@@ -2,7 +2,6 @@ import fs from "fs";
 import path from "path";
 
 const CHART_PATH = process.cwd();
-const CONFIG_FILE = path.join(process.cwd(), "config.json");
 
 const DEFAULT_ASSETS = [
   { id: "XBTUSD", symbol: "BTC" },
@@ -12,20 +11,54 @@ const DEFAULT_ASSETS = [
   { id: "TAOUSD", symbol: "TAO" }
 ];
 
-// Load config
-export function loadConfig() {
-  if (fs.existsSync(CONFIG_FILE)) {
-    const config = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
-    if (!config.convictionThreshold) config.convictionThreshold = 8;
-    if (!config.watchlist) config.watchlist = DEFAULT_ASSETS;
-    return config;
-  }
-  return { convictionThreshold: 8, watchlist: DEFAULT_ASSETS };
+// Map symbol to Kraken pair ID
+export function symbolToKrakenId(symbol) {
+  const map = {
+    BTC: "XBTUSD",
+    ETH: "ETHUSD",
+    SOL: "SOLUSD",
+    BNB: "BNBUSD",
+    TAO: "TAOUSD",
+    XRP: "XRPUSD",
+    ADA: "ADAUSD",
+    DOGE: "DOGEUSD",
+    AVAX: "AVAXUSD",
+    LINK: "LINKUSD",
+    DOT: "DOTUSD",
+    MATIC: "MATICUSD",
+    LTC: "LTCUSD",
+    UNI: "UNIUSD",
+    ATOM: "ATOMUSD"
+  };
+  return map[symbol.toUpperCase()] || `${symbol.toUpperCase()}USD`;
 }
 
-// Save config
+// Parse watchlist from env variable (e.g. "BTC,ETH,SOL")
+function parseWatchlist(watchlistEnv) {
+  if (!watchlistEnv) return DEFAULT_ASSETS;
+  return watchlistEnv.split(",").map(s => {
+    const symbol = s.trim().toUpperCase();
+    return { id: symbolToKrakenId(symbol), symbol };
+  });
+}
+
+// Load config from environment variables
+export function loadConfig() {
+  return {
+    scanChannelId: process.env.SCAN_CHANNEL_ID || null,
+    convictionThreshold: parseInt(process.env.CONVICTION_THRESHOLD) || 8,
+    watchlist: parseWatchlist(process.env.WATCHLIST)
+  };
+}
+
+// Save config — updates in-memory state only
+// To persist changes, update Railway environment variables
 export function saveConfig(config) {
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+  console.log("Config updated in memory:", {
+    scanChannelId: config.scanChannelId,
+    convictionThreshold: config.convictionThreshold,
+    watchlist: config.watchlist?.map(a => a.symbol).join(",")
+  });
 }
 
 // Save chart to disk
@@ -48,26 +81,4 @@ export function loadChart() {
     }
   }
   return null;
-}
-
-// Map symbol to Kraken pair ID
-export function symbolToKrakenId(symbol) {
-  const map = {
-    BTC: "XBTUSD",
-    ETH: "ETHUSD",
-    SOL: "SOLUSD",
-    BNB: "BNBUSD",
-    TAO: "TAOUSD",
-    XRP: "XRPUSD",
-    ADA: "ADAUSD",
-    DOGE: "DOGEUSD",
-    AVAX: "AVAXUSD",
-    LINK: "LINKUSD",
-    DOT: "DOTUSD",
-    MATIC: "MATICUSD",
-    LTC: "LTCUSD",
-    UNI: "UNIUSD",
-    ATOM: "ATOMUSD"
-  };
-  return map[symbol.toUpperCase()] || `${symbol.toUpperCase()}USD`;
 }
