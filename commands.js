@@ -90,7 +90,8 @@ export async function handleHelp(message, state) {
     `> \`!resume\` — Re-enable trading\n\n` +
 
     `**Analysis:**\n` +
-    `> \`!trade <symbol>\` — Manual multi-TF analysis\n` +
+    `> \`!trade\` — Scan all watched assets and find the best long entry\n` +
+    `> \`!trade BTC\` — Analyze a specific asset for a long entry\n` +
     `> \`@c analyze that\` — Force-analyze last chart\n\n` +
 
     `**Scanner:**\n` +
@@ -278,16 +279,28 @@ export async function handleGeneral(message, userMessage) {
   }
 }
 
-// ─── !trade <symbol> ───────────────────────────────────────────────────────────
+// ─── !trade [symbol] ───────────────────────────────────────────────────────────
+// No symbol → scan all watched assets and find the best long entry
+// With symbol → analyze that specific asset only
 
 export async function handleManualTrade(message, state, symbol) {
+  const { analyzeMultiTimeframe, findBestLongEntry } = await import("./analyzer.js");
+
+  // No symbol — find best long across entire watchlist
+  if (!symbol) {
+    if (!state.watchlist?.length) {
+      return message.reply("⚠️ Watchlist is empty. Add assets with `!watch BTC ETH SOL`.");
+    }
+    return findBestLongEntry(state.watchlist, message.channel, state.convictionThreshold);
+  }
+
+  // Specific symbol — deep dive on that asset
   const upper = symbol.toUpperCase();
   await message.reply(`🔍 Analyzing **${upper}** across 15m · 1h · 4h...`);
 
   try {
-    const { fetchCandles }          = await import("./scanner.js");
-    const { generateChartImage }    = await import("./chart.js");
-    const { analyzeMultiTimeframe } = await import("./analyzer.js");
+    const { fetchCandles }       = await import("./scanner.js");
+    const { generateChartImage } = await import("./chart.js");
 
     const krakenId = symbolToKrakenId(upper);
     const charts   = [];
@@ -309,7 +322,7 @@ export async function handleManualTrade(message, state, symbol) {
     }
 
     await message.channel.send({
-      content: `📈 **${upper}/USD — Manual Trade Analysis**`,
+      content: `📈 **${upper}/USD — Trade Analysis**`,
       files:   buffers.map(b => ({ attachment: b.buffer, name: `${upper}_${b.label}.png` }))
     });
 

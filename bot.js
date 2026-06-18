@@ -131,6 +131,10 @@ client.on("messageCreate", async (message) => {
   if (lower === "!status")     return handleStatus(message, state);
   if (lower === "!scan")       return handleScan(message, state);
 
+  if (lower === "!trade") {
+    return handleManualTrade(message, state, null);
+  }
+
   if (lower.startsWith("!trade ")) {
     return handleManualTrade(message, state, raw.slice(7).trim().split(/\s+/)[0]);
   }
