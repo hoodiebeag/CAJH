@@ -216,7 +216,19 @@ Use EXACTLY the labels above. Be specific with prices.`,
     });
 
     const analysis = analysisResponse.content[0].text;
-    await channel.send(`📊 **${asset} Multi-TF Conviction: ${conviction}/10 — Position Size: ${positionSize} @ ${leverage}x leverage**\n\n${analysis}`);
+    const header = `📊 **${asset} Multi-TF Conviction: ${conviction}/10 — Position Size: ${positionSize} @ ${leverage}x leverage**\n\n`;
+const fullMessage = header + analysis;
+
+// Split into chunks of 1900 characters if too long
+if (fullMessage.length <= 2000) {
+  await channel.send(fullMessage);
+} else {
+  await channel.send(header);
+  // Split analysis into 1900 char chunks
+  for (let i = 0; i < analysis.length; i += 1900) {
+    await channel.send(analysis.slice(i, i + 1900));
+  }
+}
 
     // Extract and execute trade if conviction >= threshold
     if (conviction >= threshold) {
