@@ -3,7 +3,7 @@
  * Tracks open trades, enforces daily drawdown limits, and posts P&L updates.
  */
 
-import { getCurrentPrice, placeSell, getAccountBalance } from "./trader.js";
+import { getCurrentPrice, placeSell, getAccountBalance, placeStopLoss, cancelOrder, getOrderStatus } from "./trader.js";
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 
@@ -146,6 +146,7 @@ export function removeTrade(symbol) {
 // ─── Discord messages ──────────────────────────────────────────────────────────
 
 export async function postTradeOpened(channel, trade) {
+  if (!channel) return;
   const sizePct = (trade.sizePct * 100).toFixed(0);
   await channel.send(
     `✅ **Trade Opened — ${trade.symbol} LONG**\n\n` +
@@ -171,6 +172,7 @@ export async function postTradeClosed(channel, trade, exitPrice, reason) {
 
   dailyPnl += pnl;
 
+  if (!channel) return;
   await channel.send(
     `${emoji} **Trade Closed — ${trade.symbol} (${label})**\n\n` +
     `**Entry:** ${usd(trade.entry)}\n` +
@@ -185,6 +187,7 @@ export async function postPartialTakeProfit(channel, trade, exitPrice, soldVolum
   const pnl = (exitPrice - trade.entry) * soldVolume;
   dailyPnl += pnl;
 
+  if (!channel) return;
   await channel.send(
     `🟢 **Partial Take-Profit — ${trade.symbol} (TP1 Hit)**\n\n` +
     `**Sold:** ${soldVolume} ${trade.symbol} @ ${usd(exitPrice)}\n` +
@@ -216,8 +219,10 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
     if (openTrades.size === 0) return;
 
     try {
-      const channel = client.channels.cache.get(channelId);
-      if (!channel) return;
+      // Fetch the channel live (cache can be empty after a restart). Exits must run
+      // even if the channel is briefly unavailable, so messages are best-effort only.
+      let channel = null;
+      try { channel = await client.channels.fetch(channelId); } catch { /* keep null */ }
 
       // Price every open position once, and value the book.
       const cash     = await getAccountBalance();
@@ -232,31 +237,40 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
       }
 
       // Drawdown is measured on total equity (cash + positions), not cash alone.
-      if (checkDrawdown(cash + positionsValue)) {
+      if (checkDrawdown(cash + positionsValue) && channel) {
         await channel.send(
           `🚨 **Daily drawdown limit reached (10%).** Trading has been automatically halted.\n` +
           `Use \`!resume\` to re-enable trading.`
         );
       }
 
-      // Manage exits. The monitor is the SINGLE source of truth for exits —
-      // no resting SL/TP orders sit on the exchange, so positions can't be
-      // sold twice or over-committed.
+      // Manage exits.
+      // Downside is protected by a REAL stop-loss order resting on Kraken (placed at
+      // entry), so it fires even if this process is down. The monitor handles the
+      // upside (TP1/TP2) and reconciles with that resting stop so nothing sells twice.
       for (const [symbol, trade] of [...openTrades.entries()]) {
+
+        // 1) Did the exchange stop already fill? If so, the position is gone — reconcile.
+        if (trade.stopOrderId) {
+          const status = await getOrderStatus(trade.stopOrderId);
+          if (status === "closed") {
+            await postTradeClosed(channel, trade, trade.stopLoss, trade.tp1Hit ? "sl-be" : "sl");
+            removeTrade(symbol);
+            continue;
+          }
+          if (status === "canceled" || status === "expired") {
+            // Unexpected — try to re-protect the position.
+            try { trade.stopOrderId = await placeStopLoss({ symbol, volume: trade.volume, stopPrice: trade.stopLoss }); }
+            catch { trade.stopOrderId = null; }
+          }
+        }
+
         const price = priceMap.get(symbol);
         if (!price) continue;
 
-        // Stop loss → close whatever remains.
-        if (price <= trade.stopLoss) {
-          try { await placeSell({ symbol, volume: trade.volume }); }
-          catch (err) { console.error(`[MONITOR] SL sell failed for ${symbol}:`, err.message); }
-          await postTradeClosed(channel, trade, price, trade.tp1Hit ? "sl-be" : "sl");
-          removeTrade(symbol);
-          continue;
-        }
-
-        // Final target → close whatever remains.
+        // 2) Final target → cancel the resting stop, then close whatever remains.
         if (price >= trade.takeProfit2) {
+          if (trade.stopOrderId) { await cancelOrder(trade.stopOrderId); trade.stopOrderId = null; }
           try { await placeSell({ symbol, volume: trade.volume }); }
           catch (err) { console.error(`[MONITOR] TP2 sell failed for ${symbol}:`, err.message); }
           await postTradeClosed(channel, trade, price, "tp");
@@ -264,18 +278,31 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
           continue;
         }
 
-        // First target → scale out half once, then move the stop to breakeven.
+        // 3) First target → scale out half, then reset the stop to breakeven.
         if (!trade.tp1Hit && price >= trade.takeProfit1) {
-          const half = trade.volume / 2;
           try {
+            if (trade.stopOrderId) { await cancelOrder(trade.stopOrderId); trade.stopOrderId = null; }
+            const half = trade.volume / 2;
             await placeSell({ symbol, volume: half });
             trade.volume  -= half;
             trade.tp1Hit   = true;
-            trade.stopLoss = trade.entry;   // protect the runner at breakeven
+            trade.stopLoss = trade.entry;   // breakeven on the runner
+            try { trade.stopOrderId = await placeStopLoss({ symbol, volume: trade.volume, stopPrice: trade.stopLoss }); }
+            catch { trade.stopOrderId = null; } // fall back to polling below
             await postPartialTakeProfit(channel, trade, price, half);
           } catch (err) {
             console.error(`[MONITOR] TP1 partial sell failed for ${symbol}:`, err.message);
           }
+          continue;
+        }
+
+        // 4) Fallback polling stop — only if no exchange stop is currently protecting us.
+        if (!trade.stopOrderId && price <= trade.stopLoss) {
+          try { await placeSell({ symbol, volume: trade.volume }); }
+          catch (err) { console.error(`[MONITOR] SL sell failed for ${symbol}:`, err.message); }
+          await postTradeClosed(channel, trade, price, trade.tp1Hit ? "sl-be" : "sl");
+          removeTrade(symbol);
+          continue;
         }
       }
 

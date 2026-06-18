@@ -24,9 +24,10 @@ Signals come only from confirmed swing pivots:
   high). Drawn as an arrow only; cajh is long-only and does not short.
 
 A pivot only confirms `N` candles later, so every signal has a built-in `N`-candle
-delay. The window size `N` is set by `SWING_WINDOW` in `strategy.js` (default `3`).
-Signals are checked on the 15m, 1h, and 4h timeframes; if more than one timeframe
-gives a buy, the higher timeframe wins.
+delay. The window size `N` is set by `SWING_WINDOW` in `strategy.js` (default `5` —
+higher means fewer, stronger signals). Signals are checked on the 15m, 1h, and 4h
+timeframes, and a trade is only proposed when **all three are bullish at once**
+(`REQUIRE_TF_ALIGNMENT`).
 
 ### Optional confidence filters (in `strategy.js`)
 
@@ -37,9 +38,11 @@ strategy, and use `!backtest` to compare:
   (i.e. the market is making higher lows). Pure structure, no indicators.
 - `MAX_STOP_PCT` — skip a buy whose stop sits more than 5% below entry, to cap how
   far the stop (and your risk) can be.
+- `REQUIRE_TF_ALIGNMENT` — only propose a trade when 15m, 1h and 4h are all bullish.
 
 These are reasonable defaults, not proven edges. Test them on your assets before
-trusting them.
+trusting them. Note: the backtester runs on a single timeframe, so it does **not**
+model `REQUIRE_TF_ALIGNMENT` — that filter only takes effect in live scanning.
 
 ## Backtesting
 
@@ -76,10 +79,17 @@ generic assistant.
 
 ## How exits work
 
-The position monitor (`monitor.js`) is the **single source of truth** for exits.
-No resting stop/take-profit orders are placed on the exchange (that would let a
-position be sold twice or over-committed). The monitor watches price every 30s.
-Tradeoff: **if the bot process is down, there is no stop protection.**
+Downside protection is a **real stop-loss order resting on Kraken**, placed the moment
+a trade opens — so it executes even if the bot process is down. The position monitor
+(`monitor.js`) handles the upside (TP1 scale-out, breakeven move, TP2) and reconciles
+with that resting stop every 30s: before it sells for a take-profit it cancels the
+stop, and if it sees the stop already filled it records the close. This avoids selling
+the same coins twice. If Kraken ever rejects the stop order, the monitor falls back to
+watching the stop by polling (which only works while the bot is running).
+
+Note: take-profits are still monitor-managed, so if the bot is offline price could run
+past a target without scaling out — that costs *potential profit*, not capital. The
+stop, which protects capital, is the one that lives on the exchange.
 
 ## Risk controls
 

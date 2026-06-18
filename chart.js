@@ -296,7 +296,9 @@ export function generateChartImage(candles, symbol, interval) {
 
   // Swing-fractal arrows — the actual trade signals.
   // Green up-arrow under a confirmed swing low (buy); red down-arrow over a swing high (sell).
-  detectSwings(displayCandles, SWING_WINDOW).forEach(p => {
+  // Only the most recent few are drawn so the chart stays readable.
+  const MAX_CHART_ARROWS = 7;
+  detectSwings(displayCandles, SWING_WINDOW).slice(-MAX_CHART_ARROWS).forEach(p => {
     const x = indexToX(p.index);
     if (p.type === "low") {
       const y = priceToY(parseFloat(displayCandles[p.index].low)) + 6;

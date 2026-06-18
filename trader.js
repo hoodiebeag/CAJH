@@ -208,6 +208,18 @@ export async function getOpenOrders() {
   }
 }
 
+/** Returns the status of a single order by txid (open/closed/canceled/expired/pending), or null. */
+export async function getOrderStatus(txid) {
+  if (!txid) return null;
+  try {
+    const res = await kraken.api("QueryOrders", { txid });
+    return res.result?.[txid]?.status ?? null;
+  } catch (err) {
+    console.error(`[TRADER] QueryOrders failed for ${txid}:`, err.message);
+    return null;
+  }
+}
+
 /** Cancels an order by txid. */
 export async function cancelOrder(txid) {
   try {

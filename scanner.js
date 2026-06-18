@@ -12,8 +12,8 @@
 
 import axios from "axios";
 import { generateChartImage } from "./chart.js";
-import { latestSignal, detectSwings, SWING_WINDOW, RR1, RR2, REQUIRE_HIGHER_LOW, MAX_STOP_PCT } from "./strategy.js";
-import { placeBuy, getCurrentPrice } from "./trader.js";
+import { latestSignal, detectSwings, currentBias, SWING_WINDOW, RR1, RR2, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, REQUIRE_TF_ALIGNMENT } from "./strategy.js";
+import { placeBuy, getCurrentPrice, placeStopLoss } from "./trader.js";
 import {
   requestConfirmation, registerTrade, postTradeOpened,
   isTradingEnabled, getTrade
@@ -66,25 +66,29 @@ export async function fetchCandles(pair, minutes) {
 
 // ─── Per-asset evaluation ──────────────────────────────────────────────────────
 // Returns { signals: { "15m": sig|null, ... }, buy: bestBuy|null, buffers: [...] }.
-// "buy" is the freshly-confirmed buy signal from the highest timeframe that has one.
+// "buy" is a freshly-confirmed buy, returned ONLY if all timeframes agree (when
+// REQUIRE_TF_ALIGNMENT is on). "biases" is each timeframe's current bull/bear bias.
 async function evaluateAsset(asset) {
   const signals = {};
+  const biases  = {};
   const buffers = [];
-  let buy = null;
+  let freshBuy = null;
 
   for (const interval of SCAN_INTERVALS) {
     const candles = await fetchCandles(asset.id, interval.minutes);
-    if (!candles || candles.length === 0) { signals[interval.label] = null; continue; }
+    if (!candles || candles.length === 0) { signals[interval.label] = null; biases[interval.label] = null; continue; }
 
     // Signals use CLOSED candles only — drop the still-forming last candle.
     const closed = candles.slice(0, -1);
     const sig    = latestSignal(closed, SWING_WINDOW);
     signals[interval.label] = sig;
+    biases[interval.label]  = currentBias(closed, SWING_WINDOW);
+
     if (sig?.type === "buy") {
       // Find the previous confirmed swing low (for the higher-low filter).
       const lowPivots = detectSwings(closed, SWING_WINDOW).filter(p => p.type === "low");
       const prev = lowPivots.length >= 2 ? lowPivots[lowPivots.length - 2].price : null;
-      buy = { ...sig, tf: interval.label, prevSwingLow: prev }; // higher TF overwrites
+      freshBuy = { ...sig, tf: interval.label, prevSwingLow: prev }; // higher TF overwrites
     }
 
     const buffer = generateChartImage(candles, asset.symbol, interval.label);
@@ -93,16 +97,20 @@ async function evaluateAsset(asset) {
     await new Promise(r => setTimeout(r, 2000)); // be gentle with Kraken
   }
 
-  return { signals, buy, buffers };
+  // All three timeframes must be bullish to confirm a setup.
+  const aligned = SCAN_INTERVALS.every(i => biases[i.label] === "bull");
+  const buy = (freshBuy && (!REQUIRE_TF_ALIGNMENT || aligned)) ? freshBuy : null;
+
+  return { signals, biases, aligned, buy, buffers };
 }
 
-function summarize(symbol, signals) {
+function summarize(symbol, biases, aligned) {
   const parts = SCAN_INTERVALS.map(i => {
-    const s = signals[i.label];
-    if (!s) return `${i.label}: —`;
-    return `${i.label}: ${s.type === "buy" ? "🟢 BUY" : "🔴 SELL"} @ $${s.pivotPrice}`;
+    const b = biases[i.label];
+    const tag = b === "bull" ? "▲ bull" : b === "bear" ? "▼ bear" : "· —";
+    return `${i.label} ${tag}`;
   });
-  return `**${symbol}**  ·  ${parts.join("  ·  ")}`;
+  return `**${symbol}**  ·  ${parts.join("  ·  ")}  ·  ${aligned ? "**aligned ✅**" : "not aligned"}`;
 }
 
 // ─── Trade proposal (buy signals only) ─────────────────────────────────────────
@@ -149,6 +157,17 @@ async function proposeBuy(symbol, buy, channel) {
     trade.sizePct     = POSITION_PCT;
     trade.tp1Hit      = false;
     trade.signal      = signal;
+
+    // Place a REAL protective stop on Kraken so the position is covered even if the
+    // bot goes offline. The monitor manages TP1/TP2 and reconciles with this order.
+    try {
+      trade.stopOrderId = await placeStopLoss({ symbol, volume: trade.volume, stopPrice: stopLoss });
+    } catch (stopErr) {
+      trade.stopOrderId = null;
+      console.error(`[STRATEGY] Could not place protective stop for ${symbol}:`, stopErr.message);
+      await channel.send(`⚠️ **${symbol}**: couldn't place the protective stop on Kraken — the monitor will watch the stop instead (only while the bot is running).`);
+    }
+
     registerTrade(trade);
     await postTradeOpened(channel, trade);
   } catch (err) {
@@ -174,7 +193,7 @@ export async function runScanner(channel, state) {
 
   for (const asset of watchlist) {
     try {
-      const { signals, buy, buffers } = await evaluateAsset(asset);
+      const { biases, aligned, buy, buffers } = await evaluateAsset(asset);
       if (buffers.length === 0) {
         await channel.send(`⚠️ Could not fetch data for **${asset.symbol}** — skipping.`);
         continue;
@@ -186,7 +205,7 @@ export async function runScanner(channel, state) {
       saveChart(b64, "image/png");
 
       await channel.send({
-        content: summarize(asset.symbol, signals),
+        content: summarize(asset.symbol, biases, aligned),
         files:   buffers.map(b => ({ attachment: b.buffer, name: `${asset.symbol}_${b.label}.png` }))
       });
 
@@ -213,16 +232,16 @@ export async function scanSymbol(symbol, channel, state) {
   await channel.send(`🔍 Checking **${upper}** on ${SCAN_INTERVALS.map(i => i.label).join("/")}...`);
 
   try {
-    const { signals, buy, buffers } = await evaluateAsset(asset);
+    const { biases, aligned, buy, buffers } = await evaluateAsset(asset);
     if (buffers.length === 0) { await channel.send(`⚠️ No data for **${upper}**.`); return; }
 
     await channel.send({
-      content: summarize(upper, signals),
+      content: summarize(upper, biases, aligned),
       files:   buffers.map(b => ({ attachment: b.buffer, name: `${upper}_${b.label}.png` }))
     });
 
     if (buy) await proposeBuy(upper, buy, channel);
-    else     await channel.send(`No fresh buy signal on **${upper}** right now.`);
+    else     await channel.send(`No confirmed setup on **${upper}** right now (needs a fresh swing low with all 3 timeframes aligned).`);
   } catch (err) {
     console.error(`[STRATEGY] scanSymbol error for ${upper}:`, err.message);
     await channel.send(`⚠️ Something went wrong: ${err.message}`);

@@ -10,7 +10,7 @@
  * every signal carries a natural N-candle delay. Change N by editing SWING_WINDOW.
  */
 
-export const SWING_WINDOW = 3; // candles checked on EACH side of a pivot
+export const SWING_WINDOW = 5; // candles checked on EACH side of a pivot (higher = fewer, stronger signals)
 
 // ─── Tunable strategy settings (shared by live trading AND the backtester) ──────
 export const RR1 = 1.5;   // take-profit 1 = entry + 1.5 × risk (scale out half)
@@ -20,6 +20,7 @@ export const RR2 = 3.0;   // take-profit 2 = entry + 3.0 × risk (close the runn
 // pure strategy. Backtest with them on vs off to see if they actually help YOU.
 export const REQUIRE_HIGHER_LOW = true;  // only buy if this swing low is above the previous one (bullish structure)
 export const MAX_STOP_PCT        = 0.05; // skip buys whose stop is further than 5% below entry (caps risk); null to disable
+export const REQUIRE_TF_ALIGNMENT = true; // only propose a trade when 15m, 1h AND 4h structure are all bullish
 
 /** Is candle i a confirmed swing high within [i-n, i+n]? */
 export function isSwingHigh(highs, i, n) {
@@ -74,4 +75,18 @@ export function latestSignal(candles, n = SWING_WINDOW) {
   if (isSwingLow(lows, i, n))  return { type: "buy",  pivotPrice: lows[i]  };
   if (isSwingHigh(highs, i, n)) return { type: "sell", pivotPrice: highs[i] };
   return null;
+}
+
+/**
+ * Current structural bias of a timeframe, based on its MOST RECENT confirmed pivot:
+ *   → "bull" if the last pivot was a swing low (price last turned up)
+ *   → "bear" if the last pivot was a swing high
+ *   → null   if there are no confirmed pivots yet
+ * Used to require multi-timeframe agreement before taking a trade.
+ */
+export function currentBias(candles, n = SWING_WINDOW) {
+  const pivots = detectSwings(candles, n);
+  if (!pivots.length) return null;
+  const last = pivots.reduce((a, b) => (b.index > a.index ? b : a));
+  return last.type === "low" ? "bull" : "bear";
 }
