@@ -16,7 +16,8 @@ import {
   handleScan,
   handleAnalyzeThat,
   handleChartRequest,
-  handleGeneral
+  handleGeneral,
+  handleManualTrade
 } from "./commands.js";
 
 const client = new Client({
@@ -108,6 +109,12 @@ client.on("messageCreate", async (message) => {
   if (contentLower === "!setchannel") return handleSetChannel(message, state, config);
   if (contentLower === "!status") return handleStatus(message, state);
   if (contentLower === "!scan") return handleScan(message, state);
+
+  if (contentLower.startsWith("!trade ")) {
+    const symbol = content.slice(7).trim().split(/\s+/)[0];
+    console.log(`Manual trade requested for: ${symbol}`);
+    return handleManualTrade(message, state, symbol);
+  }
 
   if (contentLower.startsWith("!watch ")) {
     const symbols = content.slice(7).trim().split(/\s+/);

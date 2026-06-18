@@ -196,3 +196,62 @@ export async function handleGeneral(message, userMessage) {
   });
   await message.reply(response.content[0].text);
 }
+
+export async function handleManualTrade(message, state, symbol) {
+  const upper = symbol.toUpperCase();
+  await message.reply(`🔍 Analyzing **${upper}** across 15m, 1h, 4h to find the best trade levels...`);
+
+  try {
+    const { fetchCandles } = await import("./scanner.js");
+    const { generateChartImage } = await import("./chart.js");
+    const { analyzeMultiTimeframe } = await import("./analyzer.js");
+    const { symbolToKrakenId } = await import("./storage.js");
+
+    const krakenId = symbolToKrakenId(upper);
+    const intervals = [
+      { label: "15m", minutes: 15 },
+      { label: "1h", minutes: 60 },
+      { label: "4h", minutes: 240 }
+    ];
+
+    const charts = [];
+    const imageBuffers = [];
+
+    for (const interval of intervals) {
+      const candles = await fetchCandles(krakenId, interval.minutes);
+      if (!candles || candles.length === 0) {
+        console.warn(`Missing candles for ${upper} ${interval.label}`);
+        continue;
+      }
+
+      const imageBuffer = generateChartImage(candles, upper, interval.label);
+      const base64 = imageBuffer.toString("base64");
+
+      charts.push({ label: interval.label, base64, mediaType: "image/png" });
+      imageBuffers.push({ label: interval.label, buffer: imageBuffer });
+
+      await new Promise(res => setTimeout(res, 1500));
+    }
+
+    if (charts.length === 0) {
+      await message.reply(`⚠️ Could not fetch chart data for **${upper}**. Check the symbol and try again.`);
+      return;
+    }
+
+    // Post charts
+    await message.channel.send({
+      content: `📈 **${upper}/USD — Manual Trade Analysis**`,
+      files: imageBuffers.map(ib => ({
+        attachment: ib.buffer,
+        name: `${upper}_${ib.label}.png`
+      }))
+    });
+
+    // Force analysis regardless of conviction threshold
+    await analyzeMultiTimeframe(upper, charts, message.channel, true, state.convictionThreshold);
+
+  } catch (error) {
+    console.error(`Manual trade error for ${symbol}:`, error.message);
+    await message.reply(`⚠️ Something went wrong analyzing **${upper}**: ${error.message}`);
+  }
+}
