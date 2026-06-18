@@ -84,7 +84,7 @@ export async function handleHelp(message, state) {
   const status = isTradingEnabled() ? "🟢 Active" : "🔴 Halted";
   await message.reply(
     `**cajh — Swing-Fractal Trading Bot**\n` +
-    `Long-only spot. Buys on confirmed swing lows (N=${SWING_WINDOW}); exits on stop-loss / take-profit.\n\n` +
+    `Long-only spot. Buys confirmed swing lows (N=${SWING_WINDOW}) only when 15m/1h/4h all agree; a protective stop rests on Kraken.\n\n` +
 
     `**Trading:**\n` +
     `> \`!confirm\` — Execute the pending trade\n` +
