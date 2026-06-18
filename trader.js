@@ -7,10 +7,10 @@ const client = new Kraken(
 
 // Leverage scale by conviction
 function getLeverage(conviction) {
-  if (conviction >= 10) return 5;
-  if (conviction >= 9) return 4;
-  if (conviction >= 8) return 3;
-  if (conviction >= 7) return 2;
+  if (conviction >= 10) return 10;
+  if (conviction >= 9) return 7;
+  if (conviction >= 8) return 5;
+  if (conviction >= 7) return 3;
   return 2;
 }
 
@@ -26,26 +26,25 @@ function getPositionSizePct(conviction) {
 // Map symbol to Kraken pair
 function symbolToPair(symbol) {
   const pairMap = {
-    BTC: "XBTUSD",
-    ETH: "ETHUSD",
-    SOL: "SOLUSD",
-    BNB: "BNBUSD",
-    TAO: "TAOUSD",
-    XRP: "XRPUSD",
-    ADA: "ADAUSD",
-    DOGE: "DOGEUSD",
-    AVAX: "AVAXUSD",
-    LINK: "LINKUSD",
-    LTC: "LTCUSD",
-    DOT: "DOTUSD"
+    BTC: "BTC/USD",
+    ETH: "ETH/USD",
+    SOL: "SOL/USD",
+    BNB: "BNB/USD",
+    TAO: "TAO/USD",
+    XRP: "XRP/USD",
+    ADA: "ADA/USD",
+    DOGE: "DOGE/USD",
+    AVAX: "AVAX/USD",
+    LINK: "LINK/USD",
+    LTC: "LTC/USD",
+    DOT: "DOT/USD"
   };
-  return pairMap[symbol.toUpperCase()] || `${symbol.toUpperCase()}USD`;
+  return pairMap[symbol.toUpperCase()] || `${symbol.toUpperCase()}/USD`;
 }
 
 // Get available USD balance
 export async function getAccountBalance() {
   const response = await client.api("Balance");
-  console.log("Balance response:", JSON.stringify(response.result));
   const balance = parseFloat(response.result?.ZUSD || response.result?.USD || 0);
   console.log(`Available balance: $${balance}`);
   return balance;
@@ -64,7 +63,7 @@ export async function getCurrentPrice(symbol) {
   }
 }
 
-// Place a margin trade (entry only for now, SL/TP added after fill)
+// Place a margin trade
 export async function placeTrade({ symbol, direction, entry, stopLoss, takeProfit1, takeProfit2, conviction }) {
   const pair = symbolToPair(symbol);
   const leverage = getLeverage(conviction);
@@ -72,27 +71,35 @@ export async function placeTrade({ symbol, direction, entry, stopLoss, takeProfi
 
   const balance = await getAccountBalance();
   const tradeCapital = balance * sizePct;
-  const volume = ((tradeCapital * leverage) / entry).toFixed(8);
+  const currentPrice = await getCurrentPrice(symbol);
+  const priceForCalc = entry || currentPrice;
+  const volume = ((tradeCapital * leverage) / priceForCalc).toFixed(8);
 
-  console.log(`Trade: balance=$${balance}, capital=$${tradeCapital}, leverage=${leverage}x, volume=${volume}`);
+  console.log(`Trade: balance=$${balance}, capital=$${tradeCapital}, leverage=${leverage}x, volume=${volume}, pair=${pair}`);
 
   if (parseFloat(volume) <= 0) {
     throw new Error(`Position size too small: $${tradeCapital.toFixed(2)} at ${leverage}x = ${volume}`);
   }
 
   const type = direction.toLowerCase() === "long" ? "buy" : "sell";
+  const isMarket = !entry;
 
-  // Place entry limit order
-  const entryOrder = await client.api("AddOrder", {
+  // Place entry order (market or limit)
+  const orderParams = {
     pair,
     type,
-    ordertype: "limit",
-    price: entry.toString(),
+    ordertype: isMarket ? "market" : "limit",
     volume,
     leverage: leverage.toString()
-  });
+  };
 
-  console.log("Entry order placed:", JSON.stringify(entryOrder));
+  if (!isMarket) {
+    orderParams.price = entry.toString();
+  }
+
+  console.log("Placing order:", JSON.stringify(orderParams));
+  const entryOrder = await client.api("AddOrder", orderParams);
+  console.log("Entry order response:", JSON.stringify(entryOrder));
   const txid = entryOrder.result?.txid?.[0];
 
   return {
@@ -100,7 +107,7 @@ export async function placeTrade({ symbol, direction, entry, stopLoss, takeProfi
     symbol,
     pair,
     direction,
-    entry,
+    entry: entry || currentPrice,
     stopLoss,
     takeProfit1,
     takeProfit2,

@@ -112,25 +112,24 @@ client.on("messageCreate", async (message) => {
 
   if (contentLower.startsWith("!trade ")) {
     const symbol = content.slice(7).trim().split(/\s+/)[0];
-    console.log(`Manual trade requested for: ${symbol}`);
     return handleManualTrade(message, state, symbol);
   }
 
   if (contentLower.startsWith("!testrade ")) {
-    const symbol = content.slice(10).trim().split(/\s+/)[0];
+    const symbol = content.slice(10).trim().split(/\s+/)[0].toUpperCase();
     try {
-      const { placeTrade } = await import("./trader.js");
+      const { placeTrade, getAccountBalance } = await import("./trader.js");
       const { postTradeOpened, registerTrade } = await import("./monitor.js");
-      const { getAccountBalance } = await import("./trader.js");
+      await message.reply(`🔍 Placing test market trade for **${symbol}**...`);
       const balance = await getAccountBalance();
       const trade = await placeTrade({
-        symbol: symbol.toUpperCase(),
+        symbol,
         direction: "long",
-        entry: 100000,
-        stopLoss: 99000,
-        takeProfit1: 101500,
-        takeProfit2: 103000,
-        conviction: 6
+        entry: null,
+        stopLoss: 0,
+        takeProfit1: 0,
+        takeProfit2: 0,
+        conviction: 10
       });
       trade.balance = balance;
       registerTrade(trade);
