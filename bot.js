@@ -68,7 +68,7 @@ async function runScheduledScan(market) {
 
 // ─── Startup ───────────────────────────────────────────────────────────────────
 
-client.once("ready", async () => {
+client.once("clientReady", async () => {
   console.log(`[BOT] Logged in as ${client.user.tag}`);
 
   // Set daily start balance for drawdown tracking
@@ -82,7 +82,6 @@ client.once("ready", async () => {
 
   if (state.scanChannelId) {
     startMonitor(client, state.scanChannelId);
-    console.log("[MONITOR] Position monitor started");
   }
 
   // Market open scans (EST timezone)
