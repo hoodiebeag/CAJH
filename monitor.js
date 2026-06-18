@@ -1,4 +1,4 @@
-import { getOpenPositions, getOpenOrders, getCurrentPrice } from "./trader.js";
+import { getOpenPositions, getCurrentPrice } from "./trader.js";
 
 // Track open trades in memory
 const openTrades = new Map();
@@ -8,15 +8,15 @@ const fmt = (n) => `$${parseFloat(n).toLocaleString("en-US", { minimumFractionDi
 
 // Post trade opened message
 export async function postTradeOpened(channel, trade) {
-  const positionSizePct = Math.round((trade.capital / trade.balance) * 100);
+  const sizePct = Math.round((trade.capital / trade.balance) * 100);
   await channel.send(
     `✅ **Trade Opened — ${trade.symbol} ${trade.direction.toUpperCase()}**\n\n` +
-    `**Contract:** ${trade.contract}\n` +
+    `**Pair:** ${trade.pair}\n` +
     `**Entry:** ${fmt(trade.entry)} (limit)\n` +
     `**Stop Loss:** ${fmt(trade.stopLoss)}\n` +
     `**Take Profit 1:** ${fmt(trade.takeProfit1)}\n` +
     `**Take Profit 2:** ${fmt(trade.takeProfit2)}\n` +
-    `**Size:** ${trade.size} contracts (${positionSizePct}% of capital at ${trade.leverage}x)\n` +
+    `**Volume:** ${trade.volume} ${trade.symbol} (${sizePct}% of capital at ${trade.leverage}x)\n` +
     `**Conviction:** ${trade.conviction}/10`
   );
 }
@@ -24,8 +24,8 @@ export async function postTradeOpened(channel, trade) {
 // Post trade closed message
 export async function postTradeClosed(channel, trade, exitPrice, reason) {
   const pnl = trade.direction.toLowerCase() === "long"
-    ? (exitPrice - trade.entry) * trade.size
-    : (trade.entry - exitPrice) * trade.size;
+    ? (exitPrice - trade.entry) * trade.volume
+    : (trade.entry - exitPrice) * trade.volume;
   const pnlStr = pnl >= 0 ? `+${fmt(pnl)}` : fmt(pnl);
   const emoji = pnl >= 0 ? "🟢" : "🔴";
   const reasonStr = reason === "tp" ? "TP Hit ✅" : reason === "sl" ? "SL Hit ❌" : "Closed";
@@ -49,12 +49,11 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
       if (!channel) return;
 
       const positions = await getOpenPositions();
-      const positionSymbols = new Set(positions.map(p => p.symbol));
+      const openPairs = new Set(positions.map(p => p.pair));
 
       // Check for closed trades
       for (const [symbol, trade] of openTrades.entries()) {
-        if (!positionSymbols.has(trade.contract)) {
-          // Position closed — figure out why
+        if (!openPairs.has(trade.pair)) {
           const currentPrice = await getCurrentPrice(trade.symbol);
           let reason = "closed";
           if (currentPrice <= trade.stopLoss && trade.direction === "long") reason = "sl";

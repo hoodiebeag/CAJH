@@ -3,14 +3,14 @@ import axios from "axios";
 
 const API_KEY = process.env.KRAKEN_FUTURES_API_KEY;
 const API_SECRET = process.env.KRAKEN_FUTURES_API_SECRET;
-const BASE_URL = "https://futures.kraken.com/derivatives/api/v3";
+const BASE_URL = "https://api.kraken.com";
 
 // Leverage scale by conviction
 function getLeverage(conviction) {
-  if (conviction >= 10) return 10;
-  if (conviction >= 9) return 7;
-  if (conviction >= 8) return 5;
-  if (conviction >= 7) return 3;
+  if (conviction >= 10) return 5;
+  if (conviction >= 9) return 4;
+  if (conviction >= 8) return 3;
+  if (conviction >= 7) return 2;
   return 2;
 }
 
@@ -23,186 +23,188 @@ function getPositionSizePct(conviction) {
   return 0.05;
 }
 
-// Sign Kraken Futures API request (updated method post Feb 2024)
-function signRequest(endpoint, nonce, postData = "") {
-  // New method: hash the (postData + nonce + endpoint) string
-  const message = postData + nonce + endpoint;
-  const secretDecoded = Buffer.from(API_SECRET, "base64");
-  const hash = crypto.createHash("sha256").update(message).digest();
-  return crypto.createHmac("sha512", secretDecoded).update(hash).digest("base64");
+// Sign Kraken Spot API request
+function signRequest(urlPath, postData, nonce) {
+  const message = urlPath + crypto.createHash("sha256")
+    .update(nonce + postData)
+    .digest();
+  return crypto.createHmac("sha512", Buffer.from(API_SECRET, "base64"))
+    .update(message)
+    .digest("base64");
 }
 
-// Make authenticated API request
-async function krakenRequest(method, endpoint, params = {}) {
+// Make authenticated Kraken Spot API request
+async function krakenRequest(endpoint, params = {}) {
   const nonce = Date.now().toString();
-  const postData = method === "POST" ? new URLSearchParams(params).toString() : "";
-  const queryString = method === "GET" && Object.keys(params).length > 0
-    ? "?" + new URLSearchParams(params).toString()
-    : "";
-  const signEndpoint = endpoint + queryString;
-  const signature = signRequest(signEndpoint, nonce, postData);
+  params.nonce = nonce;
+  const postData = new URLSearchParams(params).toString();
+  const signature = signRequest(endpoint, postData, nonce);
 
   const headers = {
-    "APIKey": API_KEY,
-    "Nonce": nonce,
-    "Authent": signature,
+    "API-Key": API_KEY,
+    "API-Sign": signature,
     "Content-Type": "application/x-www-form-urlencoded"
   };
 
   try {
-    const response = await axios({
-      method,
-      url: `${BASE_URL}${endpoint}`,
+    const response = await axios.post(`${BASE_URL}${endpoint}`, postData, {
       headers,
-      data: method === "POST" ? postData : undefined,
-      params: method === "GET" ? params : undefined,
       timeout: 10000
     });
-    return response.data;
+
+    if (response.data.error && response.data.error.length > 0) {
+      throw new Error(`Kraken error: ${response.data.error.join(", ")}`);
+    }
+
+    return response.data.result;
   } catch (error) {
     console.error(`Kraken API error (${endpoint}):`, error.response?.data || error.message);
     throw error;
   }
 }
 
-// Get available account balance
+// Get available USD balance
 export async function getAccountBalance() {
-  const data = await krakenRequest("GET", "/accounts");
-  console.log("Kraken accounts response:", JSON.stringify(data, null, 2));
-  
-  // Try different account structures
-  const accounts = data.accounts || {};
-  const account = accounts.fi_xbtusd || accounts.cash || accounts.flex || Object.values(accounts)[0];
-  console.log("Account found:", JSON.stringify(account, null, 2));
-  
-  return account?.balances?.available || account?.available || 0;
+  const result = await krakenRequest("/0/private/Balance");
+  console.log("Kraken balance response:", JSON.stringify(result, null, 2));
+
+  // Look for USD, ZUSD, or USDT balance
+  const balance = parseFloat(
+    result.ZUSD || result.USD || result.USDT || result.USDC || 0
+  );
+  console.log(`Available balance: $${balance}`);
+  return balance;
 }
 
-// Map asset symbol to Kraken Futures contract
-function symbolToContract(symbol) {
-  const contractMap = {
-    BTC: "PF_XBTUSD",
-    ETH: "PF_ETHUSD",
-    SOL: "PF_SOLUSD",
-    BNB: "PF_BNBUSD",
-    TAO: "PF_TAOUSD",
-    XRP: "PF_XRPUSD",
-    ADA: "PF_ADAUSD",
-    DOGE: "PF_DOGEUSD",
-    AVAX: "PF_AVAXUSD",
-    LINK: "PF_LINKUSD"
+// Map symbol to Kraken spot margin pair
+function symbolToPair(symbol) {
+  const pairMap = {
+    BTC: "XBTUSD",
+    ETH: "ETHUSD",
+    SOL: "SOLUSD",
+    BNB: "BNBUSD",
+    TAO: "TAOUSD",
+    XRP: "XRPUSD",
+    ADA: "ADAUSD",
+    DOGE: "DOGEUSD",
+    AVAX: "AVAXUSD",
+    LINK: "LINKUSD",
+    LTC: "LTCUSD",
+    DOT: "DOTUSD"
   };
-  return contractMap[symbol.toUpperCase()] || `PF_${symbol.toUpperCase()}USD`;
+  return pairMap[symbol.toUpperCase()] || `${symbol.toUpperCase()}USD`;
 }
 
-// Get current price for a contract
+// Get current price
 export async function getCurrentPrice(symbol) {
-  const contract = symbolToContract(symbol);
-  const data = await krakenRequest("GET", "/tickers");
-  const ticker = data.tickers?.find(t => t.symbol === contract);
-  return ticker?.last || null;
+  const pair = symbolToPair(symbol);
+  try {
+    const response = await axios.get(`${BASE_URL}/0/public/Ticker?pair=${pair}`);
+    const ticker = Object.values(response.data.result)[0];
+    return parseFloat(ticker?.c?.[0] || 0);
+  } catch (error) {
+    console.error(`Failed to get price for ${symbol}:`, error.message);
+    return null;
+  }
 }
 
-// Place a trade with limit entry, SL, and TP
+// Place a margin trade with limit entry, SL, and TP
 export async function placeTrade({ symbol, direction, entry, stopLoss, takeProfit1, takeProfit2, conviction }) {
-  const contract = symbolToContract(symbol);
+  const pair = symbolToPair(symbol);
   const leverage = getLeverage(conviction);
   const sizePct = getPositionSizePct(conviction);
 
   // Get available balance
   const balance = await getAccountBalance();
-  console.log(`Available balance: $${balance}`);
-
   const tradeCapital = balance * sizePct;
-  const size = Math.floor((tradeCapital * leverage) / entry);
+  const volume = ((tradeCapital * leverage) / entry).toFixed(8);
 
-  console.log(`Trade calc: balance=$${balance}, sizePct=${sizePct}, capital=$${tradeCapital}, leverage=${leverage}x, entry=$${entry}, size=${size} contracts`);
+  console.log(`Trade calc: balance=$${balance}, sizePct=${sizePct}, capital=$${tradeCapital}, leverage=${leverage}x, entry=$${entry}, volume=${volume}`);
 
-  if (size < 1) {
-    throw new Error(`Position size too small: $${tradeCapital.toFixed(2)} capital at ${leverage}x = ${size} contracts`);
+  if (parseFloat(volume) <= 0) {
+    throw new Error(`Position size too small: $${tradeCapital.toFixed(2)} capital at ${leverage}x = ${volume}`);
   }
 
-  const side = direction.toLowerCase() === "long" ? "buy" : "sell";
-  const closeSide = side === "buy" ? "sell" : "buy";
+  const type = direction.toLowerCase() === "long" ? "buy" : "sell";
+  const closeType = type === "buy" ? "sell" : "buy";
 
-  console.log(`Placing ${side} order: ${size} contracts of ${contract} at $${entry}`);
+  console.log(`Placing ${type} margin order: ${volume} ${symbol} at $${entry}`);
 
   // Place limit entry order
-  const entryOrder = await krakenRequest("POST", "/sendorder", {
-    orderType: "lmt",
-    symbol: contract,
-    side,
-    size,
-    limitPrice: entry,
-    reduceOnly: "false"
+  const entryOrder = await krakenRequest("/0/private/AddOrder", {
+    pair,
+    type,
+    ordertype: "limit",
+    price: entry.toString(),
+    volume,
+    leverage: leverage.toString(),
+    oflags: "post" // post-only limit order
   });
 
-  console.log("Entry order response:", JSON.stringify(entryOrder, null, 2));
-
-  if (entryOrder.result !== "success") {
-    throw new Error(`Entry order failed: ${JSON.stringify(entryOrder)}`);
-  }
-
-  const orderId = entryOrder.sendStatus?.order_id;
+  console.log("Entry order:", JSON.stringify(entryOrder, null, 2));
+  const txid = entryOrder.txid?.[0];
 
   // Place stop loss
-  await krakenRequest("POST", "/sendorder", {
-    orderType: "stp",
-    symbol: contract,
-    side: closeSide,
-    size,
-    stopPrice: stopLoss,
-    reduceOnly: "true"
+  await krakenRequest("/0/private/AddOrder", {
+    pair,
+    type: closeType,
+    ordertype: "stop-loss",
+    price: stopLoss.toString(),
+    volume,
+    leverage: leverage.toString(),
+    reduce_only: "true"
   });
 
   // Place take profit 1 (half size)
-  const tp1Size = Math.max(1, Math.floor(size / 2));
-  await krakenRequest("POST", "/sendorder", {
-    orderType: "take_profit",
-    symbol: contract,
-    side: closeSide,
-    size: tp1Size,
-    limitPrice: takeProfit1,
-    reduceOnly: "true"
+  const tp1Volume = (parseFloat(volume) / 2).toFixed(8);
+  await krakenRequest("/0/private/AddOrder", {
+    pair,
+    type: closeType,
+    ordertype: "take-profit",
+    price: takeProfit1.toString(),
+    volume: tp1Volume,
+    leverage: leverage.toString(),
+    reduce_only: "true"
   });
 
   // Place take profit 2 (remaining size)
-  const tp2Size = size - tp1Size;
-  if (tp2Size > 0) {
-    await krakenRequest("POST", "/sendorder", {
-      orderType: "take_profit",
-      symbol: contract,
-      side: closeSide,
-      size: tp2Size,
-      limitPrice: takeProfit2,
-      reduceOnly: "true"
+  const tp2Volume = (parseFloat(volume) - parseFloat(tp1Volume)).toFixed(8);
+  if (parseFloat(tp2Volume) > 0) {
+    await krakenRequest("/0/private/AddOrder", {
+      pair,
+      type: closeType,
+      ordertype: "take-profit",
+      price: takeProfit2.toString(),
+      volume: tp2Volume,
+      leverage: leverage.toString(),
+      reduce_only: "true"
     });
   }
 
   return {
-    orderId,
+    txid,
     symbol,
-    contract,
+    pair,
     direction,
     entry,
     stopLoss,
     takeProfit1,
     takeProfit2,
-    size,
+    volume: parseFloat(volume),
     leverage,
     capital: tradeCapital,
+    balance,
     conviction
   };
 }
 
 // Get open positions
 export async function getOpenPositions() {
-  const data = await krakenRequest("GET", "/openpositions");
-  return data.openPositions || [];
-}
-
-// Get open orders
-export async function getOpenOrders() {
-  const data = await krakenRequest("GET", "/openorders");
-  return data.openOrders || [];
+  try {
+    const result = await krakenRequest("/0/private/OpenPositions");
+    return Object.values(result || {});
+  } catch (error) {
+    console.error("Failed to get open positions:", error.message);
+    return [];
+  }
 }
