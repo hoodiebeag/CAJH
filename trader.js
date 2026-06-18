@@ -1,8 +1,8 @@
 import crypto from "crypto";
 import axios from "axios";
 
-const API_KEY = process.env.KRAKEN_FUTURES_API_KEY;
-const API_SECRET = process.env.KRAKEN_FUTURES_API_SECRET;
+const API_KEY = process.env.KRAKEN_API_KEY;
+const API_SECRET = process.env.KRAKEN_API_SECRET;
 const BASE_URL = "https://api.kraken.com";
 
 // Leverage scale by conviction
