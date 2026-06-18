@@ -5,7 +5,7 @@ const client = new Kraken(
   process.env.KRAKEN_API_SECRET
 );
 
-// Leverage scale by conviction
+// Leverage scale by conviction (for when margin is enabled)
 function getLeverage(conviction) {
   if (conviction >= 10) return 10;
   if (conviction >= 9) return 7;
@@ -63,41 +63,41 @@ export async function getCurrentPrice(symbol) {
   }
 }
 
-// Place a margin trade
+// Place a spot trade (no leverage) — margin will be re-enabled after ECP approval
 export async function placeTrade({ symbol, direction, entry, stopLoss, takeProfit1, takeProfit2, conviction }) {
   const pair = symbolToPair(symbol);
-  const leverage = getLeverage(conviction);
   const sizePct = getPositionSizePct(conviction);
 
   const balance = await getAccountBalance();
   const tradeCapital = balance * sizePct;
   const currentPrice = await getCurrentPrice(symbol);
   const priceForCalc = entry || currentPrice;
-  const volume = ((tradeCapital * leverage) / priceForCalc).toFixed(8);
 
-  console.log(`Trade: balance=$${balance}, capital=$${tradeCapital}, leverage=${leverage}x, volume=${volume}, pair=${pair}`);
+  // Spot volume (no leverage)
+  const volume = (tradeCapital / priceForCalc).toFixed(8);
+
+  console.log(`Trade: balance=$${balance}, capital=$${tradeCapital}, volume=${volume}, pair=${pair}`);
 
   if (parseFloat(volume) <= 0) {
-    throw new Error(`Position size too small: $${tradeCapital.toFixed(2)} at ${leverage}x = ${volume}`);
+    throw new Error(`Position size too small: $${tradeCapital.toFixed(2)} = ${volume} ${symbol}`);
   }
 
   const type = direction.toLowerCase() === "long" ? "buy" : "sell";
   const isMarket = !entry;
 
-  // Place entry order (market or limit)
   const orderParams = {
     pair,
     type,
     ordertype: isMarket ? "market" : "limit",
-    volume,
-    leverage: leverage.toString()
+    volume
+    // No leverage — spot order
   };
 
   if (!isMarket) {
     orderParams.price = entry.toString();
   }
 
-  console.log("Placing order:", JSON.stringify(orderParams));
+  console.log("Placing spot order:", JSON.stringify(orderParams));
   const entryOrder = await client.api("AddOrder", orderParams);
   console.log("Entry order response:", JSON.stringify(entryOrder));
   const txid = entryOrder.result?.txid?.[0];
@@ -112,7 +112,7 @@ export async function placeTrade({ symbol, direction, entry, stopLoss, takeProfi
     takeProfit1,
     takeProfit2,
     volume: parseFloat(volume),
-    leverage,
+    leverage: 1,
     capital: tradeCapital,
     balance,
     conviction
