@@ -116,6 +116,32 @@ client.on("messageCreate", async (message) => {
     return handleManualTrade(message, state, symbol);
   }
 
+  if (contentLower.startsWith("!testrade ")) {
+    const symbol = content.slice(10).trim().split(/\s+/)[0];
+    try {
+      const { placeTrade } = await import("./trader.js");
+      const { postTradeOpened, registerTrade } = await import("./monitor.js");
+      const { getAccountBalance } = await import("./trader.js");
+      const balance = await getAccountBalance();
+      const trade = await placeTrade({
+        symbol: symbol.toUpperCase(),
+        direction: "long",
+        entry: 100000,
+        stopLoss: 99000,
+        takeProfit1: 101500,
+        takeProfit2: 103000,
+        conviction: 6
+      });
+      trade.balance = balance;
+      registerTrade(trade);
+      await postTradeOpened(message.channel, trade);
+    } catch (error) {
+      console.error("Test trade error:", error.message);
+      await message.reply(`⚠️ Test trade failed: ${error.message}`);
+    }
+    return;
+  }
+
   if (contentLower.startsWith("!watch ")) {
     const symbols = content.slice(7).trim().split(/\s+/);
     return handleWatch(message, state, config, symbols);
