@@ -118,20 +118,9 @@ client.on("messageCreate", async (message) => {
   if (contentLower.startsWith("!testrade ")) {
     const symbol = content.slice(10).trim().split(/\s+/)[0].toUpperCase();
     try {
-      const { validateTrade, placeTrade, getAccountBalance } = await import("./trader.js");
+      const { placeTrade, getAccountBalance } = await import("./trader.js");
       const { postTradeOpened, registerTrade } = await import("./monitor.js");
-
-      // First validate without placing
-      await message.reply(`🔍 Validating margin order for **${symbol}**...`);
-      const validation = await validateTrade({ symbol, direction: "long", entry: null, conviction: 6 });
-      console.log("Validation result:", JSON.stringify(validation));
-
-      if (validation.error && validation.error.length > 0) {
-        await message.reply(`⚠️ Validation failed: ${validation.error.join(", ")}`);
-        return;
-      }
-
-      await message.reply(`✅ Validation passed! Placing real order...`);
+      await message.reply(`🔍 Placing test trade for **${symbol}** on demo account...`);
       const balance = await getAccountBalance();
       const trade = await placeTrade({
         symbol,
