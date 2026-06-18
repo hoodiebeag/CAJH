@@ -5,6 +5,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { analyzeChart }                   from "./analyzer.js";
 import { runScanner, scanSymbol, fetchCandles, SCAN_INTERVALS } from "./scanner.js";
+import { generateChartImage } from "./chart.js";
 import { SWING_WINDOW } from "./strategy.js";
 import { backtestMultiTF } from "./backtest.js";
 import { buildLiveContext, looksLikeCodeQuestion, readSource } from "./context.js";
@@ -247,7 +248,7 @@ export async function handleAnalyzeThat(message, state) {
   const base64    = state.lastChartBase64    ?? saved?.base64;
   const mediaType = state.lastChartMediaType ?? saved?.mediaType;
 
-  if (!base64) return message.reply("No chart available yet. Pull one with a `!fc` command first.");
+  if (!base64) return message.reply("No chart available yet. Ask for one first, e.g. `@cajh BTC 15m`.");
 
   await message.reply("Reading last chart...");
   await analyzeChart(base64, mediaType, message.channel);
@@ -255,27 +256,75 @@ export async function handleAnalyzeThat(message, state) {
 
 // ─── cajh [chart request] ────────────────────────────────────────────────────────
 
-export async function handleChartRequest(message, userMessage) {
-  const res = await anthropic.messages.create({
-    model: MODEL, max_tokens: 50,
-    system:
-      `You are cajh, a Discord trading bot. You trigger TradingView charts via !fc commands handled by @tree_capital.\n` +
-      `If the user asks for a chart, respond with ONLY the correct !fc command.\n` +
-      `If not a chart request, respond with ONLY the word NOTACHART.\n\n` +
-      `!fc format: !fc <pair> [exchange] [timeframe] [indicators]\n` +
-      `Pairs: btc eth sol xrp ada doge avax link ltc dot uni atom pol matic near fil apt inj tao tia sui\n` +
-      `Timeframes: 1m 5m 15m 30m 1h 4h 1d\n` +
-      `Indicators: ma ema bb rsi macd\n` +
-      `Shortcuts: !fcb (BTC 1m Binance)  !fce (ETH 1m Binance)  !fcs (SOL 1m Binance)`,
-    messages: [{ role: "user", content: userMessage }]
-  });
+const TF_ALIASES = {
+  "15m": 15, "15": 15, "15min": 15,
+  "1h": 60, "1hr": 60, "1hour": 60, "60m": 60,
+  "4h": 240, "4hr": 240, "4hour": 240
+};
+const CHART_STOPWORDS = new Set(["show", "me", "a", "the", "chart", "charts", "for", "of", "please", "pull", "up", "cajh", "on", "send", "give", "get"]);
 
-  const cmd = res.content[0].text.trim();
-  if (cmd !== "NOTACHART" && /^!fc[bes]?\s/.test(cmd + " ")) {
-    await message.channel.send(cmd);
+/**
+ * `@cajh BTC` → posts all three (15m/1h/4h) charts. `@cajh BTC 15m` → just that one.
+ * Generates the charts itself from Kraken data. Returns true if it handled a chart
+ * request, false otherwise (so the caller falls through to general chat).
+ */
+export async function handleChartRequest(message, userMessage, state) {
+  const words = userMessage.trim().split(/\s+/).filter(Boolean);
+
+  // Timeframe (optional)
+  let tfMinutes = null;
+  for (const w of words) {
+    const key = w.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (TF_ALIASES[key]) { tfMinutes = TF_ALIASES[key]; break; }
+  }
+
+  // Symbol: first 2–5 letter token that isn't a stopword or timeframe
+  let symbol = null;
+  for (const w of words) {
+    const t = w.replace(/[^a-zA-Z]/g, "");
+    const lo = t.toLowerCase();
+    if (t.length >= 2 && t.length <= 5 && !CHART_STOPWORDS.has(lo) && !TF_ALIASES[lo]) {
+      symbol = t.toUpperCase();
+      break;
+    }
+  }
+  if (!symbol) return false;
+
+  // Only treat as a chart request if it's short, names a timeframe, or uses a chart word.
+  const hasChartWord = /\b(chart|charts|show|pull|send|give|get)\b/i.test(userMessage);
+  if (!(tfMinutes != null || words.length <= 2 || hasChartWord)) return false;
+
+  const known = (state?.watchlist || []).find(a => a.symbol === symbol);
+  const id    = known?.id || symbolToKrakenId(symbol);
+  const tfs   = tfMinutes != null
+    ? SCAN_INTERVALS.filter(i => i.minutes === tfMinutes)
+    : SCAN_INTERVALS;
+
+  const files = [];
+  for (const tf of tfs) {
+    const candles = await fetchCandles(id, tf.minutes);
+    if (candles?.length) {
+      files.push({ attachment: generateChartImage(candles, symbol, tf.label), name: `${symbol}_${tf.label}.png` });
+    }
+    await new Promise(r => setTimeout(r, 600));
+  }
+
+  if (!files.length) {
+    await message.reply(`⚠️ Couldn't pull a chart for **${symbol}** — check the symbol.`);
     return true;
   }
-  return false;
+
+  // Cache the first chart so "@cajh analyze that" can read it.
+  if (state) {
+    state.lastChartBase64    = files[0].attachment.toString("base64");
+    state.lastChartMediaType = "image/png";
+  }
+
+  await message.reply({
+    content: `📈 **${symbol}** — ${tfs.map(t => t.label).join(" · ")}`,
+    files
+  });
+  return true;
 }
 
 // ─── cajh [general question] ─────────────────────────────────────────────────────

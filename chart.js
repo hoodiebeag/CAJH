@@ -1,8 +1,7 @@
 /**
- * chart.js — Renders clean candlestick charts in the Tree Capital style:
- * dark navy background, green frame, candles + volume, and white swing-fractal
- * arrows labeled with the pivot price. No moving averages / bands / RSI — pure
- * price structure, matching the strategy.
+ * chart.js — Renders clean candlestick charts: dark navy theme, green frame,
+ * candles + volume, and white swing-fractal arrows labeled with the pivot price.
+ * No moving averages / bands / RSI — pure price structure, matching the strategy.
  */
 
 import { createCanvas } from "canvas";

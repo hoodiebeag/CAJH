@@ -5,9 +5,8 @@
 import "dotenv/config";
 import { Client, GatewayIntentBits } from "discord.js";
 import cron from "node-cron";
-import { analyzeChart }    from "./analyzer.js";
 import { runScanner }      from "./scanner.js";
-import { saveChart, loadConfig, saveConfig } from "./storage.js";
+import { loadConfig, saveConfig } from "./storage.js";
 import { startMonitor, setDailyStartBalance } from "./monitor.js";
 import {
   handleHelp, handleWatchlist, handleWatch, handleUnwatch,
@@ -38,8 +37,6 @@ const state = {
   scanChannelId:       config.scanChannelId       || null,
   watchlist:           config.watchlist           || []
 };
-
-const TREE_CAPITAL_ID = process.env.TREE_CAPITAL_ID || "723993425325719619";
 
 // ─── Scheduled scans ───────────────────────────────────────────────────────────
 
@@ -97,25 +94,6 @@ client.once("clientReady", async () => {
 // ─── Message handler ───────────────────────────────────────────────────────────
 
 client.on("messageCreate", async (message) => {
-
-  // Auto-analyze charts from @tree_capital
-  if (message.author.id === TREE_CAPITAL_ID && message.attachments.size > 0) {
-    const attachment = message.attachments.first();
-    if (!attachment.contentType?.startsWith("image/")) return;
-
-    await message.channel.sendTyping();
-
-    const buffer  = await fetch(attachment.url).then(r => r.arrayBuffer());
-    const base64  = Buffer.from(buffer).toString("base64");
-    const mediaType = attachment.contentType;
-
-    state.lastChartBase64    = base64;
-    state.lastChartMediaType = mediaType;
-    saveChart(base64, mediaType);
-
-    await analyzeChart(base64, mediaType, message.channel);
-    return;
-  }
 
   if (message.author.bot) return;
 
@@ -180,7 +158,7 @@ client.on("messageCreate", async (message) => {
       return handleAnalyzeThat(message, state);
     }
 
-    const wasChartRequest = await handleChartRequest(message, userMessage);
+    const wasChartRequest = await handleChartRequest(message, userMessage, state);
     if (!wasChartRequest) await handleGeneral(message, userMessage, state);
 
   } catch (err) {
