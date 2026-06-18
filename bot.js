@@ -4,6 +4,7 @@ import cron from "node-cron";
 import { analyzeChart } from "./analyzer.js";
 import { runScanner } from "./scanner.js";
 import { saveChart, loadConfig, saveConfig } from "./storage.js";
+import { startMonitor } from "./monitor.js";
 import {
   handleHelp,
   handleWatchlist,
@@ -35,7 +36,7 @@ const state = {
   lastChartMediaType: null,
   lastScanTime: config.lastScanTime || null,
   scanChannelId: config.scanChannelId || null,
-  convictionThreshold: config.convictionThreshold || 8,
+  convictionThreshold: config.convictionThreshold || 6,
   watchlist: config.watchlist || []
 };
 
@@ -57,6 +58,12 @@ async function runScheduledScan(market) {
 
 client.once("ready", () => {
   console.log(`Logged in as ${client.user.tag}`);
+
+  // Start position monitor (checks every 30 seconds)
+  if (state.scanChannelId) {
+    startMonitor(client, state.scanChannelId, 30000);
+    console.log("Position monitor started.");
+  }
 
   // New York open 9:30 AM EST
   cron.schedule("30 9 * * 1-5", () => runScheduledScan("New York"), { timezone: "America/New_York" });
