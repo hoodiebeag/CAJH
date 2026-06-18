@@ -3,6 +3,8 @@ import axios from "axios";
 
 const API_KEY = process.env.KRAKEN_API_KEY;
 const API_SECRET = process.env.KRAKEN_API_SECRET;
+console.log("API Key loaded:", API_KEY ? `${API_KEY.slice(0, 6)}...` : "MISSING");
+console.log("API Secret loaded:", API_SECRET ? `${API_SECRET.slice(0, 6)}...` : "MISSING");
 const BASE_URL = "https://api.kraken.com";
 
 // Leverage scale by conviction
