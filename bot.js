@@ -13,8 +13,8 @@ import {
   handleHelp, handleWatchlist, handleWatch, handleUnwatch,
   handleSetChannel, handleStatus,
   handleScan, handleAnalyzeThat, handleChartRequest,
-  handleGeneral, handleManualTrade, handleBacktest, handleConfirm,
-  handleCancel, handleStop, handleResume, handleClose
+  handleGeneral, handleManualTrade, handleBacktest,
+  handleStop, handleResume, handleSell, handlePort
 } from "./commands.js";
 
 // ─── Discord client ────────────────────────────────────────────────────────────
@@ -43,9 +43,9 @@ const TREE_CAPITAL_ID = process.env.TREE_CAPITAL_ID || "723993425325719619";
 
 // ─── Scheduled scans ───────────────────────────────────────────────────────────
 
-async function runScheduledScan(market) {
+async function runScheduledScan(label) {
   if (!state.scanChannelId) {
-    console.warn(`[SCAN] ${market}: no scan channel set — run !setchannel once.`);
+    console.warn(`[SCAN] ${label}: no scan channel set — run !setchannel once.`);
     return;
   }
 
@@ -53,13 +53,13 @@ async function runScheduledScan(market) {
   try {
     channel = await client.channels.fetch(state.scanChannelId);
   } catch (err) {
-    console.error(`[SCAN] ${market}: could not fetch channel ${state.scanChannelId}:`, err.message);
+    console.error(`[SCAN] ${label}: could not fetch channel ${state.scanChannelId}:`, err.message);
     return;
   }
   if (!channel) return;
 
-  console.log(`[SCAN] ${market} market open`);
-  await channel.send(`🌍 **${market} Market Open Scan**`);
+  console.log(`[SCAN] ${label} scan running`);
+  await channel.send(`🕒 **Scheduled Scan**`);
   await runScanner(channel, state);
 
   config.lastScanTime = state.lastScanTime;
@@ -84,12 +84,14 @@ client.once("clientReady", async () => {
     startMonitor(client, state.scanChannelId);
   }
 
-  // Market open scans (EST timezone)
-  cron.schedule("0 19 * * 0-4", () => runScheduledScan("Tokyo"),    { timezone: "America/New_York" });
-  cron.schedule("0 3  * * 1-5", () => runScheduledScan("London"),   { timezone: "America/New_York" });
-  cron.schedule("30 9 * * 1-5", () => runScheduledScan("New York"), { timezone: "America/New_York" });
+  // Scheduled scans every 3 hours, anchored to NY 9:30 AM EST (≈8×/day).
+  cron.schedule(
+    "30 9,12,15,18,21,0,3,6 * * *",
+    () => runScheduledScan("Scheduled"),
+    { timezone: "America/New_York" }
+  );
 
-  console.log("[CRON] Market open scans scheduled: Tokyo 7pm · London 3am · New York 9:30am EST");
+  console.log("[CRON] Scans scheduled every 3h from 9:30 AM EST (9:30, 12:30, 3:30, ...).");
 });
 
 // ─── Message handler ───────────────────────────────────────────────────────────
@@ -120,15 +122,16 @@ client.on("messageCreate", async (message) => {
   const raw   = message.content.trim();
   const lower = raw.toLowerCase();
 
-  // ── Trading commands ─────────────────────────────────────────────────────────
+  // ── Position commands ────────────────────────────────────────────────────────
 
-  if (lower === "!confirm")  return handleConfirm(message);
-  if (lower === "!cancel")   return handleCancel(message);
   if (lower === "!stop")     return handleStop(message);
   if (lower === "!resume")   return handleResume(message);
+  if (lower === "!port" || lower === "!portfolio") return handlePort(message);
 
-  if (lower.startsWith("!close ")) {
-    return handleClose(message, raw.slice(7).trim().split(/\s+/)[0]);
+  // !sell BTC  /  !sell BTC 50   (and aliases !cancel / !close)
+  if (lower.startsWith("!sell ") || lower.startsWith("!cancel ") || lower.startsWith("!close ")) {
+    const args = raw.split(/\s+/).slice(1);
+    return handleSell(message, args[0], args[1]);
   }
 
   // ── Info commands ────────────────────────────────────────────────────────────

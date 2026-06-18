@@ -7,6 +7,12 @@
 import fs   from "fs";
 import path from "path";
 
+// Where persistent files (config.json, positions.json) live. On Railway, attach a
+// volume and set DATA_DIR to its mount path (e.g. /data) so they survive redeploys.
+// Falls back to the app directory when DATA_DIR is unset (local dev).
+const DATA_DIR = process.env.DATA_DIR || process.cwd();
+try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch { /* dir already exists */ }
+
 // ─── Curated watchlist ─────────────────────────────────────────────────────────
 // 20 most liquid Kraken spot pairs — Tier 1 (core) + Tier 2 (mid cap)
 
@@ -68,7 +74,35 @@ function parseWatchlist(raw) {
 // mounted volume) this file is wiped on redeploy — attach a volume or set the env
 // vars for durable defaults.
 
-const CONFIG_FILE = path.join(process.cwd(), "config.json");
+const CONFIG_FILE = path.join(DATA_DIR, "config.json");
+
+// ─── Open-trade persistence ────────────────────────────────────────────────────
+// Open positions live in memory, so a restart would otherwise lose them (and stop
+// managing their exits). We mirror them to positions.json so the bot recovers on
+// boot. NOTE: on an ephemeral host (Railway without a mounted volume) this file is
+// wiped on every *redeploy* — attach a volume to make recovery durable across deploys.
+
+const POSITIONS_FILE = path.join(DATA_DIR, "positions.json");
+
+export function saveTrades(trades) {
+  try {
+    fs.writeFileSync(POSITIONS_FILE, JSON.stringify(trades, null, 2));
+  } catch (err) {
+    console.error("[STORAGE] Failed to save positions.json:", err.message);
+  }
+}
+
+export function loadTrades() {
+  try {
+    if (fs.existsSync(POSITIONS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(POSITIONS_FILE, "utf8"));
+      if (Array.isArray(data)) return data;
+    }
+  } catch (err) {
+    console.error("[STORAGE] Could not read positions.json:", err.message);
+  }
+  return [];
+}
 
 function readConfigFile() {
   try {

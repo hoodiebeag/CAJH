@@ -6,14 +6,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { analyzeChart }                   from "./analyzer.js";
 import { runScanner, scanSymbol, fetchCandles, SCAN_INTERVALS } from "./scanner.js";
 import { SWING_WINDOW } from "./strategy.js";
-import { backtest } from "./backtest.js";
+import { backtestMultiTF } from "./backtest.js";
 import { buildLiveContext, looksLikeCodeQuestion, readSource } from "./context.js";
 import { loadChart, saveConfig, symbolToKrakenId } from "./storage.js";
-import { getCurrentPrice, placeSell }     from "./trader.js";
+import { getCurrentPrice, placeSell, getHoldings } from "./trader.js";
 import {
-  confirmTrade, cancelTrade, hasPendingTrade,
   enableTrading, disableTrading, isTradingEnabled,
-  getTrade, removeTrade, postTradeClosed, getOpenTrades
+  getTrade, removeTrade, saveTradeState, postTradeClosed, getOpenTrades
 } from "./monitor.js";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -21,22 +20,77 @@ const MODEL     = "claude-sonnet-4-6";
 
 // ─── !confirm ──────────────────────────────────────────────────────────────────
 
-export async function handleConfirm(message) {
-  if (!hasPendingTrade()) {
-    return message.reply("ℹ️ No pending trade to confirm.");
+// ─── !sell <asset> [percent]  (also !cancel <asset>, !close <symbol>) ──────────
+// Closes cajh's tracked position for that asset. Defaults to 100%; an optional
+// percent sells part of it (e.g. !sell BTC 50). Only touches cajh's own position —
+// never your manually-held coins.
+
+export async function handleSell(message, symbol, percentArg) {
+  if (!symbol) return message.reply("Usage: `!sell BTC` or `!sell BTC 50` (percent).");
+  const upper = symbol.toUpperCase();
+  const trade = getTrade(upper);
+
+  if (!trade) {
+    return message.reply(`ℹ️ cajh has no open position in **${upper}** to sell. (This only closes cajh's own trades, not coins you hold manually.)`);
   }
-  const trade = confirmTrade();
-  await message.reply(`✅ Confirmed — executing **${trade?.symbol}** trade now...`);
+
+  let pct = 100;
+  if (percentArg != null) {
+    pct = parseFloat(percentArg);
+    if (isNaN(pct) || pct <= 0 || pct > 100) return message.reply("Percent must be between 1 and 100.");
+  }
+
+  const volume = trade.volume * (pct / 100);
+
+  try {
+    await message.reply(`🔄 Selling ${pct}% of cajh's **${upper}** position...`);
+    const price = await getCurrentPrice(upper);
+    await placeSell({ symbol: upper, volume });
+
+    if (pct >= 100) {
+      await postTradeClosed(message.channel, trade, price, "manual");
+      removeTrade(upper);
+    } else {
+      trade.volume -= volume;        // keep the remainder open with same stop/targets
+      saveTradeState();
+      await message.reply(`✅ Sold ${pct}% of **${upper}** at ~$${price}. Remaining: ${trade.volume} ${upper}.`);
+    }
+  } catch (err) {
+    console.error(`[COMMAND] Sell failed for ${upper}:`, err.message);
+    await message.reply(`⚠️ Failed to sell **${upper}**: ${err.message}`);
+  }
 }
 
-// ─── !cancel ───────────────────────────────────────────────────────────────────
+// ─── !port  (whole-account portfolio) ──────────────────────────────────────────
 
-export async function handleCancel(message) {
-  if (!hasPendingTrade()) {
-    return message.reply("ℹ️ No pending trade to cancel.");
+export async function handlePort(message) {
+  await message.reply("📊 Pulling your Kraken holdings...");
+  try {
+    const { holdings, totalUsd } = await getHoldings();
+    if (!holdings.length) return message.channel.send("No assets found on the account.");
+
+    const cajhTrades = getOpenTrades();
+    const usd = (n) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const lines = holdings.map(h => {
+      const t = cajhTrades.find(t => t.symbol === h.asset);
+      let pnl = "";
+      if (t && h.price) {
+        const d   = (h.price - t.entry) * t.volume;
+        const dPc = ((h.price - t.entry) / t.entry) * 100;
+        pnl = `  ·  cajh P&L: ${d >= 0 ? "+" : ""}${usd(d)} (${dPc >= 0 ? "+" : ""}${dPc.toFixed(1)}%)`;
+      }
+      return `**${h.asset}** — ${h.qty} @ ${usd(h.price)} = ${usd(h.value)}${pnl}`;
+    });
+
+    await message.channel.send(
+      `**Kraken Portfolio**\n\n${lines.join("\n")}\n\n**Total value:** ${usd(totalUsd)}\n` +
+      `_Market value for all holdings; entry-based P&L shown only for positions cajh opened._`
+    );
+  } catch (err) {
+    console.error("[COMMAND] Portfolio failed:", err.message);
+    await message.reply(`⚠️ Couldn't fetch holdings: ${err.message}`);
   }
-  cancelTrade();
-  await message.reply("❌ Trade cancelled.");
 }
 
 // ─── !stop ─────────────────────────────────────────────────────────────────────
@@ -53,29 +107,7 @@ export async function handleStop(message) {
 
 export async function handleResume(message) {
   enableTrading();
-  await message.reply("✅ **Trading resumed.** New setups will be posted for confirmation.");
-}
-
-// ─── !close <symbol> ───────────────────────────────────────────────────────────
-
-export async function handleClose(message, symbol) {
-  const upper = symbol.toUpperCase();
-  const trade = getTrade(upper);
-
-  if (!trade) {
-    return message.reply(`ℹ️ No open trade found for **${upper}**.`);
-  }
-
-  try {
-    await message.reply(`🔄 Closing **${upper}** position...`);
-    const price = await getCurrentPrice(upper);
-    await placeSell({ symbol: upper, volume: trade.volume });
-    await postTradeClosed(message.channel, trade, price, "manual");
-    removeTrade(upper);
-  } catch (err) {
-    console.error(`[COMMAND] Close failed for ${upper}:`, err.message);
-    await message.reply(`⚠️ Failed to close **${upper}**: ${err.message}`);
-  }
+  await message.reply("✅ **Trading resumed.** cajh will auto-place new setups.");
 }
 
 // ─── !help ─────────────────────────────────────────────────────────────────────
@@ -84,20 +116,18 @@ export async function handleHelp(message, state) {
   const status = isTradingEnabled() ? "🟢 Active" : "🔴 Halted";
   await message.reply(
     `**cajh — Swing-Fractal Trading Bot**\n` +
-    `Long-only spot. Buys confirmed swing lows (N=${SWING_WINDOW}) only when 15m/1h/4h all agree; a protective stop rests on Kraken.\n\n` +
+    `Long-only spot. Auto-buys confirmed swing lows (N=${SWING_WINDOW}) only when 15m/1h/4h all agree, and self-manages exits by stop / take-profit.\n\n` +
 
-    `**Trading:**\n` +
-    `> \`!confirm\` — Execute the pending trade\n` +
-    `> \`!cancel\` — Cancel the pending trade\n` +
-    `> \`!close <symbol>\` — Manually close an open position\n` +
-    `> \`!stop\` — Halt all trading immediately\n` +
-    `> \`!resume\` — Re-enable trading\n\n` +
+    `**Positions:**\n` +
+    `> \`!sell BTC\` — Close cajh's position in an asset\n` +
+    `> \`!sell BTC 50\` — Sell part of it (percent)\n` +
+    `> \`!port\` — Full Kraken portfolio + cajh P&L\n` +
+    `> \`!stop\` — Halt new trades  ·  \`!resume\` — Re-enable\n\n` +
 
     `**Signals & scanning:**\n` +
-    `> \`!scan\` — Scan the whole watchlist for swing signals\n` +
-    `> \`!trade\` — Same as !scan (watchlist sweep)\n` +
+    `> \`!scan\` — Scan the whole watchlist (auto-runs every 3h)\n` +
     `> \`!trade BTC\` — Check one asset across all timeframes\n` +
-    `> \`!backtest BTC 1h\` — Test the strategy on recent history\n` +
+    `> \`!backtest BTC\` — Multi-timeframe backtest on recent history\n` +
     `> \`!watchlist\` · \`!watch BTC ETH\` · \`!unwatch TAO\`\n\n` +
 
     `**Settings:**\n` +
@@ -105,8 +135,7 @@ export async function handleHelp(message, state) {
     `> \`!status\` — Bot status\n\n` +
 
     `**Extras (AI, no trades):**\n` +
-    `> \`@cajh show me BTC 15m\` — pull a chart\n` +
-    `> \`@cajh analyze that\` — plain-language read of the last chart\n\n` +
+    `> \`@cajh show me BTC 15m\`  ·  \`@cajh analyze that\`\n\n` +
 
     `**Status:** ${status}\n` +
     `**Watchlist:** ${state.watchlist.map(a => a.symbol).join(", ")}`
@@ -274,38 +303,46 @@ export async function handleGeneral(message, userMessage, state) {
   }
 }
 
-// ─── !backtest <symbol> [timeframe] ────────────────────────────────────────────
+// ─── !backtest <symbol> ────────────────────────────────────────────────────────
+// Multi-timeframe backtest: entries on 15m, gated by 1h + 4h alignment (the live rule).
 
 export async function handleBacktest(message, state, arg) {
-  const parts  = (arg || "").trim().split(/\s+/).filter(Boolean);
-  const symbol = parts[0]?.toUpperCase();
-  if (!symbol) return message.reply("Usage: `!backtest BTC` or `!backtest BTC 1h`");
-
-  const tfArg = parts[1];
-  const tfs   = tfArg ? SCAN_INTERVALS.filter(i => i.label === tfArg) : SCAN_INTERVALS;
-  if (!tfs.length) return message.reply("Timeframe must be 15m, 1h, or 4h.");
+  const symbol = (arg || "").trim().split(/\s+/)[0]?.toUpperCase();
+  if (!symbol) return message.reply("Usage: `!backtest BTC`");
 
   const id = (state.watchlist || []).find(a => a.symbol === symbol)?.id || symbolToKrakenId(symbol);
-  await message.reply(`📈 Backtesting **${symbol}** on ${tfs.map(t => t.label).join("/")} (N=${SWING_WINDOW})...`);
+  await message.reply(`📈 Backtesting **${symbol}** across 15m/1h/4h with alignment (N=${SWING_WINDOW})...`);
 
-  const lines = [];
-  for (const tf of tfs) {
-    const candles = await fetchCandles(id, tf.minutes);
-    if (!candles?.length) { lines.push(`**${tf.label}** — no data`); continue; }
-    const r = backtest(candles.slice(0, -1));
-    lines.push(
-      `**${tf.label}** — ${r.trades} trades · win ${(r.winRate * 100).toFixed(0)}% · ` +
-      `total ${r.totalR.toFixed(1)}R · avg ${r.avgR.toFixed(2)}R · maxDD ${r.maxDrawdownR.toFixed(1)}R`
+  try {
+    const candles15 = await fetchCandles(id, 15);
+    await new Promise(r => setTimeout(r, 1200));
+    const candles1h = await fetchCandles(id, 60);
+    await new Promise(r => setTimeout(r, 1200));
+    const candles4h = await fetchCandles(id, 240);
+
+    if (!candles15?.length || !candles1h?.length || !candles4h?.length) {
+      return message.reply(`⚠️ Couldn't fetch enough data for **${symbol}**.`);
+    }
+
+    const r = backtestMultiTF({
+      candles15: candles15.slice(0, -1),
+      candles1h: candles1h.slice(0, -1),
+      candles4h: candles4h.slice(0, -1)
+    });
+
+    await message.reply(
+      `📊 **Backtest — ${symbol}** (15m entries, 1h+4h aligned, recent history)\n\n` +
+      `**Trades:** ${r.trades}\n` +
+      `**Win rate:** ${(r.winRate * 100).toFixed(0)}%\n` +
+      `**Total:** ${r.totalR.toFixed(1)}R   ·   **Avg:** ${r.avgR.toFixed(2)}R/trade\n` +
+      `**Max drawdown:** ${r.maxDrawdownR.toFixed(1)}R\n\n` +
+      `_Simplified model: exact fills, stop assumed before target on the same candle, ` +
+      `limited history. Past results don't predict the future. "R" = multiples of per-trade risk._`
     );
-    await new Promise(res => setTimeout(res, 1500));
+  } catch (err) {
+    console.error(`[COMMAND] Backtest failed for ${symbol}:`, err.message);
+    await message.reply(`⚠️ Backtest failed: ${err.message}`);
   }
-
-  await message.reply(
-    `📊 **Backtest — ${symbol}** (recent history)\n` +
-    lines.join("\n") +
-    `\n\n_Simplified model: exact fills, stop assumed before target on the same candle, ` +
-    `limited history. Past results don't predict the future. "R" = multiples of per-trade risk._`
-  );
 }
 
 // ─── !trade [symbol] ───────────────────────────────────────────────────────────

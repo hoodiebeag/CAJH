@@ -3,19 +3,18 @@
  * Tracks open trades, enforces daily drawdown limits, and posts P&L updates.
  */
 
-import { getCurrentPrice, placeSell, getAccountBalance, placeStopLoss, cancelOrder, getOrderStatus } from "./trader.js";
+import { getCurrentPrice, placeSell, getAccountBalance } from "./trader.js";
+import { saveTrades, loadTrades } from "./storage.js";
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 
 const openTrades  = new Map();   // symbol → trade object
-const pendingTrades = new Map(); // pendingId → { trade, timeout, resolve }
 
 let tradingEnabled   = true;
 let dailyStartBalance = null;
 let dailyPnl          = 0;
 
 const DAILY_DRAWDOWN_LIMIT = 0.10; // 10%
-const CONFIRM_TIMEOUT_MS   = 10 * 60 * 1000; // 10 minutes
 
 // ─── Formatting ────────────────────────────────────────────────────────────────
 
@@ -66,68 +65,24 @@ async function currentEquity() {
   return cash + positionsValue;
 }
 
-// ─── Pending trade confirmations ───────────────────────────────────────────────
-
-/** Post a pending trade card and wait for !confirm or !cancel (10 min timeout). */
-export async function requestConfirmation(channel, trade) {
-  const id    = `${trade.symbol}-${Date.now()}`;
-  const sizePct = (trade.sizePct * 100).toFixed(0);
-
-  await channel.send(
-    `🔔 **Trade Setup — ${trade.symbol} LONG**\n\n` +
-    `**Entry:** ${usd(trade.entry)} (market)\n` +
-    `**Stop Loss:** ${usd(trade.stopLoss)}\n` +
-    `**Take Profit 1:** ${usd(trade.takeProfit1)}\n` +
-    `**Take Profit 2:** ${usd(trade.takeProfit2)}\n` +
-    `**Position Size:** ${sizePct}% of capital\n` +
-    `**Signal:** ${trade.signal ?? "—"}\n\n` +
-    `Type \`!confirm\` to execute or \`!cancel\` to skip.\n` +
-    `⏱️ Auto-cancels in 10 minutes.`
-  );
-
-  return new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      if (pendingTrades.has(id)) {
-        pendingTrades.delete(id);
-        channel.send(`⏱️ **${trade.symbol}** trade timed out — no confirmation received.`);
-        resolve(false);
-      }
-    }, CONFIRM_TIMEOUT_MS);
-
-    pendingTrades.set(id, { trade, timeout, resolve, channel });
-  });
-}
-
-/** Confirm the most recent pending trade. Returns true if one was found. */
-export function confirmTrade() {
-  const entry = [...pendingTrades.entries()].at(-1);
-  if (!entry) return null;
-  const [id, pending] = entry;
-  clearTimeout(pending.timeout);
-  pendingTrades.delete(id);
-  pending.resolve(true);
-  return pending.trade;
-}
-
-/** Cancel the most recent pending trade. Returns true if one was found. */
-export function cancelTrade() {
-  const entry = [...pendingTrades.entries()].at(-1);
-  if (!entry) return false;
-  const [id, pending] = entry;
-  clearTimeout(pending.timeout);
-  pendingTrades.delete(id);
-  pending.resolve(false);
-  return true;
-}
-
-export function hasPendingTrade() {
-  return pendingTrades.size > 0;
-}
-
 // ─── Trade registration ────────────────────────────────────────────────────────
 
+function persist() {
+  saveTrades(Array.from(openTrades.values()));
+}
+
+/** Reload open positions from disk on startup so a restart keeps managing exits. */
+export function hydrateTrades() {
+  const saved = loadTrades();
+  for (const t of saved) {
+    if (t?.symbol) openTrades.set(t.symbol.toUpperCase(), t);
+  }
+  if (saved.length) console.log(`[MONITOR] Recovered ${saved.length} open position(s) from disk.`);
+}
+
 export function registerTrade(trade) {
-  openTrades.set(trade.symbol, trade);
+  openTrades.set(trade.symbol.toUpperCase(), trade);
+  persist();
   console.log(`[MONITOR] Tracking ${trade.symbol} — entry: ${usd(trade.entry)}`);
 }
 
@@ -141,6 +96,12 @@ export function getTrade(symbol) {
 
 export function removeTrade(symbol) {
   openTrades.delete(symbol.toUpperCase());
+  persist();
+}
+
+/** Persist after mutating a tracked trade in place (e.g. partial close). */
+export function saveTradeState() {
+  persist();
 }
 
 // ─── Discord messages ──────────────────────────────────────────────────────────
@@ -201,6 +162,7 @@ export async function postPartialTakeProfit(channel, trade, exitPrice, soldVolum
 
 export function startMonitor(client, channelId, intervalMs = 30000) {
   console.log("[MONITOR] Position monitor started");
+  hydrateTrades();
 
   // Reset daily stats at the next local midnight, then every 24h.
   const now  = new Date();
@@ -244,33 +206,24 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
         );
       }
 
-      // Manage exits.
-      // Downside is protected by a REAL stop-loss order resting on Kraken (placed at
-      // entry), so it fires even if this process is down. The monitor handles the
-      // upside (TP1/TP2) and reconciles with that resting stop so nothing sells twice.
+      // Manage exits — fully self-managed by threshold. cajh polls each position's
+      // price and sells itself when price crosses a target or the stop. (No resting
+      // orders on the exchange.)
       for (const [symbol, trade] of [...openTrades.entries()]) {
-
-        // 1) Did the exchange stop already fill? If so, the position is gone — reconcile.
-        if (trade.stopOrderId) {
-          const status = await getOrderStatus(trade.stopOrderId);
-          if (status === "closed") {
-            await postTradeClosed(channel, trade, trade.stopLoss, trade.tp1Hit ? "sl-be" : "sl");
-            removeTrade(symbol);
-            continue;
-          }
-          if (status === "canceled" || status === "expired") {
-            // Unexpected — try to re-protect the position.
-            try { trade.stopOrderId = await placeStopLoss({ symbol, volume: trade.volume, stopPrice: trade.stopLoss }); }
-            catch { trade.stopOrderId = null; }
-          }
-        }
-
         const price = priceMap.get(symbol);
         if (!price) continue;
 
-        // 2) Final target → cancel the resting stop, then close whatever remains.
+        // Stop → close whatever remains (price at or below the stop).
+        if (price <= trade.stopLoss) {
+          try { await placeSell({ symbol, volume: trade.volume }); }
+          catch (err) { console.error(`[MONITOR] SL sell failed for ${symbol}:`, err.message); }
+          await postTradeClosed(channel, trade, price, trade.tp1Hit ? "sl-be" : "sl");
+          removeTrade(symbol);
+          continue;
+        }
+
+        // Final target → close whatever remains (price at or above TP2).
         if (price >= trade.takeProfit2) {
-          if (trade.stopOrderId) { await cancelOrder(trade.stopOrderId); trade.stopOrderId = null; }
           try { await placeSell({ symbol, volume: trade.volume }); }
           catch (err) { console.error(`[MONITOR] TP2 sell failed for ${symbol}:`, err.message); }
           await postTradeClosed(channel, trade, price, "tp");
@@ -278,31 +231,19 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
           continue;
         }
 
-        // 3) First target → scale out half, then reset the stop to breakeven.
+        // First target → scale out half once, move the stop to breakeven.
         if (!trade.tp1Hit && price >= trade.takeProfit1) {
+          const half = trade.volume / 2;
           try {
-            if (trade.stopOrderId) { await cancelOrder(trade.stopOrderId); trade.stopOrderId = null; }
-            const half = trade.volume / 2;
             await placeSell({ symbol, volume: half });
             trade.volume  -= half;
             trade.tp1Hit   = true;
             trade.stopLoss = trade.entry;   // breakeven on the runner
-            try { trade.stopOrderId = await placeStopLoss({ symbol, volume: trade.volume, stopPrice: trade.stopLoss }); }
-            catch { trade.stopOrderId = null; } // fall back to polling below
+            saveTradeState();
             await postPartialTakeProfit(channel, trade, price, half);
           } catch (err) {
             console.error(`[MONITOR] TP1 partial sell failed for ${symbol}:`, err.message);
           }
-          continue;
-        }
-
-        // 4) Fallback polling stop — only if no exchange stop is currently protecting us.
-        if (!trade.stopOrderId && price <= trade.stopLoss) {
-          try { await placeSell({ symbol, volume: trade.volume }); }
-          catch (err) { console.error(`[MONITOR] SL sell failed for ${symbol}:`, err.message); }
-          await postTradeClosed(channel, trade, price, trade.tp1Hit ? "sl-be" : "sl");
-          removeTrade(symbol);
-          continue;
         }
       }
 

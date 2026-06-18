@@ -85,6 +85,57 @@ export async function getAccountBalance() {
   return balance;
 }
 
+/** Map a Kraken asset code to a friendly ticker (XXBT → BTC, ZUSD → USD, etc.). */
+function displayAsset(a) {
+  if (a === "ZUSD") return "USD";
+  if (a === "XXBT" || a === "XBT") return "BTC";
+  if (a.length === 4 && (a.startsWith("X") || a.startsWith("Z"))) return a.slice(1);
+  return a;
+}
+
+const STABLES = ["USD", "USDT", "USDC", "DAI", "PYUSD"];
+
+/**
+ * Returns every non-dust asset held on the Kraken account, priced in USD:
+ *   { holdings: [{ asset, qty, price, value }], totalUsd }
+ * Stablecoins are valued at $1. Cost basis isn't available from the API, so this is
+ * market value only — true entry-based P&L is tracked separately for cajh's own trades.
+ */
+export async function getHoldings() {
+  const res = await kraken.api("Balance");
+  const bal = res.result || {};
+  const holdings = [];
+  let totalUsd = 0;
+
+  for (const [code, qtyStr] of Object.entries(bal)) {
+    const qty = parseFloat(qtyStr);
+    if (!qty || qty < 1e-8) continue;
+    const asset = displayAsset(code);
+
+    if (STABLES.includes(asset)) {
+      holdings.push({ asset, qty, price: 1, value: qty });
+      totalUsd += qty;
+      continue;
+    }
+
+    let price = 0;
+    try {
+      const pairCode = asset === "BTC" ? "XBT" : asset;
+      const t = await kraken.api("Ticker", { pair: `${pairCode}USD` });
+      const k = Object.keys(t.result)[0];
+      price = parseFloat(t.result[k].c[0]);
+    } catch { price = 0; }
+
+    const value = qty * price;
+    holdings.push({ asset, qty, price, value });
+    totalUsd += value;
+    await new Promise(r => setTimeout(r, 400)); // gentle with Kraken rate limits
+  }
+
+  holdings.sort((a, b) => b.value - a.value);
+  return { holdings, totalUsd };
+}
+
 /** Returns the current mid price for a symbol. */
 export async function getCurrentPrice(symbol) {
   const pair = symbolToPair(symbol);

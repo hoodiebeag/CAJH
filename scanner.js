@@ -13,12 +13,13 @@
 import axios from "axios";
 import { generateChartImage } from "./chart.js";
 import { latestSignal, detectSwings, currentBias, SWING_WINDOW, RR1, RR2, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, REQUIRE_TF_ALIGNMENT } from "./strategy.js";
-import { placeBuy, getCurrentPrice, placeStopLoss } from "./trader.js";
+import { placeBuy, getCurrentPrice } from "./trader.js";
 import {
-  requestConfirmation, registerTrade, postTradeOpened,
-  isTradingEnabled, getTrade
+  registerTrade, postTradeOpened, isTradingEnabled, getTrade
 } from "./monitor.js";
 import { saveChart, symbolToKrakenId } from "./storage.js";
+
+const BEAG = () => process.env.BEAG_USER_ID || "795521432783552552";
 
 export const SCAN_INTERVALS = [
   { label: "15m", minutes: 15 },
@@ -141,13 +142,7 @@ async function proposeBuy(symbol, buy, channel) {
   const tp2    = entry + RR2 * risk;
   const signal = `${buy.tf} swing low`;
 
-  const confirmed = await requestConfirmation(channel, {
-    symbol, entry, stopLoss, takeProfit1: tp1, takeProfit2: tp2,
-    sizePct: POSITION_PCT, signal
-  });
-
-  if (!confirmed) { await channel.send(`❌ **${symbol}** trade skipped.`); return; }
-
+  // Auto-execute — no confirmation needed. cajh places the trade itself.
   try {
     const trade = await placeBuy({ symbol, sizePct: POSITION_PCT, price: entry });
     trade.entry       = entry;
@@ -158,21 +153,12 @@ async function proposeBuy(symbol, buy, channel) {
     trade.tp1Hit      = false;
     trade.signal      = signal;
 
-    // Place a REAL protective stop on Kraken so the position is covered even if the
-    // bot goes offline. The monitor manages TP1/TP2 and reconciles with this order.
-    try {
-      trade.stopOrderId = await placeStopLoss({ symbol, volume: trade.volume, stopPrice: stopLoss });
-    } catch (stopErr) {
-      trade.stopOrderId = null;
-      console.error(`[STRATEGY] Could not place protective stop for ${symbol}:`, stopErr.message);
-      await channel.send(`⚠️ **${symbol}**: couldn't place the protective stop on Kraken — the monitor will watch the stop instead (only while the bot is running).`);
-    }
-
-    registerTrade(trade);
+    registerTrade(trade);            // persists to disk
     await postTradeOpened(channel, trade);
+    await channel.send(`<@${BEAG()}> 🚨 New trade opened on **${symbol}** — \`!sell ${symbol}\` to close it (or \`!sell ${symbol} 50\` for half).`);
   } catch (err) {
     console.error(`[STRATEGY] Execution failed for ${symbol}:`, err.message);
-    await channel.send(`⚠️ **${symbol}** trade failed: ${err.message}`);
+    await channel.send(`<@${BEAG()}> ⚠️ **${symbol}** trade failed: ${err.message}`);
   }
 }
 
