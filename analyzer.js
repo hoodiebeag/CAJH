@@ -3,8 +3,18 @@ import { fetchNews } from "./news.js";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// Get position size based on conviction
+function getPositionSize(conviction) {
+  if (conviction >= 10) return "15%";
+  if (conviction >= 9) return "12%";
+  if (conviction >= 8) return "9%";
+  if (conviction >= 7) return "7%";
+  if (conviction >= 6) return "5%";
+  return "0%";
+}
+
 // Analyze a single chart from Tree Capital
-export async function analyzeChart(base64, mediaType, channel, forceAnalysis = false, threshold = 8) {
+export async function analyzeChart(base64, mediaType, channel, forceAnalysis = false, threshold = 6) {
   try {
     console.log(`Analyzing chart, base64 length: ${base64.length}`);
 
@@ -34,6 +44,8 @@ Respond with ONLY a single number between 1 and 10. Nothing else.`,
       return;
     }
 
+    const positionSize = getPositionSize(conviction);
+
     const analysisResponse = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1024,
@@ -42,7 +54,8 @@ Respond with ONLY a single number between 1 and 10. Nothing else.`,
 - **Setup Type:** (e.g. Order Block Retest, FVG Fill, BOS continuation, Liquidity Sweep, BB squeeze breakout)
 - **Entry:** specific price
 - **Stop Loss:** specific price (below/above order block or FVG)
-- **Take Profit:** specific price
+- **Take Profit 1:** specific price (1:1.5 R:R minimum)
+- **Take Profit 2:** specific price (extended target)
 - **Grade:** A (all confluences align), B (2-3 confluences), C (basic setup)
 - **Key Confluences:** list 2-3 (e.g. EMA support, RSI oversold, VWAP reclaim, Order Block, FVG)
 Be specific with prices. No lengthy explanations.`,
@@ -58,7 +71,7 @@ Be specific with prices. No lengthy explanations.`,
     });
 
     const analysis = analysisResponse.content[0].text;
-    await channel.send(`📊 **Conviction: ${conviction}/10**\n\n${analysis}`);
+    await channel.send(`📊 **Conviction: ${conviction}/10 — Position Size: ${positionSize} of capital**\n\n${analysis}`);
 
   } catch (error) {
     console.error("Error analyzing chart:", error.message);
@@ -67,7 +80,7 @@ Be specific with prices. No lengthy explanations.`,
 }
 
 // Multi-timeframe analysis with smart money concepts and news awareness
-export async function analyzeMultiTimeframe(asset, charts, channel, forceAnalysis = false, threshold = 8) {
+export async function analyzeMultiTimeframe(asset, charts, channel, forceAnalysis = false, threshold = 6) {
   try {
     console.log(`Running multi-timeframe SMC analysis for ${asset}...`);
 
@@ -109,15 +122,17 @@ Respond with ONLY a single number. Nothing else.`,
     console.log(`SMC multi-TF conviction for ${asset}: ${conviction}`);
 
     if (conviction < threshold && !forceAnalysis) {
-      await channel.send(`📊 **${asset} Multi-TF Conviction: ${conviction}/10** — No high quality SMC setup detected.`);
+      await channel.send(`📊 **${asset} Multi-TF Conviction: ${conviction}/10** — No quality SMC setup detected.`);
       return { conviction, analysis: null };
     }
+
+    const positionSize = getPositionSize(conviction);
 
     // Full SMC analysis
     const analysisContent = [...content];
     analysisContent.push({
       type: "text",
-      text: "Based on all three timeframes, news, and smart money concepts, provide a detailed trade setup."
+      text: "Based on all three timeframes, news, and smart money concepts, provide detailed trade setups."
     });
 
     const analysisResponse = await anthropic.messages.create({
@@ -142,7 +157,7 @@ Be specific with prices. Prioritize A and B grade setups only.`,
     });
 
     const analysis = analysisResponse.content[0].text;
-    await channel.send(`📊 **${asset} Multi-TF Conviction: ${conviction}/10**\n\n${analysis}`);
+    await channel.send(`📊 **${asset} Multi-TF Conviction: ${conviction}/10 — Position Size: ${positionSize} of capital**\n\n${analysis}`);
     return { conviction, analysis };
 
   } catch (error) {
