@@ -112,24 +112,20 @@ function symbolToContract(symbol) {
 export async function getAccountBalance() {
   const data = await krakenFuturesRequest("GET", "/accounts");
   const accounts = data.accounts || {};
-  console.log("Raw accounts:", JSON.stringify(accounts));
 
   let balance = 0;
 
-  // Try multi-collateral cash account first
-  if (accounts.cash?.balances?.available) {
-    balance = parseFloat(accounts.cash.balances.available);
+  // Prefer flex (multi-collateral) available margin — most accurate for PF_ contracts
+  if (accounts.flex?.availableMargin) {
+    balance = parseFloat(accounts.flex.availableMargin);
   }
-  // Try flex account
-  else if (accounts.flex?.balances?.available) {
-    balance = parseFloat(accounts.flex.balances.available);
+  // Fall back to flex USD currency
+  else if (accounts.flex?.currencies?.USD?.available) {
+    balance = parseFloat(accounts.flex.currencies.USD.available);
   }
-  // Try each account's auxiliary.af (available funds)
-  else {
-    for (const account of Object.values(accounts)) {
-      const af = parseFloat(account?.auxiliary?.af || 0);
-      if (af > balance) balance = af;
-    }
+  // Fall back to cash USD balance
+  else if (accounts.cash?.balances?.usd) {
+    balance = parseFloat(accounts.cash.balances.usd);
   }
 
   console.log(`Available balance: $${balance}`);
@@ -156,12 +152,15 @@ export async function placeTrade({ symbol, direction, entry, stopLoss, takeProfi
   const tradeCapital = balance * sizePct;
   const currentPrice = await getCurrentPrice(symbol);
   const priceForCalc = entry || currentPrice;
-  const size = Math.floor((tradeCapital * leverage) / priceForCalc);
 
-  console.log(`Trade: balance=$${balance}, capital=$${tradeCapital}, leverage=${leverage}x, size=${size}, contract=${contract}`);
+  // For PF_ perpetuals, size is in number of contracts (each contract = 1 unit of base asset)
+  // Minimum size is 1 contract
+  const size = Math.max(1, Math.floor((tradeCapital * leverage) / priceForCalc));
 
-  if (size < 1) {
-    throw new Error(`Position size too small: $${tradeCapital.toFixed(2)} at ${leverage}x @ $${priceForCalc} = ${size} contracts`);
+  console.log(`Trade: balance=$${balance}, capital=$${tradeCapital}, leverage=${leverage}x, price=$${priceForCalc}, size=${size}, contract=${contract}`);
+
+  if (balance <= 0) {
+    throw new Error(`No available balance in demo account. Fund the multi-collateral wallet first.`);
   }
 
   const side = direction.toLowerCase() === "long" ? "buy" : "sell";
