@@ -2,7 +2,7 @@ import crypto from "crypto";
 import axios from "axios";
 
 // Toggle between demo and live
-const USE_DEMO = process.env.KRAKEN_DEMO_API_KEY ? true : false;
+const USE_DEMO = !!process.env.KRAKEN_DEMO_API_KEY;
 const BASE_URL = USE_DEMO
   ? "https://demo-futures.kraken.com/derivatives/api/v3"
   : "https://futures.kraken.com/derivatives/api/v3";
@@ -19,8 +19,10 @@ console.log(`Using ${USE_DEMO ? "DEMO" : "LIVE"} Kraken Futures API`);
 console.log("API Key loaded:", API_KEY ? `${API_KEY.slice(0, 6)}...` : "MISSING");
 
 // Sign Kraken Futures API request
-function signRequest(endpoint, nonce, postData = "") {
-  const message = postData + nonce + endpoint;
+// endpointPath for signing starts with /api/v3 (NOT /derivatives/api/v3)
+// Order: postData + nonce + endpointPath → SHA256 → HMAC-SHA512
+function signRequest(endpointPath, nonce, postData = "") {
+  const message = postData + nonce + endpointPath;
   const secretDecoded = Buffer.from(API_SECRET, "base64");
   const hash = crypto.createHash("sha256").update(message).digest();
   return crypto.createHmac("sha512", secretDecoded).update(hash).digest("base64");
@@ -30,11 +32,13 @@ function signRequest(endpoint, nonce, postData = "") {
 async function krakenFuturesRequest(method, endpoint, params = {}) {
   const nonce = Date.now().toString();
   const postData = method === "POST" ? new URLSearchParams(params).toString() : "";
+
+  // The signing path uses /api/v3/... not /derivatives/api/v3/...
+  const signPath = `/api/v3${endpoint}`;
   const queryString = method === "GET" && Object.keys(params).length > 0
     ? "?" + new URLSearchParams(params).toString()
     : "";
-  const signEndpoint = endpoint + queryString;
-  const signature = signRequest(signEndpoint, nonce, postData);
+  const signature = signRequest(signPath + queryString, nonce, postData);
 
   try {
     const response = await axios({
@@ -51,15 +55,19 @@ async function krakenFuturesRequest(method, endpoint, params = {}) {
       timeout: 10000
     });
 
-    console.log(`Futures API response (${endpoint}):`, JSON.stringify(response.data));
+    console.log(`Futures API (${endpoint}):`, JSON.stringify(response.data).slice(0, 200));
 
-    if (response.data.result !== "success" && response.data.error) {
+    if (response.data.result === "error") {
       throw new Error(`Kraken Futures error: ${response.data.error}`);
     }
 
     return response.data;
   } catch (error) {
-    console.error(`Kraken Futures API error (${endpoint}):`, error.response?.data || error.message);
+    if (error.response) {
+      console.error(`Kraken Futures error (${endpoint}):`, JSON.stringify(error.response.data));
+    } else {
+      console.error(`Kraken Futures error (${endpoint}):`, error.message);
+    }
     throw error;
   }
 }
@@ -103,9 +111,18 @@ function symbolToContract(symbol) {
 // Get available account balance
 export async function getAccountBalance() {
   const data = await krakenFuturesRequest("GET", "/accounts");
-  console.log("Accounts:", JSON.stringify(data.accounts));
-  const cash = data.accounts?.cash || data.accounts?.fi_xbtusd || Object.values(data.accounts || {})[0];
-  const balance = parseFloat(cash?.balances?.available || cash?.available || 0);
+  const accounts = data.accounts || {};
+  // Try different account structures
+  const account = accounts.cash ||
+    accounts.fi_xbtusd ||
+    accounts.flex ||
+    Object.values(accounts)[0];
+  const balance = parseFloat(
+    account?.balances?.available ||
+    account?.available ||
+    account?.balance ||
+    0
+  );
   console.log(`Available balance: $${balance}`);
   return balance;
 }
@@ -114,8 +131,10 @@ export async function getAccountBalance() {
 export async function getCurrentPrice(symbol) {
   const contract = symbolToContract(symbol);
   const data = await krakenFuturesRequest("GET", "/tickers");
-  const ticker = data.tickers?.find(t => t.symbol === contract);
-  return ticker?.last || ticker?.markPrice || null;
+  const ticker = data.tickers?.find(t =>
+    t.symbol?.toLowerCase() === contract.toLowerCase()
+  );
+  return parseFloat(ticker?.last || ticker?.markPrice || 0);
 }
 
 // Place a futures trade
@@ -133,13 +152,13 @@ export async function placeTrade({ symbol, direction, entry, stopLoss, takeProfi
   console.log(`Trade: balance=$${balance}, capital=$${tradeCapital}, leverage=${leverage}x, size=${size}, contract=${contract}`);
 
   if (size < 1) {
-    throw new Error(`Position size too small: $${tradeCapital.toFixed(2)} at ${leverage}x = ${size} contracts`);
+    throw new Error(`Position size too small: $${tradeCapital.toFixed(2)} at ${leverage}x @ $${priceForCalc} = ${size} contracts`);
   }
 
   const side = direction.toLowerCase() === "long" ? "buy" : "sell";
   const closeSide = side === "buy" ? "sell" : "buy";
 
-  // Place entry order
+  // Place entry order (market or limit)
   const orderParams = {
     orderType: entry ? "lmt" : "mkt",
     symbol: contract,
