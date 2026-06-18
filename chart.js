@@ -1,4 +1,5 @@
 import { createCanvas } from "canvas";
+import { detectSwings, SWING_WINDOW } from "./strategy.js";
 
 const COLORS = {
   background: "#0d1117",
@@ -291,6 +292,25 @@ export function generateChartImage(candles, symbol, interval) {
     const bodyTop = priceToY(Math.max(open, close));
     const bodyBottom = priceToY(Math.min(open, close));
     ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, Math.max(1, bodyBottom - bodyTop));
+  });
+
+  // Swing-fractal arrows — the actual trade signals.
+  // Green up-arrow under a confirmed swing low (buy); red down-arrow over a swing high (sell).
+  detectSwings(displayCandles, SWING_WINDOW).forEach(p => {
+    const x = indexToX(p.index);
+    if (p.type === "low") {
+      const y = priceToY(parseFloat(displayCandles[p.index].low)) + 6;
+      ctx.fillStyle = COLORS.bullish;
+      ctx.beginPath();
+      ctx.moveTo(x, y); ctx.lineTo(x - 5, y + 9); ctx.lineTo(x + 5, y + 9);
+      ctx.closePath(); ctx.fill();
+    } else {
+      const y = priceToY(parseFloat(displayCandles[p.index].high)) - 6;
+      ctx.fillStyle = COLORS.bearish;
+      ctx.beginPath();
+      ctx.moveTo(x, y); ctx.lineTo(x - 5, y - 9); ctx.lineTo(x + 5, y - 9);
+      ctx.closePath(); ctx.fill();
+    }
   });
 
   // Volume bars

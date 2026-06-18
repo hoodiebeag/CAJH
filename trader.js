@@ -17,14 +17,6 @@ if (!process.env.KRAKEN_API_KEY || !process.env.KRAKEN_API_SECRET) {
   console.warn("[TRADER] Warning: KRAKEN_API_KEY or KRAKEN_API_SECRET not set.");
 }
 
-// ─── Conviction scaling ────────────────────────────────────────────────────────
-
-const POSITION_PCT = { 10: 0.15, 9: 0.12, 8: 0.09, 7: 0.07, 6: 0.05 };
-
-export function getPositionPct(conviction) {
-  return POSITION_PCT[Math.min(conviction, 10)] ?? 0.05;
-}
-
 // ─── Pair mapping ──────────────────────────────────────────────────────────────
 
 const PAIR_MAP = {
@@ -32,13 +24,55 @@ const PAIR_MAP = {
   XRP:   "XRPUSD",  ADA:   "ADAUSD",  DOGE:  "DOGEUSD",
   AVAX:  "AVAXUSD", LINK:  "LINKUSD", LTC:   "LTCUSD",
   DOT:   "DOTUSD",  UNI:   "UNIUSD",  ATOM:  "ATOMUSD",
-  MATIC: "MATICUSD",NEAR:  "NEARUSD", FIL:   "FILUSD",
-  APT:   "APTUSD",  INJ:   "INJUSD",  TAO:   "TAOUSD",
-  TIA:   "TIAUSD",  SUI:   "SUIUSD"
+  POL:   "POLUSD",  MATIC: "POLUSD",  NEAR:  "NEARUSD",
+  FIL:   "FILUSD",  APT:   "APTUSD",  INJ:   "INJUSD",
+  TAO:   "TAOUSD",  TIA:   "TIAUSD",  SUI:   "SUIUSD"
 };
 
 export function symbolToPair(symbol) {
   return PAIR_MAP[symbol.toUpperCase()] ?? `${symbol.toUpperCase()}USD`;
+}
+
+// ─── Pair metadata (lot decimals + minimum order size) ─────────────────────────
+// Kraken rejects orders with too many volume decimals or below the per-pair
+// minimum. We fetch AssetPairs once and cache it for the process lifetime.
+
+let pairInfoCache = null;
+
+async function loadPairInfo() {
+  if (pairInfoCache) return pairInfoCache;
+  try {
+    const res = await kraken.api("AssetPairs");
+    pairInfoCache = res.result ?? {};
+  } catch (err) {
+    console.error("[TRADER] Failed to load AssetPairs:", err.message);
+    pairInfoCache = {};
+  }
+  return pairInfoCache;
+}
+
+async function getPairInfo(pair) {
+  const all = await loadPairInfo();
+  for (const [key, info] of Object.entries(all)) {
+    if (key === pair || info.altname === pair || info.wsname === pair) return info;
+  }
+  return null;
+}
+
+/** Round a volume to the pair's allowed lot decimals and validate the minimum. */
+async function normalizeVolume(pair, volume) {
+  const info     = await getPairInfo(pair);
+  const decimals = info?.lot_decimals ?? 8;
+  const rounded  = Number(parseFloat(volume).toFixed(decimals));
+
+  if (info?.ordermin && rounded < parseFloat(info.ordermin)) {
+    throw new Error(
+      `Volume ${rounded} ${pair} is below Kraken's minimum of ${info.ordermin}.`
+    );
+  }
+  if (rounded <= 0) throw new Error(`Computed volume for ${pair} is zero.`);
+
+  return rounded.toFixed(decimals);
 }
 
 // ─── Account ───────────────────────────────────────────────────────────────────
@@ -65,18 +99,19 @@ export async function getCurrentPrice(symbol) {
  * Places a spot market buy order.
  * Volume is calculated as (balance × sizePct) / price.
  */
-export async function placeBuy({ symbol, conviction, price }) {
-  const pair     = symbolToPair(symbol);
-  const sizePct  = getPositionPct(conviction);
-  const balance  = await getAccountBalance();
-  const capital  = balance * sizePct;
-  const volume   = (capital / price).toFixed(8);
-
-  if (parseFloat(volume) <= 0) throw new Error("Insufficient balance.");
+/**
+ * Places a spot market buy order.
+ * Volume is (balance × sizePct) / price, rounded to the pair's lot decimals.
+ */
+export async function placeBuy({ symbol, sizePct, price }) {
+  const pair    = symbolToPair(symbol);
+  const balance = await getAccountBalance();
+  const capital = balance * sizePct;
+  const volume  = await normalizeVolume(pair, capital / price);
 
   console.log(`[TRADER] BUY ${volume} ${symbol} @ ~$${price} (${(sizePct * 100).toFixed(0)}% of balance)`);
 
-  const res  = await kraken.api("AddOrder", {
+  const res = await kraken.api("AddOrder", {
     pair,
     type:      "buy",
     ordertype: "market",
@@ -92,7 +127,7 @@ export async function placeBuy({ symbol, conviction, price }) {
     price,
     capital,
     balance,
-    conviction
+    sizePct
   };
 }
 
@@ -101,15 +136,16 @@ export async function placeBuy({ symbol, conviction, price }) {
  * Volume is the amount of the asset held.
  */
 export async function placeSell({ symbol, volume }) {
-  const pair = symbolToPair(symbol);
+  const pair    = symbolToPair(symbol);
+  const volStr  = await normalizeVolume(pair, volume);
 
-  console.log(`[TRADER] SELL ${volume} ${symbol}`);
+  console.log(`[TRADER] SELL ${volStr} ${symbol}`);
 
   const res = await kraken.api("AddOrder", {
     pair,
     type:      "sell",
     ordertype: "market",
-    volume:    volume.toFixed(8)
+    volume:    volStr
   });
 
   return {
@@ -117,7 +153,7 @@ export async function placeSell({ symbol, volume }) {
     symbol,
     pair,
     side:   "sell",
-    volume
+    volume: parseFloat(volStr)
   };
 }
 
@@ -125,7 +161,8 @@ export async function placeSell({ symbol, volume }) {
  * Places a stop-loss sell order at a specific price.
  */
 export async function placeStopLoss({ symbol, volume, stopPrice }) {
-  const pair = symbolToPair(symbol);
+  const pair   = symbolToPair(symbol);
+  const volStr = await normalizeVolume(pair, volume);
 
   console.log(`[TRADER] STOP-LOSS ${symbol} @ $${stopPrice}`);
 
@@ -134,7 +171,7 @@ export async function placeStopLoss({ symbol, volume, stopPrice }) {
     type:      "sell",
     ordertype: "stop-loss",
     price:     stopPrice.toString(),
-    volume:    volume.toFixed(8)
+    volume:    volStr
   });
 
   return res.result?.txid?.[0];
@@ -144,7 +181,8 @@ export async function placeStopLoss({ symbol, volume, stopPrice }) {
  * Places a take-profit sell order at a specific price.
  */
 export async function placeTakeProfit({ symbol, volume, takeProfitPrice }) {
-  const pair = symbolToPair(symbol);
+  const pair   = symbolToPair(symbol);
+  const volStr = await normalizeVolume(pair, volume);
 
   console.log(`[TRADER] TAKE-PROFIT ${symbol} @ $${takeProfitPrice}`);
 
@@ -153,7 +191,7 @@ export async function placeTakeProfit({ symbol, volume, takeProfitPrice }) {
     type:      "sell",
     ordertype: "take-profit",
     price:     takeProfitPrice.toString(),
-    volume:    volume.toFixed(8)
+    volume:    volStr
   });
 
   return res.result?.txid?.[0];

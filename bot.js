@@ -11,9 +11,9 @@ import { saveChart, loadConfig, saveConfig } from "./storage.js";
 import { startMonitor, setDailyStartBalance } from "./monitor.js";
 import {
   handleHelp, handleWatchlist, handleWatch, handleUnwatch,
-  handleSetChannel, handleSetConviction, handleStatus,
+  handleSetChannel, handleStatus,
   handleScan, handleAnalyzeThat, handleChartRequest,
-  handleGeneral, handleManualTrade, handleConfirm,
+  handleGeneral, handleManualTrade, handleBacktest, handleConfirm,
   handleCancel, handleStop, handleResume, handleClose
 } from "./commands.js";
 
@@ -36,17 +36,26 @@ const state = {
   lastChartMediaType:  null,
   lastScanTime:        config.lastScanTime        || null,
   scanChannelId:       config.scanChannelId       || null,
-  convictionThreshold: config.convictionThreshold || 6,
   watchlist:           config.watchlist           || []
 };
 
-const TREE_CAPITAL_ID = "723993425325719619";
+const TREE_CAPITAL_ID = process.env.TREE_CAPITAL_ID || "723993425325719619";
 
 // ─── Scheduled scans ───────────────────────────────────────────────────────────
 
 async function runScheduledScan(market) {
-  if (!state.scanChannelId) return;
-  const channel = client.channels.cache.get(state.scanChannelId);
+  if (!state.scanChannelId) {
+    console.warn(`[SCAN] ${market}: no scan channel set — run !setchannel once.`);
+    return;
+  }
+
+  let channel;
+  try {
+    channel = await client.channels.fetch(state.scanChannelId);
+  } catch (err) {
+    console.error(`[SCAN] ${market}: could not fetch channel ${state.scanChannelId}:`, err.message);
+    return;
+  }
   if (!channel) return;
 
   console.log(`[SCAN] ${market} market open`);
@@ -103,7 +112,7 @@ client.on("messageCreate", async (message) => {
     state.lastChartMediaType = mediaType;
     saveChart(base64, mediaType);
 
-    await analyzeChart(base64, mediaType, message.channel, false, state.convictionThreshold);
+    await analyzeChart(base64, mediaType, message.channel);
     return;
   }
 
@@ -131,6 +140,10 @@ client.on("messageCreate", async (message) => {
   if (lower === "!status")     return handleStatus(message, state);
   if (lower === "!scan")       return handleScan(message, state);
 
+  if (lower.startsWith("!backtest ")) {
+    return handleBacktest(message, state, raw.slice(10).trim());
+  }
+
   if (lower === "!trade") {
     return handleManualTrade(message, state, null);
   }
@@ -145,10 +158,6 @@ client.on("messageCreate", async (message) => {
 
   if (lower.startsWith("!unwatch ")) {
     return handleUnwatch(message, state, config, raw.slice(9).trim().split(/\s+/));
-  }
-
-  if (lower.startsWith("!setconviction ")) {
-    return handleSetConviction(message, state, config, lower.split(" ")[1]);
   }
 
   // ── @mention commands ────────────────────────────────────────────────────────
@@ -170,7 +179,7 @@ client.on("messageCreate", async (message) => {
     }
 
     const wasChartRequest = await handleChartRequest(message, userMessage);
-    if (!wasChartRequest) await handleGeneral(message, userMessage);
+    if (!wasChartRequest) await handleGeneral(message, userMessage, state);
 
   } catch (err) {
     console.error("[BOT] Message handler error:", err.message);

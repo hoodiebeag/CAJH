@@ -21,15 +21,35 @@ function parseRSS(xml) {
   return items;
 }
 
-// Fetch latest crypto news from CoinDesk RSS (free, no API key)
+// Crypto news RSS feeds (free, no API key). Tried in order until one returns items.
+const NEWS_FEEDS = [
+  "https://www.coindesk.com/arc/outboundfeeds/rss/",
+  "https://cointelegraph.com/rss",
+  "https://decrypt.co/feed"
+];
+
+async function fetchFeedItems() {
+  for (const url of NEWS_FEEDS) {
+    try {
+      const response = await axios.get(url, {
+        timeout: 8000,
+        headers: { "User-Agent": "Mozilla/5.0" },
+        validateStatus: (s) => s >= 200 && s < 300
+      });
+      const items = parseRSS(response.data);
+      if (items.length) return items;
+    } catch (error) {
+      console.error(`News feed failed (${url}):`, error.message);
+    }
+  }
+  return [];
+}
+
+// Fetch latest crypto news, filtered for relevance to the given symbol.
 export async function fetchNews(symbol) {
   try {
-    const response = await axios.get("https://www.coindesk.com/arc/outboundfeeds/rss/", {
-      timeout: 8000,
-      headers: { "User-Agent": "Mozilla/5.0" }
-    });
-
-    const items = parseRSS(response.data);
+    const items = await fetchFeedItems();
+    if (!items.length) return [];
 
     // Filter for relevant news (match symbol or general crypto terms)
     const symbolMap = {
@@ -37,6 +57,7 @@ export async function fetchNews(symbol) {
       ETH: ["ethereum", "eth"],
       SOL: ["solana", "sol"],
       BNB: ["bnb", "binance"],
+      POL: ["polygon", "pol", "matic"],
       TAO: ["bittensor", "tao"]
     };
 

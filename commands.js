@@ -4,7 +4,10 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { analyzeChart }                   from "./analyzer.js";
-import { runScanner, SCAN_INTERVALS }     from "./scanner.js";
+import { runScanner, scanSymbol, fetchCandles, SCAN_INTERVALS } from "./scanner.js";
+import { SWING_WINDOW } from "./strategy.js";
+import { backtest } from "./backtest.js";
+import { buildLiveContext, looksLikeCodeQuestion, readSource } from "./context.js";
 import { loadChart, saveConfig, symbolToKrakenId } from "./storage.js";
 import { getCurrentPrice, placeSell }     from "./trader.js";
 import {
@@ -80,7 +83,8 @@ export async function handleClose(message, symbol) {
 export async function handleHelp(message, state) {
   const status = isTradingEnabled() ? "🟢 Active" : "🔴 Halted";
   await message.reply(
-    `**@c — Intraday Trading Bot**\n\n` +
+    `**cajh — Swing-Fractal Trading Bot**\n` +
+    `Long-only spot. Buys on confirmed swing lows (N=${SWING_WINDOW}); exits on stop-loss / take-profit.\n\n` +
 
     `**Trading:**\n` +
     `> \`!confirm\` — Execute the pending trade\n` +
@@ -89,24 +93,20 @@ export async function handleHelp(message, state) {
     `> \`!stop\` — Halt all trading immediately\n` +
     `> \`!resume\` — Re-enable trading\n\n` +
 
-    `**Analysis:**\n` +
-    `> \`!trade\` — Scan all watched assets and find the best long entry\n` +
-    `> \`!trade BTC\` — Analyze a specific asset for a long entry\n` +
-    `> \`@c analyze that\` — Force-analyze last chart\n\n` +
-
-    `**Scanner:**\n` +
-    `> \`!scan\` — Run full watchlist scan\n` +
-    `> \`!watchlist\` — View watchlist\n` +
-    `> \`!watch BTC ETH\` — Add to watchlist\n` +
-    `> \`!unwatch TAO\` — Remove from watchlist\n\n` +
+    `**Signals & scanning:**\n` +
+    `> \`!scan\` — Scan the whole watchlist for swing signals\n` +
+    `> \`!trade\` — Same as !scan (watchlist sweep)\n` +
+    `> \`!trade BTC\` — Check one asset across all timeframes\n` +
+    `> \`!backtest BTC 1h\` — Test the strategy on recent history\n` +
+    `> \`!watchlist\` · \`!watch BTC ETH\` · \`!unwatch TAO\`\n\n` +
 
     `**Settings:**\n` +
-    `> \`!setchannel\` — Set scan channel\n` +
-    `> \`!setconviction <1-10>\` — Min conviction (now **${state.convictionThreshold}**)\n` +
+    `> \`!setchannel\` — Set scan/alert channel\n` +
     `> \`!status\` — Bot status\n\n` +
 
-    `**Chart requests:**\n` +
-    `> \`@c show me BTC 15m\`  ·  \`@c ETH 1h with RSI\`\n\n` +
+    `**Extras (AI, no trades):**\n` +
+    `> \`@cajh show me BTC 15m\` — pull a chart\n` +
+    `> \`@cajh analyze that\` — plain-language read of the last chart\n\n` +
 
     `**Status:** ${status}\n` +
     `**Watchlist:** ${state.watchlist.map(a => a.symbol).join(", ")}`
@@ -181,17 +181,6 @@ export async function handleSetChannel(message, state, config) {
   await message.reply("✅ Scan and trade alerts will post in this channel.");
 }
 
-// ─── !setconviction ────────────────────────────────────────────────────────────
-
-export async function handleSetConviction(message, state, config, value) {
-  const n = parseInt(value);
-  if (isNaN(n) || n < 1 || n > 10) return message.reply("⚠️ Usage: `!setconviction 7` (1–10)");
-  state.convictionThreshold  = n;
-  config.convictionThreshold = n;
-  saveConfig(config);
-  await message.reply(`✅ Conviction threshold set to **${n}/10**.`);
-}
-
 // ─── !status ───────────────────────────────────────────────────────────────────
 
 export async function handleStatus(message, state) {
@@ -211,7 +200,7 @@ export async function handleStatus(message, state) {
     `**Open positions:** ${positions}\n` +
     `**Watchlist:** ${state.watchlist.map(a => a.symbol).join(", ")}\n` +
     `**Timeframes:** ${SCAN_INTERVALS.map(i => i.label).join(" · ")}\n` +
-    `**Conviction threshold:** ${state.convictionThreshold}/10`
+    `**Strategy:** Swing fractals, N=${SWING_WINDOW} (long-only)`
   );
 }
 
@@ -222,7 +211,7 @@ export async function handleScan(message, state) {
   await runScanner(message.channel, state);
 }
 
-// ─── @c analyze that ───────────────────────────────────────────────────────────
+// ─── cajh analyze that ───────────────────────────────────────────────────────────
 
 export async function handleAnalyzeThat(message, state) {
   const saved     = loadChart();
@@ -231,21 +220,21 @@ export async function handleAnalyzeThat(message, state) {
 
   if (!base64) return message.reply("No chart available yet. Pull one with a `!fc` command first.");
 
-  await message.reply("Analyzing last chart...");
-  await analyzeChart(base64, mediaType, message.channel, true, state.convictionThreshold);
+  await message.reply("Reading last chart...");
+  await analyzeChart(base64, mediaType, message.channel);
 }
 
-// ─── @c [chart request] ────────────────────────────────────────────────────────
+// ─── cajh [chart request] ────────────────────────────────────────────────────────
 
 export async function handleChartRequest(message, userMessage) {
   const res = await anthropic.messages.create({
     model: MODEL, max_tokens: 50,
     system:
-      `You are @c, a Discord trading bot. You trigger TradingView charts via !fc commands handled by @tree_capital.\n` +
+      `You are cajh, a Discord trading bot. You trigger TradingView charts via !fc commands handled by @tree_capital.\n` +
       `If the user asks for a chart, respond with ONLY the correct !fc command.\n` +
       `If not a chart request, respond with ONLY the word NOTACHART.\n\n` +
       `!fc format: !fc <pair> [exchange] [timeframe] [indicators]\n` +
-      `Pairs: btc eth sol xrp ada doge avax link ltc dot uni atom matic near fil apt inj tao tia sui\n` +
+      `Pairs: btc eth sol xrp ada doge avax link ltc dot uni atom pol matic near fil apt inj tao tia sui\n` +
       `Timeframes: 1m 5m 15m 30m 1h 4h 1d\n` +
       `Indicators: ma ema bb rsi macd\n` +
       `Shortcuts: !fcb (BTC 1m Binance)  !fce (ETH 1m Binance)  !fcs (SOL 1m Binance)`,
@@ -260,76 +249,75 @@ export async function handleChartRequest(message, userMessage) {
   return false;
 }
 
-// ─── @c [general question] ─────────────────────────────────────────────────────
+// ─── cajh [general question] ─────────────────────────────────────────────────────
 
-export async function handleGeneral(message, userMessage) {
+export async function handleGeneral(message, userMessage, state) {
+  let system =
+    `You are cajh, a long-only spot crypto trading bot on Kraken in a Discord server.\n` +
+    `Your trading is mechanical: you buy confirmed swing lows (Williams-style fractals,\n` +
+    `window N) and exit on stop-loss / take-profit. Answer questions about yourself, your\n` +
+    `live state, and your own code accurately and concisely. If you don't know, say so.\n\n` +
+    buildLiveContext(state);
+
+  if (looksLikeCodeQuestion(userMessage)) {
+    system += `\n\nYour current source code follows — use it to answer accurately:\n` + readSource();
+  }
+
   const res = await anthropic.messages.create({
-    model: MODEL, max_tokens: 1024,
-    system:
-      `You are @c, an expert intraday trader and technical analyst in a Discord server.\n` +
-      `You use smart money concepts (SMC), technical analysis, and market structure.\n` +
-      `You trade spot crypto on Kraken (long-only). You can trigger charts via !fc and run scans via !scan.\n` +
-      `Keep responses concise, direct, and trading-focused.`,
+    model: MODEL, max_tokens: 1024, system,
     messages: [{ role: "user", content: userMessage }]
   });
 
-  const text = res.content[0].text;
+  const text = res.content[0]?.text ?? "…";
   for (let i = 0; i < text.length; i += 1900) {
     await message.reply(text.slice(i, i + 1900));
   }
 }
 
+// ─── !backtest <symbol> [timeframe] ────────────────────────────────────────────
+
+export async function handleBacktest(message, state, arg) {
+  const parts  = (arg || "").trim().split(/\s+/).filter(Boolean);
+  const symbol = parts[0]?.toUpperCase();
+  if (!symbol) return message.reply("Usage: `!backtest BTC` or `!backtest BTC 1h`");
+
+  const tfArg = parts[1];
+  const tfs   = tfArg ? SCAN_INTERVALS.filter(i => i.label === tfArg) : SCAN_INTERVALS;
+  if (!tfs.length) return message.reply("Timeframe must be 15m, 1h, or 4h.");
+
+  const id = (state.watchlist || []).find(a => a.symbol === symbol)?.id || symbolToKrakenId(symbol);
+  await message.reply(`📈 Backtesting **${symbol}** on ${tfs.map(t => t.label).join("/")} (N=${SWING_WINDOW})...`);
+
+  const lines = [];
+  for (const tf of tfs) {
+    const candles = await fetchCandles(id, tf.minutes);
+    if (!candles?.length) { lines.push(`**${tf.label}** — no data`); continue; }
+    const r = backtest(candles.slice(0, -1));
+    lines.push(
+      `**${tf.label}** — ${r.trades} trades · win ${(r.winRate * 100).toFixed(0)}% · ` +
+      `total ${r.totalR.toFixed(1)}R · avg ${r.avgR.toFixed(2)}R · maxDD ${r.maxDrawdownR.toFixed(1)}R`
+    );
+    await new Promise(res => setTimeout(res, 1500));
+  }
+
+  await message.reply(
+    `📊 **Backtest — ${symbol}** (recent history)\n` +
+    lines.join("\n") +
+    `\n\n_Simplified model: exact fills, stop assumed before target on the same candle, ` +
+    `limited history. Past results don't predict the future. "R" = multiples of per-trade risk._`
+  );
+}
+
 // ─── !trade [symbol] ───────────────────────────────────────────────────────────
-// No symbol → scan all watched assets and find the best long entry
-// With symbol → analyze that specific asset only
+// No symbol → scan the whole watchlist for fresh swing signals.
+// With symbol → check that one asset across all timeframes.
 
 export async function handleManualTrade(message, state, symbol) {
-  const { analyzeMultiTimeframe, findBestLongEntry } = await import("./analyzer.js");
-
-  // No symbol — find best long across entire watchlist
   if (!symbol) {
     if (!state.watchlist?.length) {
       return message.reply("⚠️ Watchlist is empty. Add assets with `!watch BTC ETH SOL`.");
     }
-    return findBestLongEntry(state.watchlist, message.channel, state.convictionThreshold);
+    return runScanner(message.channel, state);
   }
-
-  // Specific symbol — deep dive on that asset
-  const upper = symbol.toUpperCase();
-  await message.reply(`🔍 Analyzing **${upper}** across 15m · 1h · 4h...`);
-
-  try {
-    const { fetchCandles }       = await import("./scanner.js");
-    const { generateChartImage } = await import("./chart.js");
-
-    const krakenId = symbolToKrakenId(upper);
-    const charts   = [];
-    const buffers  = [];
-
-    for (const interval of SCAN_INTERVALS) {
-      const candles = await fetchCandles(krakenId, interval.minutes);
-      if (!candles?.length) continue;
-
-      const buffer = generateChartImage(candles, upper, interval.label);
-      charts.push({ label: interval.label, base64: buffer.toString("base64"), mediaType: "image/png" });
-      buffers.push({ label: interval.label, buffer });
-
-      await new Promise(r => setTimeout(r, 1500));
-    }
-
-    if (!charts.length) {
-      return message.reply(`⚠️ No data for **${upper}**. Check the symbol and try again.`);
-    }
-
-    await message.channel.send({
-      content: `📈 **${upper}/USD — Trade Analysis**`,
-      files:   buffers.map(b => ({ attachment: b.buffer, name: `${upper}_${b.label}.png` }))
-    });
-
-    await analyzeMultiTimeframe(upper, charts, message.channel, true, state.convictionThreshold);
-
-  } catch (err) {
-    console.error(`[COMMAND] !trade error for ${symbol}:`, err.message);
-    await message.reply(`⚠️ Something went wrong: ${err.message}`);
-  }
+  return scanSymbol(symbol, message.channel, state);
 }

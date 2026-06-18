@@ -25,7 +25,7 @@ const DEFAULT_WATCHLIST = [
   // Tier 2 — Mid cap
   { id: "UNIUSD",   symbol: "UNI"   },
   { id: "ATOMUSD",  symbol: "ATOM"  },
-  { id: "MATICUSD", symbol: "MATIC" },
+  { id: "POLUSD",   symbol: "POL"   },
   { id: "NEARUSD",  symbol: "NEAR"  },
   { id: "FILUSD",   symbol: "FIL"   },
   { id: "APTUSD",   symbol: "APT"   },
@@ -42,9 +42,10 @@ const PAIR_MAP = {
   XRP:   "XRPUSD",   ADA:   "ADAUSD",   DOGE:  "DOGEUSD",
   AVAX:  "AVAXUSD",  LINK:  "LINKUSD",  LTC:   "LTCUSD",
   DOT:   "DOTUSD",   UNI:   "UNIUSD",   ATOM:  "ATOMUSD",
-  MATIC: "MATICUSD", NEAR:  "NEARUSD",  FIL:   "FILUSD",
-  APT:   "APTUSD",   INJ:   "INJUSD",   TAO:   "TAOUSD",
-  TIA:   "TIAUSD",   SUI:   "SUIUSD",   BNB:   "BNBUSD"
+  POL:   "POLUSD",   MATIC: "POLUSD",   NEAR:  "NEARUSD",
+  FIL:   "FILUSD",   APT:   "APTUSD",   INJ:   "INJUSD",
+  TAO:   "TAOUSD",   TIA:   "TIAUSD",   SUI:   "SUIUSD",
+  BNB:   "BNBUSD"
 };
 
 export function symbolToKrakenId(symbol) {
@@ -61,17 +62,45 @@ function parseWatchlist(raw) {
 }
 
 // ─── Config ────────────────────────────────────────────────────────────────────
+// Settings are seeded from environment variables on first run, then persisted to
+// config.json so runtime changes (!watch, !setchannel) survive a
+// restart. NOTE: on hosts with an ephemeral filesystem (e.g. Railway without a
+// mounted volume) this file is wiped on redeploy — attach a volume or set the env
+// vars for durable defaults.
+
+const CONFIG_FILE = path.join(process.cwd(), "config.json");
+
+function readConfigFile() {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
+    }
+  } catch (err) {
+    console.error("[STORAGE] Could not read config.json:", err.message);
+  }
+  return {};
+}
 
 export function loadConfig() {
+  const file = readConfigFile();
   return {
-    scanChannelId:       process.env.SCAN_CHANNEL_ID                 ?? null,
-    convictionThreshold: parseInt(process.env.CONVICTION_THRESHOLD)   || 6,
-    watchlist:           parseWatchlist(process.env.WATCHLIST)
+    scanChannelId: file.scanChannelId ?? process.env.SCAN_CHANNEL_ID ?? null,
+    watchlist:     file.watchlist     ?? parseWatchlist(process.env.WATCHLIST),
+    lastScanTime:  file.lastScanTime  ?? null
   };
 }
 
-export function saveConfig(_config) {
-  // Runtime only — update Railway env vars to persist changes permanently.
+export function saveConfig(config) {
+  try {
+    const payload = {
+      scanChannelId: config.scanChannelId ?? null,
+      watchlist:     config.watchlist     ?? [],
+      lastScanTime:  config.lastScanTime  ?? null
+    };
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(payload, null, 2));
+  } catch (err) {
+    console.error("[STORAGE] Failed to save config.json:", err.message);
+  }
 }
 
 // ─── Chart cache ───────────────────────────────────────────────────────────────

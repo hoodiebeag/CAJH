@@ -1,15 +1,36 @@
+/**
+ * scanner.js — Swing-fractal trading strategy (the core of cajh).
+ *
+ * Pure price structure, no indicators:
+ *   • Swing low  (BUY)  = low below the N candles on both sides.
+ *   • Swing high (SELL) = high above the N candles on both sides.
+ * A pivot confirms N candles later, so signals have a built-in N-candle delay.
+ *
+ * cajh is long-only spot: it ACTS on buy signals (opens a long) and only DISPLAYS
+ * sell signals. Exits are handled by the position monitor via stop-loss / take-profit.
+ */
+
 import axios from "axios";
 import { generateChartImage } from "./chart.js";
-import { analyzeMultiTimeframe } from "./analyzer.js";
-import { saveChart } from "./storage.js";
+import { latestSignal, detectSwings, SWING_WINDOW, RR1, RR2, REQUIRE_HIGHER_LOW, MAX_STOP_PCT } from "./strategy.js";
+import { placeBuy, getCurrentPrice } from "./trader.js";
+import {
+  requestConfirmation, registerTrade, postTradeOpened,
+  isTradingEnabled, getTrade
+} from "./monitor.js";
+import { saveChart, symbolToKrakenId } from "./storage.js";
 
 export const SCAN_INTERVALS = [
   { label: "15m", minutes: 15 },
-  { label: "1h", minutes: 60 },
-  { label: "4h", minutes: 240 }
+  { label: "1h",  minutes: 60 },
+  { label: "4h",  minutes: 240 }
 ];
 
-// Fetch OHLC candles from Kraken (free, no API key)
+// ─── Tunable strategy settings ─────────────────────────────────────────────────
+const POSITION_PCT = 0.10;  // 10% of balance per trade
+// Swing window N, RR1/RR2, and the optional filters live in strategy.js.
+
+// ─── Candle fetch (Kraken public OHLC, no API key) ─────────────────────────────
 export async function fetchCandles(pair, minutes) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -23,84 +44,155 @@ export async function fetchCandles(pair, minutes) {
         return null;
       }
 
-      const key = Object.keys(response.data.result).find(k => k !== "last");
+      const key     = Object.keys(response.data.result).find(k => k !== "last");
       const candles = response.data.result[key];
 
       return candles.map(k => ({
-        open: k[1].toString(),
-        high: k[2].toString(),
-        low: k[3].toString(),
-        close: k[4].toString(),
+        time:   k[0],
+        open:   k[1].toString(),
+        high:   k[2].toString(),
+        low:    k[3].toString(),
+        close:  k[4].toString(),
         volume: k[6].toString()
       }));
 
     } catch (error) {
       console.error(`Fetch attempt ${attempt} failed for ${pair}:`, error.message);
       if (attempt === 3) return null;
-      await new Promise(res => setTimeout(res, 5000 * attempt)); // increasing delay
+      await new Promise(res => setTimeout(res, 5000 * attempt));
     }
   }
 }
 
-// Run full scanner using watchlist from state
-export async function runScanner(channel, state) {
-  const watchlist = state.watchlist || [];
+// ─── Per-asset evaluation ──────────────────────────────────────────────────────
+// Returns { signals: { "15m": sig|null, ... }, buy: bestBuy|null, buffers: [...] }.
+// "buy" is the freshly-confirmed buy signal from the highest timeframe that has one.
+async function evaluateAsset(asset) {
+  const signals = {};
+  const buffers = [];
+  let buy = null;
 
-  if (watchlist.length === 0) {
-    await channel.send(`⚠️ Your watchlist is empty! Add assets with \`!watch BTC ETH SOL\``);
+  for (const interval of SCAN_INTERVALS) {
+    const candles = await fetchCandles(asset.id, interval.minutes);
+    if (!candles || candles.length === 0) { signals[interval.label] = null; continue; }
+
+    // Signals use CLOSED candles only — drop the still-forming last candle.
+    const closed = candles.slice(0, -1);
+    const sig    = latestSignal(closed, SWING_WINDOW);
+    signals[interval.label] = sig;
+    if (sig?.type === "buy") {
+      // Find the previous confirmed swing low (for the higher-low filter).
+      const lowPivots = detectSwings(closed, SWING_WINDOW).filter(p => p.type === "low");
+      const prev = lowPivots.length >= 2 ? lowPivots[lowPivots.length - 2].price : null;
+      buy = { ...sig, tf: interval.label, prevSwingLow: prev }; // higher TF overwrites
+    }
+
+    const buffer = generateChartImage(candles, asset.symbol, interval.label);
+    buffers.push({ label: interval.label, buffer });
+
+    await new Promise(r => setTimeout(r, 2000)); // be gentle with Kraken
+  }
+
+  return { signals, buy, buffers };
+}
+
+function summarize(symbol, signals) {
+  const parts = SCAN_INTERVALS.map(i => {
+    const s = signals[i.label];
+    if (!s) return `${i.label}: —`;
+    return `${i.label}: ${s.type === "buy" ? "🟢 BUY" : "🔴 SELL"} @ $${s.pivotPrice}`;
+  });
+  return `**${symbol}**  ·  ${parts.join("  ·  ")}`;
+}
+
+// ─── Trade proposal (buy signals only) ─────────────────────────────────────────
+async function proposeBuy(symbol, buy, channel) {
+  if (!isTradingEnabled()) return;
+  if (getTrade(symbol))    return;   // one position per symbol
+
+  const entry    = await getCurrentPrice(symbol);
+  const stopLoss = buy.pivotPrice;   // the swing low = structural invalidation
+  const risk     = entry - stopLoss;
+
+  if (!entry || risk <= 0) {
+    await channel.send(`ℹ️ **${symbol}** buy signal skipped — price is already at/below the swing low.`);
     return;
   }
 
-  const assetNames = watchlist.map(a => a.symbol).join(", ");
-  await channel.send(`🔍 **Scanning ${assetNames} across 15m, 1h, 4h timeframes...**`);
+  // Optional confidence filters (see strategy.js).
+  if (MAX_STOP_PCT && risk / entry > MAX_STOP_PCT) {
+    await channel.send(`ℹ️ **${symbol}** skipped — stop too far (${(risk / entry * 100).toFixed(1)}% > ${(MAX_STOP_PCT * 100).toFixed(0)}%).`);
+    return;
+  }
+  if (REQUIRE_HIGHER_LOW && buy.prevSwingLow != null && buy.pivotPrice <= buy.prevSwingLow) {
+    await channel.send(`ℹ️ **${symbol}** skipped — not a higher low (structure not yet bullish).`);
+    return;
+  }
+
+  const tp1    = entry + RR1 * risk;
+  const tp2    = entry + RR2 * risk;
+  const signal = `${buy.tf} swing low`;
+
+  const confirmed = await requestConfirmation(channel, {
+    symbol, entry, stopLoss, takeProfit1: tp1, takeProfit2: tp2,
+    sizePct: POSITION_PCT, signal
+  });
+
+  if (!confirmed) { await channel.send(`❌ **${symbol}** trade skipped.`); return; }
+
+  try {
+    const trade = await placeBuy({ symbol, sizePct: POSITION_PCT, price: entry });
+    trade.entry       = entry;
+    trade.stopLoss    = stopLoss;
+    trade.takeProfit1 = tp1;
+    trade.takeProfit2 = tp2;
+    trade.sizePct     = POSITION_PCT;
+    trade.tp1Hit      = false;
+    trade.signal      = signal;
+    registerTrade(trade);
+    await postTradeOpened(channel, trade);
+  } catch (err) {
+    console.error(`[STRATEGY] Execution failed for ${symbol}:`, err.message);
+    await channel.send(`⚠️ **${symbol}** trade failed: ${err.message}`);
+  }
+}
+
+// ─── Public entry points ───────────────────────────────────────────────────────
+
+/** Full watchlist scan — used by !scan and the scheduled market-open scans. */
+export async function runScanner(channel, state) {
+  const watchlist = state.watchlist || [];
+  if (watchlist.length === 0) {
+    await channel.send("⚠️ Your watchlist is empty! Add assets with `!watch BTC ETH SOL`.");
+    return;
+  }
+
+  await channel.send(
+    `🔍 **Scanning ${watchlist.map(a => a.symbol).join(", ")}** on ` +
+    `${SCAN_INTERVALS.map(i => i.label).join("/")} for swing signals (N=${SWING_WINDOW})...`
+  );
 
   for (const asset of watchlist) {
     try {
-      console.log(`Fetching all timeframes for ${asset.symbol}...`);
-
-      const charts = [];
-      const imageBuffers = [];
-
-      for (const interval of SCAN_INTERVALS) {
-        const candles = await fetchCandles(asset.id, interval.minutes);
-
-        if (!candles || candles.length === 0) {
-          console.warn(`Missing candles for ${asset.symbol} ${interval.label}`);
-          continue;
-        }
-
-        const imageBuffer = generateChartImage(candles, asset.symbol, interval.label);
-        const base64 = imageBuffer.toString("base64");
-
-        charts.push({ label: interval.label, base64, mediaType: "image/png" });
-        imageBuffers.push({ label: interval.label, buffer: imageBuffer });
-
-        // Delay between timeframe fetches
-        await new Promise(res => setTimeout(res, 3000));
-      }
-
-      if (charts.length === 0) {
-        await channel.send(`⚠️ Could not fetch any data for **${asset.symbol}** — skipping.`);
+      const { signals, buy, buffers } = await evaluateAsset(asset);
+      if (buffers.length === 0) {
+        await channel.send(`⚠️ Could not fetch data for **${asset.symbol}** — skipping.`);
         continue;
       }
 
-      state.lastChartBase64 = charts[0].base64;
+      const b64 = buffers[0].buffer.toString("base64");
+      state.lastChartBase64    = b64;
       state.lastChartMediaType = "image/png";
-      saveChart(charts[0].base64, "image/png");
+      saveChart(b64, "image/png");
 
       await channel.send({
-        content: `📈 **${asset.symbol}/USD — Multi-Timeframe Analysis**`,
-        files: imageBuffers.map(ib => ({
-          attachment: ib.buffer,
-          name: `${asset.symbol}_${ib.label}.png`
-        }))
+        content: summarize(asset.symbol, signals),
+        files:   buffers.map(b => ({ attachment: b.buffer, name: `${asset.symbol}_${b.label}.png` }))
       });
 
-      await analyzeMultiTimeframe(asset.symbol, charts, channel, false, state.convictionThreshold);
+      if (buy) await proposeBuy(asset.symbol, buy, channel);
 
-      // Longer delay between assets
-      await new Promise(res => setTimeout(res, 5000));
-
+      await new Promise(r => setTimeout(r, 3000));
     } catch (error) {
       console.error(`Error scanning ${asset.symbol}:`, error.message);
       await channel.send(`⚠️ Error scanning **${asset.symbol}**.`);
@@ -110,4 +202,29 @@ export async function runScanner(channel, state) {
   const now = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
   await channel.send(`✅ **Scan complete** — ${now} EST`);
   state.lastScanTime = now;
+}
+
+/** Single-symbol check — used by !trade BTC. */
+export async function scanSymbol(symbol, channel, state) {
+  const upper = symbol.toUpperCase();
+  const known = (state.watchlist || []).find(a => a.symbol === upper);
+  const asset = { symbol: upper, id: known?.id || symbolToKrakenId(upper) };
+
+  await channel.send(`🔍 Checking **${upper}** on ${SCAN_INTERVALS.map(i => i.label).join("/")}...`);
+
+  try {
+    const { signals, buy, buffers } = await evaluateAsset(asset);
+    if (buffers.length === 0) { await channel.send(`⚠️ No data for **${upper}**.`); return; }
+
+    await channel.send({
+      content: summarize(upper, signals),
+      files:   buffers.map(b => ({ attachment: b.buffer, name: `${upper}_${b.label}.png` }))
+    });
+
+    if (buy) await proposeBuy(upper, buy, channel);
+    else     await channel.send(`No fresh buy signal on **${upper}** right now.`);
+  } catch (err) {
+    console.error(`[STRATEGY] scanSymbol error for ${upper}:`, err.message);
+    await channel.send(`⚠️ Something went wrong: ${err.message}`);
+  }
 }
