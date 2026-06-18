@@ -61,10 +61,12 @@ async function krakenRequest(method, endpoint, params = {}) {
   }
 }
 
-// Get available account balance
+// Get account balance
 export async function getAccountBalance() {
   const data = await krakenRequest("GET", "/accounts");
+  console.log("Kraken accounts response:", JSON.stringify(data, null, 2));
   const account = data.accounts?.fi_xbtusd || data.accounts?.cash;
+  console.log("Account found:", JSON.stringify(account, null, 2));
   return account?.balances?.available || 0;
 }
 
