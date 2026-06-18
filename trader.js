@@ -1,246 +1,181 @@
-import crypto from "crypto";
-import axios from "axios";
+/**
+ * trader.js — Kraken Spot Trading API
+ * Handles authenticated requests, balance queries, and order placement.
+ * Uses the kraken-api library for battle-tested authentication.
+ */
 
-// Toggle between demo and live
-const USE_DEMO = !!process.env.KRAKEN_DEMO_API_KEY;
-const BASE_URL = USE_DEMO
-  ? "https://demo-futures.kraken.com/derivatives/api/v3"
-  : "https://futures.kraken.com/derivatives/api/v3";
+import Kraken from "kraken-api";
 
-const API_KEY = USE_DEMO
-  ? process.env.KRAKEN_DEMO_API_KEY
-  : process.env.KRAKEN_FUTURES_API_KEY;
+// ─── Client ────────────────────────────────────────────────────────────────────
 
-const API_SECRET = USE_DEMO
-  ? process.env.KRAKEN_DEMO_API_SECRET
-  : process.env.KRAKEN_FUTURES_API_SECRET;
+const kraken = new Kraken(
+  process.env.KRAKEN_API_KEY,
+  process.env.KRAKEN_API_SECRET
+);
 
-console.log(`Using ${USE_DEMO ? "DEMO" : "LIVE"} Kraken Futures API`);
-console.log("API Key loaded:", API_KEY ? `${API_KEY.slice(0, 6)}...` : "MISSING");
-
-// Sign Kraken Futures API request
-// endpointPath for signing starts with /api/v3 (NOT /derivatives/api/v3)
-// Order: postData + nonce + endpointPath → SHA256 → HMAC-SHA512
-function signRequest(endpointPath, nonce, postData = "") {
-  const message = postData + nonce + endpointPath;
-  const secretDecoded = Buffer.from(API_SECRET, "base64");
-  const hash = crypto.createHash("sha256").update(message).digest();
-  return crypto.createHmac("sha512", secretDecoded).update(hash).digest("base64");
+if (!process.env.KRAKEN_API_KEY || !process.env.KRAKEN_API_SECRET) {
+  console.warn("[TRADER] Warning: KRAKEN_API_KEY or KRAKEN_API_SECRET not set.");
 }
 
-// Make authenticated Kraken Futures API request
-async function krakenFuturesRequest(method, endpoint, params = {}) {
-  const nonce = Date.now().toString();
-  const postData = method === "POST" ? new URLSearchParams(params).toString() : "";
+// ─── Conviction scaling ────────────────────────────────────────────────────────
 
-  // The signing path uses /api/v3/... not /derivatives/api/v3/...
-  const signPath = `/api/v3${endpoint}`;
-  const queryString = method === "GET" && Object.keys(params).length > 0
-    ? "?" + new URLSearchParams(params).toString()
-    : "";
-  const signature = signRequest(signPath + queryString, nonce, postData);
+const POSITION_PCT = { 10: 0.15, 9: 0.12, 8: 0.09, 7: 0.07, 6: 0.05 };
 
-  try {
-    const response = await axios({
-      method,
-      url: `${BASE_URL}${endpoint}`,
-      headers: {
-        "APIKey": API_KEY,
-        "Nonce": nonce,
-        "Authent": signature,
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
-      data: method === "POST" ? postData : undefined,
-      params: method === "GET" ? params : undefined,
-      timeout: 10000
-    });
-
-    console.log(`Futures API (${endpoint}):`, JSON.stringify(response.data).slice(0, 200));
-
-    if (response.data.result === "error") {
-      throw new Error(`Kraken Futures error: ${response.data.error}`);
-    }
-
-    return response.data;
-  } catch (error) {
-    if (error.response) {
-      console.error(`Kraken Futures error (${endpoint}):`, JSON.stringify(error.response.data));
-    } else {
-      console.error(`Kraken Futures error (${endpoint}):`, error.message);
-    }
-    throw error;
-  }
+export function getPositionPct(conviction) {
+  return POSITION_PCT[Math.min(conviction, 10)] ?? 0.05;
 }
 
-// Leverage scale by conviction
-function getLeverage(conviction) {
-  if (conviction >= 10) return 10;
-  if (conviction >= 9) return 7;
-  if (conviction >= 8) return 5;
-  if (conviction >= 7) return 3;
-  return 2;
+// ─── Pair mapping ──────────────────────────────────────────────────────────────
+
+const PAIR_MAP = {
+  BTC:   "XBTUSD",  ETH:   "ETHUSD",  SOL:   "SOLUSD",
+  XRP:   "XRPUSD",  ADA:   "ADAUSD",  DOGE:  "DOGEUSD",
+  AVAX:  "AVAXUSD", LINK:  "LINKUSD", LTC:   "LTCUSD",
+  DOT:   "DOTUSD",  UNI:   "UNIUSD",  ATOM:  "ATOMUSD",
+  MATIC: "MATICUSD",NEAR:  "NEARUSD", FIL:   "FILUSD",
+  APT:   "APTUSD",  INJ:   "INJUSD",  TAO:   "TAOUSD",
+  TIA:   "TIAUSD",  SUI:   "SUIUSD"
+};
+
+export function symbolToPair(symbol) {
+  return PAIR_MAP[symbol.toUpperCase()] ?? `${symbol.toUpperCase()}USD`;
 }
 
-// Position size by conviction
-function getPositionSizePct(conviction) {
-  if (conviction >= 10) return 0.15;
-  if (conviction >= 9) return 0.12;
-  if (conviction >= 8) return 0.09;
-  if (conviction >= 7) return 0.07;
-  return 0.05;
-}
+// ─── Account ───────────────────────────────────────────────────────────────────
 
-// Map symbol to Kraken Futures perpetual contract
-function symbolToContract(symbol) {
-  const contractMap = {
-    BTC: "PF_XBTUSD",
-    ETH: "PF_ETHUSD",
-    SOL: "PF_SOLUSD",
-    XRP: "PF_XRPUSD",
-    ADA: "PF_ADAUSD",
-    DOGE: "PF_DOGEUSD",
-    LTC: "PF_LTCUSD",
-    LINK: "PF_LINKUSD",
-    AVAX: "PF_AVAXUSD",
-    BNB: "PF_BNBUSD",
-    TAO: "PF_TAOUSD"
-  };
-  return contractMap[symbol.toUpperCase()] || `PF_${symbol.toUpperCase()}USD`;
-}
-
-// Get available account balance
+/** Returns available USD balance. */
 export async function getAccountBalance() {
-  const data = await krakenFuturesRequest("GET", "/accounts");
-  const accounts = data.accounts || {};
-
-  let balance = 0;
-
-  // Prefer flex (multi-collateral) available margin — most accurate for PF_ contracts
-  if (accounts.flex?.availableMargin) {
-    balance = parseFloat(accounts.flex.availableMargin);
-  }
-  // Fall back to flex USD currency
-  else if (accounts.flex?.currencies?.USD?.available) {
-    balance = parseFloat(accounts.flex.currencies.USD.available);
-  }
-  // Fall back to cash USD balance
-  else if (accounts.cash?.balances?.usd) {
-    balance = parseFloat(accounts.cash.balances.usd);
-  }
-
-  console.log(`Available balance: $${balance}`);
+  const res     = await kraken.api("Balance");
+  const balance = parseFloat(res.result?.ZUSD ?? res.result?.USD ?? 0);
+  console.log(`[TRADER] Available balance: $${balance.toFixed(2)}`);
   return balance;
 }
 
-// Get current price for a contract
+/** Returns the current mid price for a symbol. */
 export async function getCurrentPrice(symbol) {
-  const contract = symbolToContract(symbol);
-  const data = await krakenFuturesRequest("GET", "/tickers");
-  const ticker = data.tickers?.find(t =>
-    t.symbol?.toLowerCase() === contract.toLowerCase()
-  );
-  return parseFloat(ticker?.last || ticker?.markPrice || 0);
+  const pair = symbolToPair(symbol);
+  const res  = await kraken.api("Ticker", { pair });
+  const data = Object.values(res.result)[0];
+  return parseFloat(data?.c?.[0] ?? 0);
 }
 
-// Place a futures trade
-export async function placeTrade({ symbol, direction, entry, stopLoss, takeProfit1, takeProfit2, conviction }) {
-  const contract = symbolToContract(symbol);
-  const leverage = getLeverage(conviction);
-  const sizePct = getPositionSizePct(conviction);
+// ─── Orders ────────────────────────────────────────────────────────────────────
 
-  const balance = await getAccountBalance();
-  const tradeCapital = balance * sizePct;
-  const currentPrice = await getCurrentPrice(symbol);
-  const priceForCalc = entry || currentPrice;
+/**
+ * Places a spot market buy order.
+ * Volume is calculated as (balance × sizePct) / price.
+ */
+export async function placeBuy({ symbol, conviction, price }) {
+  const pair     = symbolToPair(symbol);
+  const sizePct  = getPositionPct(conviction);
+  const balance  = await getAccountBalance();
+  const capital  = balance * sizePct;
+  const volume   = (capital / price).toFixed(8);
 
-  // For PF_ perpetuals, size is in number of contracts (each contract = 1 unit of base asset)
-  // Minimum size is 1 contract
-  const size = Math.max(1, Math.floor((tradeCapital * leverage) / priceForCalc));
+  if (parseFloat(volume) <= 0) throw new Error("Insufficient balance.");
 
-  console.log(`Trade: balance=$${balance}, capital=$${tradeCapital}, leverage=${leverage}x, price=$${priceForCalc}, size=${size}, contract=${contract}`);
+  console.log(`[TRADER] BUY ${volume} ${symbol} @ ~$${price} (${(sizePct * 100).toFixed(0)}% of balance)`);
 
-  if (balance <= 0) {
-    throw new Error(`No available balance in demo account. Fund the multi-collateral wallet first.`);
-  }
-
-  const side = direction.toLowerCase() === "long" ? "buy" : "sell";
-  const closeSide = side === "buy" ? "sell" : "buy";
-
-  // Place entry order (market or limit)
-  const orderParams = {
-    orderType: entry ? "lmt" : "mkt",
-    symbol: contract,
-    side,
-    size: size.toString()
-  };
-  if (entry) orderParams.limitPrice = entry.toString();
-
-  const entryOrder = await krakenFuturesRequest("POST", "/sendorder", orderParams);
-  const orderId = entryOrder.sendStatus?.order_id;
-  console.log("Entry order placed:", orderId);
-
-  // Place stop loss
-  if (stopLoss > 0) {
-    await krakenFuturesRequest("POST", "/sendorder", {
-      orderType: "stp",
-      symbol: contract,
-      side: closeSide,
-      size: size.toString(),
-      stopPrice: stopLoss.toString(),
-      reduceOnly: "true"
-    });
-  }
-
-  // Place take profit 1 (half size)
-  if (takeProfit1 > 0) {
-    const tp1Size = Math.max(1, Math.floor(size / 2));
-    await krakenFuturesRequest("POST", "/sendorder", {
-      orderType: "take_profit",
-      symbol: contract,
-      side: closeSide,
-      size: tp1Size.toString(),
-      limitPrice: takeProfit1.toString(),
-      reduceOnly: "true"
-    });
-
-    // Take profit 2 (remaining)
-    const tp2Size = size - tp1Size;
-    if (takeProfit2 > 0 && tp2Size > 0) {
-      await krakenFuturesRequest("POST", "/sendorder", {
-        orderType: "take_profit",
-        symbol: contract,
-        side: closeSide,
-        size: tp2Size.toString(),
-        limitPrice: takeProfit2.toString(),
-        reduceOnly: "true"
-      });
-    }
-  }
+  const res  = await kraken.api("AddOrder", {
+    pair,
+    type:      "buy",
+    ordertype: "market",
+    volume
+  });
 
   return {
-    orderId,
+    txid:    res.result?.txid?.[0],
     symbol,
-    contract,
-    direction,
-    entry: entry || currentPrice,
-    stopLoss,
-    takeProfit1,
-    takeProfit2,
-    size,
-    leverage,
-    capital: tradeCapital,
+    pair,
+    side:    "buy",
+    volume:  parseFloat(volume),
+    price,
+    capital,
     balance,
     conviction
   };
 }
 
-// Get open positions
-export async function getOpenPositions() {
+/**
+ * Places a spot market sell order to close a position.
+ * Volume is the amount of the asset held.
+ */
+export async function placeSell({ symbol, volume }) {
+  const pair = symbolToPair(symbol);
+
+  console.log(`[TRADER] SELL ${volume} ${symbol}`);
+
+  const res = await kraken.api("AddOrder", {
+    pair,
+    type:      "sell",
+    ordertype: "market",
+    volume:    volume.toFixed(8)
+  });
+
+  return {
+    txid:   res.result?.txid?.[0],
+    symbol,
+    pair,
+    side:   "sell",
+    volume
+  };
+}
+
+/**
+ * Places a stop-loss sell order at a specific price.
+ */
+export async function placeStopLoss({ symbol, volume, stopPrice }) {
+  const pair = symbolToPair(symbol);
+
+  console.log(`[TRADER] STOP-LOSS ${symbol} @ $${stopPrice}`);
+
+  const res = await kraken.api("AddOrder", {
+    pair,
+    type:      "sell",
+    ordertype: "stop-loss",
+    price:     stopPrice.toString(),
+    volume:    volume.toFixed(8)
+  });
+
+  return res.result?.txid?.[0];
+}
+
+/**
+ * Places a take-profit sell order at a specific price.
+ */
+export async function placeTakeProfit({ symbol, volume, takeProfitPrice }) {
+  const pair = symbolToPair(symbol);
+
+  console.log(`[TRADER] TAKE-PROFIT ${symbol} @ $${takeProfitPrice}`);
+
+  const res = await kraken.api("AddOrder", {
+    pair,
+    type:      "sell",
+    ordertype: "take-profit",
+    price:     takeProfitPrice.toString(),
+    volume:    volume.toFixed(8)
+  });
+
+  return res.result?.txid?.[0];
+}
+
+/** Returns all open orders. */
+export async function getOpenOrders() {
   try {
-    const data = await krakenFuturesRequest("GET", "/openpositions");
-    return data.openPositions || [];
-  } catch (error) {
-    console.error("Failed to get open positions:", error.message);
+    const res = await kraken.api("OpenOrders");
+    return Object.values(res.result?.open ?? {});
+  } catch (err) {
+    console.error("[TRADER] Failed to fetch open orders:", err.message);
     return [];
+  }
+}
+
+/** Cancels an order by txid. */
+export async function cancelOrder(txid) {
+  try {
+    await kraken.api("CancelOrder", { txid });
+    console.log(`[TRADER] Cancelled order ${txid}`);
+  } catch (err) {
+    console.error(`[TRADER] Failed to cancel order ${txid}:`, err.message);
   }
 }

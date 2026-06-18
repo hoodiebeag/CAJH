@@ -1,24 +1,23 @@
+/**
+ * bot.js — Entry point and Discord event handler
+ */
+
 import "dotenv/config";
 import { Client, GatewayIntentBits } from "discord.js";
 import cron from "node-cron";
-import { analyzeChart } from "./analyzer.js";
-import { runScanner } from "./scanner.js";
+import { analyzeChart }    from "./analyzer.js";
+import { runScanner }      from "./scanner.js";
 import { saveChart, loadConfig, saveConfig } from "./storage.js";
-import { startMonitor } from "./monitor.js";
+import { startMonitor, setDailyStartBalance } from "./monitor.js";
 import {
-  handleHelp,
-  handleWatchlist,
-  handleWatch,
-  handleUnwatch,
-  handleSetChannel,
-  handleSetConviction,
-  handleStatus,
-  handleScan,
-  handleAnalyzeThat,
-  handleChartRequest,
-  handleGeneral,
-  handleManualTrade
+  handleHelp, handleWatchlist, handleWatch, handleUnwatch,
+  handleSetChannel, handleSetConviction, handleStatus,
+  handleScan, handleAnalyzeThat, handleChartRequest,
+  handleGeneral, handleManualTrade, handleConfirm,
+  handleCancel, handleStop, handleResume, handleClose
 } from "./commands.js";
+
+// ─── Discord client ────────────────────────────────────────────────────────────
 
 const client = new Client({
   intents: [
@@ -28,68 +27,79 @@ const client = new Client({
   ]
 });
 
-const TREE_CAPITAL_ID = "723993425325719619";
+// ─── Shared state ──────────────────────────────────────────────────────────────
 
-// Shared state
 const config = loadConfig();
+
 const state = {
-  lastChartBase64: null,
-  lastChartMediaType: null,
-  lastScanTime: config.lastScanTime || null,
-  scanChannelId: config.scanChannelId || null,
+  lastChartBase64:     null,
+  lastChartMediaType:  null,
+  lastScanTime:        config.lastScanTime        || null,
+  scanChannelId:       config.scanChannelId       || null,
   convictionThreshold: config.convictionThreshold || 6,
-  watchlist: config.watchlist || []
+  watchlist:           config.watchlist           || []
 };
 
-// Run a scheduled scan for a specific market
+const TREE_CAPITAL_ID = "723993425325719619";
+
+// ─── Scheduled scans ───────────────────────────────────────────────────────────
+
 async function runScheduledScan(market) {
-  console.log(`Running ${market} market open scan...`);
-  if (state.scanChannelId) {
-    const channel = client.channels.cache.get(state.scanChannelId);
-    if (channel) {
-      await channel.send(`🌍 **${market} Market Open Scan**`);
-      await runScanner(channel, state);
-      config.lastScanTime = state.lastScanTime;
-      saveConfig(config);
-    }
-  } else {
-    console.log("No scan channel set. Use !setchannel to configure.");
-  }
+  if (!state.scanChannelId) return;
+  const channel = client.channels.cache.get(state.scanChannelId);
+  if (!channel) return;
+
+  console.log(`[SCAN] ${market} market open`);
+  await channel.send(`🌍 **${market} Market Open Scan**`);
+  await runScanner(channel, state);
+
+  config.lastScanTime = state.lastScanTime;
+  saveConfig(config);
 }
 
-client.once("ready", () => {
-  console.log(`Logged in as ${client.user.tag}`);
+// ─── Startup ───────────────────────────────────────────────────────────────────
 
-  // Start position monitor (checks every 30 seconds)
-  if (state.scanChannelId) {
-    startMonitor(client, state.scanChannelId, 30000);
-    console.log("Position monitor started.");
+client.once("ready", async () => {
+  console.log(`[BOT] Logged in as ${client.user.tag}`);
+
+  // Set daily start balance for drawdown tracking
+  try {
+    const { getAccountBalance } = await import("./trader.js");
+    const balance = await getAccountBalance();
+    setDailyStartBalance(balance);
+  } catch (err) {
+    console.error("[BOT] Could not fetch initial balance:", err.message);
   }
 
-  // New York open 9:30 AM EST
+  if (state.scanChannelId) {
+    startMonitor(client, state.scanChannelId);
+    console.log("[MONITOR] Position monitor started");
+  }
+
+  // Market open scans (EST timezone)
+  cron.schedule("0 19 * * 0-4", () => runScheduledScan("Tokyo"),    { timezone: "America/New_York" });
+  cron.schedule("0 3  * * 1-5", () => runScheduledScan("London"),   { timezone: "America/New_York" });
   cron.schedule("30 9 * * 1-5", () => runScheduledScan("New York"), { timezone: "America/New_York" });
-  // London open 3:00 AM EST
-  cron.schedule("0 3 * * 1-5", () => runScheduledScan("London"), { timezone: "America/New_York" });
-  // Tokyo open 7:00 PM EST
-  cron.schedule("0 19 * * 0-4", () => runScheduledScan("Tokyo"), { timezone: "America/New_York" });
+
+  console.log("[CRON] Market open scans scheduled: Tokyo 7pm · London 3am · New York 9:30am EST");
 });
+
+// ─── Message handler ───────────────────────────────────────────────────────────
 
 client.on("messageCreate", async (message) => {
 
-  // Auto-analyze charts from Tree Capital
+  // Auto-analyze charts from @tree_capital
   if (message.author.id === TREE_CAPITAL_ID && message.attachments.size > 0) {
     const attachment = message.attachments.first();
     if (!attachment.contentType?.startsWith("image/")) return;
 
-    console.log("Chart detected from Tree Capital, checking conviction...");
     await message.channel.sendTyping();
 
-    const imageResponse = await fetch(attachment.url);
-    const arrayBuffer = await imageResponse.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    const buffer  = await fetch(attachment.url).then(r => r.arrayBuffer());
+    const base64  = Buffer.from(buffer).toString("base64");
     const mediaType = attachment.contentType;
 
-    state.lastChartBase64 = base64;
+    state.lastChartBase64    = base64;
     state.lastChartMediaType = mediaType;
     saveChart(base64, mediaType);
 
@@ -97,87 +107,73 @@ client.on("messageCreate", async (message) => {
     return;
   }
 
-  // Ignore other bots
   if (message.author.bot) return;
 
-  const content = message.content.trim();
-  const contentLower = content.toLowerCase();
+  const raw   = message.content.trim();
+  const lower = raw.toLowerCase();
 
-  // Commands
-  if (contentLower === "!help") return handleHelp(message, state);
-  if (contentLower === "!watchlist") return handleWatchlist(message, state);
-  if (contentLower === "!setchannel") return handleSetChannel(message, state, config);
-  if (contentLower === "!status") return handleStatus(message, state);
-  if (contentLower === "!scan") return handleScan(message, state);
+  // ── Trading commands ─────────────────────────────────────────────────────────
 
-  if (contentLower.startsWith("!trade ")) {
-    const symbol = content.slice(7).trim().split(/\s+/)[0];
-    return handleManualTrade(message, state, symbol);
+  if (lower === "!confirm")  return handleConfirm(message);
+  if (lower === "!cancel")   return handleCancel(message);
+  if (lower === "!stop")     return handleStop(message);
+  if (lower === "!resume")   return handleResume(message);
+
+  if (lower.startsWith("!close ")) {
+    return handleClose(message, raw.slice(7).trim().split(/\s+/)[0]);
   }
 
-  if (contentLower.startsWith("!testrade ")) {
-    const symbol = content.slice(10).trim().split(/\s+/)[0].toUpperCase();
-    try {
-      const { placeTrade, getAccountBalance } = await import("./trader.js");
-      const { postTradeOpened, registerTrade } = await import("./monitor.js");
-      await message.reply(`🔍 Placing test trade for **${symbol}** on demo account...`);
-      const balance = await getAccountBalance();
-      const trade = await placeTrade({
-        symbol,
-        direction: "long",
-        entry: null,
-        stopLoss: 0,
-        takeProfit1: 0,
-        takeProfit2: 0,
-        conviction: 6
-      });
-      trade.balance = balance;
-      registerTrade(trade);
-      await postTradeOpened(message.channel, trade);
-    } catch (error) {
-      console.error("Test trade error:", error.message);
-      await message.reply(`⚠️ Test trade failed: ${error.message}`);
-    }
-    return;
+  // ── Info commands ────────────────────────────────────────────────────────────
+
+  if (lower === "!help")       return handleHelp(message, state);
+  if (lower === "!watchlist")  return handleWatchlist(message, state);
+  if (lower === "!setchannel") return handleSetChannel(message, state, config);
+  if (lower === "!status")     return handleStatus(message, state);
+  if (lower === "!scan")       return handleScan(message, state);
+
+  if (lower.startsWith("!trade ")) {
+    return handleManualTrade(message, state, raw.slice(7).trim().split(/\s+/)[0]);
   }
 
-  if (contentLower.startsWith("!watch ")) {
-    const symbols = content.slice(7).trim().split(/\s+/);
-    return handleWatch(message, state, config, symbols);
+  if (lower.startsWith("!watch ")) {
+    return handleWatch(message, state, config, raw.slice(7).trim().split(/\s+/));
   }
 
-  if (contentLower.startsWith("!unwatch ")) {
-    const symbols = content.slice(9).trim().split(/\s+/);
-    return handleUnwatch(message, state, config, symbols);
+  if (lower.startsWith("!unwatch ")) {
+    return handleUnwatch(message, state, config, raw.slice(9).trim().split(/\s+/));
   }
 
-  if (contentLower.startsWith("!setconviction")) {
-    const value = contentLower.split(" ")[1];
-    return handleSetConviction(message, state, config, value);
+  if (lower.startsWith("!setconviction ")) {
+    return handleSetConviction(message, state, config, lower.split(" ")[1]);
   }
 
-  // @mention handling
+  // ── @mention commands ────────────────────────────────────────────────────────
+
   if (!message.mentions.has(client.user)) return;
 
   const userMessage = message.content.replace(/<@!?\d+>/g, "").trim();
-  const userMessageLower = userMessage.toLowerCase();
+  const userLower   = userMessage.toLowerCase();
 
   await message.channel.sendTyping();
 
   try {
-    if (userMessageLower.includes("analyze that") || userMessageLower.includes("analyze the last") || userMessageLower.includes("what do you think")) {
+    if (
+      userLower.includes("analyze that") ||
+      userLower.includes("analyze the last") ||
+      userLower.includes("what do you think")
+    ) {
       return handleAnalyzeThat(message, state);
     }
 
     const wasChartRequest = await handleChartRequest(message, userMessage);
-    if (!wasChartRequest) {
-      await handleGeneral(message, userMessage);
-    }
+    if (!wasChartRequest) await handleGeneral(message, userMessage);
 
-  } catch (error) {
-    console.error("Error handling message:", error.message);
-    await message.reply("Something went wrong!");
+  } catch (err) {
+    console.error("[BOT] Message handler error:", err.message);
+    await message.reply("⚠️ Something went wrong. Please try again.");
   }
 });
+
+// ─── Connect ───────────────────────────────────────────────────────────────────
 
 client.login(process.env.DISCORD_BOT_TOKEN);
