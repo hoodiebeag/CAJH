@@ -230,16 +230,17 @@ if (fullMessage.length <= 2000) {
   }
 }
 
-    // Extract and execute trade if conviction >= threshold
-    if (conviction >= threshold) {
-      const params = extractTradeParams(analysis);
-      if (params) {
-        console.log(`Executing trade for ${asset}:`, params);
-        await executeTrade(asset, params, conviction, channel);
-      } else {
-        console.warn(`Could not extract trade params for ${asset} from analysis`);
-      }
-    }
+   // Extract and execute trade if forced or conviction >= threshold
+if (forceAnalysis || conviction >= threshold) {
+  const params = extractTradeParams(analysis);
+  if (params) {
+    console.log(`Executing trade for ${asset}:`, params);
+    await executeTrade(asset, params, conviction, channel);
+  } else {
+    console.warn(`Could not extract trade params for ${asset} from analysis`);
+    await channel.send(`⚠️ Could not extract trade levels from analysis. Try again or check the chart manually.`);
+  }
+}
 
     return { conviction, analysis };
 
