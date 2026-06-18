@@ -64,7 +64,7 @@ export async function getCurrentPrice(symbol) {
   }
 }
 
-// Place a margin trade
+// Place a margin trade (entry only for now, SL/TP added after fill)
 export async function placeTrade({ symbol, direction, entry, stopLoss, takeProfit1, takeProfit2, conviction }) {
   const pair = symbolToPair(symbol);
   const leverage = getLeverage(conviction);
@@ -81,9 +81,8 @@ export async function placeTrade({ symbol, direction, entry, stopLoss, takeProfi
   }
 
   const type = direction.toLowerCase() === "long" ? "buy" : "sell";
-  const closeType = type === "buy" ? "sell" : "buy";
 
-  // Entry order
+  // Place entry limit order
   const entryOrder = await client.api("AddOrder", {
     pair,
     type,
@@ -95,40 +94,6 @@ export async function placeTrade({ symbol, direction, entry, stopLoss, takeProfi
 
   console.log("Entry order placed:", JSON.stringify(entryOrder));
   const txid = entryOrder.result?.txid?.[0];
-
-  // Stop loss
-  await client.api("AddOrder", {
-    pair,
-    type: closeType,
-    ordertype: "stop-loss",
-    price: stopLoss.toString(),
-    volume,
-    leverage: leverage.toString()
-  });
-
-  // Take profit 1 (half size)
-  const tp1Volume = (parseFloat(volume) / 2).toFixed(8);
-  await client.api("AddOrder", {
-    pair,
-    type: closeType,
-    ordertype: "take-profit",
-    price: takeProfit1.toString(),
-    volume: tp1Volume,
-    leverage: leverage.toString()
-  });
-
-  // Take profit 2 (remaining)
-  const tp2Volume = (parseFloat(volume) - parseFloat(tp1Volume)).toFixed(8);
-  if (parseFloat(tp2Volume) > 0) {
-    await client.api("AddOrder", {
-      pair,
-      type: closeType,
-      ordertype: "take-profit",
-      price: takeProfit2.toString(),
-      volume: tp2Volume,
-      leverage: leverage.toString()
-    });
-  }
 
   return {
     txid,
