@@ -11,11 +11,11 @@ export const SCAN_INTERVALS = [
 
 // Fetch OHLC candles from Kraken (free, no API key)
 export async function fetchCandles(pair, minutes) {
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const response = await axios.get("https://api.kraken.com/0/public/OHLC", {
         params: { pair, interval: minutes },
-        timeout: 10000
+        timeout: 15000
       });
 
       if (response.data.error && response.data.error.length > 0) {
@@ -36,8 +36,8 @@ export async function fetchCandles(pair, minutes) {
 
     } catch (error) {
       console.error(`Fetch attempt ${attempt} failed for ${pair}:`, error.message);
-      if (attempt === 2) return null;
-      await new Promise(res => setTimeout(res, 3000));
+      if (attempt === 3) return null;
+      await new Promise(res => setTimeout(res, 5000 * attempt)); // increasing delay
     }
   }
 }
@@ -75,7 +75,8 @@ export async function runScanner(channel, state) {
         charts.push({ label: interval.label, base64, mediaType: "image/png" });
         imageBuffers.push({ label: interval.label, buffer: imageBuffer });
 
-        await new Promise(res => setTimeout(res, 1500));
+        // Delay between timeframe fetches
+        await new Promise(res => setTimeout(res, 3000));
       }
 
       if (charts.length === 0) {
@@ -96,7 +97,9 @@ export async function runScanner(channel, state) {
       });
 
       await analyzeMultiTimeframe(asset.symbol, charts, channel, false, state.convictionThreshold);
-      await new Promise(res => setTimeout(res, 2000));
+
+      // Longer delay between assets
+      await new Promise(res => setTimeout(res, 5000));
 
     } catch (error) {
       console.error(`Error scanning ${asset.symbol}:`, error.message);
