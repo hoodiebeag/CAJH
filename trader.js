@@ -112,17 +112,26 @@ function symbolToContract(symbol) {
 export async function getAccountBalance() {
   const data = await krakenFuturesRequest("GET", "/accounts");
   const accounts = data.accounts || {};
-  // Try different account structures
-  const account = accounts.cash ||
-    accounts.fi_xbtusd ||
-    accounts.flex ||
-    Object.values(accounts)[0];
-  const balance = parseFloat(
-    account?.balances?.available ||
-    account?.available ||
-    account?.balance ||
-    0
-  );
+  console.log("Raw accounts:", JSON.stringify(accounts));
+
+  let balance = 0;
+
+  // Try multi-collateral cash account first
+  if (accounts.cash?.balances?.available) {
+    balance = parseFloat(accounts.cash.balances.available);
+  }
+  // Try flex account
+  else if (accounts.flex?.balances?.available) {
+    balance = parseFloat(accounts.flex.balances.available);
+  }
+  // Try each account's auxiliary.af (available funds)
+  else {
+    for (const account of Object.values(accounts)) {
+      const af = parseFloat(account?.auxiliary?.af || 0);
+      if (af > balance) balance = af;
+    }
+  }
+
   console.log(`Available balance: $${balance}`);
   return balance;
 }
