@@ -117,7 +117,7 @@ export async function handleHelp(message, state) {
   const status = isTradingEnabled() ? "🟢 Active" : "🔴 Halted";
   await message.reply(
     `**cajh — Swing-Fractal Trading Bot**\n` +
-    `Long-only spot. Auto-buys confirmed swing lows (N=${SWING_WINDOW}) only when 15m/1h/4h all agree, and self-manages exits by stop / take-profit.\n\n` +
+    `Long-only spot. Enters on a 15m swing low confirmed by break of structure, only when the 1h and 4h trend are bullish, and self-manages exits by stop / take-profit / swing high.\n\n` +
 
     `**Positions:**\n` +
     `> \`!sell BTC\` — Close cajh's position in an asset\n` +
@@ -332,9 +332,10 @@ export async function handleChartRequest(message, userMessage, state) {
 export async function handleGeneral(message, userMessage, state) {
   let system =
     `You are cajh, a long-only spot crypto trading bot on Kraken in a Discord server.\n` +
-    `Your trading is mechanical: you buy confirmed swing lows (Williams-style fractals,\n` +
-    `window N) and exit on stop-loss / take-profit. Answer questions about yourself, your\n` +
-    `live state, and your own code accurately and concisely. If you don't know, say so.\n\n` +
+    `Your trading is mechanical: you enter on a 15m swing low confirmed by break of\n` +
+    `structure (price closing back above it), only when the 1h and 4h trend are bullish,\n` +
+    `and exit on stop-loss / take-profit / a swing high. Answer questions about yourself,\n` +
+    `your live state, and your own code accurately and concisely. If you don't know, say so.\n\n` +
     buildLiveContext(state);
 
   if (looksLikeCodeQuestion(userMessage)) {

@@ -15,21 +15,23 @@ In Discord, run `!setchannel` once in the channel where you want scans and alert
 
 ## The strategy
 
-Signals come only from confirmed swing pivots:
+Pure price structure, no indicators. A pivot is identified by a strong **left** side
+(its low is below the `N` candles before it — a meaningful local low) and **confirmed
+by break of structure**: the moment price closes back above that candle's high. This
+confirms in ~1–2 candles instead of waiting `N` candles on the right, so signals are
+timely without lowering the bar (same strong pivots, not more of them). `N` is
+`SWING_WINDOW` in `strategy.js` (default `5`).
 
-- **Buy** — a candle whose low is below the `N` candles before *and* after it
-  (a swing low). cajh opens a long.
-- **Sell** — a swing high. Drawn as an arrow only; cajh is long-only and does not short.
-
-A pivot confirms `N` candles later (built-in delay). `N` is `SWING_WINDOW` in
-`strategy.js` (default `5` — higher = fewer, stronger signals). Signals are checked on
-15m, 1h and 4h, and a trade is only taken when **all three are bullish at once**
-(`REQUIRE_TF_ALIGNMENT`). With N=5 plus alignment, entries are deliberately rare —
-expect quiet stretches.
+- **Entry trigger** — a 15m swing low that just confirmed by break of structure
+  (within `RECENT_BARS` candles, so scans catch setups that confirmed since the last scan).
+- **Trend filter** — the trade is only taken when the **1h and 4h** structural bias are
+  bullish (`REQUIRE_TF_ALIGNMENT`). Higher-timeframe trend, fast-timeframe entry.
+- **Sell arrows** — swing highs (confirmed when price breaks below them) are drawn and
+  used for take-profit; cajh is long-only and does not short.
 
 ### Entry, stop, and targets
 
-- **Entry** — market buy at the confirmation price.
+- **Entry** — market buy when the setup is found on a scan.
 - **Size** — flat 10% of balance (`POSITION_PCT` in `scanner.js`).
 - **Stop** — the swing low that triggered the entry.
 - **Targets** — `risk = entry − stop`; TP1 at `entry + 1.5 × risk` (sells half, moves
@@ -37,8 +39,8 @@ expect quiet stretches.
 
 ### Optional filters (in `strategy.js`, on by default)
 
-`REQUIRE_HIGHER_LOW`, `MAX_STOP_PCT`, `REQUIRE_TF_ALIGNMENT`. Set any to `false`/`null`
-to relax. Use `!backtest` to compare.
+`REQUIRE_HIGHER_LOW`, `MAX_STOP_PCT`, `REQUIRE_TF_ALIGNMENT`, `EXIT_ON_SWING_HIGH`, plus
+`RECENT_BARS`. Set any to `false`/`null` to relax. Use `!backtest` to compare.
 
 ## Autonomous trading
 

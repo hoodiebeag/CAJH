@@ -1,92 +1,97 @@
 /**
- * strategy.js — Swing-fractal detection (pure price structure, no indicators).
+ * strategy.js — Swing detection via market structure (break-of-structure confirmation).
  *
- *   • Swing HIGH = a candle whose high is strictly above the N candles before
- *     AND the N candles after it  → SELL signal (drawn as a down arrow).
- *   • Swing LOW  = a candle whose low is strictly below the N candles before
- *     AND the N candles after it   → BUY signal (drawn as an up arrow).
+ * A pivot is identified by a strong LEFT side (the candle's low is below the N candles
+ * before it — a meaningful local low), then CONFIRMED the moment price reverses and
+ * closes back through it (a candle closes above the swing-low candle's high). This
+ * confirms in ~1–2 candles instead of waiting N candles on the right, so signals are
+ * timely WITHOUT lowering the bar (same strong pivots, not more of them).
  *
- * A pivot can only be confirmed once N more candles have closed after it, so
- * every signal carries a natural N-candle delay. Change N by editing SWING_WINDOW.
+ *   • Swing LOW  (BUY)  — strong left low, confirmed when a later close breaks ABOVE
+ *     the pivot candle's high.
+ *   • Swing HIGH (SELL) — strong left high, confirmed when a later close breaks BELOW
+ *     the pivot candle's low. (Displayed / used for take-profit; cajh is long-only.)
  */
 
-export const SWING_WINDOW = 5; // candles checked on EACH side of a pivot (higher = fewer, stronger signals)
+export const SWING_WINDOW = 5; // LEFT-side strength: a pivot must beat the N candles before it (higher = stronger/rarer)
 
 // ─── Tunable strategy settings (shared by live trading AND the backtester) ──────
 export const RR1 = 1.5;   // take-profit 1 = entry + 1.5 × risk (scale out half)
 export const RR2 = 3.0;   // take-profit 2 = entry + 3.0 × risk (close the runner)
 
-// Optional confidence filters. Set to false / null to disable and revert to the
-// pure strategy. Backtest with them on vs off to see if they actually help YOU.
-export const REQUIRE_HIGHER_LOW = true;  // only buy if this swing low is above the previous one (bullish structure)
-export const MAX_STOP_PCT        = 0.05; // skip buys whose stop is further than 5% below entry (caps risk); null to disable
-export const REQUIRE_TF_ALIGNMENT = true; // only propose a trade when 15m, 1h AND 4h structure are all bullish
+export const RECENT_BARS = 16; // a confirmed low is only "actionable" for this many candles after it confirms
 
-/** Is candle i a confirmed swing high within [i-n, i+n]? */
-export function isSwingHigh(highs, i, n) {
-  for (let j = i - n; j <= i + n; j++) {
-    if (j === i) continue;
-    if (highs[j] >= highs[i]) return false;
-  }
+// Optional confidence filters. Set to false / null to disable.
+export const REQUIRE_HIGHER_LOW   = true;  // only buy if this swing low is above the previous one (bullish structure)
+export const MAX_STOP_PCT         = 0.05;  // skip buys whose stop is further than 5% below entry; null to disable
+export const REQUIRE_TF_ALIGNMENT = true;  // require the higher-timeframe trend (1h AND 4h) to be bullish
+export const EXIT_ON_SWING_HIGH   = true;  // take profit when a fresh swing high confirms on the entry timeframe
+
+/** Is candle i a strong local LOW vs the N candles before it? */
+function isLeftLow(lows, i, n) {
+  if (i < n) return false;
+  for (let j = i - n; j < i; j++) if (lows[j] <= lows[i]) return false;
   return true;
 }
 
-/** Is candle i a confirmed swing low within [i-n, i+n]? */
-export function isSwingLow(lows, i, n) {
-  for (let j = i - n; j <= i + n; j++) {
-    if (j === i) continue;
-    if (lows[j] <= lows[i]) return false;
-  }
+/** Is candle i a strong local HIGH vs the N candles before it? */
+function isLeftHigh(highs, i, n) {
+  if (i < n) return false;
+  for (let j = i - n; j < i; j++) if (highs[j] >= highs[i]) return false;
   return true;
 }
 
 /**
- * Return every confirmed pivot in a candle array (used for drawing arrows).
- * candles: chronological array of { high, low, ... } (strings or numbers).
+ * Detect confirmed pivots via break of structure. Returns chronological
+ * [{ type:"low"|"high", index, price, confirmIndex }] where `index` is the pivot
+ * candle and `confirmIndex` is the candle whose close confirmed it.
  */
 export function detectSwings(candles, n = SWING_WINDOW) {
-  const highs = candles.map(c => parseFloat(c.high));
-  const lows  = candles.map(c => parseFloat(c.low));
+  const H = candles.map(c => parseFloat(c.high));
+  const L = candles.map(c => parseFloat(c.low));
+  const C = candles.map(c => parseFloat(c.close));
   const pivots = [];
+  let loC = null, hiC = null; // running candidate low / high (the extreme of the current leg)
 
-  for (let i = n; i < candles.length - n; i++) {
-    if (isSwingHigh(highs, i, n)) pivots.push({ type: "high", index: i, price: highs[i] });
-    if (isSwingLow(lows,  i, n))  pivots.push({ type: "low",  index: i, price: lows[i]  });
+  for (let i = 0; i < candles.length; i++) {
+    if (isLeftLow(L, i, n)  && (!loC || L[i] < loC.price)) loC = { index: i, price: L[i] };
+    if (isLeftHigh(H, i, n) && (!hiC || H[i] > hiC.price)) hiC = { index: i, price: H[i] };
+
+    if (loC && i > loC.index && C[i] > H[loC.index]) {
+      pivots.push({ type: "low", index: loC.index, price: loC.price, confirmIndex: i });
+      loC = null; hiC = null;           // fresh leg after the break
+    } else if (hiC && i > hiC.index && C[i] < L[hiC.index]) {
+      pivots.push({ type: "high", index: hiC.index, price: hiC.price, confirmIndex: i });
+      loC = null; hiC = null;
+    }
   }
   return pivots;
 }
 
-/**
- * Return the signal that JUST confirmed on the most recent closed candle, or null.
- * A pivot at index i confirms when candle i+n closes, so the freshly-confirmed
- * pivot sits at index (lastIndex - n). Pass CLOSED candles only.
- *   → { type: "buy",  pivotPrice }  for a swing low
- *   → { type: "sell", pivotPrice }  for a swing high
- */
-export function latestSignal(candles, n = SWING_WINDOW) {
-  if (candles.length < 2 * n + 1) return null;
-
-  const i = candles.length - 1 - n; // the candle that just became confirmable
-  if (i < n) return null;
-
-  const highs = candles.map(c => parseFloat(c.high));
-  const lows  = candles.map(c => parseFloat(c.low));
-
-  if (isSwingLow(lows, i, n))  return { type: "buy",  pivotPrice: lows[i]  };
-  if (isSwingHigh(highs, i, n)) return { type: "sell", pivotPrice: highs[i] };
-  return null;
-}
-
-/**
- * Current structural bias of a timeframe, based on its MOST RECENT confirmed pivot:
- *   → "bull" if the last pivot was a swing low (price last turned up)
- *   → "bear" if the last pivot was a swing high
- *   → null   if there are no confirmed pivots yet
- * Used to require multi-timeframe agreement before taking a trade.
- */
+/** Current structural bias: type of the MOST RECENTLY CONFIRMED pivot. */
 export function currentBias(candles, n = SWING_WINDOW) {
   const pivots = detectSwings(candles, n);
   if (!pivots.length) return null;
-  const last = pivots.reduce((a, b) => (b.index > a.index ? b : a));
-  return last.type === "low" ? "bull" : "bear";
+  return pivots[pivots.length - 1].type === "low" ? "bull" : "bear";
+}
+
+/**
+ * Returns a buy when the current structure is a recently-confirmed swing low:
+ *   → { type:"buy", pivotPrice, pivotIndex, confirmIndex, prevSwingLow }
+ * "Recently" = confirmed within RECENT_BARS candles, so the scanner catches setups
+ * that confirmed since the last scan without acting on stale ones. Returns null
+ * otherwise. (How far price has run above the low is governed by MAX_STOP_PCT.)
+ */
+export function entrySignal(candles, n = SWING_WINDOW, recentBars = RECENT_BARS) {
+  const pivots = detectSwings(candles, n);
+  if (!pivots.length) return null;
+
+  const last = pivots[pivots.length - 1];
+  if (last.type !== "low") return null;                       // structure must currently be bullish
+  if (candles.length - 1 - last.confirmIndex > recentBars) return null; // too old
+
+  const lows = pivots.filter(p => p.type === "low");
+  const prevSwingLow = lows.length >= 2 ? lows[lows.length - 2].price : null;
+
+  return { type: "buy", pivotPrice: last.price, pivotIndex: last.index, confirmIndex: last.confirmIndex, prevSwingLow };
 }
