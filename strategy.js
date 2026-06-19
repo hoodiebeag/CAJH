@@ -26,6 +26,22 @@ export const REQUIRE_HIGHER_LOW   = true;  // only buy if this swing low is abov
 export const MAX_STOP_PCT         = 0.05;  // skip buys whose stop is further than 5% below entry; null to disable
 export const REQUIRE_TF_ALIGNMENT = true;  // require the higher-timeframe trend (1h AND 4h) to be bullish
 export const EXIT_ON_SWING_HIGH   = true;  // take profit when a fresh swing high confirms on the entry timeframe
+export const CHOP_FILTER          = false; // when true, only trade when the 4h is genuinely TRENDING (higher highs AND higher lows), not just bouncing inside a range
+
+/**
+ * Is this timeframe in a clean uptrend — making higher highs AND higher lows?
+ * Stricter than `currentBias` (which only checks the single most-recent pivot), so it
+ * filters out bounces inside chop. Needs at least two confirmed highs and two lows.
+ */
+export function isTrending(candles, n = SWING_WINDOW) {
+  const pivots = detectSwings(candles, n);
+  const lows  = pivots.filter(p => p.type === "low");
+  const highs = pivots.filter(p => p.type === "high");
+  if (lows.length < 2 || highs.length < 2) return false;
+  const higherLow  = lows[lows.length - 1].price  > lows[lows.length - 2].price;
+  const higherHigh = highs[highs.length - 1].price > highs[highs.length - 2].price;
+  return higherLow && higherHigh;
+}
 
 /** Is candle i a strong local LOW vs the N candles before it? */
 function isLeftLow(lows, i, n) {

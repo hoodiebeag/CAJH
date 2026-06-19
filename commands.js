@@ -128,7 +128,8 @@ export async function handleHelp(message, state) {
     `**Signals & scanning:**\n` +
     `> \`!scan\` — Scan the whole watchlist (auto-runs every 3h)\n` +
     `> \`!trade BTC\` — Check one asset across all timeframes\n` +
-    `> \`!backtest BTC\` — Multi-timeframe backtest on recent history\n` +
+    `> \`!backtest\` — Backtest the whole watchlist (pooled win rate / total R)\n` +
+    `> \`!backtest BTC\` — Backtest a single asset\n` +
     `> \`!watchlist\` · \`!watch BTC ETH\` · \`!unwatch TAO\`\n\n` +
 
     `**Settings:**\n` +
@@ -358,10 +359,12 @@ export async function handleGeneral(message, userMessage, state) {
 
 export async function handleBacktest(message, state, arg) {
   const symbol = (arg || "").trim().split(/\s+/)[0]?.toUpperCase();
-  if (!symbol) return message.reply("Usage: `!backtest BTC`");
+
+  // No symbol → aggregate sweep of the whole watchlist (the number worth optimizing).
+  if (!symbol) return backtestWatchlist(message, state);
 
   const id = (state.watchlist || []).find(a => a.symbol === symbol)?.id || symbolToKrakenId(symbol);
-  await message.reply(`📈 Backtesting **${symbol}** across 15m/1h/4h with alignment (N=${SWING_WINDOW})...`);
+  await message.reply(`📈 Backtesting **${symbol}** across 15m/1h/4h (N=${SWING_WINDOW})...`);
 
   try {
     const candles15 = await fetchCandles(id, 15);
@@ -381,18 +384,57 @@ export async function handleBacktest(message, state, arg) {
     });
 
     await message.reply(
-      `📊 **Backtest — ${symbol}** (15m entries, 1h+4h aligned, recent history)\n\n` +
+      `📊 **Backtest — ${symbol}** (15m entries, 1h+4h filter, recent history)\n\n` +
       `**Trades:** ${r.trades}\n` +
       `**Win rate:** ${(r.winRate * 100).toFixed(0)}%\n` +
       `**Total:** ${r.totalR.toFixed(1)}R   ·   **Avg:** ${r.avgR.toFixed(2)}R/trade\n` +
       `**Max drawdown:** ${r.maxDrawdownR.toFixed(1)}R\n\n` +
-      `_Simplified model: exact fills, stop assumed before target on the same candle, ` +
-      `limited history. Past results don't predict the future. "R" = multiples of per-trade risk._`
+      `_Small samples mislead — judge on total R, not win rate alone. "R" = multiples of per-trade risk._`
     );
   } catch (err) {
     console.error(`[COMMAND] Backtest failed for ${symbol}:`, err.message);
     await message.reply(`⚠️ Backtest failed: ${err.message}`);
   }
+}
+
+// Aggregate backtest across the whole watchlist — pools every trade into one win
+// rate / total R. This is the figure to optimize (single pairs are too small a sample).
+async function backtestWatchlist(message, state) {
+  const watchlist = state.watchlist || [];
+  if (!watchlist.length) return message.reply("Your watchlist is empty — add assets with `!watch BTC ETH`.");
+
+  await message.reply(`📈 Backtesting all **${watchlist.length}** watchlist assets (15m entries, 1h+4h filter)... give me a minute.`);
+
+  const pooled = [];
+  const lines  = [];
+  for (const asset of watchlist) {
+    try {
+      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 1000));
+      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 1000));
+      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 1000));
+      if (!c15?.length || !c1h?.length || !c4h?.length) { lines.push(`**${asset.symbol}** — no data`); continue; }
+
+      const r = backtestMultiTF({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) });
+      pooled.push(...(r.results || []));
+      lines.push(`**${asset.symbol}** — ${r.trades}t · ${(r.winRate * 100).toFixed(0)}% · ${r.totalR.toFixed(1)}R`);
+    } catch (err) {
+      console.error(`[COMMAND] Backtest failed for ${asset.symbol}:`, err.message);
+      lines.push(`**${asset.symbol}** — error`);
+    }
+  }
+
+  const n      = pooled.length;
+  const wins   = pooled.filter(r => r > 0).length;
+  const totalR = pooled.reduce((a, b) => a + b, 0);
+
+  await message.channel.send(
+    `📊 **Aggregate Backtest — ${watchlist.length} assets**\n\n` +
+    `**Total trades:** ${n}\n` +
+    `**Win rate:** ${n ? (wins / n * 100).toFixed(0) : 0}%\n` +
+    `**Total:** ${totalR.toFixed(1)}R   ·   **Avg:** ${n ? (totalR / n).toFixed(2) : 0}R/trade\n\n` +
+    lines.join("\n") +
+    `\n\n_This pooled total is the figure to optimize. Change ONE setting, re-run, and keep it only if total R rises (not just win rate)._`
+  );
 }
 
 // ─── !trade [symbol] ───────────────────────────────────────────────────────────

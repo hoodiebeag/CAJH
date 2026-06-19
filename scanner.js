@@ -11,7 +11,7 @@
  */
 
 import { generateChartImage } from "./chart.js";
-import { entrySignal, currentBias, SWING_WINDOW, RR1, RR2, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, REQUIRE_TF_ALIGNMENT } from "./strategy.js";
+import { entrySignal, currentBias, isTrending, SWING_WINDOW, RR1, RR2, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, REQUIRE_TF_ALIGNMENT, CHOP_FILTER } from "./strategy.js";
 import { placeBuy, getCurrentPrice, fetchOHLC } from "./trader.js";
 import {
   registerTrade, postTradeOpened, isTradingEnabled, getTrade
@@ -61,7 +61,13 @@ async function evaluateAsset(asset) {
 
   // Higher-timeframe trend filter: 1h AND 4h must be bullish.
   const aligned = biases["1h"] === "bull" && biases["4h"] === "bull";
-  if (buy && REQUIRE_TF_ALIGNMENT && !aligned) buy = null;
+  let pass = !REQUIRE_TF_ALIGNMENT || aligned;
+  // Chop filter: additionally require the 4h to be genuinely trending (HH + HL).
+  if (pass && CHOP_FILTER) {
+    const c4 = candlesByTf["4h"];
+    pass = c4 ? isTrending(c4.slice(0, -1), SWING_WINDOW) : false;
+  }
+  if (buy && !pass) buy = null;
 
   return { biases, aligned, buy, candlesByTf };
 }

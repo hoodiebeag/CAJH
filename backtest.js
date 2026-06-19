@@ -16,10 +16,38 @@
 
 import {
   SWING_WINDOW, RR1, RR2, REQUIRE_HIGHER_LOW, MAX_STOP_PCT,
-  EXIT_ON_SWING_HIGH, detectSwings
+  EXIT_ON_SWING_HIGH, CHOP_FILTER, detectSwings
 } from "./strategy.js";
 
 const MAX_HOLD = 100; // close a trade after this many candles if neither stop nor target hits
+
+/**
+ * Timeline of [{ t, trending }] — was the timeframe making higher highs AND higher
+ * lows as of each candle's close? Mirrors the live chop filter.
+ */
+function trendTimeline(candles, intervalMin, n) {
+  const pivots = detectSwings(candles, n);
+  const timeline = [];
+  let pi = 0; const lows = [], highs = [];
+  for (let i = 0; i < candles.length; i++) {
+    while (pi < pivots.length && pivots[pi].confirmIndex <= i) {
+      (pivots[pi].type === "low" ? lows : highs).push(pivots[pi].price); pi++;
+    }
+    const trending = lows.length >= 2 && highs.length >= 2 &&
+      lows[lows.length - 1] > lows[lows.length - 2] &&
+      highs[highs.length - 1] > highs[highs.length - 2];
+    timeline.push({ t: parseInt(candles[i].time) + intervalMin * 60, trending });
+  }
+  return timeline;
+}
+
+function trendingAsOf(timeline, t) {
+  let v = false;
+  for (let i = 0; i < timeline.length; i++) {
+    if (timeline[i].t <= t) v = timeline[i].trending; else break;
+  }
+  return v;
+}
 
 /**
  * Timeline of [{ t: candleCloseTimeSec, bias }] for a timeframe, so we can ask
@@ -68,6 +96,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
 
   const tl1h = biasTimeline(candles1h, 60,  n);
   const tl4h = biasTimeline(candles4h, 240, n);
+  const trend4h = trendTimeline(candles4h, 240, n);
 
   const trades = [];
   let pos = null, prevLowPrice = null;
@@ -76,7 +105,8 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
     const lowHere = lowAt.get(k); // a 15m swing low confirmed at this candle?
     if (lowHere && !pos) {
       const tClose  = T[k] + 15 * 60;
-      const aligned = biasAsOf(tl1h, tClose) === "bull" && biasAsOf(tl4h, tClose) === "bull";
+      let aligned = biasAsOf(tl1h, tClose) === "bull" && biasAsOf(tl4h, tClose) === "bull";
+      if (aligned && CHOP_FILTER) aligned = trendingAsOf(trend4h, tClose);
       const entry = C[k], stop = lowHere.price, risk = entry - stop;
       let ok = risk > 0 && aligned;
       if (ok && maxStopPct && risk / entry > maxStopPct) ok = false;
@@ -122,6 +152,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
     winRate: count ? wins / count : 0,
     totalR,
     avgR: count ? totalR / count : 0,
-    maxDrawdownR: maxDD
+    maxDrawdownR: maxDD,
+    results: trades   // raw per-trade R values, for pooling across pairs
   };
 }

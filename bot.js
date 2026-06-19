@@ -120,8 +120,8 @@ client.on("messageCreate", async (message) => {
   if (lower === "!status")     return handleStatus(message, state);
   if (lower === "!scan")       return handleScan(message, state);
 
-  if (lower.startsWith("!backtest ")) {
-    return handleBacktest(message, state, raw.slice(10).trim());
+  if (lower === "!backtest" || lower.startsWith("!backtest ")) {
+    return handleBacktest(message, state, raw.slice(9).trim());
   }
 
   if (lower === "!trade") {
