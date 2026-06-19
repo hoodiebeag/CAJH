@@ -11,7 +11,7 @@
  */
 
 import { generateChartImage } from "./chart.js";
-import { entrySignal, currentBias, isTrending, SWING_WINDOW, TP_R, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, REQUIRE_TF_ALIGNMENT, CHOP_FILTER } from "./strategy.js";
+import { entrySignal, currentBias, isTrending, aboveTrendMA, SWING_WINDOW, TP_R, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, REQUIRE_TF_ALIGNMENT, CHOP_FILTER, TREND_GATE, TREND_MA } from "./strategy.js";
 import { placeBuy, getCurrentPrice, fetchOHLC } from "./trader.js";
 import {
   registerTrade, postTradeOpened, isTradingEnabled, getTrade
@@ -66,6 +66,11 @@ async function evaluateAsset(asset) {
   if (pass && CHOP_FILTER) {
     const c4 = candlesByTf["4h"];
     pass = c4 ? isTrending(c4.slice(0, -1), SWING_WINDOW) : false;
+  }
+  // Per-pair trend gate: this symbol's own 4h must be above its moving average.
+  if (pass && TREND_GATE) {
+    const c4 = candlesByTf["4h"];
+    pass = c4 ? aboveTrendMA(c4.slice(0, -1), TREND_MA) : false;
   }
   if (buy && !pass) buy = null;
 

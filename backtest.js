@@ -16,7 +16,8 @@
 
 import {
   SWING_WINDOW, TP_R, REQUIRE_HIGHER_LOW, MAX_STOP_PCT,
-  EXIT_ON_SWING_HIGH, CHOP_FILTER, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, detectSwings
+  EXIT_ON_SWING_HIGH, CHOP_FILTER, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R,
+  TREND_GATE, TREND_MA, detectSwings
 } from "./strategy.js";
 
 const MAX_HOLD = 100; // close a trade after this many candles if neither stop nor target hits
@@ -49,6 +50,27 @@ function trendingAsOf(timeline, t) {
   return v;
 }
 
+/** Timeline of [{ t, above }] — was each close above its `period` SMA at that candle? */
+function maTimeline(candles, intervalMin, period) {
+  const closes = candles.map(c => parseFloat(c.close));
+  const tl = []; let sum = 0;
+  for (let i = 0; i < candles.length; i++) {
+    sum += closes[i];
+    if (i >= period) sum -= closes[i - period];
+    const above = i >= period - 1 ? closes[i] > sum / period : false;
+    tl.push({ t: parseInt(candles[i].time) + intervalMin * 60, above });
+  }
+  return tl;
+}
+
+function aboveAsOf(timeline, t) {
+  let v = false;
+  for (let i = 0; i < timeline.length; i++) {
+    if (timeline[i].t <= t) v = timeline[i].above; else break;
+  }
+  return v;
+}
+
 /**
  * Timeline of [{ t: candleCloseTimeSec, bias }] for a timeframe, so we can ask
  * "what was this timeframe's bias as of time t?" Bias flips at each pivot's CONFIRM
@@ -77,7 +99,8 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
   n = SWING_WINDOW, tpR = TP_R,
   requireHigherLow = REQUIRE_HIGHER_LOW, maxStopPct = MAX_STOP_PCT,
   exitOnSwingHigh = EXIT_ON_SWING_HIGH, chopFilter = CHOP_FILTER,
-  lockBreakeven = LOCK_BREAKEVEN, beTriggerR = BE_TRIGGER_R, beLockR = BE_LOCK_R
+  lockBreakeven = LOCK_BREAKEVEN, beTriggerR = BE_TRIGGER_R, beLockR = BE_LOCK_R,
+  trendGate = TREND_GATE, trendMa = TREND_MA
 } = {}) {
   if (!candles15?.length || !candles1h?.length || !candles4h?.length) {
     return { trades: 0, winRate: 0, totalR: 0, avgR: 0, maxDrawdownR: 0 };
@@ -99,6 +122,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
   const tl1h = biasTimeline(candles1h, 60,  n);
   const tl4h = biasTimeline(candles4h, 240, n);
   const trend4h = trendTimeline(candles4h, 240, n);
+  const maTl4h  = maTimeline(candles4h, 240, trendMa);
 
   const trades = [];
   let pos = null, prevLowPrice = null;
@@ -109,6 +133,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
       const tClose  = T[k] + 15 * 60;
       let aligned = biasAsOf(tl1h, tClose) === "bull" && biasAsOf(tl4h, tClose) === "bull";
       if (aligned && chopFilter) aligned = trendingAsOf(trend4h, tClose);
+      if (aligned && trendGate)  aligned = aboveAsOf(maTl4h, tClose);
       const entry = C[k], stop = lowHere.price, risk = entry - stop;
       let ok = risk > 0 && aligned;
       if (ok && maxStopPct && risk / entry > maxStopPct) ok = false;
