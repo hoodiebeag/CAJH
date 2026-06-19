@@ -3,8 +3,8 @@
  *
  * Entries TRIGGER on a 15m break-of-structure swing low (confirmed when price closes
  * back above the pivot candle's high), taken only when the 1h AND 4h trend bias are
- * bullish at that moment. Exits mirror live: stop, TP1 (scale out half + breakeven),
- * TP2, and the optional swing-high take-profit. Results are in "R" (multiples of the
+ * bullish at that moment. Exits mirror live: stop, single take-profit (full position),
+ * TP, and the optional swing-high take-profit. Results are in "R" (multiples of the
  * per-trade risk), independent of position size.
  *
  * Caveats (read before trusting any number):
@@ -15,8 +15,8 @@
  */
 
 import {
-  SWING_WINDOW, RR1, RR2, REQUIRE_HIGHER_LOW, MAX_STOP_PCT,
-  EXIT_ON_SWING_HIGH, CHOP_FILTER, detectSwings
+  SWING_WINDOW, TP_R, REQUIRE_HIGHER_LOW, MAX_STOP_PCT,
+  EXIT_ON_SWING_HIGH, CHOP_FILTER, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, detectSwings
 } from "./strategy.js";
 
 const MAX_HOLD = 100; // close a trade after this many candles if neither stop nor target hits
@@ -74,8 +74,10 @@ function biasAsOf(timeline, t) {
 }
 
 export function backtestMultiTF({ candles15, candles1h, candles4h }, {
-  n = SWING_WINDOW, rr1 = RR1, rr2 = RR2,
-  requireHigherLow = REQUIRE_HIGHER_LOW, maxStopPct = MAX_STOP_PCT
+  n = SWING_WINDOW, tpR = TP_R,
+  requireHigherLow = REQUIRE_HIGHER_LOW, maxStopPct = MAX_STOP_PCT,
+  exitOnSwingHigh = EXIT_ON_SWING_HIGH, chopFilter = CHOP_FILTER,
+  lockBreakeven = LOCK_BREAKEVEN, beTriggerR = BE_TRIGGER_R, beLockR = BE_LOCK_R
 } = {}) {
   if (!candles15?.length || !candles1h?.length || !candles4h?.length) {
     return { trades: 0, winRate: 0, totalR: 0, avgR: 0, maxDrawdownR: 0 };
@@ -106,36 +108,34 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
     if (lowHere && !pos) {
       const tClose  = T[k] + 15 * 60;
       let aligned = biasAsOf(tl1h, tClose) === "bull" && biasAsOf(tl4h, tClose) === "bull";
-      if (aligned && CHOP_FILTER) aligned = trendingAsOf(trend4h, tClose);
+      if (aligned && chopFilter) aligned = trendingAsOf(trend4h, tClose);
       const entry = C[k], stop = lowHere.price, risk = entry - stop;
       let ok = risk > 0 && aligned;
       if (ok && maxStopPct && risk / entry > maxStopPct) ok = false;
       if (ok && requireHigherLow && prevLowPrice != null && lowHere.price <= prevLowPrice) ok = false;
-      if (ok) pos = { entry, stop, risk, tp1: entry + rr1 * risk, tp2: entry + rr2 * risk, half: false, r: 0, openedAt: k };
+      if (ok) pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k };
     }
     if (lowHere) prevLowPrice = lowHere.price;
 
     if (pos && k > pos.openedAt) {
       const hi = H[k], lo = L[k];
-      if (!pos.half) {
-        if (lo <= pos.stop) { trades.push(-1); pos = null; }
-        else if (hi >= pos.tp1) {
-          pos.r += rr1 * 0.5; pos.half = true; pos.stop = pos.entry;
-          if (hi >= pos.tp2) { pos.r += rr2 * 0.5; trades.push(pos.r); pos = null; }
-        }
-      } else {
-        if (lo <= pos.stop) { trades.push(pos.r); pos = null; }
-        else if (hi >= pos.tp2) { pos.r += rr2 * 0.5; trades.push(pos.r); pos = null; }
+      // Stop checked first against the stop as it stands entering this candle
+      // (conservative: if both stop and target are touched, assume stop hit first).
+      if (lo <= pos.stop) { trades.push((pos.stop - pos.entry) / pos.risk); pos = null; }
+      else if (hi >= pos.tp) { trades.push(tpR); pos = null; }
+      // Breakeven-plus: once this candle's high reaches the trigger, lift the stop
+      // above entry for subsequent candles.
+      if (pos && lockBreakeven && !pos.beMoved && hi >= pos.entry + beTriggerR * pos.risk) {
+        pos.stop = pos.entry + beLockR * pos.risk;
+        pos.beMoved = true;
       }
       // Structure-based take-profit: a swing high confirmed here, while in profit.
-      if (pos && EXIT_ON_SWING_HIGH && highAt.has(k) && C[k] > pos.entry) {
-        const mtm = (C[k] - pos.entry) / pos.risk;
-        trades.push(pos.half ? pos.r + 0.5 * mtm : mtm);
+      if (pos && exitOnSwingHigh && highAt.has(k) && C[k] > pos.entry) {
+        trades.push((C[k] - pos.entry) / pos.risk);
         pos = null;
       }
       if (pos && k - pos.openedAt >= MAX_HOLD) {
-        const mtm = (C[k] - pos.entry) / pos.risk;
-        trades.push(pos.half ? pos.r + 0.5 * mtm : mtm);
+        trades.push((C[k] - pos.entry) / pos.risk);
         pos = null;
       }
     }

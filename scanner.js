@@ -11,7 +11,7 @@
  */
 
 import { generateChartImage } from "./chart.js";
-import { entrySignal, currentBias, isTrending, SWING_WINDOW, RR1, RR2, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, REQUIRE_TF_ALIGNMENT, CHOP_FILTER } from "./strategy.js";
+import { entrySignal, currentBias, isTrending, SWING_WINDOW, TP_R, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, REQUIRE_TF_ALIGNMENT, CHOP_FILTER } from "./strategy.js";
 import { placeBuy, getCurrentPrice, fetchOHLC } from "./trader.js";
 import {
   registerTrade, postTradeOpened, isTradingEnabled, getTrade
@@ -28,7 +28,7 @@ export const SCAN_INTERVALS = [
 
 // ─── Tunable strategy settings ─────────────────────────────────────────────────
 const POSITION_PCT = 0.10;  // 10% of balance per trade
-// Swing window N, RR1/RR2, and the optional filters live in strategy.js.
+// Swing window N, TP_R, and the optional filters live in strategy.js.
 
 // Candle fetching lives in trader.js (shared with the monitor); re-export the name
 // the rest of the app already uses.
@@ -114,8 +114,7 @@ async function proposeBuy(symbol, buy, channel) {
     return { traded: false, reason: "not a higher low (structure not yet bullish)" };
   }
 
-  const tp1    = entry + RR1 * risk;
-  const tp2    = entry + RR2 * risk;
+  const takeProfit = entry + TP_R * risk;
   const signal = `${buy.tf} swing low`;
   const tfMinutes = SCAN_INTERVALS.find(i => i.label === buy.tf)?.minutes ?? 15;
 
@@ -124,10 +123,10 @@ async function proposeBuy(symbol, buy, channel) {
     const trade = await placeBuy({ symbol, sizePct: POSITION_PCT, price: entry });
     trade.entry       = entry;
     trade.stopLoss    = stopLoss;
-    trade.takeProfit1 = tp1;
-    trade.takeProfit2 = tp2;
+    trade.takeProfit  = takeProfit;
+    trade.risk        = risk;          // entry − stop, for R-based stop management
+    trade.beMoved     = false;         // has the breakeven+ stop-raise happened yet?
     trade.sizePct     = POSITION_PCT;
-    trade.tp1Hit      = false;
     trade.signal      = signal;
     trade.tf          = buy.tf;          // entry timeframe (for swing-high exit)
     trade.tfMinutes   = tfMinutes;

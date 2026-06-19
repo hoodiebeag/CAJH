@@ -5,7 +5,7 @@
 
 import { getCurrentPrice, placeSell, getAccountBalance, fetchOHLC, symbolToPair } from "./trader.js";
 import { saveTrades, loadTrades } from "./storage.js";
-import { detectSwings, SWING_WINDOW, EXIT_ON_SWING_HIGH } from "./strategy.js";
+import { detectSwings, SWING_WINDOW, EXIT_ON_SWING_HIGH, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R } from "./strategy.js";
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 
@@ -114,8 +114,7 @@ export async function postTradeOpened(channel, trade) {
     `✅ **Trade Opened — ${trade.symbol} LONG**\n\n` +
     `**Entry:** ${usd(trade.entry)}\n` +
     `**Stop Loss:** ${usd(trade.stopLoss)}\n` +
-    `**Take Profit 1:** ${usd(trade.takeProfit1)}\n` +
-    `**Take Profit 2:** ${usd(trade.takeProfit2)}\n` +
+    `**Take Profit:** ${usd(trade.takeProfit)}\n` +
     `**Volume:** ${trade.volume} ${trade.symbol}\n` +
     `**Capital:** ${usd(trade.capital)} (${sizePct}% of balance)\n` +
     `**Signal:** ${trade.signal ?? "—"}`
@@ -128,7 +127,6 @@ export async function postTradeClosed(channel, trade, exitPrice, reason) {
   const emoji  = pnl >= 0 ? "🟢" : "🔴";
   const label  = reason === "tp"         ? "TP Hit ✅"
                : reason === "sl"         ? "SL Hit ❌"
-               : reason === "sl-be"      ? "Stopped at Breakeven ➖"
                : reason === "swing-high" ? "Swing-High Take-Profit 📈"
                : reason === "manual"     ? "Manually Closed"
                : "Closed";
@@ -141,21 +139,6 @@ export async function postTradeClosed(channel, trade, exitPrice, reason) {
     `**Entry:** ${usd(trade.entry)}\n` +
     `**Exit:** ${usd(exitPrice)}\n` +
     `**P&L:** ${pnl >= 0 ? "+" : ""}${usd(pnl)} (${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%)\n` +
-    `**Daily P&L:** ${dailyPnl >= 0 ? "+" : ""}${usd(dailyPnl)}`
-  );
-}
-
-/** Posted when TP1 is hit and we scale out part of the position. */
-export async function postPartialTakeProfit(channel, trade, exitPrice, soldVolume) {
-  const pnl = (exitPrice - trade.entry) * soldVolume;
-  dailyPnl += pnl;
-
-  if (!channel) return;
-  await channel.send(
-    `🟢 **Partial Take-Profit — ${trade.symbol} (TP1 Hit)**\n\n` +
-    `**Sold:** ${soldVolume} ${trade.symbol} @ ${usd(exitPrice)}\n` +
-    `**Realized P&L:** ${pnl >= 0 ? "+" : ""}${usd(pnl)}\n` +
-    `**Runner left:** ${trade.volume} ${trade.symbol}, stop moved to breakeven (${usd(trade.stopLoss)})\n` +
     `**Daily P&L:** ${dailyPnl >= 0 ? "+" : ""}${usd(dailyPnl)}`
   );
 }
@@ -215,19 +198,19 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
         const price = priceMap.get(symbol);
         if (!price) continue;
 
-        // Stop → close whatever remains (price at or below the stop).
+        // Stop → close the position (price at or below the stop).
         if (price <= trade.stopLoss) {
           try { await placeSell({ symbol, volume: trade.volume }); }
           catch (err) { console.error(`[MONITOR] SL sell failed for ${symbol}:`, err.message); }
-          await postTradeClosed(channel, trade, price, trade.tp1Hit ? "sl-be" : "sl");
+          await postTradeClosed(channel, trade, price, "sl");
           removeTrade(symbol);
           continue;
         }
 
-        // Final target → close whatever remains (price at or above TP2).
-        if (price >= trade.takeProfit2) {
+        // Take-profit → close the full position (price at or above the target).
+        if (price >= trade.takeProfit) {
           try { await placeSell({ symbol, volume: trade.volume }); }
-          catch (err) { console.error(`[MONITOR] TP2 sell failed for ${symbol}:`, err.message); }
+          catch (err) { console.error(`[MONITOR] TP sell failed for ${symbol}:`, err.message); }
           await postTradeClosed(channel, trade, price, "tp");
           removeTrade(symbol);
           continue;
@@ -256,18 +239,21 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
           }
         }
 
-        // First target → scale out half once, move the stop to breakeven.
-        if (!trade.tp1Hit && price >= trade.takeProfit1) {
-          const half = trade.volume / 2;
-          try {
-            await placeSell({ symbol, volume: half });
-            trade.volume  -= half;
-            trade.tp1Hit   = true;
-            trade.stopLoss = trade.entry;   // breakeven on the runner
+        // Breakeven-plus: once price has run far enough, lift the stop above entry so
+        // the trade can no longer close red. Checked after stop/TP so those take priority.
+        if (LOCK_BREAKEVEN && !trade.beMoved) {
+          const risk = trade.risk ?? (trade.entry - trade.stopLoss);
+          if (risk > 0 && price >= trade.entry + BE_TRIGGER_R * risk) {
+            trade.stopLoss = trade.entry + BE_LOCK_R * risk;
+            trade.beMoved  = true;
             saveTradeState();
-            await postPartialTakeProfit(channel, trade, price, half);
-          } catch (err) {
-            console.error(`[MONITOR] TP1 partial sell failed for ${symbol}:`, err.message);
+            if (channel) {
+              await channel.send(
+                `🔒 **Stop Raised — ${symbol}**\n` +
+                `Price reached +${BE_TRIGGER_R}R. Stop moved up to ${usd(trade.stopLoss)} ` +
+                `(locks +${BE_LOCK_R}R). This trade can no longer close at a loss.`
+              );
+            }
           }
         }
       }

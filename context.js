@@ -28,8 +28,7 @@ export function buildLiveContext(state) {
   const open    = getOpenTrades();
   const positions = open.length
     ? open.map(t =>
-        `${t.symbol}: entry $${t.entry}, stop $${t.stopLoss}, TP1 $${t.takeProfit1}, ` +
-        `TP2 $${t.takeProfit2}${t.tp1Hit ? " (half taken, stop at breakeven)" : ""}`
+        `${t.symbol}: entry $${t.entry}, stop $${t.stopLoss}, TP $${t.takeProfit}`
       ).join("\n")
     : "none";
   const watch = (state.watchlist || []).map(a => a.symbol).join(", ") || "empty";

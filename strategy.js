@@ -16,16 +16,21 @@
 export const SWING_WINDOW = 5; // LEFT-side strength: a pivot must beat the N candles before it (higher = stronger/rarer)
 
 // ─── Tunable strategy settings (shared by live trading AND the backtester) ──────
-export const RR1 = 1.5;   // take-profit 1 = entry + 1.5 × risk (scale out half)
-export const RR2 = 3.0;   // take-profit 2 = entry + 3.0 × risk (close the runner)
+export const TP_R = 4.0;   // single take-profit = entry + TP_R × risk (full position, no scale-out). This is the dial — try 4 / 5 / 6 and backtest.
+
+// Breakeven-plus: once price has run far enough in our favor, lift the stop above
+// entry so the trade can no longer close red. Full position stays on for the TP.
+export const LOCK_BREAKEVEN = true;  // master toggle for the stop-raise
+export const BE_TRIGGER_R   = 2.0;   // arm the raise once price reaches entry + 2.0 × risk (halfway to a 4R target)
+export const BE_LOCK_R      = 0.2;   // raise the stop to entry + 0.2 × risk (small locked profit, covers fees)
 
 export const RECENT_BARS = 16; // a confirmed low is only "actionable" for this many candles after it confirms
 
 // Optional confidence filters. Set to false / null to disable.
 export const REQUIRE_HIGHER_LOW   = true;  // only buy if this swing low is above the previous one (bullish structure)
-export const MAX_STOP_PCT         = 0.05;  // skip buys whose stop is further than 5% below entry; null to disable
+export const MAX_STOP_PCT         = 0.03;  // skip buys whose stop is further than 3% below entry; null to disable
 export const REQUIRE_TF_ALIGNMENT = true;  // require the higher-timeframe trend (1h AND 4h) to be bullish
-export const EXIT_ON_SWING_HIGH   = false;  // take profit when a fresh swing high confirms on the entry timeframe
+export const EXIT_ON_SWING_HIGH   = false; // take profit when a fresh swing high confirms on the entry timeframe (off = let winners run to TP)
 export const CHOP_FILTER          = false; // when true, only trade when the 4h is genuinely TRENDING (higher highs AND higher lows), not just bouncing inside a range
 
 /**
