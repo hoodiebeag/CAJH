@@ -12,7 +12,7 @@ import { getOpenTrades, isTradingEnabled } from "./monitor.js";
 
 const SOURCE_FILES = [
   "bot.js", "strategy.js", "scanner.js", "backtest.js", "trader.js",
-  "monitor.js", "commands.js", "chart.js", "storage.js", "news.js",
+  "monitor.js", "commands.js", "chart.js", "storage.js",
   "analyzer.js", "context.js"
 ];
 

@@ -3,8 +3,9 @@
  * Tracks open trades, enforces daily drawdown limits, and posts P&L updates.
  */
 
-import { getCurrentPrice, placeSell, getAccountBalance } from "./trader.js";
+import { getCurrentPrice, placeSell, getAccountBalance, fetchOHLC, symbolToPair } from "./trader.js";
 import { saveTrades, loadTrades } from "./storage.js";
+import { detectSwings, SWING_WINDOW, EXIT_ON_SWING_HIGH } from "./strategy.js";
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 
@@ -125,10 +126,11 @@ export async function postTradeClosed(channel, trade, exitPrice, reason) {
   const pnl    = (exitPrice - trade.entry) * trade.volume;
   const pnlPct = ((exitPrice - trade.entry) / trade.entry) * 100;
   const emoji  = pnl >= 0 ? "🟢" : "🔴";
-  const label  = reason === "tp"     ? "TP Hit ✅"
-               : reason === "sl"     ? "SL Hit ❌"
-               : reason === "sl-be"  ? "Stopped at Breakeven ➖"
-               : reason === "manual" ? "Manually Closed"
+  const label  = reason === "tp"         ? "TP Hit ✅"
+               : reason === "sl"         ? "SL Hit ❌"
+               : reason === "sl-be"      ? "Stopped at Breakeven ➖"
+               : reason === "swing-high" ? "Swing-High Take-Profit 📈"
+               : reason === "manual"     ? "Manually Closed"
                : "Closed";
 
   dailyPnl += pnl;
@@ -229,6 +231,29 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
           await postTradeClosed(channel, trade, price, "tp");
           removeTrade(symbol);
           continue;
+        }
+
+        // Structure-based take-profit: if a fresh swing high confirms on the entry
+        // timeframe while we're in profit, lock it in. Throttled to limit API calls.
+        if (EXIT_ON_SWING_HIGH && price > trade.entry) {
+          const now = Date.now();
+          if (now - (trade._swingCheckedAt || 0) > 90_000) {
+            trade._swingCheckedAt = now;
+            try {
+              const candles = await fetchOHLC(symbolToPair(symbol), trade.tfMinutes || 15);
+              const closed  = candles?.slice(0, -1) || [];
+              const pivots  = detectSwings(closed, SWING_WINDOW);
+              const last    = pivots[pivots.length - 1];
+              if (last?.type === "high" && parseInt(closed[last.index].time) * 1000 > trade.openedAt) {
+                await placeSell({ symbol, volume: trade.volume });
+                await postTradeClosed(channel, trade, price, "swing-high");
+                removeTrade(symbol);
+                continue;
+              }
+            } catch (err) {
+              console.error(`[MONITOR] swing-high check failed for ${symbol}:`, err.message);
+            }
+          }
         }
 
         // First target → scale out half once, move the stop to breakeven.

@@ -5,6 +5,7 @@
  */
 
 import Kraken from "kraken-api";
+import axios  from "axios";
 
 // ─── Client ────────────────────────────────────────────────────────────────────
 
@@ -208,75 +209,42 @@ export async function placeSell({ symbol, volume }) {
   };
 }
 
-/**
- * Places a stop-loss sell order at a specific price.
- */
-export async function placeStopLoss({ symbol, volume, stopPrice }) {
-  const pair   = symbolToPair(symbol);
-  const volStr = await normalizeVolume(pair, volume);
-
-  console.log(`[TRADER] STOP-LOSS ${symbol} @ $${stopPrice}`);
-
-  const res = await kraken.api("AddOrder", {
-    pair,
-    type:      "sell",
-    ordertype: "stop-loss",
-    price:     stopPrice.toString(),
-    volume:    volStr
-  });
-
-  return res.result?.txid?.[0];
-}
+// ─── Public market data ─────────────────────────────────────────────────────────
 
 /**
- * Places a take-profit sell order at a specific price.
+ * Fetches OHLC candles for a Kraken pair id (e.g. "XBTUSD") at the given interval
+ * (minutes). Returns [{ time, open, high, low, close, volume }] or null. Public
+ * endpoint — no auth needed. Centralized here so scanner and monitor share one path.
  */
-export async function placeTakeProfit({ symbol, volume, takeProfitPrice }) {
-  const pair   = symbolToPair(symbol);
-  const volStr = await normalizeVolume(pair, volume);
+export async function fetchOHLC(pair, minutes) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await axios.get("https://api.kraken.com/0/public/OHLC", {
+        params: { pair, interval: minutes },
+        timeout: 15000
+      });
 
-  console.log(`[TRADER] TAKE-PROFIT ${symbol} @ $${takeProfitPrice}`);
+      if (response.data.error && response.data.error.length > 0) {
+        console.error(`Kraken error for ${pair}:`, response.data.error);
+        return null;
+      }
 
-  const res = await kraken.api("AddOrder", {
-    pair,
-    type:      "sell",
-    ordertype: "take-profit",
-    price:     takeProfitPrice.toString(),
-    volume:    volStr
-  });
+      const key     = Object.keys(response.data.result).find(k => k !== "last");
+      const candles = response.data.result[key];
 
-  return res.result?.txid?.[0];
-}
-
-/** Returns all open orders. */
-export async function getOpenOrders() {
-  try {
-    const res = await kraken.api("OpenOrders");
-    return Object.values(res.result?.open ?? {});
-  } catch (err) {
-    console.error("[TRADER] Failed to fetch open orders:", err.message);
-    return [];
+      return candles.map(k => ({
+        time:   k[0],
+        open:   k[1].toString(),
+        high:   k[2].toString(),
+        low:    k[3].toString(),
+        close:  k[4].toString(),
+        volume: k[6].toString()
+      }));
+    } catch (error) {
+      console.error(`Fetch attempt ${attempt} failed for ${pair}:`, error.message);
+      if (attempt === 3) return null;
+      await new Promise(res => setTimeout(res, 5000 * attempt));
+    }
   }
-}
-
-/** Returns the status of a single order by txid (open/closed/canceled/expired/pending), or null. */
-export async function getOrderStatus(txid) {
-  if (!txid) return null;
-  try {
-    const res = await kraken.api("QueryOrders", { txid });
-    return res.result?.[txid]?.status ?? null;
-  } catch (err) {
-    console.error(`[TRADER] QueryOrders failed for ${txid}:`, err.message);
-    return null;
-  }
-}
-
-/** Cancels an order by txid. */
-export async function cancelOrder(txid) {
-  try {
-    await kraken.api("CancelOrder", { txid });
-    console.log(`[TRADER] Cancelled order ${txid}`);
-  } catch (err) {
-    console.error(`[TRADER] Failed to cancel order ${txid}:`, err.message);
-  }
+  return null;
 }
