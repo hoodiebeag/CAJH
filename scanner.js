@@ -66,20 +66,18 @@ export async function fetchCandles(pair, minutes) {
 }
 
 // ─── Per-asset evaluation ──────────────────────────────────────────────────────
-// Returns { signals, biases, aligned, buy, candlesByTf }. Charts are NOT rendered
-// here — we keep the raw candles so charts can be built on demand (only when a trade
-// fires, during scans). "buy" is a freshly-confirmed buy, returned ONLY if all
-// timeframes agree (when REQUIRE_TF_ALIGNMENT is on).
+// Returns { signals: { "15m": sig|null, ... }, buy: bestBuy|null, buffers: [...] }.
+// "buy" is a freshly-confirmed buy, returned ONLY if all timeframes agree (when
+// REQUIRE_TF_ALIGNMENT is on). "biases" is each timeframe's current bull/bear bias.
 async function evaluateAsset(asset) {
   const signals = {};
   const biases  = {};
-  const candlesByTf = {};
+  const buffers = [];
   let freshBuy = null;
 
   for (const interval of SCAN_INTERVALS) {
     const candles = await fetchCandles(asset.id, interval.minutes);
     if (!candles || candles.length === 0) { signals[interval.label] = null; biases[interval.label] = null; continue; }
-    candlesByTf[interval.label] = candles;
 
     // Signals use CLOSED candles only — drop the still-forming last candle.
     const closed = candles.slice(0, -1);
@@ -94,6 +92,9 @@ async function evaluateAsset(asset) {
       freshBuy = { ...sig, tf: interval.label, prevSwingLow: prev }; // higher TF overwrites
     }
 
+    const buffer = generateChartImage(candles, asset.symbol, interval.label);
+    buffers.push({ label: interval.label, buffer });
+
     await new Promise(r => setTimeout(r, 2000)); // be gentle with Kraken
   }
 
@@ -101,19 +102,7 @@ async function evaluateAsset(asset) {
   const aligned = SCAN_INTERVALS.every(i => biases[i.label] === "bull");
   const buy = (freshBuy && (!REQUIRE_TF_ALIGNMENT || aligned)) ? freshBuy : null;
 
-  return { signals, biases, aligned, buy, candlesByTf };
-}
-
-/** Render the 3 timeframe charts for a symbol from already-fetched candles. */
-function buildCharts(symbol, candlesByTf) {
-  const buffers = [];
-  for (const interval of SCAN_INTERVALS) {
-    const candles = candlesByTf[interval.label];
-    if (candles?.length) {
-      buffers.push({ label: interval.label, buffer: generateChartImage(candles, symbol, interval.label) });
-    }
-  }
-  return buffers;
+  return { signals, biases, aligned, buy, buffers };
 }
 
 function summarize(symbol, biases, aligned) {
@@ -126,24 +115,27 @@ function summarize(symbol, biases, aligned) {
 }
 
 // ─── Trade proposal (buy signals only) ─────────────────────────────────────────
-// Returns { traded: bool, reason }. Posts the trade card + ping only on success;
-// callers decide whether to surface skip reasons (scans stay quiet, !trade explains).
 async function proposeBuy(symbol, buy, channel) {
-  if (!isTradingEnabled()) return { traded: false, reason: "trading is halted (!resume to enable)" };
-  if (getTrade(symbol))    return { traded: false, reason: "already in a position" };
+  if (!isTradingEnabled()) return;
+  if (getTrade(symbol))    return;   // one position per symbol
 
   const entry    = await getCurrentPrice(symbol);
   const stopLoss = buy.pivotPrice;   // the swing low = structural invalidation
   const risk     = entry - stopLoss;
 
-  if (!entry || risk <= 0) return { traded: false, reason: "price already at/below the swing low" };
+  if (!entry || risk <= 0) {
+    await channel.send(`ℹ️ **${symbol}** buy signal skipped — price is already at/below the swing low.`);
+    return;
+  }
 
   // Optional confidence filters (see strategy.js).
   if (MAX_STOP_PCT && risk / entry > MAX_STOP_PCT) {
-    return { traded: false, reason: `stop too far (${(risk / entry * 100).toFixed(1)}% > ${(MAX_STOP_PCT * 100).toFixed(0)}%)` };
+    await channel.send(`ℹ️ **${symbol}** skipped — stop too far (${(risk / entry * 100).toFixed(1)}% > ${(MAX_STOP_PCT * 100).toFixed(0)}%).`);
+    return;
   }
   if (REQUIRE_HIGHER_LOW && buy.prevSwingLow != null && buy.pivotPrice <= buy.prevSwingLow) {
-    return { traded: false, reason: "not a higher low (structure not yet bullish)" };
+    await channel.send(`ℹ️ **${symbol}** skipped — not a higher low (structure not yet bullish).`);
+    return;
   }
 
   const tp1    = entry + RR1 * risk;
@@ -164,18 +156,15 @@ async function proposeBuy(symbol, buy, channel) {
     registerTrade(trade);            // persists to disk
     await postTradeOpened(channel, trade);
     await channel.send(`<@${BEAG()}> 🚨 New trade opened on **${symbol}** — \`!sell ${symbol}\` to close it (or \`!sell ${symbol} 50\` for half).`);
-    return { traded: true };
   } catch (err) {
     console.error(`[STRATEGY] Execution failed for ${symbol}:`, err.message);
     await channel.send(`<@${BEAG()}> ⚠️ **${symbol}** trade failed: ${err.message}`);
-    return { traded: false, reason: `order error: ${err.message}` };
   }
 }
 
 // ─── Public entry points ───────────────────────────────────────────────────────
 
-/** Full watchlist scan — used by !scan and the scheduled scans. Stays quiet:
- *  posts charts only for assets that actually open a trade. */
+/** Full watchlist scan — used by !scan and the scheduled market-open scans. */
 export async function runScanner(channel, state) {
   const watchlist = state.watchlist || [];
   if (watchlist.length === 0) {
@@ -184,52 +173,43 @@ export async function runScanner(channel, state) {
   }
 
   await channel.send(
-    `🔍 Scanning ${watchlist.length} assets on ${SCAN_INTERVALS.map(i => i.label).join("/")} ` +
-    `(N=${SWING_WINDOW}). Charts post only when a trade fires.`
+    `🔍 **Scanning ${watchlist.map(a => a.symbol).join(", ")}** on ` +
+    `${SCAN_INTERVALS.map(i => i.label).join("/")} for swing signals (N=${SWING_WINDOW})...`
   );
 
-  let checked = 0, opened = 0;
   for (const asset of watchlist) {
     try {
-      const { buy, candlesByTf } = await evaluateAsset(asset);
-      if (Object.keys(candlesByTf).length === 0) { console.warn(`[SCAN] no data for ${asset.symbol}`); continue; }
-      checked++;
-
-      if (!buy) continue;   // no aligned fresh setup → stay silent
-
-      const res = await proposeBuy(asset.symbol, buy, channel);
-      if (res.traded) {
-        opened++;
-        const buffers = buildCharts(asset.symbol, candlesByTf);
-        if (buffers.length) {
-          const b64 = buffers[0].buffer.toString("base64");
-          state.lastChartBase64    = b64;
-          state.lastChartMediaType = "image/png";
-          saveChart(b64, "image/png");
-          await channel.send({
-            content: `📈 **${asset.symbol}** — the setup that triggered this trade`,
-            files:   buffers.map(b => ({ attachment: b.buffer, name: `${asset.symbol}_${b.label}.png` }))
-          });
-        }
-      } else {
-        console.log(`[SCAN] ${asset.symbol} buy not taken: ${res.reason}`);
+      const { biases, aligned, buy, buffers } = await evaluateAsset(asset);
+      if (buffers.length === 0) {
+        await channel.send(`⚠️ Could not fetch data for **${asset.symbol}** — skipping.`);
+        continue;
       }
+
+      const b64 = buffers[0].buffer.toString("base64");
+      state.lastChartBase64    = b64;
+      state.lastChartMediaType = "image/png";
+      saveChart(b64, "image/png");
+
+      await channel.send({
+        content: summarize(asset.symbol, biases, aligned),
+        files:   buffers.map(b => ({ attachment: b.buffer, name: `${asset.symbol}_${b.label}.png` }))
+      });
+
+      if (buy) await proposeBuy(asset.symbol, buy, channel);
 
       await new Promise(r => setTimeout(r, 3000));
     } catch (error) {
       console.error(`Error scanning ${asset.symbol}:`, error.message);
+      await channel.send(`⚠️ Error scanning **${asset.symbol}**.`);
     }
   }
 
   const now = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
-  await channel.send(
-    `✅ **Scan complete** — checked ${checked} asset${checked === 1 ? "" : "s"}, ` +
-    `opened ${opened} trade${opened === 1 ? "" : "s"} · ${now} EST`
-  );
+  await channel.send(`✅ **Scan complete** — ${now} EST`);
   state.lastScanTime = now;
 }
 
-/** Single-symbol check — used by !trade BTC. Always shows charts (you asked to see it). */
+/** Single-symbol check — used by !trade BTC. */
 export async function scanSymbol(symbol, channel, state) {
   const upper = symbol.toUpperCase();
   const known = (state.watchlist || []).find(a => a.symbol === upper);
@@ -238,28 +218,16 @@ export async function scanSymbol(symbol, channel, state) {
   await channel.send(`🔍 Checking **${upper}** on ${SCAN_INTERVALS.map(i => i.label).join("/")}...`);
 
   try {
-    const { biases, aligned, buy, candlesByTf } = await evaluateAsset(asset);
-    if (Object.keys(candlesByTf).length === 0) { await channel.send(`⚠️ No data for **${upper}**.`); return; }
-
-    const buffers = buildCharts(upper, candlesByTf);
-    const b64 = buffers[0]?.buffer.toString("base64");
-    if (b64) {
-      state.lastChartBase64    = b64;
-      state.lastChartMediaType = "image/png";
-      saveChart(b64, "image/png");
-    }
+    const { biases, aligned, buy, buffers } = await evaluateAsset(asset);
+    if (buffers.length === 0) { await channel.send(`⚠️ No data for **${upper}**.`); return; }
 
     await channel.send({
       content: summarize(upper, biases, aligned),
       files:   buffers.map(b => ({ attachment: b.buffer, name: `${upper}_${b.label}.png` }))
     });
 
-    if (buy) {
-      const res = await proposeBuy(upper, buy, channel);
-      if (!res.traded) await channel.send(`ℹ️ **${upper}** setup not taken — ${res.reason}.`);
-    } else {
-      await channel.send(`No confirmed setup on **${upper}** right now (needs a fresh swing low with all 3 timeframes aligned).`);
-    }
+    if (buy) await proposeBuy(upper, buy, channel);
+    else     await channel.send(`No confirmed setup on **${upper}** right now (needs a fresh swing low with all 3 timeframes aligned).`);
   } catch (err) {
     console.error(`[STRATEGY] scanSymbol error for ${upper}:`, err.message);
     await channel.send(`⚠️ Something went wrong: ${err.message}`);
