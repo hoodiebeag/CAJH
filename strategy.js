@@ -33,7 +33,7 @@ export const REQUIRE_TF_ALIGNMENT = true;  // require the higher-timeframe trend
 export const EXIT_ON_SWING_HIGH   = false; // take profit when a fresh swing high confirms on the entry timeframe (off = let winners run to TP)
 export const CHOP_FILTER          = false; // when true, only trade when the 4h is genuinely TRENDING (higher highs AND higher lows), not just bouncing inside a range
 export const TREND_GATE           = true; // when true, only trade a symbol whose OWN 4h close is above its TREND_MA moving average (per-pair, not blanket)
-export const TREND_MA             = 30;    // moving-average period for the per-pair trend gate
+export const TREND_MA             = 20;    // moving-average period for the per-pair trend gate
 
 /** Is the latest 4h close above its TREND_MA-period simple moving average? */
 export function aboveTrendMA(candles, period = TREND_MA) {
