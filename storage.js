@@ -104,6 +104,27 @@ export function loadTrades() {
   return [];
 }
 
+const STATS_FILE = path.join(DATA_DIR, "stats.json");
+
+export function saveStats(stats) {
+  try {
+    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2));
+  } catch (err) {
+    console.error("[STORAGE] Failed to save stats.json:", err.message);
+  }
+}
+
+export function loadStats() {
+  try {
+    if (fs.existsSync(STATS_FILE)) {
+      return JSON.parse(fs.readFileSync(STATS_FILE, "utf8"));
+    }
+  } catch (err) {
+    console.error("[STORAGE] Could not read stats.json:", err.message);
+  }
+  return null;
+}
+
 function readConfigFile() {
   try {
     if (fs.existsSync(CONFIG_FILE)) {

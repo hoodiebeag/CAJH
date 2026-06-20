@@ -4,7 +4,7 @@
  */
 
 import { getCurrentPrice, placeSell, getAccountBalance, fetchOHLC, symbolToPair } from "./trader.js";
-import { saveTrades, loadTrades } from "./storage.js";
+import { saveTrades, loadTrades, saveStats, loadStats } from "./storage.js";
 import { detectSwings, SWING_WINDOW, EXIT_ON_SWING_HIGH, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R } from "./strategy.js";
 
 // ─── State ─────────────────────────────────────────────────────────────────────
@@ -29,11 +29,28 @@ export function isTradingEnabled()  { return tradingEnabled; }
 export function enableTrading()     { tradingEnabled = true;  console.log("[RISK] Trading enabled.");  }
 export function disableTrading()    { tradingEnabled = false; console.log("[RISK] Trading disabled."); }
 
+// Current calendar date in ET (YYYY-MM-DD), so daily stats roll over on the ET day.
+function todayET() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+}
+
+function persistStats() {
+  saveStats({ date: todayET(), dailyStartBalance, dailyPnl, tradesToday });
+}
+
 export function setDailyStartBalance(balance) {
-  if (dailyStartBalance === null) {
+  const saved = loadStats();
+  if (saved && saved.date === todayET()) {
+    // Same ET day (e.g. a mid-day redeploy) → restore counters instead of zeroing them.
+    dailyStartBalance = saved.dailyStartBalance ?? balance;
+    dailyPnl          = saved.dailyPnl ?? 0;
+    tradesToday       = saved.tradesToday ?? 0;
+    console.log(`[RISK] Restored today's stats — start ${usd(dailyStartBalance)}, P&L ${usd(dailyPnl)}, ${tradesToday} trade(s).`);
+  } else if (dailyStartBalance === null) {
     dailyStartBalance = balance;
     console.log(`[RISK] Daily start balance set: ${usd(balance)}`);
   }
+  persistStats();
 }
 
 export function checkDrawdown(currentBalance) {
@@ -52,6 +69,7 @@ export function resetDailyStats(balance) {
   dailyPnl          = 0;
   tradesToday       = 0;
   enableTrading();
+  persistStats();
   console.log(`[RISK] Daily stats reset. Start balance: ${usd(balance)}`);
 }
 
@@ -87,6 +105,7 @@ export function registerTrade(trade) {
   openTrades.set(trade.symbol.toUpperCase(), trade);
   tradesToday++;
   persist();
+  persistStats();
   console.log(`[MONITOR] Tracking ${trade.symbol} — entry: ${usd(trade.entry)}`);
 }
 
@@ -164,6 +183,7 @@ export async function postTradeClosed(channel, trade, exitPrice, reason) {
                : "Closed";
 
   dailyPnl += pnl;
+  persistStats();
 
   if (!channel) return;
   await channel.send(
