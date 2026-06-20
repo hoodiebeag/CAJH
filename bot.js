@@ -7,7 +7,7 @@ import { Client, GatewayIntentBits } from "discord.js";
 import cron from "node-cron";
 import { runScanner }      from "./scanner.js";
 import { loadConfig, saveConfig } from "./storage.js";
-import { startMonitor, setDailyStartBalance } from "./monitor.js";
+import { startMonitor, setDailyStartBalance, postDailySummary } from "./monitor.js";
 import {
   handleHelp, handleWatchlist, handleWatch, handleUnwatch,
   handleSetChannel, handleStatus,
@@ -56,7 +56,6 @@ async function runScheduledScan(label) {
   if (!channel) return;
 
   console.log(`[SCAN] ${label} scan running`);
-  await channel.send(`🕒 **Scheduled Scan**`);
   await runScanner(channel, state);
 
   config.lastScanTime = state.lastScanTime;
@@ -81,14 +80,28 @@ client.once("clientReady", async () => {
     startMonitor(client, state.scanChannelId);
   }
 
-  // Scheduled scans every 3 hours, anchored to NY 9:30 AM EST (≈8×/day).
+  // Scan every 15 minutes (right after each 15m candle closes). Quiet — only posts on a trade.
   cron.schedule(
-    "30 9,12,15,18,21,0,3,6 * * *",
+    "*/15 * * * *",
     () => runScheduledScan("Scheduled"),
     { timezone: "America/New_York" }
   );
+  console.log("[CRON] Scans scheduled every 15 minutes.");
 
-  console.log("[CRON] Scans scheduled every 3h from 9:30 AM EST (9:30, 12:30, 3:30, ...).");
+  // Daily summary at 3:30 PM ET: trades entered + live P&L on open positions.
+  cron.schedule(
+    "30 15 * * *",
+    async () => {
+      try {
+        const channel = await client.channels.fetch(state.scanChannelId);
+        if (channel) await postDailySummary(channel);
+      } catch (err) {
+        console.error("[CRON] Daily summary failed:", err.message);
+      }
+    },
+    { timezone: "America/New_York" }
+  );
+  console.log("[CRON] Daily summary scheduled for 3:30 PM ET.");
 });
 
 // ─── Message handler ───────────────────────────────────────────────────────────

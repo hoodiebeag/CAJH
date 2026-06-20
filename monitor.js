@@ -14,6 +14,7 @@ const openTrades  = new Map();   // symbol → trade object
 let tradingEnabled   = true;
 let dailyStartBalance = null;
 let dailyPnl          = 0;
+let tradesToday       = 0;
 
 const DAILY_DRAWDOWN_LIMIT = 0.10; // 10%
 
@@ -49,6 +50,7 @@ export function checkDrawdown(currentBalance) {
 export function resetDailyStats(balance) {
   dailyStartBalance = balance;
   dailyPnl          = 0;
+  tradesToday       = 0;
   enableTrading();
   console.log(`[RISK] Daily stats reset. Start balance: ${usd(balance)}`);
 }
@@ -83,12 +85,42 @@ export function hydrateTrades() {
 
 export function registerTrade(trade) {
   openTrades.set(trade.symbol.toUpperCase(), trade);
+  tradesToday++;
   persist();
   console.log(`[MONITOR] Tracking ${trade.symbol} — entry: ${usd(trade.entry)}`);
 }
 
 export function getOpenTrades() {
   return Array.from(openTrades.values());
+}
+
+/** Posted once a day: trades entered since the last summary + live P&L on open positions. */
+export async function postDailySummary(channel) {
+  let unrealized = 0;
+  const lines = [];
+  for (const [symbol, trade] of openTrades.entries()) {
+    try {
+      const price = await getCurrentPrice(symbol);
+      if (!price) continue;
+      const pnl  = (price - trade.entry) * trade.volume;
+      const risk = trade.risk ?? (trade.entry - trade.stopLoss);
+      const rMult = risk > 0 ? (price - trade.entry) / risk : 0;
+      unrealized += pnl;
+      lines.push(`${symbol}: ${pnl >= 0 ? "+" : ""}${usd(pnl)} (${rMult >= 0 ? "+" : ""}${rMult.toFixed(1)}R)`);
+    } catch { /* skip price failures */ }
+  }
+
+  const entered = tradesToday;
+  tradesToday = 0; // reset for the next day
+
+  if (!channel) return;
+  await channel.send(
+    `📅 **Daily Summary**\n\n` +
+    `**Trades entered:** ${entered}\n` +
+    `**Open positions:** ${openTrades.size}\n` +
+    `**Unrealized P&L:** ${unrealized >= 0 ? "+" : ""}${usd(unrealized)}` +
+    (lines.length ? `\n\n${lines.join("\n")}` : "")
+  );
 }
 
 export function getTrade(symbol) {
