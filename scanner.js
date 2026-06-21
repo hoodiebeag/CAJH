@@ -12,9 +12,9 @@
 
 import { generateChartImage } from "./chart.js";
 import { entrySignal, currentBias, isTrending, aboveTrendMA, SWING_WINDOW, TP_R, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, REQUIRE_TF_ALIGNMENT, CHOP_FILTER, TREND_GATE, TREND_MA } from "./strategy.js";
-import { placeBuy, getCurrentPrice, fetchOHLC } from "./trader.js";
+import { placeBuy, getCurrentPrice, fetchOHLC, getAccountBalance } from "./trader.js";
 import {
-  registerTrade, postTradeOpened, isTradingEnabled, getTrade
+  registerTrade, postTradeOpened, isTradingEnabled, getTrade, getOpenTrades
 } from "./monitor.js";
 import { saveChart, symbolToKrakenId } from "./storage.js";
 
@@ -27,7 +27,9 @@ export const SCAN_INTERVALS = [
 ];
 
 // ─── Tunable strategy settings ─────────────────────────────────────────────────
-const POSITION_PCT = 0.10;  // 10% of balance per trade
+const POSITION_PCT        = 0.10;  // 10% of free cash per trade
+const MAX_OPEN_POSITIONS  = 6;     // never hold more than this many positions at once
+const MIN_POSITION_USD    = 10;    // skip if the 10% slice would be below Kraken's min order size
 // Swing window N, TP_R, and the optional filters live in strategy.js.
 
 // Candle fetching lives in trader.js (shared with the monitor); re-export the name
@@ -104,12 +106,21 @@ function summarize(symbol, biases, aligned) {
 async function proposeBuy(symbol, buy, channel) {
   if (!isTradingEnabled()) return { traded: false, reason: "trading is halted (!resume to enable)" };
   if (getTrade(symbol))    return { traded: false, reason: "already in a position" };
+  if (getOpenTrades().length >= MAX_OPEN_POSITIONS) {
+    return { traded: false, reason: `max open positions (${MAX_OPEN_POSITIONS}) reached` };
+  }
 
   const entry    = await getCurrentPrice(symbol);
   const stopLoss = buy.pivotPrice;   // the swing low = structural invalidation
   const risk     = entry - stopLoss;
 
   if (!entry || risk <= 0) return { traded: false, reason: "price already at/below the swing low" };
+
+  // Don't attempt a buy whose size would fall below the exchange minimum.
+  const freeCash = await getAccountBalance();
+  if (freeCash * POSITION_PCT < MIN_POSITION_USD) {
+    return { traded: false, reason: `free cash too low (10% slice < $${MIN_POSITION_USD})` };
+  }
 
   // Optional confidence filters (see strategy.js).
   if (MAX_STOP_PCT && risk / entry > MAX_STOP_PCT) {
@@ -152,7 +163,7 @@ async function proposeBuy(symbol, buy, channel) {
 
 /** Full watchlist scan — used by !scan and the scheduled scans. Stays quiet:
  *  posts charts only for assets that actually open a trade. */
-export async function runScanner(channel, state) {
+export async function runScanner(channel, state, verbose = false) {
   const watchlist = state.watchlist || [];
   if (watchlist.length === 0) {
     await channel.send("⚠️ Your watchlist is empty! Add assets with `!watch BTC ETH SOL`.");
@@ -198,11 +209,13 @@ export async function runScanner(channel, state) {
   }
 
   const now = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
-  await channel.send(
-    `✅ **Scan complete** — checked ${checked} asset${checked === 1 ? "" : "s"}, ` +
-    `opened ${opened} trade${opened === 1 ? "" : "s"} · ${now} EST`
-  );
   state.lastScanTime = now;
+  if (verbose) {
+    await channel.send(
+      `✅ **Scan complete** — checked ${checked} asset${checked === 1 ? "" : "s"}, ` +
+      `opened ${opened} trade${opened === 1 ? "" : "s"} · ${now} EST`
+    );
+  }
 }
 
 /** Single-symbol check — used by !trade BTC. Always shows charts (you asked to see it). */

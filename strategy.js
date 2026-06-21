@@ -22,7 +22,9 @@ export const TP_R = 4.0;   // single take-profit = entry + TP_R × risk (full po
 // entry so the trade can no longer close red. Full position stays on for the TP.
 export const LOCK_BREAKEVEN = true;  // master toggle for the stop-raise
 export const BE_TRIGGER_R   = 2.0;   // arm the raise once price reaches entry + 2.0 × risk (halfway to a 4R target)
-export const BE_LOCK_R      = 0.2;   // raise the stop to entry + 0.2 × risk (small locked profit, covers fees)
+export const BE_LOCK_R      = 0.2;   // raise the stop to entry + 0.2 × risk (or the fee floor below, whichever is higher)
+export const FEE_BUFFER_PCT = 0.01;  // the breakeven stop sits at least this % above entry to clear round-trip fees (~0.8% Kraken taker) plus margin. Lower it if your fee tier improves.
+export const FEE_RATE       = 0.004; // per-side taker fee estimate, used to show P&L net of fees (round trip ≈ 0.8%)
 
 export const RECENT_BARS = 16; // a confirmed low is only "actionable" for this many candles after it confirms
 
@@ -32,7 +34,7 @@ export const MAX_STOP_PCT         = 0.03;  // skip buys whose stop is further th
 export const REQUIRE_TF_ALIGNMENT = true;  // require the higher-timeframe trend (1h AND 4h) to be bullish
 export const EXIT_ON_SWING_HIGH   = false; // take profit when a fresh swing high confirms on the entry timeframe (off = let winners run to TP)
 export const CHOP_FILTER          = false; // when true, only trade when the 4h is genuinely TRENDING (higher highs AND higher lows), not just bouncing inside a range
-export const TREND_GATE           = true; // when true, only trade a symbol whose OWN 4h close is above its TREND_MA moving average (per-pair, not blanket)
+export const TREND_GATE           = true;  // when true, only trade a symbol whose OWN 4h close is above its TREND_MA moving average (per-pair, not blanket)
 export const TREND_MA             = 20;    // moving-average period for the per-pair trend gate
 
 /** Is the latest 4h close above its TREND_MA-period simple moving average? */

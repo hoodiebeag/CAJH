@@ -239,7 +239,7 @@ export async function handleStatus(message, state) {
 
 export async function handleScan(message, state) {
   state.scanChannelId = message.channel.id;
-  await runScanner(message.channel, state);
+  await runScanner(message.channel, state, true);
 }
 
 // ─── cajh analyze that ───────────────────────────────────────────────────────────
@@ -446,7 +446,7 @@ export async function handleManualTrade(message, state, symbol) {
     if (!state.watchlist?.length) {
       return message.reply("⚠️ Watchlist is empty. Add assets with `!watch BTC ETH SOL`.");
     }
-    return runScanner(message.channel, state);
+    return runScanner(message.channel, state, true);
   }
   return scanSymbol(symbol, message.channel, state);
 }

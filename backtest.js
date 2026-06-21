@@ -16,7 +16,7 @@
 
 import {
   SWING_WINDOW, TP_R, REQUIRE_HIGHER_LOW, MAX_STOP_PCT,
-  EXIT_ON_SWING_HIGH, CHOP_FILTER, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R,
+  EXIT_ON_SWING_HIGH, CHOP_FILTER, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT,
   TREND_GATE, TREND_MA, detectSwings
 } from "./strategy.js";
 
@@ -99,7 +99,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
   n = SWING_WINDOW, tpR = TP_R,
   requireHigherLow = REQUIRE_HIGHER_LOW, maxStopPct = MAX_STOP_PCT,
   exitOnSwingHigh = EXIT_ON_SWING_HIGH, chopFilter = CHOP_FILTER,
-  lockBreakeven = LOCK_BREAKEVEN, beTriggerR = BE_TRIGGER_R, beLockR = BE_LOCK_R,
+  lockBreakeven = LOCK_BREAKEVEN, beTriggerR = BE_TRIGGER_R, beLockR = BE_LOCK_R, feeBufferPct = FEE_BUFFER_PCT,
   trendGate = TREND_GATE, trendMa = TREND_MA
 } = {}) {
   if (!candles15?.length || !candles1h?.length || !candles4h?.length) {
@@ -150,9 +150,13 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
       else if (hi >= pos.tp) { trades.push(tpR); pos = null; }
       // Breakeven-plus: once this candle's high reaches the trigger, lift the stop
       // above entry for subsequent candles.
-      if (pos && lockBreakeven && !pos.beMoved && hi >= pos.entry + beTriggerR * pos.risk) {
-        pos.stop = pos.entry + beLockR * pos.risk;
-        pos.beMoved = true;
+      if (pos && lockBreakeven && !pos.beMoved) {
+        const lockOffset = Math.max(beLockR * pos.risk, feeBufferPct * pos.entry);
+        const armOffset  = Math.max(beTriggerR * pos.risk, lockOffset + 0.5 * pos.risk);
+        if (hi >= pos.entry + armOffset) {
+          pos.stop = pos.entry + lockOffset;
+          pos.beMoved = true;
+        }
       }
       // Structure-based take-profit: a swing high confirmed here, while in profit.
       if (pos && exitOnSwingHigh && highAt.has(k) && C[k] > pos.entry) {

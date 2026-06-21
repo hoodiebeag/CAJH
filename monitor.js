@@ -5,7 +5,7 @@
 
 import { getCurrentPrice, placeSell, getAccountBalance, fetchOHLC, symbolToPair } from "./trader.js";
 import { saveTrades, loadTrades, saveStats, loadStats } from "./storage.js";
-import { detectSwings, SWING_WINDOW, EXIT_ON_SWING_HIGH, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R } from "./strategy.js";
+import { detectSwings, SWING_WINDOW, EXIT_ON_SWING_HIGH, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT, FEE_RATE } from "./strategy.js";
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 
@@ -121,7 +121,9 @@ export async function postDailySummary(channel) {
     try {
       const price = await getCurrentPrice(symbol);
       if (!price) continue;
-      const pnl  = (price - trade.entry) * trade.volume;
+      const gross = (price - trade.entry) * trade.volume;
+      const fees  = (trade.entry + price) * trade.volume * FEE_RATE; // round-trip if closed now
+      const pnl   = gross - fees;
       const risk = trade.risk ?? (trade.entry - trade.stopLoss);
       const rMult = risk > 0 ? (price - trade.entry) / risk : 0;
       unrealized += pnl;
@@ -137,7 +139,7 @@ export async function postDailySummary(channel) {
     `📅 **Daily Summary**\n\n` +
     `**Trades entered:** ${entered}\n` +
     `**Open positions:** ${openTrades.size}\n` +
-    `**Unrealized P&L:** ${unrealized >= 0 ? "+" : ""}${usd(unrealized)}` +
+    `**Unrealized P&L (net of fees):** ${unrealized >= 0 ? "+" : ""}${usd(unrealized)}` +
     (lines.length ? `\n\n${lines.join("\n")}` : "")
   );
 }
@@ -173,8 +175,10 @@ export async function postTradeOpened(channel, trade) {
 }
 
 export async function postTradeClosed(channel, trade, exitPrice, reason) {
-  const pnl    = (exitPrice - trade.entry) * trade.volume;
-  const pnlPct = ((exitPrice - trade.entry) / trade.entry) * 100;
+  const gross  = (exitPrice - trade.entry) * trade.volume;
+  const fees   = (trade.entry + exitPrice) * trade.volume * FEE_RATE; // round-trip taker
+  const pnl    = gross - fees;
+  const pnlPct = (pnl / (trade.entry * trade.volume)) * 100;
   const emoji  = pnl >= 0 ? "🟢" : "🔴";
   const label  = reason === "tp"         ? "TP Hit ✅"
                : reason === "sl"         ? "SL Hit ❌"
@@ -190,7 +194,7 @@ export async function postTradeClosed(channel, trade, exitPrice, reason) {
     `${emoji} **Trade Closed — ${trade.symbol} (${label})**\n\n` +
     `**Entry:** ${usd(trade.entry)}\n` +
     `**Exit:** ${usd(exitPrice)}\n` +
-    `**P&L:** ${pnl >= 0 ? "+" : ""}${usd(pnl)} (${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%)\n` +
+    `**P&L (net of fees):** ${pnl >= 0 ? "+" : ""}${usd(pnl)} (${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%)\n` +
     `**Daily P&L:** ${dailyPnl >= 0 ? "+" : ""}${usd(dailyPnl)}`
   );
 }
@@ -291,20 +295,28 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
           }
         }
 
-        // Breakeven-plus: once price has run far enough, lift the stop above entry so
-        // the trade can no longer close red. Checked after stop/TP so those take priority.
+        // Breakeven-plus: once price has run far enough, lift the stop above entry to a
+        // level that clears round-trip fees, so the trade can no longer close net-red.
+        // Checked after stop/TP so those take priority.
         if (LOCK_BREAKEVEN && !trade.beMoved) {
           const risk = trade.risk ?? (trade.entry - trade.stopLoss);
-          if (risk > 0 && price >= trade.entry + BE_TRIGGER_R * risk) {
-            trade.stopLoss = trade.entry + BE_LOCK_R * risk;
-            trade.beMoved  = true;
-            saveTradeState();
-            if (channel) {
-              await channel.send(
-                `🔒 **Stop Raised — ${symbol}**\n` +
-                `Price reached +${BE_TRIGGER_R}R. Stop moved up to ${usd(trade.stopLoss)} ` +
-                `(locks +${BE_LOCK_R}R). This trade can no longer close at a loss.`
-              );
+          if (risk > 0) {
+            // Lock at the larger of 0.2R or the fee buffer; arm high enough that the lock
+            // is always comfortably below price (matters when the stop is very tight).
+            const lockOffset = Math.max(BE_LOCK_R * risk, FEE_BUFFER_PCT * trade.entry);
+            const armOffset  = Math.max(BE_TRIGGER_R * risk, lockOffset + 0.5 * risk);
+            if (price >= trade.entry + armOffset) {
+              trade.stopLoss = trade.entry + lockOffset;
+              trade.beMoved  = true;
+              saveTradeState();
+              if (channel) {
+                const lockPct = (lockOffset / trade.entry) * 100;
+                await channel.send(
+                  `🔒 **Stop Raised — ${symbol}**\n` +
+                  `Stop moved up to ${usd(trade.stopLoss)} (+${lockPct.toFixed(2)}% above entry, net of fees). ` +
+                  `This trade can no longer close at a loss.`
+                );
+              }
             }
           }
         }
