@@ -170,10 +170,12 @@ export async function runScanner(channel, state, verbose = false) {
     return;
   }
 
-  await channel.send(
-    `🔍 Scanning ${watchlist.length} assets on ${SCAN_INTERVALS.map(i => i.label).join("/")} ` +
-    `(N=${SWING_WINDOW}). Charts post only when a trade fires.`
-  );
+  if (verbose) {
+    await channel.send(
+      `🔍 Scanning ${watchlist.length} assets on ${SCAN_INTERVALS.map(i => i.label).join("/")} ` +
+      `(N=${SWING_WINDOW}). Charts post only when a trade fires.`
+    );
+  }
 
   let checked = 0, opened = 0;
   for (const asset of watchlist) {
