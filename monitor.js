@@ -190,8 +190,9 @@ export async function postTradeClosed(channel, trade, exitPrice, reason) {
   persistStats();
 
   if (!channel) return;
+  const beag = process.env.BEAG_USER_ID || "795521432783552552";
   await channel.send(
-    `${emoji} **Trade Closed — ${trade.symbol} (${label})**\n\n` +
+    `<@${beag}> ${emoji} **Trade Closed — ${trade.symbol} (${label})**\n\n` +
     `**Entry:** ${usd(trade.entry)}\n` +
     `**Exit:** ${usd(exitPrice)}\n` +
     `**P&L (net of fees):** ${pnl >= 0 ? "+" : ""}${usd(pnl)} (${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%)\n` +
