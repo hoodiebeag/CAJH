@@ -490,24 +490,45 @@ export async function handleOptimize(message, state) {
     return { cfg, n, winRate: n ? wins / n : 0, net, green, pairs: data.length };
   }).sort((a, b) => b.net - a.net);
 
-  // 4) Report top 8 + an honest read.
+  // 4) Report. Rank configs that ACTUALLY TRADED by net R — a zero-trade config sits
+  // at 0.0R and would otherwise outrank net-negative configs that traded, burying the
+  // informative rows. Also show the most active configs (by trade count) so the
+  // high-trade cases — the ones that decide the fee question — always print. The R/t
+  // (net R per trade) figure is the fee-drag signal: ≈ −0.1 to −0.2R means fees are
+  // the killer (maker orders could help); worse than that means no edge to rescue.
   const fmt = r =>
     `**${r.cfg.entryTf}/${r.cfg.trendGateMode === "structure" ? "struct" : "ma"}** · min${(r.cfg.minStopPct * 100).toFixed(1)}/TP${r.cfg.tpR}` +
-    ` → **${r.net.toFixed(1)}R** net · ${r.n}t · ${(r.winRate * 100).toFixed(0)}% · ${r.green}/${r.pairs} green`;
+    ` → **${r.net.toFixed(1)}R** · ${r.n}t · ${r.n ? (r.net / r.n).toFixed(2) : "0.00"}R/t · ${(r.winRate * 100).toFixed(0)}% · ${r.green}/${r.pairs} grn`;
 
-  const top  = ranked.slice(0, 8).map((r, i) => `${i + 1}. ${fmt(r)}`).join("\n");
-  const best = ranked[0];
+  const traded     = ranked.filter(r => r.n > 0);                       // already net-sorted
+  const mostActive = [...ranked].sort((a, b) => b.n - a.n).slice(0, 5); // by trade count
+
+  const byNet = traded.length
+    ? traded.slice(0, 6).map((r, i) => `${i + 1}. ${fmt(r)}`).join("\n")
+    : "_No config produced a single trade — every setup was rejected by the filters._";
+  const active = mostActive.map(r => `• ${fmt(r)}`).join("\n");
+
+  const best = traded[0] || null;
+  let verdict;
+  if (!best) {
+    verdict = `⚠️ **Zero trades in the whole grid.** The filters rejected every setup across all ${data.length} pairs — ` +
+      `correct behavior when nothing is trending up. This is a read on the regime, not the strategy. Re-run when the market ` +
+      `is actually trending and see if trades and breadth appear.`;
+  } else if (best.net > 0 && best.green >= Math.ceil(best.pairs * 0.3) && best.n >= 10) {
+    verdict = `Best traded config is net-positive with real breadth (${best.green}/${best.pairs}) — **a hypothesis to test on ` +
+      `fresh data**, not a result. Check the R/t: near zero or mildly negative means maker orders could tip it positive.`;
+  } else {
+    verdict = `⚠️ **No real edge in this window.** The configs that traded are net-negative or rest on a handful of trades ` +
+      `(low breadth, tiny samples). Read the **R/t** on the active configs: ≈ −0.1 to −0.2R (the fee drag) with decent breadth ` +
+      `means maker orders are worth building. Worse than that, or near-zero breadth, means fees aren't the killer — the regime ` +
+      `is — and cheaper fills won't manufacture an edge.`;
+  }
 
   await message.channel.send(
     `🧪 **Optimizer — ${data.length} assets, ${grid.length} configs (net of fees)**\n\n` +
-    `${top}\n\n` +
-    (best.net > 0
-      ? `Best is net-positive — but **treat it as a hypothesis, not a result.** It's tuned to this one window. ` +
-        `The breadth number (pairs green) matters more than the total: green on most pairs = a real edge; ` +
-        `driven by 2-3 outliers = luck. Re-run on fresh data before trusting it.`
-      : `⚠️ **No config is net-positive across the watchlist.** That's the honest answer: at 15m, after fees, ` +
-        `this strategy has no edge in this data. The fix isn't another parameter — it's bigger moves (1h entries) ` +
-        `or lower fees (maker orders). That's the next step, not more tuning.`)
+    `__Best by net R (configs that traded):__\n${byNet}\n\n` +
+    `__Most active (decides the fee question):__\n${active}\n\n` +
+    verdict
   );
 }
 
