@@ -339,7 +339,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
  * An edge is a feature where winners and losers DIVERGE; a feature they share is a
  * mirage. Breakeven is intentionally off so every entry resolves cleanly to win/loss.
  */
-export function profileEntries({ candles15, candles1h, candles4h } = {}, { tpR = TP_R, n = SWING_WINDOW } = {}) {
+export function profileEntries({ candles15, candles1h, candles4h } = {}, { tpR = TP_R, n = SWING_WINDOW, feeRate = FEE_RATE } = {}) {
   const records = [];
   if (!candles15?.length || !candles1h?.length || !candles4h?.length) return { records };
 
@@ -398,6 +398,8 @@ export function profileEntries({ candles15, candles1h, candles4h } = {}, { tpR =
 
     records.push({
       outcome,
+      t: T[k],
+      netR: (outcome === "win" ? tpR : -1) - (2 * feeRate * entry) / risk,
       rsi: rsi[k],
       maDistPct: m ? (entry - m) / m * 100 : null,
       roomR: isFinite(res) ? (res - entry) / risk : null,

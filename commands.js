@@ -769,6 +769,74 @@ export async function handleProfile(message, state) {
 }
 
 
+// ─── !validate ──────────────────────────────────────────────────────────────
+// The honest test of the room edge the profile found. Learns the best room
+// threshold on the first 60% of history, then measures whether it beats the
+// no-filter baseline on the last 40% it never saw. Out-of-sample is the lie
+// detector: an edge that's real holds up on unseen data; an overfit one doesn't.
+export async function handleValidate(message, state) {
+  const watchlist = state.watchlist || [];
+  if (!watchlist.length) return message.reply("Watchlist is empty.");
+
+  await message.reply(`🔬 Out-of-sample test of the room edge across **${watchlist.length}** assets — learn on the first 60% of history, test on the last 40% it never saw. A minute or two…`);
+
+  const all = [];
+  for (const asset of watchlist) {
+    try {
+      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 900));
+      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 900));
+      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 900));
+      if (!c15?.length || !c1h?.length || !c4h?.length) continue;
+      const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) }, { tpR: 4 });
+      all.push(...records);
+    } catch (err) { console.error(`[VALIDATE] ${asset.symbol}:`, err.message); }
+  }
+  if (all.length < 50) return message.channel.send(`Only ${all.length} resolved candidates — too few for a split test. Needs more data.`);
+
+  // room null = nothing overhead = infinite room → passes any threshold.
+  const passes = (rec, thr) => thr <= 0 || rec.roomR == null || rec.roomR >= thr;
+  const evalSet = (set, thr) => { const f = set.filter(r => passes(r, thr)); const net = f.reduce((a, b) => a + b.netR, 0); return { n: f.length, net, rpt: f.length ? net / f.length : 0 }; };
+  const times = all.map(r => r.t).sort((a, b) => a - b);
+
+  // Run the learn-then-test procedure at THREE split points. A real edge holds across
+  // all of them; a single lucky out-of-sample draw won't survive three different splits.
+  const runSplit = (frac) => {
+    const splitT = times[Math.floor(times.length * frac)];
+    const IS = all.filter(r => r.t <= splitT), OOS = all.filter(r => r.t > splitT);
+    let learned = 0, best = evalSet(IS, 0);
+    for (const thr of [1, 1.5, 2, 2.5, 3]) { const e = evalSet(IS, thr); if (e.n >= 15 && e.net > best.net) { best = e; learned = thr; } }
+    const oosBase = evalSet(OOS, 0), oosLearned = evalSet(OOS, learned);
+    const beat = learned > 0 && oosLearned.net > oosBase.net && oosLearned.rpt > 0;
+    return { frac, learned, isBase: evalSet(IS, 0), isLearned: evalSet(IS, learned), oosBase, oosLearned, beat };
+  };
+  const splits = [0.5, 0.6, 0.7].map(runSplit);
+  const mid = splits[1];                                   // 60/40 shown in detail
+  const held = splits.filter(s => s.beat).length;
+  const anyLearned = splits.some(s => s.learned > 0);
+  const fmt = e => `${e.n}t · ${e.net.toFixed(1)}R · ${e.rpt.toFixed(2)}R/t`;
+
+  let verdict;
+  if (!anyLearned) {
+    verdict = `**No edge to validate.** At no split did requiring room beat taking every candidate, even in-sample. The profile's room gap was descriptive, not a profitable *rule*.`;
+  } else if (held === 3) {
+    verdict = `✅ **VALIDATED across all 3 splits.** The room rule beat the no-filter baseline on out-of-sample data it never saw, at every split point. That's a real, durable edge — the first one this project has found. Next: confirm on fresh data before risking size, but this is the genuine article.`;
+  } else if (held >= 1) {
+    verdict = `🟡 **MIXED — held at ${held}/3 splits.** Promising but not consistent: the room edge survived out-of-sample at some split points and not others. That's suggestive, not proven — and exactly the kind of half-signal that more data (or a trending regime) would resolve either way. Don't bet size on it yet.`;
+  } else {
+    verdict = `⚠️ **OVERFIT — held at 0/3 splits.** Room looked best in-sample but never beat the baseline out-of-sample. The gap was in-sample luck. This is the result that single-window tuning would have sold us as an edge — and the out-of-sample test caught it.`;
+  }
+
+  await message.channel.send(
+    `🔬 **Out-of-sample room validation — ${all.length} candidates**\n` +
+    `Learn-then-test at 3 split points; **held at ${held}/3**.\n\n` +
+    `**60/40 split detail** (learned ${mid.learned}R room):\n` +
+    `In-sample — no filter: ${fmt(mid.isBase)} · learned: ${fmt(mid.isLearned)}\n` +
+    `Out-of-sample — no filter: ${fmt(mid.oosBase)} · learned: ${fmt(mid.oosLearned)}\n\n` +
+    verdict
+  );
+}
+
+
 export async function handleModes(message, state) {
   const watchlist = state.watchlist || [];
   if (!watchlist.length) return message.reply("Watchlist is empty.");
