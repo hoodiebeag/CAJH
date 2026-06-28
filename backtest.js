@@ -102,7 +102,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
   lockBreakeven = LOCK_BREAKEVEN, beTriggerR = BE_TRIGGER_R, beLockR = BE_LOCK_R, feeBufferPct = FEE_BUFFER_PCT,
   feeRate = FEE_RATE,
   trendGate = TREND_GATE, trendMa = TREND_MA, trendGateMode = TREND_GATE_MODE,
-  entryTf = "15m", alignMode = "all"
+  entryTf = "15m", alignMode = "all", minRoomR = 0
 } = {}) {
   if (!candles15?.length || !candles1h?.length || !candles4h?.length) {
     return { trades: 0, winRate: 0, totalR: 0, avgR: 0, maxDrawdownR: 0, results: [] };
@@ -141,6 +141,17 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
   const trendTL = trendTimeline(trendSrc.candles, trendSrc.mins, n);
   const maTL    = maTimeline(trendSrc.candles, trendSrc.mins, trendMa);
 
+  // Overhead resistance: confirmed swing highs on the chop/MA anchor TF (4h for a
+  // 15m/1h entry). Used by minRoomR to require clear air above entry before the target.
+  const resHighs = detectSwings(trendSrc.candles, n)
+    .filter(p => p.type === "high")
+    .map(p => ({ t: parseInt(trendSrc.candles[p.confirmIndex].time) + trendSrc.mins * 60, price: p.price }));
+  const nearestResAbove = (entry, t) => {
+    let best = Infinity;
+    for (const r of resHighs) if (r.t <= t && r.price > entry && r.price < best) best = r.price;
+    return best;   // Infinity when nothing is overhead = unlimited room
+  };
+
   const trades = [];
   const reasons = {};   // tally of why each candidate swing low was taken / rejected
   let pos = null, prevLowPrice = null;
@@ -173,6 +184,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
       else if (maxStopPct && risk / entry > maxStopPct)                           { ok = false; reason = "stopTooFar"; }
       else if (minStopPct && risk / entry < minStopPct)                           { ok = false; reason = "stopTooTight"; }
       else if (requireHigherLow && prevLowPrice != null && lowHere.price <= prevLowPrice) { ok = false; reason = "notHigherLow"; }
+      else if (minRoomR && (nearestResAbove(entry, tClose) - entry) / risk < minRoomR)    { ok = false; reason = "noRoom"; }
       else                                                                        { reason = "taken"; }
       reasons[reason] = (reasons[reason] || 0) + 1;
       if (ok) pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k };

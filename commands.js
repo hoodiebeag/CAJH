@@ -639,6 +639,58 @@ export async function handleAlign(message, state) {
 }
 
 
+// ─── !room ──────────────────────────────────────────────────────────────────
+// Focused sweep: holds the promising loosened base (15m / ma gate / alignment off /
+// min1.5 / TP4) and requires increasing "room" — clear air from entry up to the
+// nearest 4h resistance, in R — to see whether cutting into-the-ceiling trades
+// lifts R/t. Net of fees, with breadth.
+export async function handleRoom(message, state) {
+  const watchlist = state.watchlist || [];
+  if (!watchlist.length) return message.reply("Watchlist is empty.");
+
+  await message.reply(`📏 Testing resistance-room thresholds across **${watchlist.length}** assets (alignment off base, net of fees)…`);
+
+  const data = [];
+  for (const asset of watchlist) {
+    try {
+      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 900));
+      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 900));
+      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 900));
+      if (c15?.length && c1h?.length && c4h?.length)
+        data.push({ c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
+    } catch (err) { console.error(`[ROOM] ${asset.symbol}:`, err.message); }
+  }
+  if (!data.length) return message.channel.send("⚠️ Couldn't fetch data for any pair.");
+
+  const base = { entryTf: "15m", trendGate: true, trendGateMode: "ma", alignMode: "none", minStopPct: 0.015, tpR: 4, lockBreakeven: true };
+  const rows = [0, 1, 2, 3, 4].map(minRoomR => {
+    const pooled = []; let green = 0;
+    for (const d of data) {
+      const r = backtestMultiTF({ candles15: d.c15, candles1h: d.c1h, candles4h: d.c4h }, { ...base, minRoomR });
+      pooled.push(...(r.results || []));
+      if (r.totalR > 0) green++;
+    }
+    const n = pooled.length, wins = pooled.filter(x => x > 0).length;
+    const net = pooled.reduce((a, b) => a + b, 0);
+    return { minRoomR, n, net, winRate: n ? wins / n : 0, green, pairs: data.length };
+  });
+
+  const fmt = r => `**${r.minRoomR}R room** → ${r.n}t · **${r.net.toFixed(1)}R** · ${r.n ? (r.net / r.n).toFixed(2) : "0.00"}R/t · ${(r.winRate * 100).toFixed(0)}% · ${r.green}/${r.pairs} grn`;
+  const traded = rows.filter(r => r.n > 0);
+  const best = traded.length ? [...traded].sort((a, b) => (b.net / b.n) - (a.net / a.n))[0] : null;
+
+  await message.channel.send(
+    `📏 **Resistance-room sweep — ${data.length} assets (net of fees)**\nBase: 15m · ma gate · alignment off · min1.5 · TP4\n\n` +
+    rows.map(r => `• ${fmt(r)}`).join("\n") + `\n\n` +
+    (best && best.minRoomR > 0 && best.n >= 5
+      ? `Best R/t at **${best.minRoomR}R room** (${(best.net / best.n).toFixed(2)}R/t, ${best.green}/${best.pairs} pairs). ` +
+        `If R/t climbs with room while trades stay ≥ a handful, the filter is cutting the into-the-ceiling losers — real signal.`
+      : `Room requirement doesn't lift R/t here, or shrinks trades below a usable sample. On this trendless window that's expected — ` +
+        `the filter can only remove trades, and there aren't many to begin with.`)
+  );
+}
+
+
 // No symbol → scan the whole watchlist for fresh swing signals.
 // With symbol → check that one asset across all timeframes.
 export async function handleManualTrade(message, state, symbol) {
