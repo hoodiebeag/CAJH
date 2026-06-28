@@ -11,7 +11,7 @@
  */
 
 import { generateChartImage } from "./chart.js";
-import { entrySignal, currentBias, isTrending, aboveTrendMA, SWING_WINDOW, TP_R, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, REQUIRE_TF_ALIGNMENT, CHOP_FILTER, TREND_GATE, TREND_MA } from "./strategy.js";
+import { entrySignal, currentBias, isTrending, aboveTrendMA, SWING_WINDOW, TP_R, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, MIN_STOP_PCT, REQUIRE_TF_ALIGNMENT, CHOP_FILTER, TREND_GATE, TREND_GATE_MODE, TREND_MA } from "./strategy.js";
 import { placeBuy, getCurrentPrice, fetchOHLC, getAccountBalance } from "./trader.js";
 import {
   registerTrade, postTradeOpened, isTradingEnabled, getTrade, getOpenTrades
@@ -69,10 +69,12 @@ async function evaluateAsset(asset) {
     const c4 = candlesByTf["4h"];
     pass = c4 ? isTrending(c4.slice(0, -1), SWING_WINDOW) : false;
   }
-  // Per-pair trend gate: this symbol's own 4h must be above its moving average.
+  // Per-pair trend gate: this symbol's own 4h must be trending up.
   if (pass && TREND_GATE) {
     const c4 = candlesByTf["4h"];
-    pass = c4 ? aboveTrendMA(c4.slice(0, -1), TREND_MA) : false;
+    if (!c4) pass = false;
+    else if (TREND_GATE_MODE === "structure") pass = isTrending(c4.slice(0, -1), SWING_WINDOW);
+    else pass = aboveTrendMA(c4.slice(0, -1), TREND_MA);
   }
   if (buy && !pass) buy = null;
 
@@ -125,6 +127,9 @@ async function proposeBuy(symbol, buy, channel) {
   // Optional confidence filters (see strategy.js).
   if (MAX_STOP_PCT && risk / entry > MAX_STOP_PCT) {
     return { traded: false, reason: `stop too far (${(risk / entry * 100).toFixed(1)}% > ${(MAX_STOP_PCT * 100).toFixed(0)}%)` };
+  }
+  if (MIN_STOP_PCT && risk / entry < MIN_STOP_PCT) {
+    return { traded: false, reason: `stop too tight (${(risk / entry * 100).toFixed(1)}% < ${(MIN_STOP_PCT * 100).toFixed(1)}%) — R too small to clear fees` };
   }
   if (REQUIRE_HIGHER_LOW && buy.prevSwingLow != null && buy.pivotPrice <= buy.prevSwingLow) {
     return { traded: false, reason: "not a higher low (structure not yet bullish)" };

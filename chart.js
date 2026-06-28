@@ -4,8 +4,18 @@
  * No moving averages / bands / RSI — pure price structure, matching the strategy.
  */
 
-import { createCanvas } from "canvas";
+import { createCanvas, registerFont } from "canvas";
 import { detectSwings, SWING_WINDOW } from "./strategy.js";
+import { fileURLToPath } from "url";
+import path from "path";
+
+// Bundle a font so chart text renders even when the host has no system fonts
+// installed (minimal containers). Must run before any canvas is created.
+const __dir = path.dirname(fileURLToPath(import.meta.url));
+try { registerFont(path.join(__dir, "fonts", "DejaVuSans.ttf"),      { family: "cajh", weight: "normal" }); }
+catch (e) { console.error("[CHART] font register (regular) failed:", e.message); }
+try { registerFont(path.join(__dir, "fonts", "DejaVuSans-Bold.ttf"), { family: "cajh", weight: "bold"   }); }
+catch (e) { console.error("[CHART] font register (bold) failed:", e.message); }
 
 const COLORS = {
   bg:        "#0e1320",
@@ -104,14 +114,14 @@ export function generateChartImage(candles, symbol, interval) {
 
   // Title
   ctx.fillStyle = COLORS.title;
-  ctx.font = "bold 26px sans-serif";
+  ctx.font = "bold 26px cajh";
   ctx.textAlign = "left";
   ctx.fillText(`${symbol}USD · ${interval} · KRAKEN`, plotLeft + 10, 44);
 
   // Horizontal gridlines + price labels
   const step = niceStep(maxP - minP);
   ctx.textAlign = "left";
-  ctx.font = "16px sans-serif";
+  ctx.font = "16px cajh";
   const firstLine = Math.ceil(minP / step) * step;
   for (let p = firstLine; p < maxP; p += step) {
     const y = priceToY(p);
@@ -152,7 +162,7 @@ export function generateChartImage(candles, symbol, interval) {
   ctx.fillStyle = COLORS.priceLine;
   ctx.fillRect(plotRight, ly - 13, PAD.right - 6, 26);
   ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 15px sans-serif";
+  ctx.font = "bold 15px cajh";
   ctx.textAlign = "left";
   ctx.fillText(fmtPrice(last), plotRight + 8, ly + 5);
 
@@ -160,7 +170,7 @@ export function generateChartImage(candles, symbol, interval) {
   const pivots = detectSwings(display, SWING_WINDOW).slice(-MAX_ARROWS);
   ctx.fillStyle = COLORS.arrow;
   ctx.strokeStyle = COLORS.arrow;
-  ctx.font = "15px sans-serif";
+  ctx.font = "15px cajh";
   ctx.textAlign = "center";
   pivots.forEach(p => {
     const x = indexToX(p.index);
@@ -196,7 +206,7 @@ export function generateChartImage(candles, symbol, interval) {
 
   // Time axis labels
   ctx.fillStyle = COLORS.axisText;
-  ctx.font = "15px sans-serif";
+  ctx.font = "15px cajh";
   ctx.textAlign = "center";
   const labelEvery = Math.floor(n / 6);
   for (let i = 0; i < n; i += labelEvery) {
@@ -205,9 +215,9 @@ export function generateChartImage(candles, symbol, interval) {
 
   // Watermark
   ctx.fillStyle = COLORS.watermark;
-  ctx.font = "bold 18px sans-serif";
+  ctx.font = "bold 18px cajh";
   ctx.textAlign = "left";
-  ctx.fillText("⌃ cajh", plotLeft + 10, H - 30);
+  ctx.fillText("cajh", plotLeft + 10, H - 30);
 
   return canvas.toBuffer("image/png");
 }

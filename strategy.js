@@ -31,11 +31,13 @@ export const RECENT_BARS = 16; // a confirmed low is only "actionable" for this 
 // Optional confidence filters. Set to false / null to disable.
 export const REQUIRE_HIGHER_LOW   = true;  // only buy if this swing low is above the previous one (bullish structure)
 export const MAX_STOP_PCT         = 0.03;  // skip buys whose stop is further than 3% below entry; null to disable
+export const MIN_STOP_PCT         = 0.015; // skip buys whose stop is CLOSER than 1.5% — R that small is swamped by ~0.8% round-trip fees
 export const REQUIRE_TF_ALIGNMENT = true;  // require the higher-timeframe trend (1h AND 4h) to be bullish
 export const EXIT_ON_SWING_HIGH   = false; // take profit when a fresh swing high confirms on the entry timeframe (off = let winners run to TP)
 export const CHOP_FILTER          = false; // when true, only trade when the 4h is genuinely TRENDING (higher highs AND higher lows), not just bouncing inside a range
-export const TREND_GATE           = true;  // when true, only trade a symbol whose OWN 4h close is above its TREND_MA moving average (per-pair, not blanket)
-export const TREND_MA             = 20;    // moving-average period for the per-pair trend gate
+export const TREND_GATE           = true;  // when true, only trade a symbol whose OWN 4h is trending up (per-pair, not blanket)
+export const TREND_GATE_MODE      = "ma";  // "ma" = 4h close above its TREND_MA average; "structure" = 4h making higher highs AND higher lows (rejects bounces in chop/downtrends)
+export const TREND_MA             = 20;    // moving-average period for the "ma" gate mode
 
 /** Is the latest 4h close above its TREND_MA-period simple moving average? */
 export function aboveTrendMA(candles, period = TREND_MA) {

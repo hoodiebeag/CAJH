@@ -15,9 +15,9 @@
  */
 
 import {
-  SWING_WINDOW, TP_R, REQUIRE_HIGHER_LOW, MAX_STOP_PCT,
-  EXIT_ON_SWING_HIGH, CHOP_FILTER, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT,
-  TREND_GATE, TREND_MA, detectSwings
+  SWING_WINDOW, TP_R, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, MIN_STOP_PCT,
+  EXIT_ON_SWING_HIGH, CHOP_FILTER, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT, FEE_RATE,
+  TREND_GATE, TREND_GATE_MODE, TREND_MA, detectSwings
 } from "./strategy.js";
 
 const MAX_HOLD = 100; // close a trade after this many candles if neither stop nor target hits
@@ -97,46 +97,68 @@ function biasAsOf(timeline, t) {
 
 export function backtestMultiTF({ candles15, candles1h, candles4h }, {
   n = SWING_WINDOW, tpR = TP_R,
-  requireHigherLow = REQUIRE_HIGHER_LOW, maxStopPct = MAX_STOP_PCT,
+  requireHigherLow = REQUIRE_HIGHER_LOW, maxStopPct = MAX_STOP_PCT, minStopPct = MIN_STOP_PCT,
   exitOnSwingHigh = EXIT_ON_SWING_HIGH, chopFilter = CHOP_FILTER,
   lockBreakeven = LOCK_BREAKEVEN, beTriggerR = BE_TRIGGER_R, beLockR = BE_LOCK_R, feeBufferPct = FEE_BUFFER_PCT,
-  trendGate = TREND_GATE, trendMa = TREND_MA
+  feeRate = FEE_RATE,
+  trendGate = TREND_GATE, trendMa = TREND_MA, trendGateMode = TREND_GATE_MODE,
+  entryTf = "15m"
 } = {}) {
   if (!candles15?.length || !candles1h?.length || !candles4h?.length) {
-    return { trades: 0, winRate: 0, totalR: 0, avgR: 0, maxDrawdownR: 0 };
+    return { trades: 0, winRate: 0, totalR: 0, avgR: 0, maxDrawdownR: 0, results: [] };
   }
 
-  const H = candles15.map(c => parseFloat(c.high));
-  const L = candles15.map(c => parseFloat(c.low));
-  const C = candles15.map(c => parseFloat(c.close));
-  const T = candles15.map(c => parseInt(c.time));
+  // Pick the entry timeframe; everything ABOVE it becomes the bias filter, and the
+  // highest available TF anchors the chop/MA gate. entryTf="15m" reproduces the original.
+  const TFS = [
+    { tf: "15m", candles: candles15, mins: 15  },
+    { tf: "1h",  candles: candles1h, mins: 60  },
+    { tf: "4h",  candles: candles4h, mins: 240 },
+  ];
+  const ei = TFS.findIndex(t => t.tf === entryTf);
+  if (ei < 0 || !TFS[ei].candles?.length) {
+    return { trades: 0, winRate: 0, totalR: 0, avgR: 0, maxDrawdownR: 0, results: [] };
+  }
+  const entryCandles = TFS[ei].candles;
+  const entryMins    = TFS[ei].mins;
+  const higher       = TFS.slice(ei + 1).filter(t => t.candles?.length);   // bias-filter TFs
+  const trendSrc     = higher.length ? higher[higher.length - 1] : TFS[ei]; // chop/MA anchor
 
-  const piv15 = detectSwings(candles15, n);
+  const H = entryCandles.map(c => parseFloat(c.high));
+  const L = entryCandles.map(c => parseFloat(c.low));
+  const C = entryCandles.map(c => parseFloat(c.close));
+  const T = entryCandles.map(c => parseInt(c.time));
+
+  const pivE = detectSwings(entryCandles, n);
   const lowAt  = new Map();             // confirmIndex → low pivot (entry trigger)
   const highAt = new Set();             // confirmIndex of high pivots (swing-high exit)
-  for (const p of piv15) {
+  for (const p of pivE) {
     if (p.type === "low") lowAt.set(p.confirmIndex, p);
     else                  highAt.add(p.confirmIndex);
   }
 
-  const tl1h = biasTimeline(candles1h, 60,  n);
-  const tl4h = biasTimeline(candles4h, 240, n);
-  const trend4h = trendTimeline(candles4h, 240, n);
-  const maTl4h  = maTimeline(candles4h, 240, trendMa);
+  const biasTLs = higher.map(t => biasTimeline(t.candles, t.mins, n));
+  const trendTL = trendTimeline(trendSrc.candles, trendSrc.mins, n);
+  const maTL    = maTimeline(trendSrc.candles, trendSrc.mins, trendMa);
 
   const trades = [];
   let pos = null, prevLowPrice = null;
 
-  for (let k = n; k < candles15.length; k++) {
-    const lowHere = lowAt.get(k); // a 15m swing low confirmed at this candle?
+  for (let k = n; k < entryCandles.length; k++) {
+    const lowHere = lowAt.get(k); // a swing low confirmed at this candle on the entry TF?
     if (lowHere && !pos) {
-      const tClose  = T[k] + 15 * 60;
-      let aligned = biasAsOf(tl1h, tClose) === "bull" && biasAsOf(tl4h, tClose) === "bull";
-      if (aligned && chopFilter) aligned = trendingAsOf(trend4h, tClose);
-      if (aligned && trendGate)  aligned = aboveAsOf(maTl4h, tClose);
+      const tClose  = T[k] + entryMins * 60;
+      let aligned = biasTLs.every(tl => biasAsOf(tl, tClose) === "bull");
+      if (aligned && chopFilter) aligned = trendingAsOf(trendTL, tClose);
+      if (aligned && trendGate) {
+        aligned = trendGateMode === "structure"
+          ? trendingAsOf(trendTL, tClose)   // 4h making higher highs AND higher lows
+          : aboveAsOf(maTL, tClose);        // 4h close above its MA
+      }
       const entry = C[k], stop = lowHere.price, risk = entry - stop;
       let ok = risk > 0 && aligned;
       if (ok && maxStopPct && risk / entry > maxStopPct) ok = false;
+      if (ok && minStopPct && risk / entry < minStopPct) ok = false;
       if (ok && requireHigherLow && prevLowPrice != null && lowHere.price <= prevLowPrice) ok = false;
       if (ok) pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k };
     }
@@ -144,10 +166,12 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
 
     if (pos && k > pos.openedAt) {
       const hi = H[k], lo = L[k];
+      // Round-trip fee expressed in R units for this trade (fee % ÷ risk %).
+      const feeR = (2 * feeRate * pos.entry) / pos.risk;
       // Stop checked first against the stop as it stands entering this candle
       // (conservative: if both stop and target are touched, assume stop hit first).
-      if (lo <= pos.stop) { trades.push((pos.stop - pos.entry) / pos.risk); pos = null; }
-      else if (hi >= pos.tp) { trades.push(tpR); pos = null; }
+      if (lo <= pos.stop) { trades.push((pos.stop - pos.entry) / pos.risk - feeR); pos = null; }
+      else if (hi >= pos.tp) { trades.push(tpR - feeR); pos = null; }
       // Breakeven-plus: once this candle's high reaches the trigger, lift the stop
       // above entry for subsequent candles.
       if (pos && lockBreakeven && !pos.beMoved) {
@@ -160,11 +184,11 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
       }
       // Structure-based take-profit: a swing high confirmed here, while in profit.
       if (pos && exitOnSwingHigh && highAt.has(k) && C[k] > pos.entry) {
-        trades.push((C[k] - pos.entry) / pos.risk);
+        trades.push((C[k] - pos.entry) / pos.risk - feeR);
         pos = null;
       }
       if (pos && k - pos.openedAt >= MAX_HOLD) {
-        trades.push((C[k] - pos.entry) / pos.risk);
+        trades.push((C[k] - pos.entry) / pos.risk - feeR);
         pos = null;
       }
     }

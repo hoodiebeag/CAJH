@@ -7,12 +7,12 @@ import { Client, GatewayIntentBits } from "discord.js";
 import cron from "node-cron";
 import { runScanner }      from "./scanner.js";
 import { loadConfig, saveConfig } from "./storage.js";
-import { startMonitor, setDailyStartBalance, postDailySummary } from "./monitor.js";
+import { startMonitor, setDailyStartBalance, postDailySummary, disableTrading } from "./monitor.js";
 import {
   handleHelp, handleWatchlist, handleWatch, handleUnwatch,
   handleSetChannel, handleStatus,
   handleScan, handleAnalyzeThat, handleChartRequest,
-  handleGeneral, handleManualTrade, handleBacktest,
+  handleGeneral, handleManualTrade, handleBacktest, handleOptimize,
   handleStop, handleResume, handleSell, handlePort
 } from "./commands.js";
 
@@ -80,6 +80,13 @@ client.once("clientReady", async () => {
     startMonitor(client, state.scanChannelId);
   }
 
+  // Test-only safety: boot with live trading OFF so you can deploy and run !backtest
+  // without opening real positions. Set START_HALTED=true in Railway; !resume to go live.
+  if (process.env.START_HALTED === "true") {
+    disableTrading();
+    console.log("[RISK] Booted HALTED (START_HALTED=true) — scans & backtests run, but NO live trades until !resume.");
+  }
+
   // Scan every 15 minutes (right after each 15m candle closes). Quiet — only posts on a trade.
   cron.schedule(
     "*/15 * * * *",
@@ -132,6 +139,7 @@ client.on("messageCreate", async (message) => {
   if (lower === "!setchannel") return handleSetChannel(message, state, config);
   if (lower === "!status")     return handleStatus(message, state);
   if (lower === "!scan")       return handleScan(message, state);
+  if (lower === "!optimize")   return handleOptimize(message, state);
 
   if (lower === "!backtest" || lower.startsWith("!backtest ")) {
     return handleBacktest(message, state, raw.slice(9).trim());

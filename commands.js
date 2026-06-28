@@ -437,7 +437,81 @@ async function backtestWatchlist(message, state) {
   );
 }
 
-// ─── !trade [symbol] ───────────────────────────────────────────────────────────
+// ─── !optimize ──────────────────────────────────────────────────────────────
+// Fee-aware parameter sweep across the whole watchlist. Fetches each pair's candles
+// ONCE, then runs every config, pooling NET-of-fees R. Ranks by pooled net R and
+// reports breadth (how many pairs are green) so we can tell a real edge from an outlier.
+export async function handleOptimize(message, state) {
+  const watchlist = state.watchlist || [];
+  if (!watchlist.length) return message.reply("Watchlist is empty — add assets with `!watch BTC ETH`.");
+
+  await message.reply(
+    `🧪 Optimizing across **${watchlist.length}** assets — fetching candles once, then sweeping configs **net of fees**. ` +
+    `This takes a minute or two.`
+  );
+
+  // 1) Fetch every pair's 3 timeframes once, cache them.
+  const data = [];
+  for (const asset of watchlist) {
+    try {
+      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 900));
+      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 900));
+      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 900));
+      if (c15?.length && c1h?.length && c4h?.length) {
+        data.push({ symbol: asset.symbol, c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
+      }
+    } catch (err) {
+      console.error(`[OPTIMIZE] fetch failed ${asset.symbol}:`, err.message);
+    }
+  }
+  if (!data.length) return message.channel.send("⚠️ Couldn't fetch data for any pair.");
+
+  // 2) Config grid — all net-of-fees, per-pair trend gate on. Entry timeframe is the
+  // key variable: higher TFs give bigger stops that clear fees.
+  const grid = [];
+  for (const entryTf of ["15m", "1h", "4h"])
+    for (const trendGateMode of ["ma", "structure"])
+      for (const minStopPct of [0.015, 0.025])
+        for (const tpR of [3, 4, 6])
+          grid.push({ entryTf, trendGateMode, minStopPct, tpR, trendMa: 20, lockBreakeven: true, trendGate: true });
+
+  // 3) Run every config across the cached pairs, pooling NET results.
+  const ranked = grid.map(cfg => {
+    const pooled = [];
+    let green = 0;
+    for (const d of data) {
+      const r = backtestMultiTF({ candles15: d.c15, candles1h: d.c1h, candles4h: d.c4h }, cfg);
+      pooled.push(...(r.results || []));
+      if (r.totalR > 0) green++;
+    }
+    const n = pooled.length;
+    const wins = pooled.filter(x => x > 0).length;
+    const net = pooled.reduce((a, b) => a + b, 0);
+    return { cfg, n, winRate: n ? wins / n : 0, net, green, pairs: data.length };
+  }).sort((a, b) => b.net - a.net);
+
+  // 4) Report top 8 + an honest read.
+  const fmt = r =>
+    `**${r.cfg.entryTf}/${r.cfg.trendGateMode === "structure" ? "struct" : "ma"}** · min${(r.cfg.minStopPct * 100).toFixed(1)}/TP${r.cfg.tpR}` +
+    ` → **${r.net.toFixed(1)}R** net · ${r.n}t · ${(r.winRate * 100).toFixed(0)}% · ${r.green}/${r.pairs} green`;
+
+  const top  = ranked.slice(0, 8).map((r, i) => `${i + 1}. ${fmt(r)}`).join("\n");
+  const best = ranked[0];
+
+  await message.channel.send(
+    `🧪 **Optimizer — ${data.length} assets, ${grid.length} configs (net of fees)**\n\n` +
+    `${top}\n\n` +
+    (best.net > 0
+      ? `Best is net-positive — but **treat it as a hypothesis, not a result.** It's tuned to this one window. ` +
+        `The breadth number (pairs green) matters more than the total: green on most pairs = a real edge; ` +
+        `driven by 2-3 outliers = luck. Re-run on fresh data before trusting it.`
+      : `⚠️ **No config is net-positive across the watchlist.** That's the honest answer: at 15m, after fees, ` +
+        `this strategy has no edge in this data. The fix isn't another parameter — it's bigger moves (1h entries) ` +
+        `or lower fees (maker orders). That's the next step, not more tuning.`)
+  );
+}
+
+
 // No symbol → scan the whole watchlist for fresh swing signals.
 // With symbol → check that one asset across all timeframes.
 
