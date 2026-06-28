@@ -328,3 +328,86 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
     reasons           // { taken, stopTooTight, stopTooFar, trendGate, notAligned, notHigherLow, priceBelowStop }
   };
 }
+
+/**
+ * profileEntries — the data-speaks-for-itself engine.
+ *
+ * Walks EVERY swing-low long candidate (no gates — every place you *could* go long),
+ * resolves each to a winner (price hits the take-profit target first) or loser (hits
+ * the stop first), and records the features cajh already computes at the moment of
+ * entry. Aggregating winners vs losers shows what — if anything — separates them.
+ * An edge is a feature where winners and losers DIVERGE; a feature they share is a
+ * mirage. Breakeven is intentionally off so every entry resolves cleanly to win/loss.
+ */
+export function profileEntries({ candles15, candles1h, candles4h } = {}, { tpR = TP_R, n = SWING_WINDOW } = {}) {
+  const records = [];
+  if (!candles15?.length || !candles1h?.length || !candles4h?.length) return { records };
+
+  const C = candles15.map(c => parseFloat(c.close));
+  const H = candles15.map(c => parseFloat(c.high));
+  const L = candles15.map(c => parseFloat(c.low));
+  const V = candles15.map(c => parseFloat(c.volume) || 0);
+  const T = candles15.map(c => parseInt(c.time));
+
+  // RSI(14), Wilder
+  const rsi = new Array(C.length).fill(null);
+  let ag = 0, al = 0;
+  for (let i = 1; i < C.length; i++) {
+    const ch = C[i] - C[i - 1], g = Math.max(ch, 0), l = Math.max(-ch, 0);
+    if (i <= 14) { ag += g; al += l; if (i === 14) { ag /= 14; al /= 14; rsi[i] = al === 0 ? 100 : 100 - 100 / (1 + ag / al); } }
+    else { ag = (ag * 13 + g) / 14; al = (al * 13 + l) / 14; rsi[i] = al === 0 ? 100 : 100 - 100 / (1 + ag / al); }
+  }
+  const maAt = (k) => { if (k < 19) return null; let s = 0; for (let j = k - 19; j <= k; j++) s += C[j]; return s / 20; };
+
+  const piv   = detectSwings(candles15, n);
+  const lows  = piv.filter(p => p.type === "low");
+  const highs = piv.filter(p => p.type === "high");
+
+  const biasAt = (candles, mins, t) => {
+    const ps = detectSwings(candles, n);
+    let b = null;
+    for (const pp of ps) { const ct = parseInt(candles[pp.confirmIndex].time) + mins * 60; if (ct <= t) b = pp.type; else break; }
+    return b === "low" ? "bull" : b === "high" ? "bear" : null;
+  };
+
+  for (let li = 0; li < lows.length; li++) {
+    const low = lows[li];
+    const k = low.confirmIndex;
+    if (k >= C.length) continue;
+    const entry = C[k], stop = low.price, risk = entry - stop;
+    if (risk <= 0) continue;
+    const target = entry + tpR * risk;
+
+    let outcome = null;
+    for (let j = k + 1; j < C.length; j++) {
+      if (L[j] <= stop)   { outcome = "loss"; break; }
+      if (H[j] >= target) { outcome = "win";  break; }
+    }
+    if (!outcome) continue;   // never resolved within the data — skip
+
+    const m = maAt(k);
+    const tClose = T[k] + 15 * 60;
+    let res = Infinity;
+    for (const h of highs) if (h.confirmIndex < k && h.price > entry && h.price < res) res = h.price;
+    let loN = L[k], hiN = H[k];
+    for (let j = Math.max(0, k - 20); j <= k; j++) { loN = Math.min(loN, L[j]); hiN = Math.max(hiN, H[j]); }
+    const prevLow = li >= 1 ? lows[li - 1].price : null;
+    let av = 0, cnt = 0;
+    for (let j = Math.max(0, k - 20); j < k; j++) { av += V[j]; cnt++; }
+    av = cnt ? av / cnt : 0;
+
+    records.push({
+      outcome,
+      rsi: rsi[k],
+      maDistPct: m ? (entry - m) / m * 100 : null,
+      roomR: isFinite(res) ? (res - entry) / risk : null,
+      rangePos: hiN > loN ? (entry - loN) / (hiN - loN) : null,
+      higherLow: prevLow != null ? (low.price > prevLow) : null,
+      stopPct: risk / entry * 100,
+      bias1h: biasAt(candles1h, 60, tClose),
+      bias4h: biasAt(candles4h, 240, tClose),
+      volRatio: av > 0 ? V[k] / av : null,
+    });
+  }
+  return { records };
+}

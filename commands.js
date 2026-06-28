@@ -7,7 +7,7 @@ import { analyzeChart }                   from "./analyzer.js";
 import { runScanner, scanSymbol, fetchCandles, SCAN_INTERVALS } from "./scanner.js";
 import { generateChartImage } from "./chart.js";
 import { SWING_WINDOW } from "./strategy.js";
-import { backtestMultiTF } from "./backtest.js";
+import { backtestMultiTF, profileEntries } from "./backtest.js";
 import { buildLiveContext, looksLikeCodeQuestion, readSource } from "./context.js";
 import { loadChart, saveConfig, symbolToKrakenId } from "./storage.js";
 import { getCurrentPrice, placeSell, getHoldings } from "./trader.js";
@@ -696,6 +696,79 @@ export async function handleRoom(message, state) {
 // BOS (trend), support-bounce, MA-dip, and RSI-oversold. The long dip-buy modes run
 // with NO trend gate and tight structural stops + ambitious targets — the test of
 // whether a long edge exists in this regime even at taker fees.
+// ─── !profile ───────────────────────────────────────────────────────────────
+// The data-speaks engine. Walks every long candidate across the watchlist, splits
+// them into winners (hit target) and losers (hit stop), and shows what each group
+// looked like at entry. Where the two columns diverge is a candidate edge — where
+// they match is a mirage. Honest by construction: an edge can't hide, and a fluke
+// can't masquerade, because the losers are right there in the comparison.
+export async function handleProfile(message, state) {
+  const watchlist = state.watchlist || [];
+  if (!watchlist.length) return message.reply("Watchlist is empty.");
+
+  await message.reply(`📊 Profiling every long candidate across **${watchlist.length}** assets — letting the winners and losers describe themselves. A minute or two…`);
+
+  const all = [];
+  for (const asset of watchlist) {
+    try {
+      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 900));
+      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 900));
+      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 900));
+      if (!c15?.length || !c1h?.length || !c4h?.length) continue;
+      const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) }, { tpR: 4 });
+      all.push(...records);
+    } catch (err) { console.error(`[PROFILE] ${asset.symbol}:`, err.message); }
+  }
+
+  const wins = all.filter(r => r.outcome === "win");
+  const loss = all.filter(r => r.outcome === "loss");
+  if (wins.length < 15 || loss.length < 15) {
+    return message.channel.send(`Only ${wins.length} winners / ${loss.length} losers resolved — too few to compare reliably. The honest read needs more data (longer history or more pairs).`);
+  }
+
+  const mean = (arr, f) => { const v = arr.map(r => r[f]).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const pct  = (arr, f, val) => { const v = arr.map(r => r[f]).filter(x => x != null); return v.length ? v.filter(x => (val === undefined ? x : x === val)).length / v.length * 100 : null; };
+
+  const num = [
+    ["RSI at entry", "rsi", 1], ["% from MA", "maDistPct", 2], ["room (R)", "roomR", 2],
+    ["range position", "rangePos", 2], ["stop size %", "stopPct", 2], ["volume vs avg", "volRatio", 2],
+  ];
+  const bool = [
+    ["higher-low %", "higherLow", true], ["1h bull %", "bias1h", "bull"], ["4h bull %", "bias4h", "bull"],
+  ];
+
+  const lines = [];
+  const seps = [];
+  for (const [label, f, dp] of num) {
+    const w = mean(wins, f), l = mean(loss, f);
+    if (w == null || l == null) continue;
+    lines.push(`${label.padEnd(15)} ${w.toFixed(dp).padStart(8)} ${l.toFixed(dp).padStart(8)}`);
+    seps.push({ label, sep: Math.abs(w - l) / (Math.abs(w) + Math.abs(l) + 1e-9), w, l, dp, kind: "num" });
+  }
+  for (const [label, f, val] of bool) {
+    const w = pct(wins, f, val), l = pct(loss, f, val);
+    if (w == null || l == null) continue;
+    lines.push(`${label.padEnd(15)} ${(w.toFixed(0) + "%").padStart(8)} ${(l.toFixed(0) + "%").padStart(8)}`);
+    seps.push({ label, sep: Math.abs(w - l) / 100, w, l, dp: 0, kind: "pct" });
+  }
+
+  seps.sort((a, b) => b.sep - a.sep);
+  const top = seps.slice(0, 3).map(s => {
+    const suff = s.kind === "pct" ? "%" : "";
+    return `**${s.label}** (winners ${s.w.toFixed(s.dp)}${suff} vs losers ${s.l.toFixed(s.dp)}${suff})`;
+  });
+  const winRate = (wins.length / all.length * 100).toFixed(0);
+
+  await message.channel.send(
+    `📊 **Entry profile — ${wins.length} winners / ${loss.length} losers (${winRate}% hit target)**\n\n` +
+    "```\nfeature           winners   losers\n" + lines.join("\n") + "\n```\n" +
+    `Biggest winner/loser divergences: ${top.join(", ")}.\n\n` +
+    `_Where the two columns are far apart, the losers don't share it — that's a candidate edge worth gating on. ` +
+    `Where they're close, it's a mirage. Next step: gate entries on the top divergent feature(s) and measure if net R improves out-of-sample._`
+  );
+}
+
+
 export async function handleModes(message, state) {
   const watchlist = state.watchlist || [];
   if (!watchlist.length) return message.reply("Watchlist is empty.");
