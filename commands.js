@@ -702,6 +702,126 @@ export async function handleRoom(message, state) {
 // looked like at entry. Where the two columns diverge is a candidate edge — where
 // they match is a mirage. Honest by construction: an edge can't hide, and a fluke
 // can't masquerade, because the losers are right there in the comparison.
+// ─── !discover ──────────────────────────────────────────────────────────────
+// Data-driven strategy search. Samples a WIDE pair universe, lets every long
+// candidate describe itself, then searches simple interpretable rules — keeping
+// only those that beat the no-filter baseline OUT-OF-SAMPLE across 3 time splits.
+// Then it shuffles outcomes and re-runs to measure how many "survivors" pure
+// chance produces, so we can tell a real edge from data-mining noise.
+const DISCOVER_UNIVERSE = [
+  "BTC","ETH","SOL","XRP","ADA","DOGE","AVAX","LINK","LTC","DOT",
+  "UNI","ATOM","POL","NEAR","FIL","APT","INJ","TAO","TIA","SUI",
+  "BCH","AAVE","ALGO","XLM","ETC","GRT","CRV","MKR","SNX","ICP",
+  "IMX","ARB","OP","SEI","RUNE","KSM","EOS","FLOW","SAND","MANA",
+];
+
+export async function handleDiscover(message, state) {
+  await message.reply(`🔭 Discovery run — sampling up to **${DISCOVER_UNIVERSE.length}** assets, then searching rules with an out-of-sample skeptic + chance baseline. This takes a few minutes…`);
+
+  const all = [];
+  let fetched = 0;
+  for (const sym of DISCOVER_UNIVERSE) {
+    try {
+      const id = symbolToKrakenId(sym);
+      const c15 = await fetchCandles(id, 15);  await new Promise(r => setTimeout(r, 800));
+      const c1h = await fetchCandles(id, 60);  await new Promise(r => setTimeout(r, 800));
+      const c4h = await fetchCandles(id, 240); await new Promise(r => setTimeout(r, 800));
+      if (!c15?.length || !c1h?.length || !c4h?.length) continue;
+      const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) }, { tpR: 4 });
+      all.push(...records);
+      fetched++;
+    } catch (err) { console.error(`[DISCOVER] ${sym}:`, err.message); }
+  }
+  if (all.length < 100) return message.channel.send(`Only ${all.length} candidates from ${fetched} assets — too few to search reliably.`);
+
+  const rules = [
+    ["room > 1R",          r => r.roomR == null || r.roomR > 1],
+    ["room > 2R",          r => r.roomR == null || r.roomR > 2],
+    ["room > 3R",          r => r.roomR == null || r.roomR > 3],
+    ["RSI < 30",           r => r.rsi != null && r.rsi < 30],
+    ["RSI < 40",           r => r.rsi != null && r.rsi < 40],
+    ["RSI > 60",           r => r.rsi != null && r.rsi > 60],
+    ["dip >2% below MA",   r => r.maDistPct != null && r.maDistPct < -2],
+    ["above MA",           r => r.maDistPct != null && r.maDistPct > 0],
+    ["range pos < 0.3",    r => r.rangePos != null && r.rangePos < 0.3],
+    ["range pos > 0.5",    r => r.rangePos != null && r.rangePos > 0.5],
+    ["higher low",         r => r.higherLow === true],
+    ["lower low",          r => r.higherLow === false],
+    ["stop < 1%",          r => r.stopPct != null && r.stopPct < 1],
+    ["stop > 2%",          r => r.stopPct != null && r.stopPct > 2],
+    ["4h bull",            r => r.bias4h === "bull"],
+    ["4h not bull",        r => r.bias4h !== "bull"],
+    ["1h bull",            r => r.bias1h === "bull"],
+    ["volume > 1.5x avg",  r => r.volRatio != null && r.volRatio > 1.5],
+  ];
+
+  const times = all.map(r => r.t).sort((a, b) => a - b);
+  const oosSets = [0.5, 0.6, 0.7].map(f => times[Math.floor(times.length * f)]).map(st => all.filter(r => r.t > st));
+
+  // Per-rule statistic: how much the rule's OOS R/t beats take-everything, averaged
+  // across the 3 split windows (baseline-independent). Real edge → reliably positive;
+  // non-predictive rule → ~0.
+  const statFor = (pred, netOf) => {
+    let sum = 0, valid = 0;
+    for (const oos of oosSets) {
+      const sel = oos.filter(pred);
+      if (sel.length < 10) continue;
+      const base = oos.reduce((a, b) => a + netOf(b), 0) / oos.length;
+      const rpt  = sel.reduce((a, b) => a + netOf(b), 0) / sel.length;
+      sum += (rpt - base); valid++;
+    }
+    return valid >= 2 ? sum / valid : null;
+  };
+
+  const oos6 = oosSets[1];
+  const base6 = oos6.reduce((a, b) => a + b.netR, 0) / (oos6.length || 1);
+  const rptOf = pred => { const s = oos6.filter(pred); return s.length ? s.reduce((a, b) => a + b.netR, 0) / s.length : null; };
+  const realStats = rules.map(([label, pred]) => ({ label, pred, stat: statFor(pred, r => r.netR), rpt: rptOf(pred) }));
+
+  // Permutation null: shuffle netR, recompute each rule's stat. p = fraction of
+  // shuffles where the shuffled stat ≥ the real stat (smoothed).
+  const netRs = all.map(r => r.netR);
+  const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const K = 30, ge = new Array(rules.length).fill(0);
+  for (let s = 0; s < K; s++) {
+    const sh = shuffle(netRs);
+    const map = new Map(all.map((r, i) => [r, sh[i]]));
+    const netOf = r => map.get(r);
+    for (let ri = 0; ri < rules.length; ri++) {
+      if (realStats[ri].stat == null) continue;
+      const ss = statFor(rules[ri][1], netOf);
+      if (ss != null && ss >= realStats[ri].stat) ge[ri]++;
+    }
+  }
+
+  // A discovery: predicts beyond chance (p<0.05) AND profitable out-of-sample (rpt>0).
+  const scored = realStats.map((rs, ri) => ({ ...rs, p: rs.stat == null ? 1 : (ge[ri] + 1) / (K + 1) }));
+  const discoveries = scored.filter(d => d.stat != null && d.p < 0.05 && d.rpt != null && d.rpt > 0).sort((a, b) => a.p - b.p);
+  const tested = scored.filter(d => d.stat != null).length;
+  const expectedFalse = tested * 0.05;
+
+  const lines = discoveries.length
+    ? discoveries.slice(0, 8).map(d => `• **${d.label}** — OOS ${d.rpt.toFixed(2)}R/t · p=${d.p.toFixed(2)}`).join("\n")
+    : "_None. No rule both beat chance (p<0.05) and turned a profit out-of-sample._";
+
+  let verdict;
+  if (discoveries.length === 0) {
+    verdict = `**No edge found.** Of ${tested} rules tested, none was both statistically real and profitable out-of-sample. The data — sampled wide, tested honestly — has no long edge our current features capture in this window.`;
+  } else if (discoveries.length > expectedFalse + 1) {
+    verdict = `🟢 **${discoveries.length} edges vs ~${expectedFalse.toFixed(1)} expected by chance.** More than noise — genuine candidates. Confirm on fresh data or a different regime before trusting size; don't deploy on this window alone.`;
+  } else {
+    verdict = `⚠️ **${discoveries.length} "edges", but ~${expectedFalse.toFixed(1)} are expected by pure chance** across this many tests. Statistically indistinguishable from luck — treat as noise, not a real edge.`;
+  }
+
+  await message.channel.send(
+    `🔭 **Strategy discovery — ${all.length} candidates from ${fetched} assets**\n` +
+    `Baseline OOS R/t: ${base6.toFixed(2)} · ${tested} rules tested, out-of-sample × 3 splits, permutation-checked.\n\n` +
+    `**Edges found (beat chance + profitable):**\n${lines}\n\n` +
+    verdict
+  );
+}
+
+
 export async function handleProfile(message, state) {
   const watchlist = state.watchlist || [];
   if (!watchlist.length) return message.reply("Watchlist is empty.");
