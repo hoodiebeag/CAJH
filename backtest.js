@@ -212,6 +212,18 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
     return { entry, stop, tp: entry + tpR * (entry - stop) };
   };
 
+  // ── rev mode ── the selective version of support: a bounce off support that holds,
+  // but ONLY when lows are already turning up (this swing low is higher than the prior
+  // one). Buys reversals, not falling knives — the feature the winning longs shared.
+  const revEntry = (k) => {
+    const base = supportEntry(k);
+    if (!base) return null;
+    const prior = swingLows.filter(s => s.ci < k);
+    if (prior.length < 2) return null;
+    if (!(prior[prior.length - 1].price > prior[prior.length - 2].price)) return null; // not a higher low
+    return base;
+  };
+
   const trades = [];
   const reasons = {};   // tally of why each candidate swing low was taken / rejected
   let pos = null, prevLowPrice = null;
@@ -257,6 +269,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
       if (entryMode === "support") cand = supportEntry(k);
       else if (entryMode === "ma_dip") cand = maDipEntry(k);
       else if (entryMode === "rsi")    cand = rsiEntry(k);
+      else if (entryMode === "rev")    cand = revEntry(k);
       if (cand) {
         const risk = cand.entry - cand.stop;
         let reason = "taken";

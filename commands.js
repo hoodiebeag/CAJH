@@ -718,7 +718,7 @@ export async function handleModes(message, state) {
   const cfgFor = mode => mode === "bos"
     ? { entryMode: "bos", entryTf: "15m", trendGate: true, trendGateMode: "ma", minStopPct: 0.015, tpR: 4, lockBreakeven: true }
     : { entryMode: mode, entryTf: "15m", trendGate: false, alignMode: "none", minStopPct: 0, tpR: 5, lockBreakeven: true };
-  const modes = [["bos", "BOS (trend)"], ["support", "support bounce"], ["ma_dip", "MA dip"], ["rsi", "RSI oversold"]];
+  const modes = [["bos", "BOS (trend)"], ["support", "support bounce"], ["ma_dip", "MA dip"], ["rsi", "RSI oversold"], ["rev", "reversal (higher-low)"]];
 
   const rows = modes.map(([mode, label]) => {
     const cfg = cfgFor(mode);
