@@ -142,6 +142,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
   const maTL    = maTimeline(trendSrc.candles, trendSrc.mins, trendMa);
 
   const trades = [];
+  const reasons = {};   // tally of why each candidate swing low was taken / rejected
   let pos = null, prevLowPrice = null;
 
   for (let k = n; k < entryCandles.length; k++) {
@@ -149,17 +150,23 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
     if (lowHere && !pos) {
       const tClose  = T[k] + entryMins * 60;
       let aligned = biasTLs.every(tl => biasAsOf(tl, tClose) === "bull");
-      if (aligned && chopFilter) aligned = trendingAsOf(trendTL, tClose);
+      let gateReason = aligned ? null : "notAligned";
+      if (aligned && chopFilter && !trendingAsOf(trendTL, tClose)) { aligned = false; gateReason = "trendGate"; }
       if (aligned && trendGate) {
-        aligned = trendGateMode === "structure"
+        const tg = trendGateMode === "structure"
           ? trendingAsOf(trendTL, tClose)   // 4h making higher highs AND higher lows
           : aboveAsOf(maTL, tClose);        // 4h close above its MA
+        if (!tg) { aligned = false; gateReason = "trendGate"; }
       }
       const entry = C[k], stop = lowHere.price, risk = entry - stop;
-      let ok = risk > 0 && aligned;
-      if (ok && maxStopPct && risk / entry > maxStopPct) ok = false;
-      if (ok && minStopPct && risk / entry < minStopPct) ok = false;
-      if (ok && requireHigherLow && prevLowPrice != null && lowHere.price <= prevLowPrice) ok = false;
+      let ok = true, reason;
+      if (risk <= 0)                                                              { ok = false; reason = "priceBelowStop"; }
+      else if (!aligned)                                                          { ok = false; reason = gateReason; }
+      else if (maxStopPct && risk / entry > maxStopPct)                           { ok = false; reason = "stopTooFar"; }
+      else if (minStopPct && risk / entry < minStopPct)                           { ok = false; reason = "stopTooTight"; }
+      else if (requireHigherLow && prevLowPrice != null && lowHere.price <= prevLowPrice) { ok = false; reason = "notHigherLow"; }
+      else                                                                        { reason = "taken"; }
+      reasons[reason] = (reasons[reason] || 0) + 1;
       if (ok) pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k };
     }
     if (lowHere) prevLowPrice = lowHere.price;
@@ -206,6 +213,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
     totalR,
     avgR: count ? totalR / count : 0,
     maxDrawdownR: maxDD,
-    results: trades   // raw per-trade R values, for pooling across pairs
+    results: trades,  // raw per-trade R values, for pooling across pairs
+    reasons           // { taken, stopTooTight, stopTooFar, trendGate, notAligned, notHigherLow, priceBelowStop }
   };
 }

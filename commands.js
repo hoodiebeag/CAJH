@@ -533,6 +533,56 @@ export async function handleOptimize(message, state) {
 }
 
 
+// ─── !why [symbol] ──────────────────────────────────────────────────────────
+// Diagnostic: replays the strategy over history with the CURRENT live config and
+// tallies WHY each candidate swing low was taken or rejected (which gate killed it).
+// Turns the silent cron rejections into a visible breakdown so we can see exactly
+// where trades are being lost — instead of guessing from charts.
+export async function handleWhy(message, state, symbol) {
+  const watchlist = state.watchlist || [];
+  const targets = symbol
+    ? watchlist.filter(a => a.symbol.toUpperCase() === symbol.toUpperCase())
+    : watchlist;
+  if (!targets.length) return message.reply(symbol ? `**${symbol}** isn't on your watchlist.` : "Watchlist is empty.");
+
+  await message.reply(
+    `🔍 Replaying ${targets.length === 1 ? `**${targets[0].symbol}**` : `**${targets.length}** assets`} ` +
+    `to see why setups were taken or skipped (current live config)…`
+  );
+
+  const agg = {};
+  for (const asset of targets) {
+    try {
+      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 900));
+      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 900));
+      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 900));
+      if (!c15?.length || !c1h?.length || !c4h?.length) continue;
+      const r = backtestMultiTF({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) });
+      for (const [k, v] of Object.entries(r.reasons || {})) agg[k] = (agg[k] || 0) + v;
+    } catch (err) { console.error(`[WHY] ${asset.symbol}:`, err.message); }
+  }
+
+  const total = Object.values(agg).reduce((a, b) => a + b, 0);
+  if (!total) return message.channel.send("No candidate swing lows found in the data.");
+
+  const label = {
+    taken: "✅ taken", stopTooTight: "❌ stop too tight (below floor)", stopTooFar: "❌ stop too far (above cap)",
+    trendGate: "❌ trend gate (4h not trending up)", notAligned: "❌ 1h/4h not aligned",
+    notHigherLow: "❌ not a higher low", priceBelowStop: "❌ price already below stop"
+  };
+  const order = ["taken", "stopTooTight", "stopTooFar", "trendGate", "notAligned", "notHigherLow", "priceBelowStop"];
+  const lines = order.filter(k => agg[k]).map(k => `${label[k]}: **${agg[k]}** (${(agg[k] / total * 100).toFixed(0)}%)`);
+
+  await message.channel.send(
+    `🔍 **Why setups were taken / skipped — ${targets.length} asset(s)**\n` +
+    `Candidate swing lows found: **${total}**\n\n` +
+    lines.join("\n") +
+    `\n\n_The biggest ❌ bucket is the gate costing you the most setups. "stop too tight" dominating = the fee floor is ` +
+    `killing fast bounces; "trend gate" dominating = the 4h filter is too strict for this regime._`
+  );
+}
+
+
 // No symbol → scan the whole watchlist for fresh swing signals.
 // With symbol → check that one asset across all timeframes.
 
