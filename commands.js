@@ -691,6 +691,65 @@ export async function handleRoom(message, state) {
 }
 
 
+// ─── !modes ─────────────────────────────────────────────────────────────────
+// Compares the four entry engines head-to-head across the watchlist, net of fees:
+// BOS (trend), support-bounce, MA-dip, and RSI-oversold. The long dip-buy modes run
+// with NO trend gate and tight structural stops + ambitious targets — the test of
+// whether a long edge exists in this regime even at taker fees.
+export async function handleModes(message, state) {
+  const watchlist = state.watchlist || [];
+  if (!watchlist.length) return message.reply("Watchlist is empty.");
+
+  await message.reply(`🧬 Comparing 4 entry engines across **${watchlist.length}** assets (net of fees). This takes a minute or two…`);
+
+  const data = [];
+  for (const asset of watchlist) {
+    try {
+      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 900));
+      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 900));
+      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 900));
+      if (c15?.length && c1h?.length && c4h?.length)
+        data.push({ c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
+    } catch (err) { console.error(`[MODES] ${asset.symbol}:`, err.message); }
+  }
+  if (!data.length) return message.channel.send("⚠️ Couldn't fetch data for any pair.");
+
+  // BOS keeps its live gates; the dip-buy modes drop trend/alignment and run tight stops + high target.
+  const cfgFor = mode => mode === "bos"
+    ? { entryMode: "bos", entryTf: "15m", trendGate: true, trendGateMode: "ma", minStopPct: 0.015, tpR: 4, lockBreakeven: true }
+    : { entryMode: mode, entryTf: "15m", trendGate: false, alignMode: "none", minStopPct: 0, tpR: 5, lockBreakeven: true };
+  const modes = [["bos", "BOS (trend)"], ["support", "support bounce"], ["ma_dip", "MA dip"], ["rsi", "RSI oversold"]];
+
+  const rows = modes.map(([mode, label]) => {
+    const cfg = cfgFor(mode);
+    const pooled = []; let green = 0;
+    for (const d of data) {
+      const r = backtestMultiTF({ candles15: d.c15, candles1h: d.c1h, candles4h: d.c4h }, cfg);
+      pooled.push(...(r.results || []));
+      if (r.totalR > 0) green++;
+    }
+    const n = pooled.length, wins = pooled.filter(x => x > 0).length;
+    const net = pooled.reduce((a, b) => a + b, 0);
+    return { label, n, net, winRate: n ? wins / n : 0, green, pairs: data.length };
+  });
+
+  const fmt = r => `**${r.label}** → ${r.n}t · **${r.net.toFixed(1)}R** · ${r.n ? (r.net / r.n).toFixed(2) : "0.00"}R/t · ${(r.winRate * 100).toFixed(0)}% · ${r.green}/${r.pairs} grn`;
+  const traded = rows.filter(r => r.n >= 10);
+  const best = traded.length ? [...traded].sort((a, b) => b.net - a.net)[0] : null;
+
+  await message.channel.send(
+    `🧬 **Entry-engine comparison — ${data.length} assets (net of taker fees)**\n\n` +
+    rows.map(r => `• ${fmt(r)}`).join("\n") + `\n\n` +
+    (best && best.net > 0
+      ? `**${best.label}** leads with a real sample (${best.n}t, ${best.green}/${best.pairs} pairs, ${(best.net / best.n).toFixed(2)}R/t). ` +
+        `If R/t is positive *at taker fees*, maker orders would only widen the edge — that's the green light to build them. ` +
+        `Trade count × R/t is the daily-profit picture you're after.`
+      : `No long engine is net-positive at taker fees on this window. That's the honest read: either the edge needs maker fees to ` +
+        `surface (build them next and re-test), or these triggers don't beat chop. The R/t and trade-count columns tell you which is closer.`)
+  );
+}
+
+
 // No symbol → scan the whole watchlist for fresh swing signals.
 // With symbol → check that one asset across all timeframes.
 export async function handleManualTrade(message, state, symbol) {

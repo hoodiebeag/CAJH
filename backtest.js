@@ -102,7 +102,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
   lockBreakeven = LOCK_BREAKEVEN, beTriggerR = BE_TRIGGER_R, beLockR = BE_LOCK_R, feeBufferPct = FEE_BUFFER_PCT,
   feeRate = FEE_RATE,
   trendGate = TREND_GATE, trendMa = TREND_MA, trendGateMode = TREND_GATE_MODE,
-  entryTf = "15m", alignMode = "all", minRoomR = 0
+  entryTf = "15m", alignMode = "all", minRoomR = 0, entryMode = "bos"
 } = {}) {
   if (!candles15?.length || !candles1h?.length || !candles4h?.length) {
     return { trades: 0, winRate: 0, totalR: 0, avgR: 0, maxDrawdownR: 0, results: [] };
@@ -152,13 +152,74 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
     return best;   // Infinity when nothing is overhead = unlimited room
   };
 
+  // Entry-TF swing lows/highs as support/resistance levels (each usable only once confirmed).
+  const swingLows  = pivE.filter(p => p.type === "low" ).map(p => ({ ci: p.confirmIndex, price: p.price }));
+  const swingHighs = pivE.filter(p => p.type === "high").map(p => ({ ci: p.confirmIndex, price: p.price }));
+
+  // ── support mode ── buy a dip into a prior swing low that closes back above it (bounce
+  // off support), tight structural stop below it, ambitious target at the next swing high.
+  const supportEntry = (k) => {
+    const tol = 0.004;            // within 0.4% counts as a touch
+    let support = null;
+    for (const s of swingLows) {
+      if (s.ci < k && L[k] <= s.price * (1 + tol) && L[k] >= s.price * (1 - 0.02)) {
+        if (support == null || Math.abs(L[k] - s.price) < Math.abs(L[k] - support)) support = s.price;
+      }
+    }
+    if (support == null || C[k] <= support) return null;   // must close back above support
+    const entry = C[k];
+    const stop  = Math.min(L[k], support) - 0.001 * entry; // tight, just below the level
+    if (entry <= stop) return null;
+    let target = Infinity;                                  // ambitious: next swing high above
+    for (const h of swingHighs) if (h.ci < k && h.price > entry && h.price < target) target = h.price;
+    if (!isFinite(target)) target = entry + tpR * (entry - stop);
+    return { entry, stop, tp: target };
+  };
+
+  // ── ma_dip mode ── buy when price closes a set % below its own moving average
+  // (oversold vs. its mean), tight stop under the dip, ambitious R-multiple target.
+  const maAt = (k, period) => {
+    if (k < period - 1) return null;
+    let s = 0; for (let j = k - period + 1; j <= k; j++) s += C[j];
+    return s / period;
+  };
+  const maDipEntry = (k) => {
+    const ma = maAt(k, 20); if (ma == null) return null;
+    if (C[k] >= ma * (1 - 0.02)) return null;          // must be ≥2% below the mean
+    const entry = C[k], stop = L[k] - 0.001 * entry;   // tight, under the dip
+    if (entry <= stop) return null;
+    return { entry, stop, tp: entry + tpR * (entry - stop) };
+  };
+
+  // ── rsi mode ── buy when Wilder RSI(14) crosses up out of oversold (<30 → ≥30).
+  const rsiArr = (() => {
+    const out = new Array(C.length).fill(null);
+    let avgGain = 0, avgLoss = 0;
+    for (let i = 1; i < C.length; i++) {
+      const ch = C[i] - C[i - 1], gain = Math.max(ch, 0), loss = Math.max(-ch, 0);
+      if (i <= 14) { avgGain += gain; avgLoss += loss; if (i === 14) { avgGain /= 14; avgLoss /= 14; out[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss); } }
+      else { avgGain = (avgGain * 13 + gain) / 14; avgLoss = (avgLoss * 13 + loss) / 14; out[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss); }
+    }
+    return out;
+  })();
+  const rsiEntry = (k) => {
+    if (rsiArr[k] == null || rsiArr[k - 1] == null) return null;
+    if (!(rsiArr[k - 1] < 30 && rsiArr[k] >= 30)) return null;   // cross up out of oversold
+    const entry = C[k];
+    let lo = L[k]; for (let j = Math.max(0, k - 5); j < k; j++) lo = Math.min(lo, L[j]);
+    const stop = lo - 0.001 * entry;
+    if (entry <= stop) return null;
+    return { entry, stop, tp: entry + tpR * (entry - stop) };
+  };
+
   const trades = [];
   const reasons = {};   // tally of why each candidate swing low was taken / rejected
   let pos = null, prevLowPrice = null;
 
   for (let k = n; k < entryCandles.length; k++) {
     const lowHere = lowAt.get(k); // a swing low confirmed at this candle on the entry TF?
-    if (lowHere && !pos) {
+    if (!pos && entryMode === "bos") {
+     if (lowHere) {
       const tClose  = T[k] + entryMins * 60;
       const hb = biasTLs.map(tl => biasAsOf(tl, tClose));   // higher-TF biases as of entry
       let aligned;
@@ -188,6 +249,23 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
       else                                                                        { reason = "taken"; }
       reasons[reason] = (reasons[reason] || 0) + 1;
       if (ok) pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k };
+     }
+    } else if (!pos) {
+      // Long dip-buy modes — no trend/alignment gate (the whole point), tight structural
+      // stop + ambitious target. Only the stop-size sanity caps apply.
+      let cand = null;
+      if (entryMode === "support") cand = supportEntry(k);
+      else if (entryMode === "ma_dip") cand = maDipEntry(k);
+      else if (entryMode === "rsi")    cand = rsiEntry(k);
+      if (cand) {
+        const risk = cand.entry - cand.stop;
+        let reason = "taken";
+        if (risk <= 0)                                          reason = "priceBelowStop";
+        else if (maxStopPct && risk / cand.entry > maxStopPct)  reason = "stopTooFar";
+        else if (minStopPct && risk / cand.entry < minStopPct)  reason = "stopTooTight";
+        reasons[reason] = (reasons[reason] || 0) + 1;
+        if (reason === "taken") pos = { entry: cand.entry, stop: cand.stop, risk, tp: cand.tp, beMoved: false, openedAt: k };
+      }
     }
     if (lowHere) prevLowPrice = lowHere.price;
 
@@ -198,7 +276,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
       // Stop checked first against the stop as it stands entering this candle
       // (conservative: if both stop and target are touched, assume stop hit first).
       if (lo <= pos.stop) { trades.push((pos.stop - pos.entry) / pos.risk - feeR); pos = null; }
-      else if (hi >= pos.tp) { trades.push(tpR - feeR); pos = null; }
+      else if (hi >= pos.tp) { trades.push((pos.tp - pos.entry) / pos.risk - feeR); pos = null; }
       // Breakeven-plus: once this candle's high reaches the trigger, lift the stop
       // above entry for subsequent candles.
       if (pos && lockBreakeven && !pos.beMoved) {
