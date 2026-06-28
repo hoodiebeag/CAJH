@@ -12,7 +12,7 @@ import {
   handleHelp, handleWatchlist, handleWatch, handleUnwatch,
   handleSetChannel, handleStatus,
   handleScan, handleAnalyzeThat, handleChartRequest,
-  handleGeneral, handleManualTrade, handleBacktest, handleOptimize, handleWhy,
+  handleGeneral, handleManualTrade, handleBacktest, handleOptimize, handleWhy, handleAlign,
   handleStop, handleResume, handleSell, handlePort
 } from "./commands.js";
 
@@ -140,6 +140,7 @@ client.on("messageCreate", async (message) => {
   if (lower === "!status")     return handleStatus(message, state);
   if (lower === "!scan")       return handleScan(message, state);
   if (lower === "!optimize")   return handleOptimize(message, state);
+  if (lower === "!align")      return handleAlign(message, state);
 
   if (lower === "!why" || lower.startsWith("!why ")) {
     return handleWhy(message, state, raw.slice(4).trim() || null);

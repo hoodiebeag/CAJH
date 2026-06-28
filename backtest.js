@@ -102,7 +102,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
   lockBreakeven = LOCK_BREAKEVEN, beTriggerR = BE_TRIGGER_R, beLockR = BE_LOCK_R, feeBufferPct = FEE_BUFFER_PCT,
   feeRate = FEE_RATE,
   trendGate = TREND_GATE, trendMa = TREND_MA, trendGateMode = TREND_GATE_MODE,
-  entryTf = "15m"
+  entryTf = "15m", alignMode = "all"
 } = {}) {
   if (!candles15?.length || !candles1h?.length || !candles4h?.length) {
     return { trades: 0, winRate: 0, totalR: 0, avgR: 0, maxDrawdownR: 0, results: [] };
@@ -149,7 +149,15 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
     const lowHere = lowAt.get(k); // a swing low confirmed at this candle on the entry TF?
     if (lowHere && !pos) {
       const tClose  = T[k] + entryMins * 60;
-      let aligned = biasTLs.every(tl => biasAsOf(tl, tClose) === "bull");
+      const hb = biasTLs.map(tl => biasAsOf(tl, tClose));   // higher-TF biases as of entry
+      let aligned;
+      switch (alignMode) {
+        case "none":    aligned = true; break;                            // entry-TF structure only
+        case "first":   aligned = hb.length === 0 || hb[0] === "bull"; break; // nearest higher TF only
+        case "notbear": aligned = hb.every(b => b !== "bear"); break;     // not actively downtrending
+        case "all":
+        default:        aligned = hb.every(b => b === "bull"); break;     // every higher TF bull (current)
+      }
       let gateReason = aligned ? null : "notAligned";
       if (aligned && chopFilter && !trendingAsOf(trendTL, tClose)) { aligned = false; gateReason = "trendGate"; }
       if (aligned && trendGate) {

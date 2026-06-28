@@ -583,9 +583,64 @@ export async function handleWhy(message, state, symbol) {
 }
 
 
+// ─── !align ─────────────────────────────────────────────────────────────────
+// Focused sweep: holds the live base config (15m / ma gate / min1.5 / TP4) and
+// tries the four alignment rules, so we can see which one actually trades
+// net-positive instead of rejecting 85% of setups. Net of fees, with breadth.
+export async function handleAlign(message, state) {
+  const watchlist = state.watchlist || [];
+  if (!watchlist.length) return message.reply("Watchlist is empty.");
+
+  await message.reply(`⚖️ Testing 4 alignment rules across **${watchlist.length}** assets on the live base config (net of fees)…`);
+
+  const data = [];
+  for (const asset of watchlist) {
+    try {
+      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 900));
+      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 900));
+      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 900));
+      if (c15?.length && c1h?.length && c4h?.length)
+        data.push({ c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
+    } catch (err) { console.error(`[ALIGN] ${asset.symbol}:`, err.message); }
+  }
+  if (!data.length) return message.channel.send("⚠️ Couldn't fetch data for any pair.");
+
+  const base = { entryTf: "15m", trendGate: true, trendGateMode: "ma", minStopPct: 0.015, tpR: 4, lockBreakeven: true };
+  const modes = [
+    ["all",     "all 3 TFs bull (current)"],
+    ["first",   "1h only"],
+    ["notbear", "higher TFs not bearish"],
+    ["none",    "entry TF only"],
+  ];
+  const rows = modes.map(([alignMode, label]) => {
+    const pooled = []; let green = 0;
+    for (const d of data) {
+      const r = backtestMultiTF({ candles15: d.c15, candles1h: d.c1h, candles4h: d.c4h }, { ...base, alignMode });
+      pooled.push(...(r.results || []));
+      if (r.totalR > 0) green++;
+    }
+    const n = pooled.length, wins = pooled.filter(x => x > 0).length;
+    const net = pooled.reduce((a, b) => a + b, 0);
+    return { label, n, net, winRate: n ? wins / n : 0, green, pairs: data.length };
+  });
+
+  const fmt = r => `**${r.label}** → ${r.n}t · **${r.net.toFixed(1)}R** · ${r.n ? (r.net / r.n).toFixed(2) : "0.00"}R/t · ${(r.winRate * 100).toFixed(0)}% · ${r.green}/${r.pairs} grn`;
+  const best = [...rows].filter(r => r.n > 0).sort((a, b) => b.net - a.net)[0];
+
+  await message.channel.send(
+    `⚖️ **Alignment sweep — ${data.length} assets (net of fees)**\nBase: 15m · ma gate · min1.5 · TP4\n\n` +
+    rows.map(r => `• ${fmt(r)}`).join("\n") + `\n\n` +
+    (best
+      ? `Most net-positive: **${best.label}** (${best.net.toFixed(1)}R, ${best.green}/${best.pairs} pairs). Read **breadth**, not just the total — ` +
+        `and watch **R/t**: a looser rule only wins if per-trade R stays healthy, because more trades means more fee exposure.`
+      : `⚠️ Every alignment rule is net-negative or never trades. Loosening alignment isn't the unlock — the problem is deeper ` +
+        `(stop placement, or the trend gate). We test that next.`)
+  );
+}
+
+
 // No symbol → scan the whole watchlist for fresh swing signals.
 // With symbol → check that one asset across all timeframes.
-
 export async function handleManualTrade(message, state, symbol) {
   if (!symbol) {
     if (!state.watchlist?.length) {
