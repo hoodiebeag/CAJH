@@ -3,7 +3,7 @@
  * Tracks open trades, enforces daily drawdown limits, and posts P&L updates.
  */
 
-import { getCurrentPrice, placeSell, getAccountBalance, fetchOHLC, symbolToPair } from "./trader.js";
+import { getCurrentPrice, placeSell, getAccountBalance, fetchOHLC, symbolToPair, getHoldings } from "./trader.js";
 import { saveTrades, loadTrades, saveStats, loadStats } from "./storage.js";
 import { detectSwings, SWING_WINDOW, EXIT_ON_SWING_HIGH, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT, FEE_RATE } from "./strategy.js";
 
@@ -113,6 +113,56 @@ export function registerTrade(trade) {
 
 export function getOpenTrades() {
   return Array.from(openTrades.values());
+}
+
+// Compare live Kraken holdings against cajh's tracked trades. Pure — unit-tested.
+//   orphans = coins held on Kraken that cajh isn't tracking. A failed exit may have left
+//             them behind, OR they're coins you hold yourself — cajh can't tell, so it only
+//             flags them and never sells. ghosts = trades cajh still tracks that Kraken no
+//             longer holds (closed outside cajh).
+const RECON_STABLES = ["USD", "USDT", "USDC", "ZUSD", "DAI", "USDG", "PYUSD"];
+export function reconcile(holdings, trades, { stables = RECON_STABLES, dustUsd = 1 } = {}) {
+  const tracked = new Set(trades.map(t => t.symbol.toUpperCase()));
+  const held    = new Map(holdings.map(h => [h.asset.toUpperCase(), h]));
+  const orphans = holdings.filter(h =>
+    !stables.includes(h.asset.toUpperCase()) &&
+    (h.value ?? 0) >= dustUsd &&
+    !tracked.has(h.asset.toUpperCase())
+  );
+  const ghosts = trades.filter(t => {
+    const h = held.get(t.symbol.toUpperCase());
+    return !h || (h.qty ?? 0) < (t.volume ?? 0) * 0.5;
+  });
+  return { orphans, ghosts };
+}
+
+// Fetch live holdings and report any mismatch with tracked trades. Reports only — never sells.
+export async function reconcileHoldings(channel) {
+  let holdings;
+  try { ({ holdings } = await getHoldings()); }
+  catch (err) { console.error("[RECONCILE] getHoldings failed:", err.message); return null; }
+  const result = reconcile(holdings, getOpenTrades());
+  const { orphans, ghosts } = result;
+  if (!orphans.length && !ghosts.length) {
+    console.log("[RECONCILE] Holdings match tracked trades.");
+    if (channel) await channel.send("🔎 **Reconciliation:** Kraken holdings match cajh's tracked trades. Nothing orphaned.");
+    return result;
+  }
+  if (channel) {
+    let msg = "🔎 **Position reconciliation**";
+    if (orphans.length) {
+      msg += `\n\n**On Kraken but NOT tracked by cajh** — a failed exit may have left these, or you hold them yourself (cajh can't tell, and won't touch them):\n` +
+        orphans.map(h => `• **${h.asset}** — ${h.qty} (~${usd(h.value)})`).join("\n") +
+        `\nIf one is an abandoned cajh trade, close it yourself with \`!sell ${orphans[0].asset}\`.`;
+    }
+    if (ghosts.length) {
+      msg += `\n\n**Tracked by cajh but missing on Kraken** — likely closed outside cajh:\n` +
+        ghosts.map(t => `• **${t.symbol}** — cajh expects ${t.volume}`).join("\n") +
+        `\nStale records; they can't be sold (nothing there) and need a manual cleanup of positions.json.`;
+    }
+    await channel.send(msg);
+  }
+  return result;
 }
 
 /** Posted once a day: trades entered since the last summary + live P&L on open positions. */
@@ -233,6 +283,12 @@ async function closePosition(channel, symbol, trade, price, reason) {
 export function startMonitor(client, channelId, intervalMs = 30000) {
   console.log("[MONITOR] Position monitor started");
   hydrateTrades();
+
+  // One-time boot reconciliation: surface any Kraken holdings cajh isn't tracking — e.g.
+  // positions a failed exit abandoned before the close-only-on-success fix.
+  client.channels.fetch(channelId)
+    .then(ch => reconcileHoldings(ch))
+    .catch(err => console.error("[RECONCILE] boot check skipped:", err.message));
 
   // Reset daily stats at the next local midnight, then every 24h.
   const now  = new Date();

@@ -14,7 +14,7 @@ import { loadChart, saveConfig, symbolToKrakenId } from "./storage.js";
 import { getCurrentPrice, placeSell, getHoldings } from "./trader.js";
 import {
   enableTrading, disableTrading, isTradingEnabled,
-  getTrade, removeTrade, saveTradeState, postTradeClosed, getOpenTrades
+  getTrade, removeTrade, saveTradeState, postTradeClosed, getOpenTrades, reconcileHoldings
 } from "./monitor.js";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -74,6 +74,13 @@ export async function handleSell(message, symbol, percentArg) {
     console.error(`[COMMAND] Sell failed for ${upper}:`, err.message);
     await message.reply(`⚠️ Failed to sell **${upper}**: ${err.message}`);
   }
+}
+
+// ─── !reconcile  (Kraken holdings vs cajh's tracked trades) ─────────────────────
+export async function handleReconcile(message) {
+  await message.reply("🔎 Reconciling Kraken holdings against cajh's tracked trades...");
+  const res = await reconcileHoldings(message.channel);
+  if (res == null) await message.reply("⚠️ Couldn't reach Kraken to reconcile — try again shortly.");
 }
 
 // ─── !port  (whole-account portfolio) ──────────────────────────────────────────

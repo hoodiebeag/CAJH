@@ -13,7 +13,7 @@ import {
   handleSetChannel, handleStatus,
   handleScan, handleAnalyzeThat, handleChartRequest,
   handleGeneral, handleManualTrade, handleBacktest, handleOptimize, handleWhy, handleAlign, handleRoom, handleModes, handleProfile, handleValidate, handleDiscover,
-  handleStop, handleResume, handleSell, handlePort
+  handleStop, handleResume, handleSell, handlePort, handleReconcile
 } from "./commands.js";
 
 // ─── Discord client ────────────────────────────────────────────────────────────
@@ -125,6 +125,7 @@ client.on("messageCreate", async (message) => {
   if (lower === "!stop")     return handleStop(message);
   if (lower === "!resume")   return handleResume(message);
   if (lower === "!port" || lower === "!portfolio") return handlePort(message);
+  if (lower === "!reconcile") return handleReconcile(message);
 
   // !sell BTC  /  !sell BTC 50   (and aliases !cancel / !close)
   if (lower.startsWith("!sell ") || lower.startsWith("!cancel ") || lower.startsWith("!close ")) {
