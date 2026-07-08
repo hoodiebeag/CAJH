@@ -25,6 +25,7 @@ export const BE_TRIGGER_R   = 2.0;   // arm the raise once price reaches entry +
 export const BE_LOCK_R      = 0.2;   // raise the stop to entry + 0.2 × risk (or the fee floor below, whichever is higher)
 export const FEE_BUFFER_PCT = 0.01;  // the breakeven stop sits at least this % above entry to clear round-trip fees (~0.8% Kraken taker) plus margin. Lower it if your fee tier improves.
 export const FEE_RATE       = 0.004; // per-side taker fee estimate, used to show P&L net of fees (round trip ≈ 0.8%)
+export const SLIPPAGE_PCT   = 0.0005; // per-side slippage estimate for market fills (round trip ≈ 0.1%); subtracted in backtests so perfect fills don't overstate edge
 
 export const RECENT_BARS = 16; // a confirmed low is only "actionable" for this many candles after it confirms
 

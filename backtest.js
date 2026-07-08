@@ -8,7 +8,7 @@
  * per-trade risk), independent of position size.
  *
  * Caveats (read before trusting any number):
- *   • Fills are assumed exactly at the stop / target price (no slippage or fees).
+ *   • Fills are at the stop / target price, minus round-trip taker fees AND a slippage allowance (both in R).
  *   • If a candle touches BOTH stop and target, the stop is assumed to hit first.
  *   • Only as much history as Kraken returns (~720 candles). Small samples mislead.
  *   • Past performance does not predict future results.
@@ -16,7 +16,7 @@
 
 import {
   SWING_WINDOW, TP_R, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, MIN_STOP_PCT,
-  EXIT_ON_SWING_HIGH, CHOP_FILTER, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT, FEE_RATE,
+  EXIT_ON_SWING_HIGH, CHOP_FILTER, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT, FEE_RATE, SLIPPAGE_PCT,
   TREND_GATE, TREND_GATE_MODE, TREND_MA, detectSwings
 } from "./strategy.js";
 
@@ -100,7 +100,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
   requireHigherLow = REQUIRE_HIGHER_LOW, maxStopPct = MAX_STOP_PCT, minStopPct = MIN_STOP_PCT,
   exitOnSwingHigh = EXIT_ON_SWING_HIGH, chopFilter = CHOP_FILTER,
   lockBreakeven = LOCK_BREAKEVEN, beTriggerR = BE_TRIGGER_R, beLockR = BE_LOCK_R, feeBufferPct = FEE_BUFFER_PCT,
-  feeRate = FEE_RATE,
+  feeRate = FEE_RATE, slipPct = SLIPPAGE_PCT,
   trendGate = TREND_GATE, trendMa = TREND_MA, trendGateMode = TREND_GATE_MODE,
   entryTf = "15m", alignMode = "all", minRoomR = 0, entryMode = "bos"
 } = {}) {
@@ -284,12 +284,12 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
 
     if (pos && k > pos.openedAt) {
       const hi = H[k], lo = L[k];
-      // Round-trip fee expressed in R units for this trade (fee % ÷ risk %).
-      const feeR = (2 * feeRate * pos.entry) / pos.risk;
+      // Round-trip cost (fees + slippage) in R units for this trade (cost % ÷ risk %).
+      const costR = (2 * (feeRate + slipPct) * pos.entry) / pos.risk;
       // Stop checked first against the stop as it stands entering this candle
       // (conservative: if both stop and target are touched, assume stop hit first).
-      if (lo <= pos.stop) { trades.push((pos.stop - pos.entry) / pos.risk - feeR); pos = null; }
-      else if (hi >= pos.tp) { trades.push((pos.tp - pos.entry) / pos.risk - feeR); pos = null; }
+      if (lo <= pos.stop) { trades.push((pos.stop - pos.entry) / pos.risk - costR); pos = null; }
+      else if (hi >= pos.tp) { trades.push((pos.tp - pos.entry) / pos.risk - costR); pos = null; }
       // Breakeven-plus: once this candle's high reaches the trigger, lift the stop
       // above entry for subsequent candles.
       if (pos && lockBreakeven && !pos.beMoved) {
@@ -302,11 +302,11 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
       }
       // Structure-based take-profit: a swing high confirmed here, while in profit.
       if (pos && exitOnSwingHigh && highAt.has(k) && C[k] > pos.entry) {
-        trades.push((C[k] - pos.entry) / pos.risk - feeR);
+        trades.push((C[k] - pos.entry) / pos.risk - costR);
         pos = null;
       }
       if (pos && k - pos.openedAt >= MAX_HOLD) {
-        trades.push((C[k] - pos.entry) / pos.risk - feeR);
+        trades.push((C[k] - pos.entry) / pos.risk - costR);
         pos = null;
       }
     }
@@ -339,7 +339,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
  * An edge is a feature where winners and losers DIVERGE; a feature they share is a
  * mirage. Breakeven is intentionally off so every entry resolves cleanly to win/loss.
  */
-export function profileEntries({ candles15, candles1h, candles4h } = {}, { tpR = TP_R, n = SWING_WINDOW, feeRate = FEE_RATE } = {}) {
+export function profileEntries({ candles15, candles1h, candles4h } = {}, { tpR = TP_R, n = SWING_WINDOW, feeRate = FEE_RATE, slipPct = SLIPPAGE_PCT } = {}) {
   const records = [];
   if (!candles15?.length || !candles1h?.length || !candles4h?.length) return { records };
 
@@ -399,7 +399,7 @@ export function profileEntries({ candles15, candles1h, candles4h } = {}, { tpR =
     records.push({
       outcome,
       t: T[k],
-      netR: (outcome === "win" ? tpR : -1) - (2 * feeRate * entry) / risk,
+      netR: (outcome === "win" ? tpR : -1) - (2 * (feeRate + slipPct) * entry) / risk,
       rsi: rsi[k],
       maDistPct: m ? (entry - m) / m * 100 : null,
       roomR: isFinite(res) ? (res - entry) / risk : null,

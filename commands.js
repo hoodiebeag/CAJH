@@ -780,7 +780,7 @@ export async function handleDiscover(message, state) {
   // shuffles where the shuffled stat ≥ the real stat (smoothed).
   const netRs = all.map(r => r.netR);
   const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const K = 30, ge = new Array(rules.length).fill(0);
+  const K = 500, ge = new Array(rules.length).fill(0); // ≥~360 shuffles so p is fine enough for BH-FDR at q=0.05 across ~18 rules (min p ≈ 1/501)
   for (let s = 0; s < K; s++) {
     const sh = shuffle(netRs);
     const map = new Map(all.map((r, i) => [r, sh[i]]));
@@ -792,28 +792,34 @@ export async function handleDiscover(message, state) {
     }
   }
 
-  // A discovery: predicts beyond chance (p<0.05) AND profitable out-of-sample (rpt>0).
   const scored = realStats.map((rs, ri) => ({ ...rs, p: rs.stat == null ? 1 : (ge[ri] + 1) / (K + 1) }));
-  const discoveries = scored.filter(d => d.stat != null && d.p < 0.05 && d.rpt != null && d.rpt > 0).sort((a, b) => a.p - b.p);
-  const tested = scored.filter(d => d.stat != null).length;
-  const expectedFalse = tested * 0.05;
+
+  // Multiple-testing control: across ~18 rules an uncorrected p<0.05 manufactures false
+  // edges. Apply Benjamini-Hochberg (FDR q): sort tested rules by p ascending, find the
+  // largest rank k with p(k) ≤ (k/m)·q; every rule at or below that p survives. (Rules are
+  // positively correlated — nested thresholds — a regime where BH still controls FDR.)
+  const FDR_Q = 0.05;
+  const byP = scored.filter(d => d.stat != null).sort((a, b) => a.p - b.p);
+  const m = byP.length;
+  let pCut = 0;
+  for (let i = 0; i < m; i++) if (byP[i].p <= ((i + 1) / m) * FDR_Q) pCut = byP[i].p;
+  // A discovery survives FDR control AND is profitable out-of-sample.
+  const discoveries = byP.filter(d => d.p <= pCut && d.rpt != null && d.rpt > 0);
 
   const lines = discoveries.length
-    ? discoveries.slice(0, 8).map(d => `• **${d.label}** — OOS ${d.rpt.toFixed(2)}R/t · p=${d.p.toFixed(2)}`).join("\n")
-    : "_None. No rule both beat chance (p<0.05) and turned a profit out-of-sample._";
+    ? discoveries.slice(0, 8).map(d => `• **${d.label}** — OOS ${d.rpt.toFixed(2)}R/t · p=${d.p.toFixed(3)}`).join("\n")
+    : `_None survived FDR control (BH, q=${FDR_Q}) while staying profitable out-of-sample._`;
 
   let verdict;
   if (discoveries.length === 0) {
-    verdict = `**No edge found.** Of ${tested} rules tested, none was both statistically real and profitable out-of-sample. The data — sampled wide, tested honestly — has no long edge our current features capture in this window.`;
-  } else if (discoveries.length > expectedFalse + 1) {
-    verdict = `🟢 **${discoveries.length} edges vs ~${expectedFalse.toFixed(1)} expected by chance.** More than noise — genuine candidates. Confirm on fresh data or a different regime before trusting size; don't deploy on this window alone.`;
+    verdict = `**No edge found.** Of ${m} rules tested, none survived false-discovery control (Benjamini-Hochberg, q=${FDR_Q}) while profitable out-of-sample. Sampled wide and tested honestly, the data shows no long edge our features capture in this window.`;
   } else {
-    verdict = `⚠️ **${discoveries.length} "edges", but ~${expectedFalse.toFixed(1)} are expected by pure chance** across this many tests. Statistically indistinguishable from luck — treat as noise, not a real edge.`;
+    verdict = `🟢 **${discoveries.length} rule(s) survived FDR control (BH, q=${FDR_Q}) and profitable out-of-sample.** By construction ≤${(FDR_Q * 100).toFixed(0)}% are expected false. Real candidates — but confirm on a different regime before trusting size; don't deploy on this window alone.`;
   }
 
   await message.channel.send(
     `🔭 **Strategy discovery — ${all.length} candidates from ${fetched} assets**\n` +
-    `Baseline OOS R/t: ${base6.toFixed(2)} · ${tested} rules tested, out-of-sample × 3 splits, permutation-checked.\n\n` +
+    `Baseline OOS R/t: ${base6.toFixed(2)} · ${m} rules · out-of-sample × 3 splits · permutation + BH-FDR (q=${FDR_Q}).\n\n` +
     `**Edges found (beat chance + profitable):**\n${lines}\n\n` +
     verdict
   );
