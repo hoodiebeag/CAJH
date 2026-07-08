@@ -81,6 +81,30 @@ export function loadBars(pair) {
 /** Load stored bars keyed by minute, for resuming/merging a backfill. */
 const loadBarMap = (pair) => new Map(loadBars(pair).map((b) => [b.time, b]));
 
+/**
+ * Resample stored 1m bars up to `tfMinutes` candles, in the same shape trader.fetchOHLC
+ * returns ({ time, open, high, low, close, volume }, OHLCV as strings) — a drop-in for
+ * fetchCandles in the backtest/analysis commands, but from deep local history instead of
+ * Kraken's 720-candle live cap.
+ */
+export function loadCandles(pair, tfMinutes) {
+  const span = tfMinutes * 60;
+  const out = new Map();
+  for (const b of loadBars(pair)) {
+    const t = Math.floor(b.time / span) * span;
+    let c = out.get(t);
+    if (!c) { c = { time: t, open: b.open, high: b.high, low: b.low, close: b.close, volume: 0 }; out.set(t, c); }
+    if (b.high > c.high) c.high = b.high;
+    if (b.low  < c.low)  c.low  = b.low;
+    c.close   = b.close;       // bars are stored ascending, so the last one wins
+    c.volume += b.volume;
+  }
+  return [...out.values()].sort((a, b) => a.time - b.time).map((c) => ({
+    time: c.time,
+    open: String(c.open), high: String(c.high), low: String(c.low), close: String(c.close), volume: String(c.volume),
+  }));
+}
+
 // ── Backfill ────────────────────────────────────────────────────────────────────
 async function fetchTradesPage(pair, sinceNs) {
   const res = await axios.get("https://api.kraken.com/0/public/Trades", {
