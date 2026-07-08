@@ -8,6 +8,7 @@ import { runScanner, scanSymbol, fetchCandles, SCAN_INTERVALS } from "./scanner.
 import { generateChartImage } from "./chart.js";
 import { SWING_WINDOW } from "./strategy.js";
 import { backtestMultiTF, profileEntries } from "./backtest.js";
+import { loadCandles } from "./data.js";
 import { buildLiveContext, looksLikeCodeQuestion, readSource } from "./context.js";
 import { loadChart, saveConfig, symbolToKrakenId } from "./storage.js";
 import { getCurrentPrice, placeSell, getHoldings } from "./trader.js";
@@ -18,6 +19,19 @@ import {
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL     = "claude-sonnet-4-6";
+
+// Candles for research/backtests: deep local history from the store once a pair has been
+// backfilled (data.js), else the live 720-candle pull kept politely paced. The live
+// scanner still calls fetchCandles directly — only analysis/backtests read the store.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function tfCandles(id) {
+  const c15 = loadCandles(id, 15);
+  if (c15.length) return { c15, c1h: loadCandles(id, 60), c4h: loadCandles(id, 240) };
+  const live15 = await fetchCandles(id, 15);  await sleep(900);
+  const live1h = await fetchCandles(id, 60);  await sleep(900);
+  const live4h = await fetchCandles(id, 240);
+  return { c15: live15, c1h: live1h, c4h: live4h };
+}
 
 // ─── !confirm ──────────────────────────────────────────────────────────────────
 
@@ -367,11 +381,7 @@ export async function handleBacktest(message, state, arg) {
   await message.reply(`📈 Backtesting **${symbol}** across 15m/1h/4h (N=${SWING_WINDOW})...`);
 
   try {
-    const candles15 = await fetchCandles(id, 15);
-    await new Promise(r => setTimeout(r, 1200));
-    const candles1h = await fetchCandles(id, 60);
-    await new Promise(r => setTimeout(r, 1200));
-    const candles4h = await fetchCandles(id, 240);
+    const { c15: candles15, c1h: candles1h, c4h: candles4h } = await tfCandles(id);
 
     if (!candles15?.length || !candles1h?.length || !candles4h?.length) {
       return message.reply(`⚠️ Couldn't fetch enough data for **${symbol}**.`);
@@ -409,9 +419,7 @@ async function backtestWatchlist(message, state) {
   const lines  = [];
   for (const asset of watchlist) {
     try {
-      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 1000));
-      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 1000));
-      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 1000));
+      const { c15, c1h, c4h } = await tfCandles(asset.id);
       if (!c15?.length || !c1h?.length || !c4h?.length) { lines.push(`**${asset.symbol}** — no data`); continue; }
 
       const r = backtestMultiTF({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) });
@@ -454,9 +462,7 @@ export async function handleOptimize(message, state) {
   const data = [];
   for (const asset of watchlist) {
     try {
-      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 900));
-      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 900));
-      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 900));
+      const { c15, c1h, c4h } = await tfCandles(asset.id);
       if (c15?.length && c1h?.length && c4h?.length) {
         data.push({ symbol: asset.symbol, c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
       }
@@ -553,9 +559,7 @@ export async function handleWhy(message, state, symbol) {
   const agg = {};
   for (const asset of targets) {
     try {
-      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 900));
-      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 900));
-      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 900));
+      const { c15, c1h, c4h } = await tfCandles(asset.id);
       if (!c15?.length || !c1h?.length || !c4h?.length) continue;
       const r = backtestMultiTF({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) });
       for (const [k, v] of Object.entries(r.reasons || {})) agg[k] = (agg[k] || 0) + v;
@@ -596,9 +600,7 @@ export async function handleAlign(message, state) {
   const data = [];
   for (const asset of watchlist) {
     try {
-      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 900));
-      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 900));
-      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 900));
+      const { c15, c1h, c4h } = await tfCandles(asset.id);
       if (c15?.length && c1h?.length && c4h?.length)
         data.push({ c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
     } catch (err) { console.error(`[ALIGN] ${asset.symbol}:`, err.message); }
@@ -653,9 +655,7 @@ export async function handleRoom(message, state) {
   const data = [];
   for (const asset of watchlist) {
     try {
-      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 900));
-      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 900));
-      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 900));
+      const { c15, c1h, c4h } = await tfCandles(asset.id);
       if (c15?.length && c1h?.length && c4h?.length)
         data.push({ c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
     } catch (err) { console.error(`[ROOM] ${asset.symbol}:`, err.message); }
@@ -723,9 +723,7 @@ export async function handleDiscover(message, state) {
   for (const sym of DISCOVER_UNIVERSE) {
     try {
       const id = symbolToKrakenId(sym);
-      const c15 = await fetchCandles(id, 15);  await new Promise(r => setTimeout(r, 800));
-      const c1h = await fetchCandles(id, 60);  await new Promise(r => setTimeout(r, 800));
-      const c4h = await fetchCandles(id, 240); await new Promise(r => setTimeout(r, 800));
+      const { c15, c1h, c4h } = await tfCandles(id);
       if (!c15?.length || !c1h?.length || !c4h?.length) continue;
       const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) }, { tpR: 4 });
       all.push(...records);
@@ -831,9 +829,7 @@ export async function handleProfile(message, state) {
   const all = [];
   for (const asset of watchlist) {
     try {
-      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 900));
-      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 900));
-      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 900));
+      const { c15, c1h, c4h } = await tfCandles(asset.id);
       if (!c15?.length || !c1h?.length || !c4h?.length) continue;
       const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) }, { tpR: 4 });
       all.push(...records);
@@ -903,9 +899,7 @@ export async function handleValidate(message, state) {
   const all = [];
   for (const asset of watchlist) {
     try {
-      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 900));
-      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 900));
-      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 900));
+      const { c15, c1h, c4h } = await tfCandles(asset.id);
       if (!c15?.length || !c1h?.length || !c4h?.length) continue;
       const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) }, { tpR: 4 });
       all.push(...records);
@@ -966,9 +960,7 @@ export async function handleModes(message, state) {
   const data = [];
   for (const asset of watchlist) {
     try {
-      const c15 = await fetchCandles(asset.id, 15);  await new Promise(r => setTimeout(r, 900));
-      const c1h = await fetchCandles(asset.id, 60);  await new Promise(r => setTimeout(r, 900));
-      const c4h = await fetchCandles(asset.id, 240); await new Promise(r => setTimeout(r, 900));
+      const { c15, c1h, c4h } = await tfCandles(asset.id);
       if (c15?.length && c1h?.length && c4h?.length)
         data.push({ c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
     } catch (err) { console.error(`[MODES] ${asset.symbol}:`, err.message); }
