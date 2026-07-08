@@ -15,6 +15,7 @@ let tradingEnabled   = true;
 let dailyStartBalance = null;
 let dailyPnl          = 0;
 let tradesToday       = 0;
+let drawdownHalted    = false; // true once today's drawdown limit trips; suppresses repeat halt alerts (cleared on daily rollover)
 
 const DAILY_DRAWDOWN_LIMIT = 0.10; // 10%
 
@@ -68,6 +69,7 @@ export function resetDailyStats(balance) {
   dailyStartBalance = balance;
   dailyPnl          = 0;
   tradesToday       = 0;
+  drawdownHalted    = false;
   enableTrading();
   persistStats();
   console.log(`[RISK] Daily stats reset. Start balance: ${usd(balance)}`);
@@ -202,6 +204,32 @@ export async function postTradeClosed(channel, trade, exitPrice, reason) {
 
 // ─── Position monitor ──────────────────────────────────────────────────────────
 
+// Close a position ONLY if the exchange sell actually succeeds. If it fails, keep the
+// trade tracked so the next tick retries — never mark it closed here, or cajh would
+// believe it's flat while Kraken still holds the position.
+async function closePosition(channel, symbol, trade, price, reason) {
+  let sold;
+  try {
+    sold = await placeSell({ symbol, volume: trade.volume });
+  } catch (err) {
+    console.error(`[MONITOR] ${reason} sell failed for ${symbol}:`, err.message);
+  }
+  if (!sold?.txid) {
+    // Sell did not go through — do NOT close. Alert once, then retry silently each tick.
+    if (channel && !trade._exitAlertSent) {
+      trade._exitAlertSent = true;
+      await channel.send(
+        `⚠️ **${symbol}** exit (${reason}) failed to fill — Kraken still holds it. ` +
+        `cajh will keep retrying; use \`!sell ${symbol}\` to close it yourself.`
+      );
+    }
+    return false;
+  }
+  await postTradeClosed(channel, trade, price, reason);
+  removeTrade(symbol);
+  return true;
+}
+
 export function startMonitor(client, channelId, intervalMs = 30000) {
   console.log("[MONITOR] Position monitor started");
   hydrateTrades();
@@ -241,7 +269,10 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
       }
 
       // Drawdown is measured on total equity (cash + positions), not cash alone.
-      if (checkDrawdown(cash + positionsValue) && channel) {
+      // checkDrawdown halts trading on every tick it's breached (idempotent). Announce
+      // only on the first breach of the day so we don't spam the channel each poll.
+      if (checkDrawdown(cash + positionsValue) && !drawdownHalted && channel) {
+        drawdownHalted = true;
         await channel.send(
           `🚨 **Daily drawdown limit reached (10%).** Trading has been automatically halted.\n` +
           `Use \`!resume\` to re-enable trading.`
@@ -255,21 +286,15 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
         const price = priceMap.get(symbol);
         if (!price) continue;
 
-        // Stop → close the position (price at or below the stop).
+        // Stop → close the position (only if the exchange sell actually goes through).
         if (price <= trade.stopLoss) {
-          try { await placeSell({ symbol, volume: trade.volume }); }
-          catch (err) { console.error(`[MONITOR] SL sell failed for ${symbol}:`, err.message); }
-          await postTradeClosed(channel, trade, price, "sl");
-          removeTrade(symbol);
+          await closePosition(channel, symbol, trade, price, "sl");
           continue;
         }
 
-        // Take-profit → close the full position (price at or above the target).
+        // Take-profit → close the full position (only if the exchange sell goes through).
         if (price >= trade.takeProfit) {
-          try { await placeSell({ symbol, volume: trade.volume }); }
-          catch (err) { console.error(`[MONITOR] TP sell failed for ${symbol}:`, err.message); }
-          await postTradeClosed(channel, trade, price, "tp");
-          removeTrade(symbol);
+          await closePosition(channel, symbol, trade, price, "tp");
           continue;
         }
 
@@ -285,9 +310,7 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
               const pivots  = detectSwings(closed, SWING_WINDOW);
               const last    = pivots[pivots.length - 1];
               if (last?.type === "high" && parseInt(closed[last.index].time) * 1000 > trade.openedAt) {
-                await placeSell({ symbol, volume: trade.volume });
-                await postTradeClosed(channel, trade, price, "swing-high");
-                removeTrade(symbol);
+                await closePosition(channel, symbol, trade, price, "swing-high");
                 continue;
               }
             } catch (err) {
