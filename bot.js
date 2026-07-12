@@ -6,7 +6,7 @@ import "dotenv/config";
 import { Client, GatewayIntentBits } from "discord.js";
 import cron from "node-cron";
 import { runScanner }      from "./scanner.js";
-import { loadConfig, saveConfig } from "./storage.js";
+import { loadConfig, saveConfig, isOwner } from "./storage.js";
 import { startMonitor, setDailyStartBalance, postDailySummary, disableTrading } from "./monitor.js";
 import {
   handleHelp, handleWatchlist, handleWatch, handleUnwatch,
@@ -15,6 +15,11 @@ import {
   handleGeneral, handleManualTrade, handleBacktest, handleOptimize, handleWhy, handleAlign, handleRoom, handleModes, handleProfile, handleValidate, handleDiscover,
   handleStop, handleResume, handleSell, handlePort, handleReconcile
 } from "./commands.js";
+
+// Last-resort safety net: an error that slips past every other handler must not kill
+// the process (which would also kill the stop-loss/take-profit monitor loop).
+process.on("unhandledRejection", (err) => console.error("[BOT] Unhandled rejection:", err));
+process.on("uncaughtException",  (err) => console.error("[BOT] Uncaught exception:", err));
 
 // ─── Discord client ────────────────────────────────────────────────────────────
 
@@ -113,6 +118,17 @@ client.once("clientReady", async () => {
 
 // ─── Message handler ───────────────────────────────────────────────────────────
 
+// A thrown/rejected command handler must never take the whole process down with it —
+// that would also kill startMonitor's stop-loss/take-profit loop until manual restart.
+// Every dispatch below is wrapped so an error becomes a logged message + a Discord
+// reply instead of an unhandled rejection.
+function safe(promise, message) {
+  return Promise.resolve(promise).catch(err => {
+    console.error("[BOT] Command error:", err.message);
+    return message.reply(`⚠️ Something went wrong: ${err.message}`).catch(() => {});
+  });
+}
+
 client.on("messageCreate", async (message) => {
 
   if (message.author.bot) return;
@@ -120,56 +136,62 @@ client.on("messageCreate", async (message) => {
   const raw   = message.content.trim();
   const lower = raw.toLowerCase();
 
+  // Commands that place/cancel real trades or change the halt state — owner only.
+  const TRADE_COMMANDS = new Set(["!stop", "!resume", "!sell", "!cancel", "!close", "!trade"]);
+  if (TRADE_COMMANDS.has(lower.split(/\s+/)[0]) && !isOwner(message.author.id)) {
+    return message.reply("🚫 This command is restricted to cajh's owner.");
+  }
+
   // ── Position commands ────────────────────────────────────────────────────────
 
-  if (lower === "!stop")     return handleStop(message);
-  if (lower === "!resume")   return handleResume(message);
-  if (lower === "!port" || lower === "!portfolio") return handlePort(message);
-  if (lower === "!reconcile") return handleReconcile(message);
+  if (lower === "!stop")     return safe(handleStop(message), message);
+  if (lower === "!resume")   return safe(handleResume(message), message);
+  if (lower === "!port" || lower === "!portfolio") return safe(handlePort(message), message);
+  if (lower === "!reconcile") return safe(handleReconcile(message), message);
 
   // !sell BTC  /  !sell BTC 50   (and aliases !cancel / !close)
   if (lower.startsWith("!sell ") || lower.startsWith("!cancel ") || lower.startsWith("!close ")) {
     const args = raw.split(/\s+/).slice(1);
-    return handleSell(message, args[0], args[1]);
+    return safe(handleSell(message, args[0], args[1]), message);
   }
 
   // ── Info commands ────────────────────────────────────────────────────────────
 
-  if (lower === "!help")       return handleHelp(message, state);
-  if (lower === "!watchlist")  return handleWatchlist(message, state);
-  if (lower === "!setchannel") return handleSetChannel(message, state, config);
-  if (lower === "!status")     return handleStatus(message, state);
-  if (lower === "!scan")       return handleScan(message, state);
-  if (lower === "!optimize")   return handleOptimize(message, state);
-  if (lower === "!align")      return handleAlign(message, state);
-  if (lower === "!room")       return handleRoom(message, state);
-  if (lower === "!modes")      return handleModes(message, state);
-  if (lower === "!profile")    return handleProfile(message, state);
-  if (lower === "!validate")   return handleValidate(message, state);
-  if (lower === "!discover")   return handleDiscover(message, state);
+  if (lower === "!help")       return safe(handleHelp(message, state), message);
+  if (lower === "!watchlist")  return safe(handleWatchlist(message, state), message);
+  if (lower === "!setchannel") return safe(handleSetChannel(message, state, config), message);
+  if (lower === "!status")     return safe(handleStatus(message, state), message);
+  if (lower === "!scan")       return safe(handleScan(message, state), message);
+  if (lower === "!optimize")   return safe(handleOptimize(message, state), message);
+  if (lower === "!align")      return safe(handleAlign(message, state), message);
+  if (lower === "!room")       return safe(handleRoom(message, state), message);
+  if (lower === "!modes")      return safe(handleModes(message, state), message);
+  if (lower === "!profile")    return safe(handleProfile(message, state), message);
+  if (lower === "!validate")   return safe(handleValidate(message, state), message);
+  if (lower === "!discover")   return safe(handleDiscover(message, state), message);
 
   if (lower === "!why" || lower.startsWith("!why ")) {
-    return handleWhy(message, state, raw.slice(4).trim() || null);
+    return safe(handleWhy(message, state, raw.slice(4).trim() || null), message);
   }
 
   if (lower === "!backtest" || lower.startsWith("!backtest ")) {
-    return handleBacktest(message, state, raw.slice(9).trim());
+    return safe(handleBacktest(message, state, raw.slice(9).trim()), message);
   }
 
   if (lower === "!trade") {
-    return handleManualTrade(message, state, null);
+    return safe(handleManualTrade(message, state, null), message);
   }
 
   if (lower.startsWith("!trade ")) {
-    return handleManualTrade(message, state, raw.slice(7).trim().split(/\s+/)[0]);
+    return safe(handleManualTrade(message, state, raw.slice(7).trim().split(/\s+/)[0]), message);
   }
 
   if (lower.startsWith("!watch ")) {
-    return handleWatch(message, state, config, raw.slice(7).trim().split(/\s+/));
+    return safe(handleWatch(message, state, config, raw.slice(7).trim().split(/\s+/)), message);
   }
 
   if (lower.startsWith("!unwatch ")) {
-    return handleUnwatch(message, state, config, raw.slice(9).trim().split(/\s+/));
+    return safe(handleUnwatch(message, state, config, raw.slice(9).trim().split(/\s+/)), message);
   }
 
   // ── @mention commands ────────────────────────────────────────────────────────

@@ -42,12 +42,17 @@ function trendTimeline(candles, intervalMin, n) {
   return timeline;
 }
 
-function trendingAsOf(timeline, t) {
-  let v = false;
-  for (let i = 0; i < timeline.length; i++) {
-    if (timeline[i].t <= t) v = timeline[i].trending; else break;
-  }
-  return v;
+/**
+ * Returns a lookup function "value as of time t" over an ascending timeline, advancing
+ * a cursor forward across calls instead of rescanning from the start each time. Only
+ * correct when callers query with non-decreasing t (true here — t tracks the entry loop).
+ */
+function makeAsOf(timeline, key, initial, transform = (v) => v) {
+  let i = 0, v = initial;
+  return (t) => {
+    while (i < timeline.length && timeline[i].t <= t) { v = transform(timeline[i][key]); i++; }
+    return v;
+  };
 }
 
 /** Timeline of [{ t, above }] — was each close above its `period` SMA at that candle? */
@@ -61,14 +66,6 @@ function maTimeline(candles, intervalMin, period) {
     tl.push({ t: parseInt(candles[i].time) + intervalMin * 60, above });
   }
   return tl;
-}
-
-function aboveAsOf(timeline, t) {
-  let v = false;
-  for (let i = 0; i < timeline.length; i++) {
-    if (timeline[i].t <= t) v = timeline[i].above; else break;
-  }
-  return v;
 }
 
 /**
@@ -85,14 +82,6 @@ function biasTimeline(candles, intervalMin, n) {
     timeline.push({ t: parseInt(candles[i].time) + intervalMin * 60, bias: lastType });
   }
   return timeline;
-}
-
-function biasAsOf(timeline, t) {
-  let bias = null;
-  for (let i = 0; i < timeline.length; i++) {
-    if (timeline[i].t <= t) bias = timeline[i].bias; else break;
-  }
-  return bias === "low" ? "bull" : bias === "high" ? "bear" : null;
 }
 
 export function backtestMultiTF({ candles15, candles1h, candles4h }, {
@@ -137,9 +126,12 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
     else                  highAt.add(p.confirmIndex);
   }
 
-  const biasTLs = higher.map(t => biasTimeline(t.candles, t.mins, n));
-  const trendTL = trendTimeline(trendSrc.candles, trendSrc.mins, n);
-  const maTL    = maTimeline(trendSrc.candles, trendSrc.mins, trendMa);
+  // t queried below (tClose) only ever increases across the entry loop, so each of
+  // these is a cursor that walks its timeline once instead of rescanning from the start.
+  const biasAsOfFns = higher.map(t =>
+    makeAsOf(biasTimeline(t.candles, t.mins, n), "bias", null, b => b === "low" ? "bull" : b === "high" ? "bear" : null));
+  const trendAsOf   = makeAsOf(trendTimeline(trendSrc.candles, trendSrc.mins, n), "trending", false);
+  const aboveMaAsOf = makeAsOf(maTimeline(trendSrc.candles, trendSrc.mins, trendMa), "above", false);
 
   // Overhead resistance: confirmed swing highs on the chop/MA anchor TF (4h for a
   // 15m/1h entry). Used by minRoomR to require clear air above entry before the target.
@@ -233,7 +225,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
     if (!pos && entryMode === "bos") {
      if (lowHere) {
       const tClose  = T[k] + entryMins * 60;
-      const hb = biasTLs.map(tl => biasAsOf(tl, tClose));   // higher-TF biases as of entry
+      const hb = biasAsOfFns.map(fn => fn(tClose));   // higher-TF biases as of entry
       let aligned;
       switch (alignMode) {
         case "none":    aligned = true; break;                            // entry-TF structure only
@@ -243,11 +235,11 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
         default:        aligned = hb.every(b => b === "bull"); break;     // every higher TF bull (current)
       }
       let gateReason = aligned ? null : "notAligned";
-      if (aligned && chopFilter && !trendingAsOf(trendTL, tClose)) { aligned = false; gateReason = "trendGate"; }
+      if (aligned && chopFilter && !trendAsOf(tClose)) { aligned = false; gateReason = "trendGate"; }
       if (aligned && trendGate) {
         const tg = trendGateMode === "structure"
-          ? trendingAsOf(trendTL, tClose)   // 4h making higher highs AND higher lows
-          : aboveAsOf(maTL, tClose);        // 4h close above its MA
+          ? trendAsOf(tClose)     // 4h making higher highs AND higher lows
+          : aboveMaAsOf(tClose);  // 4h close above its MA
         if (!tg) { aligned = false; gateReason = "trendGate"; }
       }
       const entry = C[k], stop = lowHere.price, risk = entry - stop;

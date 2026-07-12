@@ -56,7 +56,12 @@ export function aggregateTrades(trades, bars = new Map()) {
 }
 
 // ── CSV persistence ───────────────────────────────────────────────────────────────
-const pairFile = (pair) => path.join(STORE_DIR, `${pair}.csv`);
+// `pair` can originate from Discord-supplied text (e.g. !backtest <symbol>), so reject
+// anything but a bare alphanumeric id before it reaches a file path.
+const pairFile = (pair) => {
+  if (!/^[A-Za-z0-9]+$/.test(pair)) throw new Error(`Invalid pair: ${pair}`);
+  return path.join(STORE_DIR, `${pair}.csv`);
+};
 
 const barToRow = (b) =>
   [b.time, b.open, b.high, b.low, b.close, b.volume, b.buyVol, b.sellVol, b.trades, b.maxTrade].join(",");

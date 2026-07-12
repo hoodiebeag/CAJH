@@ -135,17 +135,19 @@ async function proposeBuy(symbol, buy, channel) {
     return { traded: false, reason: "not a higher low (structure not yet bullish)" };
   }
 
-  const takeProfit = entry + TP_R * risk;
   const signal = `${buy.tf} swing low`;
   const tfMinutes = SCAN_INTERVALS.find(i => i.label === buy.tf)?.minutes ?? 15;
 
   // Auto-execute — no confirmation needed. cajh places the trade itself.
   try {
     const trade = await placeBuy({ symbol, sizePct: POSITION_PCT, price: entry });
-    trade.entry       = entry;
+    // Recompute off the actual fill (trade.price), not the pre-trade quote — a market
+    // order can fill away from the quote, and stop/target must track the real entry.
+    const actualRisk  = trade.price - stopLoss;
+    trade.entry       = trade.price;
     trade.stopLoss    = stopLoss;
-    trade.takeProfit  = takeProfit;
-    trade.risk        = risk;          // entry − stop, for R-based stop management
+    trade.takeProfit  = trade.entry + TP_R * actualRisk;
+    trade.risk        = actualRisk;    // entry − stop, for R-based stop management
     trade.beMoved     = false;         // has the breakeven+ stop-raise happened yet?
     trade.sizePct     = POSITION_PCT;
     trade.signal      = signal;

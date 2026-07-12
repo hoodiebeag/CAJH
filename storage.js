@@ -58,6 +58,11 @@ export function symbolToKrakenId(symbol) {
   return PAIR_MAP[symbol.toUpperCase()] ?? `${symbol.toUpperCase()}USD`;
 }
 
+/** Is this Discord user cajh's owner? Gates trading commands and source disclosure. */
+export function isOwner(userId) {
+  return userId === (process.env.BEAG_USER_ID || "795521432783552552");
+}
+
 /** Parse a comma-separated WATCHLIST env var into the internal format. */
 function parseWatchlist(raw) {
   if (!raw) return DEFAULT_WATCHLIST;

@@ -10,7 +10,7 @@ import { SWING_WINDOW } from "./strategy.js";
 import { backtestMultiTF, profileEntries } from "./backtest.js";
 import { loadCandles } from "./data.js";
 import { buildLiveContext, looksLikeCodeQuestion, readSource } from "./context.js";
-import { loadChart, saveConfig, symbolToKrakenId } from "./storage.js";
+import { loadChart, saveConfig, symbolToKrakenId, isOwner } from "./storage.js";
 import { getCurrentPrice, placeSell, getHoldings } from "./trader.js";
 import {
   enableTrading, disableTrading, isTradingEnabled,
@@ -59,16 +59,16 @@ export async function handleSell(message, symbol, percentArg) {
 
   try {
     await message.reply(`🔄 Selling ${pct}% of cajh's **${upper}** position...`);
-    const price = await getCurrentPrice(upper);
-    await placeSell({ symbol: upper, volume });
+    const quote = await getCurrentPrice(upper);
+    const sold  = await placeSell({ symbol: upper, volume, price: quote });
 
     if (pct >= 100) {
-      await postTradeClosed(message.channel, trade, price, "manual");
+      await postTradeClosed(message.channel, trade, sold.price, "manual");
       removeTrade(upper);
     } else {
-      trade.volume -= volume;        // keep the remainder open with same stop/targets
+      trade.volume -= sold.volume;   // actual executed volume, not the requested amount
       saveTradeState();
-      await message.reply(`✅ Sold ${pct}% of **${upper}** at ~$${price}. Remaining: ${trade.volume} ${upper}.`);
+      await message.reply(`✅ Sold ${pct}% of **${upper}** at ~$${sold.price}. Remaining: ${trade.volume} ${upper}.`);
     }
   } catch (err) {
     console.error(`[COMMAND] Sell failed for ${upper}:`, err.message);
@@ -360,7 +360,7 @@ export async function handleGeneral(message, userMessage, state) {
     `your live state, and your own code accurately and concisely. If you don't know, say so.\n\n` +
     buildLiveContext(state);
 
-  if (looksLikeCodeQuestion(userMessage)) {
+  if (looksLikeCodeQuestion(userMessage) && isOwner(message.author.id)) {
     system += `\n\nYour current source code follows — use it to answer accurately:\n` + readSource();
   }
 

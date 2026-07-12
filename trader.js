@@ -148,12 +148,31 @@ export async function getCurrentPrice(symbol) {
 // ─── Orders ────────────────────────────────────────────────────────────────────
 
 /**
- * Places a spot market buy order.
- * Volume is calculated as (balance × sizePct) / price.
+ * Poll for a market order's actual average fill price via QueryOrders. Market orders
+ * fill almost instantly, but AddOrder's response doesn't include the fill price, so we
+ * ask again a few times. Falls back to the pre-trade quote if Kraken doesn't confirm in time.
  */
+async function getFillPrice(txid, quotedPrice) {
+  if (!txid) return quotedPrice;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await new Promise(r => setTimeout(r, 500));
+    try {
+      const res   = await kraken.api("QueryOrders", { txid });
+      const order = res.result?.[txid];
+      const price = parseFloat(order?.price);
+      if (order?.status === "closed" && price > 0) return price;
+    } catch (err) {
+      console.error(`[TRADER] QueryOrders failed for ${txid}:`, err.message);
+    }
+  }
+  console.warn(`[TRADER] Could not confirm fill price for ${txid} — using quote $${quotedPrice}.`);
+  return quotedPrice;
+}
+
 /**
  * Places a spot market buy order.
  * Volume is (balance × sizePct) / price, rounded to the pair's lot decimals.
+ * `price` is the actual average fill price (falls back to the pre-trade quote).
  */
 export async function placeBuy({ symbol, sizePct, price }) {
   const pair    = symbolToPair(symbol);
@@ -170,13 +189,16 @@ export async function placeBuy({ symbol, sizePct, price }) {
     volume
   });
 
+  const txid      = res.result?.txid?.[0];
+  const fillPrice = await getFillPrice(txid, price);
+
   return {
-    txid:    res.result?.txid?.[0],
+    txid,
     symbol,
     pair,
     side:    "buy",
     volume:  parseFloat(volume),
-    price,
+    price:   fillPrice,
     capital,
     balance,
     sizePct
@@ -185,9 +207,10 @@ export async function placeBuy({ symbol, sizePct, price }) {
 
 /**
  * Places a spot market sell order to close a position.
- * Volume is the amount of the asset held.
+ * Volume is the amount of the asset held. `price` (optional) is a pre-trade quote used
+ * only as a fallback if the actual fill price can't be confirmed.
  */
-export async function placeSell({ symbol, volume }) {
+export async function placeSell({ symbol, volume, price }) {
   const pair    = symbolToPair(symbol);
   const volStr  = await normalizeVolume(pair, volume);
 
@@ -200,12 +223,16 @@ export async function placeSell({ symbol, volume }) {
     volume:    volStr
   });
 
+  const txid      = res.result?.txid?.[0];
+  const fillPrice = await getFillPrice(txid, price);
+
   return {
-    txid:   res.result?.txid?.[0],
+    txid,
     symbol,
     pair,
     side:   "sell",
-    volume: parseFloat(volStr)
+    volume: parseFloat(volStr),
+    price:  fillPrice
   };
 }
 

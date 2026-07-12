@@ -260,7 +260,7 @@ export async function postTradeClosed(channel, trade, exitPrice, reason) {
 async function closePosition(channel, symbol, trade, price, reason) {
   let sold;
   try {
-    sold = await placeSell({ symbol, volume: trade.volume });
+    sold = await placeSell({ symbol, volume: trade.volume, price });
   } catch (err) {
     console.error(`[MONITOR] ${reason} sell failed for ${symbol}:`, err.message);
   }
@@ -275,7 +275,7 @@ async function closePosition(channel, symbol, trade, price, reason) {
     }
     return false;
   }
-  await postTradeClosed(channel, trade, price, reason);
+  await postTradeClosed(channel, trade, sold.price, reason);
   removeTrade(symbol);
   return true;
 }
@@ -290,17 +290,17 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
     .then(ch => reconcileHoldings(ch))
     .catch(err => console.error("[RECONCILE] boot check skipped:", err.message));
 
-  // Reset daily stats at the next local midnight, then every 24h.
-  const now  = new Date();
-  const msUntilMidnight = new Date(now).setHours(24, 0, 0, 0) - now;
-  setTimeout(async () => {
+  // Reset daily stats when the ET calendar day rolls over. Checked every minute instead
+  // of computing "ms until midnight" — that math runs in the server's local timezone
+  // (e.g. UTC on Railway), which drifts from the ET day todayET() actually keys stats by.
+  let lastResetDay = todayET();
+  setInterval(async () => {
+    const day = todayET();
+    if (day === lastResetDay) return;
+    lastResetDay = day;
     try { resetDailyStats(await currentEquity()); }
     catch (err) { console.error("[MONITOR] Reset failed:", err.message); }
-    setInterval(async () => {
-      try { resetDailyStats(await currentEquity()); }
-      catch (err) { console.error("[MONITOR] Reset failed:", err.message); }
-    }, 24 * 60 * 60 * 1000);
-  }, msUntilMidnight);
+  }, 60_000);
 
   // Monitor open positions.
   setInterval(async () => {
