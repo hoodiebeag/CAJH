@@ -780,6 +780,14 @@ export async function handleDiscover(message, state) {
     ["BTC 4h not bull",    r => r.btcBias4h != null && r.btcBias4h !== "bull"],
     ["BTC ripping >3%/24h", r => r.btc4hRetPct != null && r.btc4hRetPct > 3],
     ["BTC bleeding <-3%/24h", r => r.btc4hRetPct != null && r.btc4hRetPct < -3],
+    // Curated feature combinations — where edge tends to hide. Kept to a small set so BH-FDR
+    // stays resolvable (exhaustive pairwise would explode the multiple-testing count).
+    ["swept low + BTC bull", r => r.swept === true && r.btcBias4h === "bull"],
+    ["swept low + FVG",      r => r.swept === true && r.fvg === true],
+    ["room>2R + BTC bull",   r => r.roomR != null && r.roomR > 2 && r.btcBias4h === "bull"],
+    ["displaced + BTC bull", r => r.displacement != null && r.displacement > 1.5 && r.btcBias4h === "bull"],
+    ["near PDL + swept low", r => r.pdlDistPct != null && r.pdlDistPct < 1 && r.swept === true],
+    ["FVG + higher low",     r => r.fvg === true && r.higherLow === true],
   ];
 
   const times = all.map(r => r.t).sort((a, b) => a - b);
