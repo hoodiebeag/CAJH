@@ -741,6 +741,15 @@ export async function handleDiscover(message, state) {
   }
   if (all.length < 100) return message.channel.send(`Only ${all.length} candidates from ${fetched} assets — too few to search reliably.`);
 
+  // Regime split: is the pool's result uniform, or hiding an edge in one BTC regime? (btcBias4h)
+  const regimeOf = (r) => (r.btcBias4h === "bull" ? "bull" : r.btcBias4h === "bear" ? "bear" : "flat");
+  const regimeLine = ["bull", "bear", "flat"].map((g) => {
+    const s = all.filter((r) => regimeOf(r) === g);
+    if (!s.length) return `${g}: —`;
+    const rpt = s.reduce((a, b) => a + b.netR, 0) / s.length;
+    return `${g}: ${rpt >= 0 ? "+" : ""}${rpt.toFixed(2)}R/t (n=${s.length})`;
+  }).join("  ·  ");
+
   const rules = [
     ["room > 1R",          r => r.roomR == null || r.roomR > 1],
     ["room > 2R",          r => r.roomR == null || r.roomR > 2],
@@ -839,7 +848,8 @@ export async function handleDiscover(message, state) {
 
   await message.channel.send(
     `🔭 **Strategy discovery — ${all.length} candidates from ${fetched} assets**\n` +
-    `Baseline OOS R/t: ${base6.toFixed(2)} · ${m} rules · out-of-sample × 3 splits · permutation + BH-FDR (q=${FDR_Q}).\n\n` +
+    `Baseline OOS R/t: ${base6.toFixed(2)} · ${m} rules · out-of-sample × 3 splits · permutation + BH-FDR (q=${FDR_Q}).\n` +
+    `By BTC regime (take-everything net R/t): ${regimeLine}\n\n` +
     `**Edges found (beat chance + profitable):**\n${lines}\n\n` +
     verdict
   );
