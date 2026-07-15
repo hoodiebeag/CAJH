@@ -19,7 +19,7 @@ import {
   EXIT_ON_SWING_HIGH, CHOP_FILTER, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT, FEE_RATE, SLIPPAGE_PCT,
   TREND_GATE, TREND_GATE_MODE, TREND_MA, detectSwings
 } from "./strategy.js";
-import { atrPct, displacement, sweptLow, prevDayLevels, bullishFVGBelow } from "./features.js";
+import { atrPct, displacement, sweptLow, prevDayLevels, bullishFVGBelow, returnAsOf } from "./features.js";
 
 const MAX_HOLD = 100; // close a trade after this many candles if neither stop nor target hits
 
@@ -332,7 +332,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
  * An edge is a feature where winners and losers DIVERGE; a feature they share is a
  * mirage. Breakeven is intentionally off so every entry resolves cleanly to win/loss.
  */
-export function profileEntries({ candles15, candles1h, candles4h } = {}, { tpR = TP_R, n = SWING_WINDOW, feeRate = FEE_RATE, slipPct = SLIPPAGE_PCT } = {}) {
+export function profileEntries({ candles15, candles1h, candles4h, btc4h } = {}, { tpR = TP_R, n = SWING_WINDOW, feeRate = FEE_RATE, slipPct = SLIPPAGE_PCT } = {}) {
   const records = [];
   if (!candles15?.length || !candles1h?.length || !candles4h?.length) return { records };
 
@@ -409,6 +409,8 @@ export function profileEntries({ candles15, candles1h, candles4h } = {}, { tpR =
       fvg: bullishFVGBelow(H, L, C, k),
       pdlDistPct: pd ? (entry - pd.pdl) / entry * 100 : null,
       pdhDistPct: pd ? (pd.pdh - entry) / entry * 100 : null,
+      btcBias4h: btc4h ? biasAt(btc4h, 240, tClose) : null,
+      btc4hRetPct: btc4h ? returnAsOf(btc4h, tClose, 6) : null,
     });
   }
   return { records };

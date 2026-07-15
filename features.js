@@ -66,3 +66,22 @@ export function bullishFVGBelow(H, L, C, k, lookback = 15) {
   }
   return false;
 }
+
+// Index of the most recent candle at or before time `tSec` (candles ascending by time).
+function idxAsOf(candles, tSec) {
+  let j = -1;
+  for (let i = 0; i < candles.length; i++) {
+    if (parseInt(candles[i].time) <= tSec) j = i; else break;
+  }
+  return j;
+}
+
+// Percent return of a candle series over `lookback` bars ending at/before `tSec` — e.g. what
+// BTC has done over the last `lookback` 4h bars as of an entry. Null if not enough history.
+export function returnAsOf(candles, tSec, lookback = 6) {
+  if (!candles?.length) return null;
+  const j = idxAsOf(candles, tSec);
+  if (j < lookback) return null;
+  const now = parseFloat(candles[j].close), then = parseFloat(candles[j - lookback].close);
+  return then > 0 ? (now - then) / then * 100 : null;
+}

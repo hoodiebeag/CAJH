@@ -725,6 +725,8 @@ const DISCOVER_UNIVERSE = [
 export async function handleDiscover(message, state) {
   await message.reply(`🔭 Discovery run — sampling up to **${DISCOVER_UNIVERSE.length}** assets, then searching rules with an out-of-sample skeptic + chance baseline. This takes a few minutes…`);
 
+  const { c4h: btcRaw } = await tfCandles(symbolToKrakenId("BTC"));
+  const btc4h = btcRaw?.slice(0, -1);
   const all = [];
   let fetched = 0;
   for (const sym of DISCOVER_UNIVERSE) {
@@ -732,7 +734,7 @@ export async function handleDiscover(message, state) {
       const id = symbolToKrakenId(sym);
       const { c15, c1h, c4h } = await tfCandles(id);
       if (!c15?.length || !c1h?.length || !c4h?.length) continue;
-      const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) }, { tpR: 4 });
+      const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1), btc4h }, { tpR: 4 });
       all.push(...records);
       fetched++;
     } catch (err) { console.error(`[DISCOVER] ${sym}:`, err.message); }
@@ -765,6 +767,10 @@ export async function handleDiscover(message, state) {
     ["into bullish FVG",   r => r.fvg === true],
     ["near prev-day low",  r => r.pdlDistPct != null && r.pdlDistPct < 1],
     ["clear of PDH >1%",   r => r.pdhDistPct != null && r.pdhDistPct > 1],
+    ["BTC 4h bull",        r => r.btcBias4h === "bull"],
+    ["BTC 4h not bull",    r => r.btcBias4h != null && r.btcBias4h !== "bull"],
+    ["BTC ripping >3%/24h", r => r.btc4hRetPct != null && r.btc4hRetPct > 3],
+    ["BTC bleeding <-3%/24h", r => r.btc4hRetPct != null && r.btc4hRetPct < -3],
   ];
 
   const times = all.map(r => r.t).sort((a, b) => a - b);
@@ -794,7 +800,7 @@ export async function handleDiscover(message, state) {
   // shuffles where the shuffled stat ≥ the real stat (smoothed).
   const netRs = all.map(r => r.netR);
   const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const K = 500, ge = new Array(rules.length).fill(0); // ≥~360 shuffles so p is fine enough for BH-FDR at q=0.05 across ~18 rules (min p ≈ 1/501)
+  const K = 1000, ge = new Array(rules.length).fill(0); // resolution for BH-FDR at q=0.05 across ~26 rules (min p ≈ 1/1001 < 0.05/26)
   for (let s = 0; s < K; s++) {
     const sh = shuffle(netRs);
     const map = new Map(all.map((r, i) => [r, sh[i]]));
@@ -846,12 +852,14 @@ export async function handleProfile(message, state) {
 
   await message.reply(`📊 Profiling every long candidate across **${watchlist.length}** assets — letting the winners and losers describe themselves. A minute or two…`);
 
+  const { c4h: btcRaw } = await tfCandles(symbolToKrakenId("BTC"));
+  const btc4h = btcRaw?.slice(0, -1);
   const all = [];
   for (const asset of watchlist) {
     try {
       const { c15, c1h, c4h } = await tfCandles(asset.id);
       if (!c15?.length || !c1h?.length || !c4h?.length) continue;
-      const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) }, { tpR: 4 });
+      const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1), btc4h }, { tpR: 4 });
       all.push(...records);
     } catch (err) { console.error(`[PROFILE] ${asset.symbol}:`, err.message); }
   }
@@ -869,10 +877,12 @@ export async function handleProfile(message, state) {
     ["RSI at entry", "rsi", 1], ["% from MA", "maDistPct", 2], ["room (R)", "roomR", 2],
     ["range position", "rangePos", 2], ["stop size %", "stopPct", 2], ["volume vs avg", "volRatio", 2],
     ["ATR %", "atrPct", 2], ["displacement", "displacement", 2], ["PDL dist %", "pdlDistPct", 2], ["PDH dist %", "pdhDistPct", 2],
+    ["BTC 24h ret %", "btc4hRetPct", 2],
   ];
   const bool = [
     ["higher-low %", "higherLow", true], ["1h bull %", "bias1h", "bull"], ["4h bull %", "bias4h", "bull"],
     ["swept low %", "swept", true], ["bullish FVG %", "fvg", true],
+    ["BTC 4h bull %", "btcBias4h", "bull"],
   ];
 
   const lines = [];
@@ -918,12 +928,14 @@ export async function handleValidate(message, state) {
 
   await message.reply(`🔬 Out-of-sample test of the room edge across **${watchlist.length}** assets — learn on the first 60% of history, test on the last 40% it never saw. A minute or two…`);
 
+  const { c4h: btcRaw } = await tfCandles(symbolToKrakenId("BTC"));
+  const btc4h = btcRaw?.slice(0, -1);
   const all = [];
   for (const asset of watchlist) {
     try {
       const { c15, c1h, c4h } = await tfCandles(asset.id);
       if (!c15?.length || !c1h?.length || !c4h?.length) continue;
-      const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) }, { tpR: 4 });
+      const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1), btc4h }, { tpR: 4 });
       all.push(...records);
     } catch (err) { console.error(`[VALIDATE] ${asset.symbol}:`, err.message); }
   }
