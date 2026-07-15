@@ -6,6 +6,7 @@
 
 import Kraken from "kraken-api";
 import axios  from "axios";
+import * as logger from './logger.js';
 
 // ─── Client ────────────────────────────────────────────────────────────────────
 
@@ -15,7 +16,7 @@ const kraken = new Kraken(
 );
 
 if (!process.env.KRAKEN_API_KEY || !process.env.KRAKEN_API_SECRET) {
-  console.warn("[TRADER] Warning: KRAKEN_API_KEY or KRAKEN_API_SECRET not set.");
+  logger.warn("[TRADER] Warning: KRAKEN_API_KEY or KRAKEN_API_SECRET not set.");
 }
 
 // ─── Pair mapping ──────────────────────────────────────────────────────────────
@@ -46,7 +47,7 @@ async function loadPairInfo() {
     const res = await kraken.api("AssetPairs");
     pairInfoCache = res.result ?? {};
   } catch (err) {
-    console.error("[TRADER] Failed to load AssetPairs:", err.message);
+      logger.error("[TRADER] Failed to load AssetPairs:", err.message);
     pairInfoCache = {};
   }
   return pairInfoCache;
@@ -82,7 +83,7 @@ async function normalizeVolume(pair, volume) {
 export async function getAccountBalance() {
   const res     = await kraken.api("Balance");
   const balance = parseFloat(res.result?.ZUSD ?? res.result?.USD ?? 0);
-  console.log(`[TRADER] Available balance: $${balance.toFixed(2)}`);
+  logger.info(`[TRADER] Available balance: $${balance.toFixed(2)}`);
   return balance;
 }
 
@@ -162,10 +163,10 @@ async function getFillPrice(txid, quotedPrice) {
       const price = parseFloat(order?.price);
       if (order?.status === "closed" && price > 0) return price;
     } catch (err) {
-      console.error(`[TRADER] QueryOrders failed for ${txid}:`, err.message);
+      logger.error(`[TRADER] QueryOrders failed for ${txid}:`, err.message);
     }
   }
-  console.warn(`[TRADER] Could not confirm fill price for ${txid} — using quote $${quotedPrice}.`);
+  logger.warn(`[TRADER] Could not confirm fill price for ${txid} — using quote $${quotedPrice}.`);
   return quotedPrice;
 }
 
@@ -180,7 +181,7 @@ export async function placeBuy({ symbol, sizePct, price }) {
   const capital = balance * sizePct;
   const volume  = await normalizeVolume(pair, capital / price);
 
-  console.log(`[TRADER] BUY ${volume} ${symbol} @ ~$${price} (${(sizePct * 100).toFixed(0)}% of balance)`);
+  logger.info(`[TRADER] BUY ${volume} ${symbol} @ ~$${price} (${(sizePct * 100).toFixed(0)}% of balance)`);
 
   const res = await kraken.api("AddOrder", {
     pair,
@@ -214,7 +215,7 @@ export async function placeSell({ symbol, volume, price }) {
   const pair    = symbolToPair(symbol);
   const volStr  = await normalizeVolume(pair, volume);
 
-  console.log(`[TRADER] SELL ${volStr} ${symbol}`);
+  logger.info(`[TRADER] SELL ${volStr} ${symbol}`);
 
   const res = await kraken.api("AddOrder", {
     pair,
@@ -252,7 +253,7 @@ export async function fetchOHLC(pair, minutes) {
       });
 
       if (response.data.error && response.data.error.length > 0) {
-        console.error(`Kraken error for ${pair}:`, response.data.error);
+              logger.error(`Kraken error for ${pair}:`, response.data.error);
         return null;
       }
 
@@ -268,7 +269,7 @@ export async function fetchOHLC(pair, minutes) {
         volume: k[6].toString()
       }));
     } catch (error) {
-      console.error(`Fetch attempt ${attempt} failed for ${pair}:`, error.message);
+          logger.error(`Fetch attempt ${attempt} failed for ${pair}:`, error.message);
       if (attempt === 3) return null;
       await new Promise(res => setTimeout(res, 5000 * attempt));
     }

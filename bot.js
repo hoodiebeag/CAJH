@@ -7,7 +7,7 @@ import { Client, GatewayIntentBits } from "discord.js";
 import cron from "node-cron";
 import { runScanner }      from "./scanner.js";
 import { loadConfig, saveConfig, isOwner } from "./storage.js";
-import { startMonitor, setDailyStartBalance, postDailySummary, disableTrading } from "./monitor.js";
+import { startMonitor, setDailyStartBalance, postDailySummary, disableTrading, haltManual } from "./monitor.js";
 import {
   handleHelp, handleWatchlist, handleWatch, handleUnwatch,
   handleSetChannel, handleStatus,
@@ -15,11 +15,12 @@ import {
   handleGeneral, handleManualTrade, handleBacktest, handleOptimize, handleWhy, handleAlign, handleRoom, handleModes, handleProfile, handleValidate, handleDiscover,
   handleStop, handleResume, handleSell, handlePort, handleReconcile
 } from "./commands.js";
+import * as logger from './logger.js';
 
 // Last-resort safety net: an error that slips past every other handler must not kill
 // the process (which would also kill the stop-loss/take-profit monitor loop).
-process.on("unhandledRejection", (err) => console.error("[BOT] Unhandled rejection:", err));
-process.on("uncaughtException",  (err) => console.error("[BOT] Uncaught exception:", err));
+process.on("unhandledRejection", (err) => logger.error("[BOT] Unhandled rejection:", err));
+process.on("uncaughtException",  (err) => logger.error("[BOT] Uncaught exception:", err));
 
 // ─── Discord client ────────────────────────────────────────────────────────────
 
@@ -47,7 +48,7 @@ const state = {
 
 async function runScheduledScan(label) {
   if (!state.scanChannelId) {
-    console.warn(`[SCAN] ${label}: no scan channel set — run !setchannel once.`);
+    logger.warn(`[SCAN] ${label}: no scan channel set — run !setchannel once.`);
     return;
   }
 
@@ -55,12 +56,12 @@ async function runScheduledScan(label) {
   try {
     channel = await client.channels.fetch(state.scanChannelId);
   } catch (err) {
-    console.error(`[SCAN] ${label}: could not fetch channel ${state.scanChannelId}:`, err.message);
+    logger.error(`[SCAN] ${label}: could not fetch channel ${state.scanChannelId}:`, err.message);
     return;
   }
   if (!channel) return;
 
-  console.log(`[SCAN] ${label} scan running`);
+  logger.info(`[SCAN] ${label} scan running`);
   await runScanner(channel, state);
 
   config.lastScanTime = state.lastScanTime;
@@ -70,7 +71,7 @@ async function runScheduledScan(label) {
 // ─── Startup ───────────────────────────────────────────────────────────────────
 
 client.once("clientReady", async () => {
-  console.log(`[BOT] Logged in as ${client.user.tag}`);
+  logger.info(`[BOT] Logged in as ${client.user.tag}`);
 
   // Set daily start balance for drawdown tracking
   try {
@@ -78,7 +79,7 @@ client.once("clientReady", async () => {
     const balance = await getAccountBalance();
     setDailyStartBalance(balance);
   } catch (err) {
-    console.error("[BOT] Could not fetch initial balance:", err.message);
+    logger.error("[BOT] Could not fetch initial balance:", err.message);
   }
 
   if (state.scanChannelId) {
@@ -88,8 +89,8 @@ client.once("clientReady", async () => {
   // Test-only safety: boot with live trading OFF so you can deploy and run !backtest
   // without opening real positions. Set START_HALTED=true in Railway; !resume to go live.
   if (process.env.START_HALTED === "true") {
-    disableTrading();
-    console.log("[RISK] Booted HALTED (START_HALTED=true) — scans & backtests run, but NO live trades until !resume.");
+    haltManual();
+    logger.warn("[RISK] Booted HALTED (START_HALTED=true) — scans & backtests run, but NO live trades until !resume.");
   }
 
   // Scan every 15 minutes (right after each 15m candle closes). Quiet — only posts on a trade.
@@ -98,7 +99,7 @@ client.once("clientReady", async () => {
     () => runScheduledScan("Scheduled"),
     { timezone: "America/New_York" }
   );
-  console.log("[CRON] Scans scheduled every 15 minutes.");
+  logger.info("[CRON] Scans scheduled every 15 minutes.");
 
   // Daily summary at 3:30 PM ET: trades entered + live P&L on open positions.
   cron.schedule(
@@ -108,12 +109,12 @@ client.once("clientReady", async () => {
         const channel = await client.channels.fetch(state.scanChannelId);
         if (channel) await postDailySummary(channel);
       } catch (err) {
-        console.error("[CRON] Daily summary failed:", err.message);
+        logger.error("[CRON] Daily summary failed:", err.message);
       }
     },
     { timezone: "America/New_York" }
   );
-  console.log("[CRON] Daily summary scheduled for 3:30 PM ET.");
+  logger.info("[CRON] Daily summary scheduled for 3:30 PM ET.");
 });
 
 // ─── Message handler ───────────────────────────────────────────────────────────
@@ -124,7 +125,7 @@ client.once("clientReady", async () => {
 // reply instead of an unhandled rejection.
 function safe(promise, message) {
   return Promise.resolve(promise).catch(err => {
-    console.error("[BOT] Command error:", err.message);
+    logger.error("[BOT] Command error:", err.message);
     return message.reply(`⚠️ Something went wrong: ${err.message}`).catch(() => {});
   });
 }
@@ -216,7 +217,7 @@ client.on("messageCreate", async (message) => {
     if (!wasChartRequest) await handleGeneral(message, userMessage, state);
 
   } catch (err) {
-    console.error("[BOT] Message handler error:", err.message);
+    logger.error("[BOT] Message handler error:", err.message);
     await message.reply("⚠️ Something went wrong. Please try again.");
   }
 });

@@ -67,20 +67,24 @@ export function bullishFVGBelow(H, L, C, k, lookback = 15) {
   return false;
 }
 
-// Index of the most recent candle at or before time `tSec` (candles ascending by time).
-function idxAsOf(candles, tSec) {
+// Index of the most recent FULLY CLOSED candle as of `tSec`. A candle is only closed once its
+// SUCCESSOR has started, so the still-open bar containing `tSec` never leaks its future close.
+// (Critical at a 15m entry reading a 4h series — selecting by start time would use the eventual
+// close of a bar that hasn't finished yet: look-ahead.)
+function lastClosedIdx(candles, tSec) {
   let j = -1;
-  for (let i = 0; i < candles.length; i++) {
-    if (parseInt(candles[i].time) <= tSec) j = i; else break;
+  for (let i = 0; i + 1 < candles.length; i++) {
+    if (parseInt(candles[i + 1].time) <= tSec) j = i; else break;
   }
   return j;
 }
 
-// Percent return of a candle series over `lookback` bars ending at/before `tSec` — e.g. what
-// BTC has done over the last `lookback` 4h bars as of an entry. Null if not enough history.
+// Percent return of a candle series over `lookback` bars ending at the last CLOSED bar as of
+// `tSec` — e.g. what BTC has done over the last `lookback` closed 4h bars as of an entry. Null
+// if not enough closed history.
 export function returnAsOf(candles, tSec, lookback = 6) {
   if (!candles?.length) return null;
-  const j = idxAsOf(candles, tSec);
+  const j = lastClosedIdx(candles, tSec);
   if (j < lookback) return null;
   const now = parseFloat(candles[j].close), then = parseFloat(candles[j - lookback].close);
   return then > 0 ? (now - then) / then * 100 : null;

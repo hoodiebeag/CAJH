@@ -9,11 +9,12 @@ import { generateChartImage } from "./chart.js";
 import { SWING_WINDOW } from "./strategy.js";
 import { backtestMultiTF, profileEntries } from "./backtest.js";
 import { loadCandles } from "./data.js";
+import * as logger from './logger.js';
 import { buildLiveContext, looksLikeCodeQuestion, readSource } from "./context.js";
 import { loadChart, saveConfig, symbolToKrakenId, isOwner } from "./storage.js";
 import { getCurrentPrice, placeSell, getHoldings } from "./trader.js";
 import {
-  enableTrading, disableTrading, isTradingEnabled,
+  haltManual, resumeManual, isTradingEnabled,
   getTrade, removeTrade, saveTradeState, postTradeClosed, getOpenTrades, reconcileHoldings
 } from "./monitor.js";
 
@@ -71,7 +72,7 @@ export async function handleSell(message, symbol, percentArg) {
       await message.reply(`✅ Sold ${pct}% of **${upper}** at ~$${sold.price}. Remaining: ${trade.volume} ${upper}.`);
     }
   } catch (err) {
-    console.error(`[COMMAND] Sell failed for ${upper}:`, err.message);
+    logger.error(`[COMMAND] Sell failed for ${upper}:`, err.message);
     await message.reply(`⚠️ Failed to sell **${upper}**: ${err.message}`);
   }
 }
@@ -110,7 +111,7 @@ export async function handlePort(message) {
       `_Market value for all holdings; entry-based P&L shown only for positions cajh opened._`
     );
   } catch (err) {
-    console.error("[COMMAND] Portfolio failed:", err.message);
+    logger.error("[COMMAND] Portfolio failed:", err.message);
     await message.reply(`⚠️ Couldn't fetch holdings: ${err.message}`);
   }
 }
@@ -118,7 +119,7 @@ export async function handlePort(message) {
 // ─── !stop ─────────────────────────────────────────────────────────────────────
 
 export async function handleStop(message) {
-  disableTrading();
+  haltManual();
   await message.reply(
     "🛑 **Trading halted.** No new trades will be placed.\n" +
     "Use `!resume` to re-enable trading."
@@ -128,7 +129,7 @@ export async function handleStop(message) {
 // ─── !resume ───────────────────────────────────────────────────────────────────
 
 export async function handleResume(message) {
-  enableTrading();
+  resumeManual();
   await message.reply("✅ **Trading resumed.** cajh will auto-place new setups.");
 }
 
@@ -409,7 +410,7 @@ export async function handleBacktest(message, state, arg) {
       `_Small samples mislead — judge on total R, not win rate alone. "R" = multiples of per-trade risk._`
     );
   } catch (err) {
-    console.error(`[COMMAND] Backtest failed for ${symbol}:`, err.message);
+    logger.error(`[COMMAND] Backtest failed for ${symbol}:`, err.message);
     await message.reply(`⚠️ Backtest failed: ${err.message}`);
   }
 }
@@ -433,7 +434,7 @@ async function backtestWatchlist(message, state) {
       pooled.push(...(r.results || []));
       lines.push(`**${asset.symbol}** — ${r.trades}t · ${(r.winRate * 100).toFixed(0)}% · ${r.totalR.toFixed(1)}R`);
     } catch (err) {
-      console.error(`[COMMAND] Backtest failed for ${asset.symbol}:`, err.message);
+      logger.error(`[COMMAND] Backtest failed for ${asset.symbol}:`, err.message);
       lines.push(`**${asset.symbol}** — error`);
     }
   }
@@ -474,7 +475,7 @@ export async function handleOptimize(message, state) {
         data.push({ symbol: asset.symbol, c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
       }
     } catch (err) {
-      console.error(`[OPTIMIZE] fetch failed ${asset.symbol}:`, err.message);
+      logger.error(`[OPTIMIZE] fetch failed ${asset.symbol}:`, err.message);
     }
   }
   if (!data.length) return message.channel.send("⚠️ Couldn't fetch data for any pair.");
@@ -570,7 +571,7 @@ export async function handleWhy(message, state, symbol) {
       if (!c15?.length || !c1h?.length || !c4h?.length) continue;
       const r = backtestMultiTF({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) });
       for (const [k, v] of Object.entries(r.reasons || {})) agg[k] = (agg[k] || 0) + v;
-    } catch (err) { console.error(`[WHY] ${asset.symbol}:`, err.message); }
+    } catch (err) { logger.error(`[WHY] ${asset.symbol}:`, err.message); }
   }
 
   const total = Object.values(agg).reduce((a, b) => a + b, 0);
@@ -610,7 +611,7 @@ export async function handleAlign(message, state) {
       const { c15, c1h, c4h } = await tfCandles(asset.id);
       if (c15?.length && c1h?.length && c4h?.length)
         data.push({ c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
-    } catch (err) { console.error(`[ALIGN] ${asset.symbol}:`, err.message); }
+    } catch (err) { logger.error(`[ALIGN] ${asset.symbol}:`, err.message); }
   }
   if (!data.length) return message.channel.send("⚠️ Couldn't fetch data for any pair.");
 
@@ -665,7 +666,7 @@ export async function handleRoom(message, state) {
       const { c15, c1h, c4h } = await tfCandles(asset.id);
       if (c15?.length && c1h?.length && c4h?.length)
         data.push({ c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
-    } catch (err) { console.error(`[ROOM] ${asset.symbol}:`, err.message); }
+    } catch (err) { logger.error(`[ROOM] ${asset.symbol}:`, err.message); }
   }
   if (!data.length) return message.channel.send("⚠️ Couldn't fetch data for any pair.");
 
@@ -737,7 +738,7 @@ export async function handleDiscover(message, state) {
       const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1), btc4h }, { tpR: 4 });
       all.push(...records);
       fetched++;
-    } catch (err) { console.error(`[DISCOVER] ${sym}:`, err.message); }
+    } catch (err) { logger.error(`[DISCOVER] ${sym}:`, err.message); }
   }
   if (all.length < 100) return message.channel.send(`Only ${all.length} candidates from ${fetched} assets — too few to search reliably.`);
 
@@ -879,7 +880,7 @@ export async function handleProfile(message, state) {
       if (!c15?.length || !c1h?.length || !c4h?.length) continue;
       const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1), btc4h }, { tpR: 4 });
       all.push(...records);
-    } catch (err) { console.error(`[PROFILE] ${asset.symbol}:`, err.message); }
+    } catch (err) { logger.error(`[PROFILE] ${asset.symbol}:`, err.message); }
   }
 
   const wins = all.filter(r => r.outcome === "win");
@@ -955,7 +956,7 @@ export async function handleValidate(message, state) {
       if (!c15?.length || !c1h?.length || !c4h?.length) continue;
       const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1), btc4h }, { tpR: 4 });
       all.push(...records);
-    } catch (err) { console.error(`[VALIDATE] ${asset.symbol}:`, err.message); }
+    } catch (err) { logger.error(`[VALIDATE] ${asset.symbol}:`, err.message); }
   }
   if (all.length < 50) return message.channel.send(`Only ${all.length} resolved candidates — too few for a split test. Needs more data.`);
 
@@ -1015,7 +1016,7 @@ export async function handleModes(message, state) {
       const { c15, c1h, c4h } = await tfCandles(asset.id);
       if (c15?.length && c1h?.length && c4h?.length)
         data.push({ c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
-    } catch (err) { console.error(`[MODES] ${asset.symbol}:`, err.message); }
+    } catch (err) { logger.error(`[MODES] ${asset.symbol}:`, err.message); }
   }
   if (!data.length) return message.channel.send("⚠️ Couldn't fetch data for any pair.");
 

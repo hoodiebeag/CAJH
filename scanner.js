@@ -17,6 +17,7 @@ import {
   registerTrade, postTradeOpened, isTradingEnabled, getTrade, getOpenTrades
 } from "./monitor.js";
 import { saveChart, symbolToKrakenId } from "./storage.js";
+import * as logger from './logger.js';
 
 const BEAG = () => process.env.BEAG_USER_ID || "795521432783552552";
 
@@ -160,7 +161,7 @@ async function proposeBuy(symbol, buy, channel) {
     await channel.send(`<@${BEAG()}> 🚨 New trade opened on **${symbol}** — \`!sell ${symbol}\` to close it (or \`!sell ${symbol} 50\` for half).`);
     return { traded: true };
   } catch (err) {
-    console.error(`[STRATEGY] Execution failed for ${symbol}:`, err.message);
+      logger.error(`[STRATEGY] Execution failed for ${symbol}:`, err.message);
     await channel.send(`<@${BEAG()}> ⚠️ **${symbol}** trade failed: ${err.message}`);
     return { traded: false, reason: `order error: ${err.message}` };
   }
@@ -188,7 +189,7 @@ export async function runScanner(channel, state, verbose = false) {
   for (const asset of watchlist) {
     try {
       const { buy, candlesByTf } = await evaluateAsset(asset);
-      if (Object.keys(candlesByTf).length === 0) { console.warn(`[SCAN] no data for ${asset.symbol}`); continue; }
+      if (Object.keys(candlesByTf).length === 0) { logger.warn(`[SCAN] no data for ${asset.symbol}`); continue; }
       checked++;
 
       if (!buy) continue;   // no aligned fresh setup → stay silent
@@ -208,12 +209,12 @@ export async function runScanner(channel, state, verbose = false) {
           });
         }
       } else {
-        console.log(`[SCAN] ${asset.symbol} buy not taken: ${res.reason}`);
+        logger.info(`[SCAN] ${asset.symbol} buy not taken: ${res.reason}`);
       }
 
       await new Promise(r => setTimeout(r, 3000));
     } catch (error) {
-      console.error(`Error scanning ${asset.symbol}:`, error.message);
+          logger.error(`Error scanning ${asset.symbol}:`, error.message);
     }
   }
 
@@ -259,7 +260,7 @@ export async function scanSymbol(symbol, channel, state) {
       await channel.send(`No confirmed setup on **${upper}** right now (needs a fresh swing low with all 3 timeframes aligned).`);
     }
   } catch (err) {
-    console.error(`[STRATEGY] scanSymbol error for ${upper}:`, err.message);
+      logger.error(`[STRATEGY] scanSymbol error for ${upper}:`, err.message);
     await channel.send(`⚠️ Something went wrong: ${err.message}`);
   }
 }

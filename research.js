@@ -17,6 +17,7 @@ import "dotenv/config";
 import { loadConfig, symbolToKrakenId } from "./storage.js";
 import { handleBacktest, handleDiscover, handleProfile, handleValidate } from "./commands.js";
 import { backfill } from "./data.js";
+import * as logger from './logger.js';
 
 // Stand-in for a Discord message: whatever a handler "replies" or "sends" just prints.
 const print = (t) => console.log("\n" + t + "\n");
@@ -40,18 +41,24 @@ const commands = {
     const syms = rest.length ? rest : state.watchlist.map((a) => a.symbol);
     for (const sym of syms) {
       const id = symbolToKrakenId(sym);
-      console.log(`\n=== backfilling ${sym} (${id}) ===`);
+      logger.info(`\n=== backfilling ${sym} (${id}) ===`);
       await backfill(id, 18);
     }
   },
 };
 
 if (!commands[cmd]) {
-  console.error("Usage: node research.js <backtest [SYMBOL] | discover | profile | validate | backfill SYM...>");
-  process.exit(1);
+  logger.error("Usage: node research.js <backtest [SYMBOL] | discover | profile | validate | backfill SYM...>");
+  process.exitCode = 1;
+} else {
+  logger.info(`[research] running "${cmd}${arg ? " " + arg : ""}" against local candles/ …`);
+  (async () => {
+    try {
+      await commands[cmd]();
+      process.exitCode = 0;
+    } catch (err) {
+      logger.error(err);
+      process.exitCode = 1;
+    }
+  })();
 }
-
-console.log(`[research] running "${cmd}${arg ? " " + arg : ""}" against local candles/ …`);
-commands[cmd]()
-  .then(() => process.exit(0))
-  .catch((err) => { console.error(err); process.exit(1); });

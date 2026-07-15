@@ -6,6 +6,7 @@
 import { getCurrentPrice, placeSell, getAccountBalance, fetchOHLC, symbolToPair, getHoldings } from "./trader.js";
 import { saveTrades, loadTrades, saveStats, loadStats } from "./storage.js";
 import { detectSwings, SWING_WINDOW, EXIT_ON_SWING_HIGH, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT, FEE_RATE } from "./strategy.js";
+import * as logger from './logger.js';
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ let dailyStartBalance = null;
 let dailyPnl          = 0;
 let tradesToday       = 0;
 let drawdownHalted    = false; // true once today's drawdown limit trips; suppresses repeat halt alerts (cleared on daily rollover)
+let manualHalt        = false; // set by !stop / START_HALTED; survives the daily reset — only !resume clears it
 
 const DAILY_DRAWDOWN_LIMIT = 0.10; // 10%
 
@@ -27,8 +29,15 @@ const pct  = (n) => `${(n * 100).toFixed(1)}%`;
 // ─── Risk management ───────────────────────────────────────────────────────────
 
 export function isTradingEnabled()  { return tradingEnabled; }
-export function enableTrading()     { tradingEnabled = true;  console.log("[RISK] Trading enabled.");  }
-export function disableTrading()    { tradingEnabled = false; console.log("[RISK] Trading disabled."); }
+export function enableTrading()     { tradingEnabled = true;  logger.info("[RISK] Trading enabled.");  }
+export function disableTrading()    { tradingEnabled = false; logger.warn("[RISK] Trading disabled."); }
+
+// Manual halt (!stop / START_HALTED) is DURABLE: unlike the daily drawdown halt, the midnight
+// reset never clears it — only an explicit !resume does. Stops the bot silently re-enabling
+// trading overnight after you halted it.
+export function haltManual()        { manualHalt = true;  disableTrading(); }
+export function resumeManual()      { manualHalt = false; enableTrading(); }
+export function isManualHalt()      { return manualHalt; }
 
 // Current calendar date in ET (YYYY-MM-DD), so daily stats roll over on the ET day.
 function todayET() {
@@ -46,10 +55,10 @@ export function setDailyStartBalance(balance) {
     dailyStartBalance = saved.dailyStartBalance ?? balance;
     dailyPnl          = saved.dailyPnl ?? 0;
     tradesToday       = saved.tradesToday ?? 0;
-    console.log(`[RISK] Restored today's stats — start ${usd(dailyStartBalance)}, P&L ${usd(dailyPnl)}, ${tradesToday} trade(s).`);
+    logger.info(`[RISK] Restored today's stats — start ${usd(dailyStartBalance)}, P&L ${usd(dailyPnl)}, ${tradesToday} trade(s).`);
   } else if (dailyStartBalance === null) {
     dailyStartBalance = balance;
-    console.log(`[RISK] Daily start balance set: ${usd(balance)}`);
+    logger.info(`[RISK] Daily start balance set: ${usd(balance)}`);
   }
   persistStats();
 }
@@ -59,7 +68,7 @@ export function checkDrawdown(currentBalance) {
   const drawdown = (dailyStartBalance - currentBalance) / dailyStartBalance;
   if (drawdown >= DAILY_DRAWDOWN_LIMIT) {
     disableTrading();
-    console.log(`[RISK] Daily drawdown limit hit: ${pct(drawdown)}`);
+    logger.warn(`[RISK] Daily drawdown limit hit: ${pct(drawdown)}`);
     return true;
   }
   return false;
@@ -70,9 +79,9 @@ export function resetDailyStats(balance) {
   dailyPnl          = 0;
   tradesToday       = 0;
   drawdownHalted    = false;
-  enableTrading();
+  if (!manualHalt) enableTrading();   // clears a drawdown (auto) halt, but never a manual !stop
   persistStats();
-  console.log(`[RISK] Daily stats reset. Start balance: ${usd(balance)}`);
+  logger.info(`[RISK] Daily stats reset. Start balance: ${usd(balance)}`);
 }
 
 /** Total account equity = USD cash + mark-to-market value of open positions. */
@@ -100,7 +109,7 @@ export function hydrateTrades() {
   for (const t of saved) {
     if (t?.symbol) openTrades.set(t.symbol.toUpperCase(), t);
   }
-  if (saved.length) console.log(`[MONITOR] Recovered ${saved.length} open position(s) from disk.`);
+  if (saved.length) logger.info(`[MONITOR] Recovered ${saved.length} open position(s) from disk.`);
 }
 
 export function registerTrade(trade) {
@@ -108,7 +117,7 @@ export function registerTrade(trade) {
   tradesToday++;
   persist();
   persistStats();
-  console.log(`[MONITOR] Tracking ${trade.symbol} — entry: ${usd(trade.entry)}`);
+  logger.info(`[MONITOR] Tracking ${trade.symbol} — entry: ${usd(trade.entry)}`);
 }
 
 export function getOpenTrades() {
@@ -140,11 +149,11 @@ export function reconcile(holdings, trades, { stables = RECON_STABLES, dustUsd =
 export async function reconcileHoldings(channel) {
   let holdings;
   try { ({ holdings } = await getHoldings()); }
-  catch (err) { console.error("[RECONCILE] getHoldings failed:", err.message); return null; }
+  catch (err) { logger.error("[RECONCILE] getHoldings failed:", err.message); return null; }
   const result = reconcile(holdings, getOpenTrades());
   const { orphans, ghosts } = result;
   if (!orphans.length && !ghosts.length) {
-    console.log("[RECONCILE] Holdings match tracked trades.");
+    logger.info("[RECONCILE] Holdings match tracked trades.");
     if (channel) await channel.send("🔎 **Reconciliation:** Kraken holdings match cajh's tracked trades. Nothing orphaned.");
     return result;
   }
@@ -262,7 +271,7 @@ async function closePosition(channel, symbol, trade, price, reason) {
   try {
     sold = await placeSell({ symbol, volume: trade.volume, price });
   } catch (err) {
-    console.error(`[MONITOR] ${reason} sell failed for ${symbol}:`, err.message);
+    logger.error(`[MONITOR] ${reason} sell failed for ${symbol}:`, err.message);
   }
   if (!sold?.txid) {
     // Sell did not go through — do NOT close. Alert once, then retry silently each tick.
@@ -281,14 +290,14 @@ async function closePosition(channel, symbol, trade, price, reason) {
 }
 
 export function startMonitor(client, channelId, intervalMs = 30000) {
-  console.log("[MONITOR] Position monitor started");
+  logger.info("[MONITOR] Position monitor started");
   hydrateTrades();
 
   // One-time boot reconciliation: surface any Kraken holdings cajh isn't tracking — e.g.
   // positions a failed exit abandoned before the close-only-on-success fix.
   client.channels.fetch(channelId)
     .then(ch => reconcileHoldings(ch))
-    .catch(err => console.error("[RECONCILE] boot check skipped:", err.message));
+      .catch(err => logger.error("[RECONCILE] boot check skipped:", err.message));
 
   // Reset daily stats when the ET calendar day rolls over. Checked every minute instead
   // of computing "ms until midnight" — that math runs in the server's local timezone
@@ -299,7 +308,7 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
     if (day === lastResetDay) return;
     lastResetDay = day;
     try { resetDailyStats(await currentEquity()); }
-    catch (err) { console.error("[MONITOR] Reset failed:", err.message); }
+    catch (err) { logger.error("[MONITOR] Reset failed:", err.message); }
   }, 60_000);
 
   // Monitor open positions.
@@ -370,7 +379,7 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
                 continue;
               }
             } catch (err) {
-              console.error(`[MONITOR] swing-high check failed for ${symbol}:`, err.message);
+              logger.error(`[MONITOR] swing-high check failed for ${symbol}:`, err.message);
             }
           }
         }
@@ -403,7 +412,7 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
       }
 
     } catch (err) {
-      console.error("[MONITOR] Error:", err.message);
+          logger.error("[MONITOR] Error:", err.message);
     }
   }, intervalMs);
 }

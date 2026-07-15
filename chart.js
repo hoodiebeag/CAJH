@@ -8,14 +8,15 @@ import { createCanvas, registerFont } from "canvas";
 import { detectSwings, SWING_WINDOW } from "./strategy.js";
 import { fileURLToPath } from "url";
 import path from "path";
+import * as logger from './logger.js';
 
 // Bundle a font so chart text renders even when the host has no system fonts
 // installed (minimal containers). Must run before any canvas is created.
 const __dir = path.dirname(fileURLToPath(import.meta.url));
 try { registerFont(path.join(__dir, "fonts", "DejaVuSans.ttf"),      { family: "cajh", weight: "normal" }); }
-catch (e) { console.error("[CHART] font register (regular) failed:", e.message); }
+catch (e) { logger.error("[CHART] font register (regular) failed:", e.message); }
 try { registerFont(path.join(__dir, "fonts", "DejaVuSans-Bold.ttf"), { family: "cajh", weight: "bold"   }); }
-catch (e) { console.error("[CHART] font register (bold) failed:", e.message); }
+catch (e) { logger.error("[CHART] font register (bold) failed:", e.message); }
 
 const COLORS = {
   bg:        "#0e1320",

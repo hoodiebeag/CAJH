@@ -6,6 +6,7 @@
 
 import fs   from "fs";
 import path from "path";
+import * as logger from './logger.js';
 
 // Where persistent files (config.json, positions.json) live. On Railway, attach a
 // volume and set DATA_DIR to its mount path (e.g. /data) so they survive redeploys.
@@ -93,7 +94,7 @@ export function saveTrades(trades) {
   try {
     fs.writeFileSync(POSITIONS_FILE, JSON.stringify(trades, null, 2));
   } catch (err) {
-    console.error("[STORAGE] Failed to save positions.json:", err.message);
+    logger.error("[STORAGE] Failed to save positions.json:", err.message);
   }
 }
 
@@ -104,7 +105,7 @@ export function loadTrades() {
       if (Array.isArray(data)) return data;
     }
   } catch (err) {
-    console.error("[STORAGE] Could not read positions.json:", err.message);
+    logger.error("[STORAGE] Could not read positions.json:", err.message);
   }
   return [];
 }
@@ -115,7 +116,7 @@ export function saveStats(stats) {
   try {
     fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2));
   } catch (err) {
-    console.error("[STORAGE] Failed to save stats.json:", err.message);
+    logger.error("[STORAGE] Failed to save stats.json:", err.message);
   }
 }
 
@@ -125,7 +126,7 @@ export function loadStats() {
       return JSON.parse(fs.readFileSync(STATS_FILE, "utf8"));
     }
   } catch (err) {
-    console.error("[STORAGE] Could not read stats.json:", err.message);
+    logger.error("[STORAGE] Could not read stats.json:", err.message);
   }
   return null;
 }
@@ -136,7 +137,7 @@ function readConfigFile() {
       return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
     }
   } catch (err) {
-    console.error("[STORAGE] Could not read config.json:", err.message);
+    logger.error("[STORAGE] Could not read config.json:", err.message);
   }
   return {};
 }
@@ -159,7 +160,7 @@ export function saveConfig(config) {
     };
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(payload, null, 2));
   } catch (err) {
-    console.error("[STORAGE] Failed to save config.json:", err.message);
+    logger.error("[STORAGE] Failed to save config.json:", err.message);
   }
 }
 

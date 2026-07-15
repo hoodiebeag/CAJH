@@ -16,6 +16,7 @@ import fs   from "fs";
 import path from "path";
 import axios from "axios";
 import { fileURLToPath } from "url";
+import * as logger from './logger.js';
 
 const DATA_DIR  = process.env.DATA_DIR || ".";
 const STORE_DIR = path.join(DATA_DIR, "candles");
@@ -125,7 +126,7 @@ async function fetchTradesPage(pair, sinceNs) {
  * exists we start from its last bar; otherwise from now − months. Writes periodically so
  * a crash loses at most the last batch of pages.
  */
-export async function backfill(pair, months = 18, log = console.log) {
+export async function backfill(pair, months = 18, log = logger.info) {
   const bars   = loadBarMap(pair);
   const resume = bars.size ? [...bars.keys()].sort((a, b) => b - a)[0] : null;
   const startSec = resume ?? Math.floor(Date.now() / 1000) - months * 30 * 24 * 60 * 60;
@@ -162,7 +163,7 @@ export async function backfill(pair, months = 18, log = console.log) {
 }
 
 /** Trust check: compare the store against Kraken's native 1m OHLC on the overlap. */
-export async function verifyAgainstOHLC(pair, log = console.log) {
+export async function verifyAgainstOHLC(pair, log = logger.info) {
   const res = await axios.get("https://api.kraken.com/0/public/OHLC", {
     params: { pair, interval: 1 }, timeout: 20000,
   });
@@ -185,12 +186,20 @@ export async function verifyAgainstOHLC(pair, log = console.log) {
 // ── CLI ───────────────────────────────────────────────────────────────────────────
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  const pair = process.argv[2];
-  const arg  = process.argv[3];
-  if (!pair) {
-    console.error("Usage: node data.js <KRAKEN_PAIR> [months]   or   node data.js <KRAKEN_PAIR> verify");
-    process.exit(1);
-  }
-  const run = arg === "verify" ? verifyAgainstOHLC(pair) : backfill(pair, Number(arg) || 18);
-  run.catch((e) => { console.error(e); process.exit(1); });
+  (async () => {
+    const pair = process.argv[2];
+    const arg  = process.argv[3];
+    if (!pair) {
+      logger.error("Usage: node data.js <KRAKEN_PAIR> [months]   or   node data.js <KRAKEN_PAIR> verify");
+      process.exitCode = 1;
+      return;
+    }
+    const run = arg === "verify" ? verifyAgainstOHLC(pair) : backfill(pair, Number(arg) || 18);
+    try {
+      await run;
+    } catch (e) {
+      logger.error(e);
+      process.exitCode = 1;
+    }
+  })();
 }

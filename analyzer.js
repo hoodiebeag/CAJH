@@ -7,6 +7,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import * as logger from './logger.js';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL     = "claude-sonnet-4-6";
@@ -30,7 +31,7 @@ export async function analyzeChart(base64, mediaType, channel) {
     await channel.send(`🔎 **Chart read**\n\n${text.slice(0, 1900)}`);
 
   } catch (err) {
-    console.error("[ANALYZER] Chart read failed:", err.message);
+    logger.error("[ANALYZER] Chart read failed:", err.message);
     await channel.send("⚠️ Couldn't read that chart.");
   }
 }
