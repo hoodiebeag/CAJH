@@ -758,6 +758,13 @@ export async function handleDiscover(message, state) {
     ["4h not bull",        r => r.bias4h !== "bull"],
     ["1h bull",            r => r.bias1h === "bull"],
     ["volume > 1.5x avg",  r => r.volRatio != null && r.volRatio > 1.5],
+    ["ATR < 1% (low vol)", r => r.atrPct != null && r.atrPct < 1],
+    ["ATR > 2% (high vol)",r => r.atrPct != null && r.atrPct > 2],
+    ["displacement > 1.5", r => r.displacement != null && r.displacement > 1.5],
+    ["swept a low",        r => r.swept === true],
+    ["into bullish FVG",   r => r.fvg === true],
+    ["near prev-day low",  r => r.pdlDistPct != null && r.pdlDistPct < 1],
+    ["clear of PDH >1%",   r => r.pdhDistPct != null && r.pdhDistPct > 1],
   ];
 
   const times = all.map(r => r.t).sort((a, b) => a - b);
@@ -861,9 +868,11 @@ export async function handleProfile(message, state) {
   const num = [
     ["RSI at entry", "rsi", 1], ["% from MA", "maDistPct", 2], ["room (R)", "roomR", 2],
     ["range position", "rangePos", 2], ["stop size %", "stopPct", 2], ["volume vs avg", "volRatio", 2],
+    ["ATR %", "atrPct", 2], ["displacement", "displacement", 2], ["PDL dist %", "pdlDistPct", 2], ["PDH dist %", "pdhDistPct", 2],
   ];
   const bool = [
     ["higher-low %", "higherLow", true], ["1h bull %", "bias1h", "bull"], ["4h bull %", "bias4h", "bull"],
+    ["swept low %", "swept", true], ["bullish FVG %", "fvg", true],
   ];
 
   const lines = [];

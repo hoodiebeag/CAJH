@@ -19,6 +19,7 @@ import {
   EXIT_ON_SWING_HIGH, CHOP_FILTER, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT, FEE_RATE, SLIPPAGE_PCT,
   TREND_GATE, TREND_GATE_MODE, TREND_MA, detectSwings
 } from "./strategy.js";
+import { atrPct, displacement, sweptLow, prevDayLevels, bullishFVGBelow } from "./features.js";
 
 const MAX_HOLD = 100; // close a trade after this many candles if neither stop nor target hits
 
@@ -387,6 +388,7 @@ export function profileEntries({ candles15, candles1h, candles4h } = {}, { tpR =
     let av = 0, cnt = 0;
     for (let j = Math.max(0, k - 20); j < k; j++) { av += V[j]; cnt++; }
     av = cnt ? av / cnt : 0;
+    const pd = prevDayLevels(H, L, T, k);
 
     records.push({
       outcome,
@@ -401,6 +403,12 @@ export function profileEntries({ candles15, candles1h, candles4h } = {}, { tpR =
       bias1h: biasAt(candles1h, 60, tClose),
       bias4h: biasAt(candles4h, 240, tClose),
       volRatio: av > 0 ? V[k] / av : null,
+      atrPct: atrPct(H, L, C, k),
+      displacement: displacement(H, L, C, k),
+      swept: sweptLow(L, C, k),
+      fvg: bullishFVGBelow(H, L, C, k),
+      pdlDistPct: pd ? (entry - pd.pdl) / entry * 100 : null,
+      pdhDistPct: pd ? (pd.pdh - entry) / entry * 100 : null,
     });
   }
   return { records };

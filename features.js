@@ -51,7 +51,7 @@ export function prevDayLevels(H, L, T, k) {
   const dayOf = (t) => Math.floor(t / 86400);
   const target = dayOf(T[k]) - 1;
   let pdh = -Infinity, pdl = Infinity, found = false;
-  for (let i = 0; i <= k; i++) {
+  for (let i = Math.max(0, k - 200); i <= k; i++) {   // prior day is always within ~192 15m bars
     if (dayOf(T[i]) === target) { pdh = Math.max(pdh, H[i]); pdl = Math.min(pdl, L[i]); found = true; }
   }
   return found ? { pdh, pdl } : null;
