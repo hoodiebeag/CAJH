@@ -25,6 +25,9 @@ const MODEL     = "claude-sonnet-4-6";
 // backfilled (data.js), else the live 720-candle pull kept politely paced. The live
 // scanner still calls fetchCandles directly — only analysis/backtests read the store.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Human-readable date span for a candle series — run transparency (deep store vs live 720).
+const spanOf = (c) => (c?.length ? `${new Date(parseInt(c[0].time) * 1000).toISOString().slice(0, 10)} → ${new Date(parseInt(c.at(-1).time) * 1000).toISOString().slice(0, 10)}` : "empty");
 async function tfCandles(id) {
   const c15 = loadCandles(id, 15);
   if (c15.length) return { c15, c1h: loadCandles(id, 60), c4h: loadCandles(id, 240) };
@@ -402,7 +405,7 @@ export async function handleBacktest(message, state, arg) {
     });
 
     await message.reply(
-      `📊 **Backtest — ${symbol}** (15m entries, 1h+4h filter, recent history)\n\n` +
+      `📊 **Backtest — ${symbol}** (15m entries, 1h+4h filter · ${candles15.length} bars · ${spanOf(candles15)})\n\n` +
       `**Trades:** ${r.trades}\n` +
       `**Win rate:** ${(r.winRate * 100).toFixed(0)}%\n` +
       `**Total:** ${r.totalR.toFixed(1)}R   ·   **Avg:** ${r.avgR.toFixed(2)}R/trade\n` +
@@ -735,6 +738,7 @@ export async function handleDiscover(message, state) {
       const id = symbolToKrakenId(sym);
       const { c15, c1h, c4h } = await tfCandles(id);
       if (!c15?.length || !c1h?.length || !c4h?.length) continue;
+      logger.info(`[DISCOVER] ${sym}: ${c15.length} 15m candles · ${spanOf(c15)}`);
       const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1), btc4h }, { tpR: 4 });
       all.push(...records);
       fetched++;

@@ -369,6 +369,11 @@ export function profileEntries({ candles15, candles1h, candles4h, btc4h } = {}, 
     if (k >= C.length) continue;
     const entry = C[k], stop = low.price, risk = entry - stop;
     if (risk <= 0) continue;
+    // Match live: only profile setups the strategy would actually take (stop in the tradeable
+    // band). Without this, discover is dominated by tiny-stop candidates whose fee+slippage
+    // cost in R guarantees a loss — and which MIN/MAX_STOP_PCT skips live anyway.
+    const stopFrac = risk / entry;
+    if ((MIN_STOP_PCT != null && stopFrac < MIN_STOP_PCT) || (MAX_STOP_PCT != null && stopFrac > MAX_STOP_PCT)) continue;
     const target = entry + tpR * risk;
 
     let outcome = null;
