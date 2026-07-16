@@ -82,9 +82,11 @@ client.once("clientReady", async () => {
     logger.error("[BOT] Could not fetch initial balance:", err.message);
   }
 
-  if (state.scanChannelId) {
-    startMonitor(client, state.scanChannelId);
-  }
+  // Positions must be monitored from boot even before a scan channel is set — channel
+  // messages are best-effort, stop/TP enforcement is not. (Recovered positions would
+  // otherwise sit unmanaged until !setchannel + restart.) The getter means a later
+  // !setchannel redirects alerts without a restart.
+  startMonitor(client, () => state.scanChannelId);
 
   // Test-only safety: boot with live trading OFF so you can deploy and run !backtest
   // without opening real positions. Set START_HALTED=true in Railway; !resume to go live.
@@ -138,7 +140,8 @@ client.on("messageCreate", async (message) => {
   const lower = raw.toLowerCase();
 
   // Commands that place/cancel real trades or change the halt state — owner only.
-  const TRADE_COMMANDS = new Set(["!stop", "!resume", "!sell", "!cancel", "!close", "!trade"]);
+  // (!scan belongs here: a scan auto-executes any setup it finds.)
+  const TRADE_COMMANDS = new Set(["!stop", "!resume", "!sell", "!cancel", "!close", "!trade", "!scan"]);
   if (TRADE_COMMANDS.has(lower.split(/\s+/)[0]) && !isOwner(message.author.id)) {
     return message.reply("🚫 This command is restricted to cajh's owner.");
   }

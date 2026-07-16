@@ -277,12 +277,13 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
 
     if (pos && k > pos.openedAt) {
       const hi = H[k], lo = L[k];
-      // Round-trip cost (fees + slippage) in R units for this trade (cost % ÷ risk %).
-      const costR = (2 * (feeRate + slipPct) * pos.entry) / pos.risk;
+      // Round-trip cost (fees + slippage) in R units: entry leg on the entry notional,
+      // exit leg on the exit notional (matches how monitor.js reports live P&L).
+      const costR = (exit) => ((feeRate + slipPct) * (pos.entry + exit)) / pos.risk;
       // Stop checked first against the stop as it stands entering this candle
       // (conservative: if both stop and target are touched, assume stop hit first).
-      if (lo <= pos.stop) { trades.push((pos.stop - pos.entry) / pos.risk - costR); pos = null; }
-      else if (hi >= pos.tp) { trades.push((pos.tp - pos.entry) / pos.risk - costR); pos = null; }
+      if (lo <= pos.stop) { trades.push((pos.stop - pos.entry) / pos.risk - costR(pos.stop)); pos = null; }
+      else if (hi >= pos.tp) { trades.push((pos.tp - pos.entry) / pos.risk - costR(pos.tp)); pos = null; }
       // Breakeven-plus: once this candle's high reaches the trigger, lift the stop
       // above entry for subsequent candles.
       if (pos && lockBreakeven && !pos.beMoved) {
@@ -295,11 +296,11 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
       }
       // Structure-based take-profit: a swing high confirmed here, while in profit.
       if (pos && exitOnSwingHigh && highAt.has(k) && C[k] > pos.entry) {
-        trades.push((C[k] - pos.entry) / pos.risk - costR);
+        trades.push((C[k] - pos.entry) / pos.risk - costR(C[k]));
         pos = null;
       }
       if (pos && k - pos.openedAt >= MAX_HOLD) {
-        trades.push((C[k] - pos.entry) / pos.risk - costR);
+        trades.push((C[k] - pos.entry) / pos.risk - costR(C[k]));
         pos = null;
       }
     }
@@ -335,6 +336,13 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
 export function profileEntries({ candles15, candles1h, candles4h, btc4h } = {}, { tpR = TP_R, n = SWING_WINDOW, feeRate = FEE_RATE, slipPct = SLIPPAGE_PCT } = {}) {
   const records = [];
   if (!candles15?.length || !candles1h?.length || !candles4h?.length) return { records };
+
+  // Uniform resolution window: every candidate gets exactly HORIZON bars to resolve, and
+  // candidates whose window would be cut off by the end of the data are excluded entirely.
+  // Without this, the tail of the data over-counts losers: losses resolve fast (stop is 1R
+  // away) while tpR-multiple wins resolve slowly, so a truncated window censors wins
+  // asymmetrically — and the tail is exactly the out-of-sample region discover scores on.
+  const HORIZON = 300; // 15m bars ≈ 3 days; "win/loss" now means "resolves within this window"
 
   const C = candles15.map(c => parseFloat(c.close));
   const H = candles15.map(c => parseFloat(c.high));
@@ -376,12 +384,13 @@ export function profileEntries({ candles15, candles1h, candles4h, btc4h } = {}, 
     if ((MIN_STOP_PCT != null && stopFrac < MIN_STOP_PCT) || (MAX_STOP_PCT != null && stopFrac > MAX_STOP_PCT)) continue;
     const target = entry + tpR * risk;
 
+    if (k + HORIZON >= C.length) continue;  // window would be truncated by data end — skip
     let outcome = null;
-    for (let j = k + 1; j < C.length; j++) {
+    for (let j = k + 1; j <= k + HORIZON; j++) {
       if (L[j] <= stop)   { outcome = "loss"; break; }
       if (H[j] >= target) { outcome = "win";  break; }
     }
-    if (!outcome) continue;   // never resolved within the data — skip
+    if (!outcome) continue;   // never resolved within the window — skip (uniform for every candidate)
 
     const m = maAt(k);
     const tClose = T[k] + 15 * 60;
@@ -398,7 +407,8 @@ export function profileEntries({ candles15, candles1h, candles4h, btc4h } = {}, 
     records.push({
       outcome,
       t: T[k],
-      netR: (outcome === "win" ? tpR : -1) - (2 * (feeRate + slipPct) * entry) / risk,
+      netR: (outcome === "win" ? tpR : -1)
+            - ((feeRate + slipPct) * (entry + (outcome === "win" ? target : stop))) / risk,
       rsi: rsi[k],
       maDistPct: m ? (entry - m) / m * 100 : null,
       roomR: isFinite(res) ? (res - entry) / risk : null,

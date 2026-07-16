@@ -106,7 +106,19 @@ function summarize(symbol, biases, aligned) {
 // ─── Trade proposal (buy signals only) ─────────────────────────────────────────
 // Returns { traded: bool, reason }. Posts the trade card + ping only on success;
 // callers decide whether to surface skip reasons (scans stay quiet, !trade explains).
+
+// Symbols with a buy attempt in flight — guards a cron scan and a manual !scan/!trade
+// racing each other into a double entry before getTrade() sees the first one.
+const pendingBuys = new Set();
+
 async function proposeBuy(symbol, buy, channel) {
+  if (pendingBuys.has(symbol)) return { traded: false, reason: "a buy for this symbol is already in flight" };
+  pendingBuys.add(symbol);
+  try { return await proposeBuyLocked(symbol, buy, channel); }
+  finally { pendingBuys.delete(symbol); }
+}
+
+async function proposeBuyLocked(symbol, buy, channel) {
   if (!isTradingEnabled()) return { traded: false, reason: "trading is halted (!resume to enable)" };
   if (getTrade(symbol))    return { traded: false, reason: "already in a position" };
   if (getOpenTrades().length >= MAX_OPEN_POSITIONS) {

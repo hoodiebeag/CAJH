@@ -151,7 +151,7 @@ export async function handleHelp(message, state) {
     `> \`!stop\` — Halt new trades  ·  \`!resume\` — Re-enable\n\n` +
 
     `**Signals & scanning:**\n` +
-    `> \`!scan\` — Scan the whole watchlist (auto-runs every 3h)\n` +
+    `> \`!scan\` — Scan the whole watchlist (auto-runs every 15 min)\n` +
     `> \`!trade BTC\` — Check one asset across all timeframes\n` +
     `> \`!backtest\` — Backtest the whole watchlist (pooled win rate / total R)\n` +
     `> \`!backtest BTC\` — Backtest a single asset\n` +
@@ -732,6 +732,7 @@ export async function handleDiscover(message, state) {
   const { c4h: btcRaw } = await tfCandles(symbolToKrakenId("BTC"));
   const btc4h = btcRaw?.slice(0, -1);
   const all = [];
+  const bySym = new Map();   // sym → record count, to surface sample imbalance (deep store vs 720-candle live)
   let fetched = 0;
   for (const sym of DISCOVER_UNIVERSE) {
     try {
@@ -741,6 +742,7 @@ export async function handleDiscover(message, state) {
       logger.info(`[DISCOVER] ${sym}: ${c15.length} 15m candles · ${spanOf(c15)}`);
       const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1), btc4h }, { tpR: 4 });
       all.push(...records);
+      if (records.length) bySym.set(sym, records.length);
       fetched++;
     } catch (err) { logger.error(`[DISCOVER] ${sym}:`, err.message); }
   }
@@ -768,7 +770,9 @@ export async function handleDiscover(message, state) {
     ["range pos > 0.5",    r => r.rangePos != null && r.rangePos > 0.5],
     ["higher low",         r => r.higherLow === true],
     ["lower low",          r => r.higherLow === false],
-    ["stop < 1%",          r => r.stopPct != null && r.stopPct < 1],
+    // Stop-size split inside the tradeable band (profileEntries already gates to 1.5–3%,
+    // so a "< 1%" rule can never select anything).
+    ["stop < 2%",          r => r.stopPct != null && r.stopPct < 2],
     ["stop > 2%",          r => r.stopPct != null && r.stopPct > 2],
     ["4h bull",            r => r.bias4h === "bull"],
     ["4h not bull",        r => r.bias4h !== "bull"],
@@ -818,15 +822,31 @@ export async function handleDiscover(message, state) {
   const rptOf = pred => { const s = oos6.filter(pred); return s.length ? s.reduce((a, b) => a + b.netR, 0) / s.length : null; };
   const realStats = rules.map(([label, pred]) => ({ label, pred, stat: statFor(pred, r => r.netR), rpt: rptOf(pred) }));
 
-  // Permutation null: shuffle netR, recompute each rule's stat. p = fraction of
-  // shuffles where the shuffled stat ≥ the real stat (smoothed).
-  const netRs = all.map(r => r.netR);
+  // Permutation null with DAY BLOCKS: candidates are heavily cross-correlated — alts move
+  // with BTC, and overlapping candidates on one pair resolve on the same price path — so
+  // shuffling outcomes independently treats every correlated cluster as independent evidence
+  // and makes the null far too easy to beat (anti-conservative p-values). Instead, permute
+  // whole UTC-day blocks of outcomes across the time-sorted records: within-day correlation
+  // survives into the null, and p reflects the real (much smaller) effective sample size.
+  // p = fraction of block-shuffles where the shuffled stat ≥ the real stat (smoothed).
+  const order = all.map((_, i) => i).sort((a, b) => all[a].t - all[b].t); // record indices, time-ascending
+  const blocks = [];
+  for (let i = 0; i < order.length; ) {
+    const day = Math.floor(all[order[i]].t / 86400);
+    const start = i;
+    while (i < order.length && Math.floor(all[order[i]].t / 86400) === day) i++;
+    blocks.push(order.slice(start, i));
+  }
+  const idxOf = new Map(all.map((r, i) => [r, i]));
   const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-  const K = 1000, ge = new Array(rules.length).fill(0); // resolution for BH-FDR at q=0.05 across ~26 rules (min p ≈ 1/1001 < 0.05/26)
+  const K = 1000, ge = new Array(rules.length).fill(0); // resolution for BH-FDR at q=0.05 across ~35 rules (min p ≈ 1/1001 < 0.05/35)
   for (let s = 0; s < K; s++) {
-    const sh = shuffle(netRs);
-    const map = new Map(all.map((r, i) => [r, sh[i]]));
-    const netOf = r => map.get(r);
+    // Lay the day-blocks back onto the time-ranked slots in shuffled order: record at time
+    // rank p gets the outcome at rank p of the permuted outcome sequence.
+    const perm = new Array(all.length);
+    let pos = 0;
+    for (const b of shuffle(blocks)) for (const idx of b) perm[order[pos++]] = all[idx].netR;
+    const netOf = r => perm[idxOf.get(r)];
     for (let ri = 0; ri < rules.length; ri++) {
       if (realStats[ri].stat == null) continue;
       const ss = statFor(rules[ri][1], netOf);
@@ -836,7 +856,7 @@ export async function handleDiscover(message, state) {
 
   const scored = realStats.map((rs, ri) => ({ ...rs, p: rs.stat == null ? 1 : (ge[ri] + 1) / (K + 1) }));
 
-  // Multiple-testing control: across ~18 rules an uncorrected p<0.05 manufactures false
+  // Multiple-testing control: across ~35 rules an uncorrected p<0.05 manufactures false
   // edges. Apply Benjamini-Hochberg (FDR q): sort tested rules by p ascending, find the
   // largest rank k with p(k) ≤ (k/m)·q; every rule at or below that p survives. (Rules are
   // positively correlated — nested thresholds — a regime where BH still controls FDR.)
@@ -859,10 +879,18 @@ export async function handleDiscover(message, state) {
     verdict = `🟢 **${discoveries.length} rule(s) survived FDR control (BH, q=${FDR_Q}) and profitable out-of-sample.** By construction ≤${(FDR_Q * 100).toFixed(0)}% are expected false. Real candidates — but confirm on a different regime before trusting size; don't deploy on this window alone.`;
   }
 
+  // Sample-imbalance readout: only backfilled pairs have deep history (720-candle live
+  // pulls span ~7.5 days of 15m bars), so one pair can dominate the pool — and the time
+  // splits then partly confound symbol with period. Surface it instead of hiding it.
+  const topSym = [...bySym.entries()].sort((a, b) => b[1] - a[1])[0];
+  const imbalance = topSym && topSym[1] / all.length > 0.3
+    ? `\n⚠️ **${topSym[0]}** contributes ${(topSym[1] / all.length * 100).toFixed(0)}% of candidates (deep local store vs live 720-candle pulls) — time splits partly confound symbol and period. Backfill more pairs to fix.`
+    : "";
+
   await message.channel.send(
     `🔭 **Strategy discovery — ${all.length} candidates from ${fetched} assets**\n` +
-    `Baseline OOS R/t: ${base6.toFixed(2)} · ${m} rules · out-of-sample × 3 splits · permutation + BH-FDR (q=${FDR_Q}).\n` +
-    `By BTC regime (take-everything net R/t): ${regimeLine}\n\n` +
+    `Baseline OOS R/t: ${base6.toFixed(2)} · ${m} rules · out-of-sample × 3 splits · day-block permutation + BH-FDR (q=${FDR_Q}).\n` +
+    `By BTC regime (take-everything net R/t): ${regimeLine}${imbalance}\n\n` +
     `**Edges found (beat chance + profitable):**\n${lines}\n\n` +
     verdict
   );

@@ -34,13 +34,17 @@ timely without lowering the bar (same strong pivots, not more of them). `N` is
 - **Entry** — market buy when the setup is found on a scan.
 - **Size** — flat 10% of balance (`POSITION_PCT` in `scanner.js`).
 - **Stop** — the swing low that triggered the entry.
-- **Targets** — `risk = entry − stop`; TP1 at `entry + 1.5 × risk` (sells half, moves
-  stop to breakeven), TP2 at `entry + 3 × risk` (closes the runner). `RR1`/`RR2` in `strategy.js`.
+- **Target** — `risk = entry − stop`; a single take-profit at `entry + 4 × risk`
+  (`TP_R` in `strategy.js`, full position, no scale-out).
+- **Breakeven-plus** — once price reaches `entry + 2 × risk` (`BE_TRIGGER_R`), the stop
+  is lifted above entry (≥ the fee buffer) so the trade can no longer close net-red.
 
-### Optional filters (in `strategy.js`, on by default)
+### Optional filters (in `strategy.js`)
 
-`REQUIRE_HIGHER_LOW`, `MAX_STOP_PCT`, `REQUIRE_TF_ALIGNMENT`, `EXIT_ON_SWING_HIGH`, plus
-`RECENT_BARS`. Set any to `false`/`null` to relax. Use `!backtest` to compare.
+`REQUIRE_HIGHER_LOW`, `MAX_STOP_PCT`, `MIN_STOP_PCT` (stops tighter than ~1.5% are
+swamped by round-trip fees), `REQUIRE_TF_ALIGNMENT`, `TREND_GATE` (4h above its MA),
+`EXIT_ON_SWING_HIGH` (off by default), plus `RECENT_BARS`. Set any to `false`/`null`
+to relax. Use `!backtest` to compare.
 
 ## Autonomous trading
 
@@ -63,7 +67,7 @@ redeploys (the filesystem is otherwise wiped on each deploy).
 ## Commands
 
 **Positions** — `!sell BTC`, `!sell BTC 50` (percent), `!port`, `!stop`, `!resume`
-**Signals** — `!scan` (auto every 3h from 9:30 AM EST), `!trade BTC` (one asset)
+**Signals** — `!scan` (auto every 15 minutes, right after each 15m candle closes), `!trade BTC` (one asset)
 **Backtest** — `!backtest BTC` (multi-timeframe: 15m entries gated by 1h+4h alignment)
 **Watchlist** — `!watchlist`, `!watch BTC ETH`, `!unwatch TAO`
 **Settings** — `!setchannel`, `!status`

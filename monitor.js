@@ -289,13 +289,22 @@ async function closePosition(channel, symbol, trade, price, reason) {
   return true;
 }
 
-export function startMonitor(client, channelId, intervalMs = 30000) {
+export function startMonitor(client, getChannelId, intervalMs = 30000) {
   logger.info("[MONITOR] Position monitor started");
   hydrateTrades();
 
+  // The channel is resolved fresh each time (the id can be set/changed later via
+  // !setchannel) and is best-effort only — exits run with or without a channel to
+  // announce them in.
+  const resolveChannel = async () => {
+    const id = typeof getChannelId === "function" ? getChannelId() : getChannelId;
+    if (!id) return null;
+    try { return await client.channels.fetch(id); } catch { return null; }
+  };
+
   // One-time boot reconciliation: surface any Kraken holdings cajh isn't tracking — e.g.
   // positions a failed exit abandoned before the close-only-on-success fix.
-  client.channels.fetch(channelId)
+  resolveChannel()
     .then(ch => reconcileHoldings(ch))
       .catch(err => logger.error("[RECONCILE] boot check skipped:", err.message));
 
@@ -316,10 +325,9 @@ export function startMonitor(client, channelId, intervalMs = 30000) {
     if (openTrades.size === 0) return;
 
     try {
-      // Fetch the channel live (cache can be empty after a restart). Exits must run
-      // even if the channel is briefly unavailable, so messages are best-effort only.
-      let channel = null;
-      try { channel = await client.channels.fetch(channelId); } catch { /* keep null */ }
+      // Exits must run even if the channel is unset or briefly unavailable,
+      // so messages are best-effort only.
+      const channel = await resolveChannel();
 
       // Price every open position once, and value the book.
       const cash     = await getAccountBalance();

@@ -111,6 +111,33 @@ export function loadCandles(pair, tfMinutes) {
   }));
 }
 
+// ── Archive ingest ────────────────────────────────────────────────────────────────
+/**
+ * Ingest Kraken's downloadable OHLCVT 1-minute CSV into the store — far faster than paging
+ * the Trades endpoint. Kraken's format is headerless: `timestamp,open,high,low,close,volume,
+ * trades` (timestamp in seconds). Order-flow columns (buyVol/sellVol/maxTrade) aren't in the
+ * archive, so they're zeroed — nothing in the current feature set uses them. Rows older than
+ * `sinceSec` are skipped; the pair's store is overwritten. Get the archive from Kraken support.
+ */
+export function ingestKrakenOHLCVT(pair, srcPath, sinceSec = 0) {
+  if (!fs.existsSync(srcPath)) {
+    throw new Error(`file not found: ${srcPath} — expected Kraken's OHLCVT 1-minute CSV (e.g. ${pair}_1.csv)`);
+  }
+  const bars = new Map();
+  for (const line of fs.readFileSync(srcPath, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    const [t, o, h, l, c, v, trades] = line.split(",");
+    const time = parseInt(t);
+    if (!Number.isFinite(time) || time < sinceSec) continue;   // skip header/garbage/too-old rows
+    bars.set(time, {
+      time, open: parseFloat(o), high: parseFloat(h), low: parseFloat(l), close: parseFloat(c),
+      volume: parseFloat(v) || 0, buyVol: 0, sellVol: 0, trades: parseInt(trades) || 0, maxTrade: 0,
+    });
+  }
+  writeBars(pair, bars);
+  return bars.size;
+}
+
 // ── Backfill ────────────────────────────────────────────────────────────────────
 async function fetchTradesPage(pair, sinceNs) {
   const res = await axios.get("https://api.kraken.com/0/public/Trades", {

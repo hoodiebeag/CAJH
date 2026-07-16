@@ -16,8 +16,9 @@
 import "dotenv/config";
 import { loadConfig, symbolToKrakenId } from "./storage.js";
 import { handleBacktest, handleDiscover, handleProfile, handleValidate } from "./commands.js";
-import { backfill } from "./data.js";
+import { backfill, ingestKrakenOHLCVT } from "./data.js";
 import * as logger from './logger.js';
+import path from "path";
 
 // Stand-in for a Discord message: whatever a handler "replies" or "sends" just prints.
 const print = (t) => console.log("\n" + t + "\n");
@@ -45,10 +46,25 @@ const commands = {
       await backfill(id, 18);
     }
   },
+  ingest: async () => {
+    const dir = process.env.ARCHIVE_DIR || "archive";
+    const sinceSec = Math.floor(Date.now() / 1000) - 18 * 30 * 24 * 60 * 60; // last ~18 months
+    const syms = rest.length ? rest : state.watchlist.map((a) => a.symbol);
+    for (const sym of syms) {
+      const id = symbolToKrakenId(sym);
+      const src = path.join(dir, `${id}_1.csv`);
+      try {
+        const n = ingestKrakenOHLCVT(id, src, sinceSec);
+        logger.info(`[INGEST] ${sym} (${id}): ${n} bars ← ${src}`);
+      } catch (e) {
+        logger.error(`[INGEST] ${sym} (${id}): ${e.message}`);
+      }
+    }
+  },
 };
 
 if (!commands[cmd]) {
-  logger.error("Usage: node research.js <backtest [SYMBOL] | discover | profile | validate | backfill SYM...>");
+  logger.error("Usage: node research.js <backtest [SYMBOL] | discover | profile | validate | backfill SYM... | ingest SYM...>");
   process.exitCode = 1;
 } else {
   logger.info(`[research] running "${cmd}${arg ? " " + arg : ""}" against local candles/ …`);
