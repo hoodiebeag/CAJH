@@ -1,34 +1,25 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
+    "status": "DONE",
     "target_file": "intensityfilter.mjs",
     "objective": "Test whether 4h trade intensity works as a FILTER on the existing long-only strategy: skip entries whose 4h trade-intensity percentile (trades vs the trailing 20-bar average) is above a threshold. Sweep thresholds (no filter / p90 / p75 / p50), report trades kept, net R/t with 95% CI, and gross R/t, split by regime (2023, 2024, 2025-26, ALL). The signal to test is NEGATIVE: high intensity predicted LOWER forward returns (non-overlapping IC -0.160, z=-1.90), so the filter should REMOVE high-intensity entries.",
     "allow_live_edit": false,
     "test_command": "npm test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "",
-    "updated_by": "executor",
-    "updated_at": "2026-07-30T20:12:49Z"
+    "notes": "VERIFIER SIGN-OFF: npm test passes 7/7. intensityfilter.mjs implementation is sound: self-contained simulation with perfect byte-for-byte alignment to backtestMultiTF (verified cross-check across all 20 pairs, no divergence). Sample integrity clean: 6,397 pooled entries, only 6 excluded (<0.1%), no n<30 at any threshold. Result conclusive: filtering high-intensity entries does NOT improve R/t at any threshold in any regime — CIs overlap throughout. Expected: high intensity → LOWER forward returns, so removing it should help. Actual: all thresholds flat-to-worse (2023 -0.256→-0.324, 2024 -0.375→-0.388, 2025-26 -0.455→-0.465). No suspicious pattern (huge R/t jump on tiny sample). Conclusion sound: trade-intensity-as-filter is closed, IC's economic size is below strategy's R variance.",
+    "updated_by": "verifier",
+    "updated_at": "2026-07-30T20:28:00Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
-    "frozen_paths": [
-      "scanner.js",
-      "monitor.js",
-      "trader.js",
-      "bot.js",
-      "strategy.js",
-      "backtest.js",
-      "commands.js"
-    ],
+    "frozen_paths": ["scanner.js", "monitor.js", "trader.js", "bot.js", "strategy.js", "backtest.js", "commands.js"],
     "test_command": "npm test (7 tests currently passing)",
-    "known_findings": "See ROADMAP.md. Settled with real numbers, do NOT re-test: the swing entry is statistically indistinguishable from random (8,203 trades); gross-of-cost expectancy ~0 so cheaper fills cannot rescue it; exit-model and stop-placement sweeps both negative; the simple daily strategy is beta not alpha (indistinguishable from random entries passing the same MA20 gate).",
-    "live_signal": "CLOSED. Trade intensity was re-tested on 11,195 independent non-overlapping samples (20 pairs, 2023-2026) after the Executor correctly established that trade COUNT is available for every pair, not just BTC/ETH/SOL/2026. Result: IC -0.0027, z=-0.29, p=0.751 pooled, with the sign FLIPPING positive in 2024. The earlier -0.160 (z=-1.90) on 142 samples was noise. No order-flow feature is both statistically real and economically tradeable: imbalance is real at 15m (p=0.003) but worth 1-6% of cost; cum-imbalance is noise (p=0.309); intensity is zero; big-print is nothing.",
-    "data_correction": "Executor turn found the assignment's stated data limitation was factually wrong and corrected it before running: 'trades data is BTC/ETH/SOL+2026-only' is FALSE for the `trades` column itself -- Kraken's OHLCVT archive format carries a real trades-count column and data.js's ingestKrakenOHLCVT parses it (verified empirically: LTCUSD, archive-ingested only, has 1,293,046 of 1,293,047 bars with trades > 0). The limitation IS correct for buyVol/sellVol/maxTrade, which genuinely are zeroed on archive-ingested bars -- so aggressor-imbalance/big-print features really are BTC/ETH/SOL+2026-only, but trade-COUNT-based features (intensity) are available for all 20 watchlist pairs across full 2023-2026 history. Use the full watchlist for any future trades-count-only feature; keep the 3-pair/2026 restriction only for buyVol/sellVol/maxTrade-dependent features.",
-    "in_flight": "Order-flow backfills extending BTC/ETH/SOL back to 2026-01-01 may still be running as background node processes (research.js flow) -- check before assuming idle. Do NOT kill node processes or touch candles/.",
-    "next_queue": "Order-flow thread is closed end to end. Remaining: expand backtest.test.mjs coverage for stopMode atr, the one-trade-per-level guard, and anticipate-mode alignment/trend gates. No further order-flow follow-up unless a genuinely new feature or data source appears."
+    "known_findings": "See ROADMAP.md. Settled with real numbers, do NOT re-test: the swing entry is statistically indistinguishable from random (8,203 trades); gross-of-cost expectancy ~0 so cheaper fills cannot rescue it; exit-model and stop-placement sweeps both negative; the simple daily strategy is beta not alpha (indistinguishable from random entries passing the same MA20 gate); trade intensity as a filter does not improve net R/t at any threshold (6,397 entries tested, CIs overlapping throughout).",
+    "data_correction": "trades column is available for all 20 watchlist pairs across full 2023-2026 history (not BTC/ETH/SOL+2026-only as assigned). The limitation IS correct for buyVol/sellVol/maxTrade (genuinely zeroed on archive-ingested bars), but trade-COUNT-based features are available everywhere. Use full watchlist for trades-count-only features; restrict 3-pair/2026 only for buyVol/sellVol/maxTrade-dependent features.",
+    "in_flight": "Order-flow backfills extending BTC/ETH/SOL back to 2026-01-01 may still be running as background node processes (research.js flow) — check before assuming idle. Do NOT kill node processes or touch candles/.",
+    "next_queue": "VERIFIER FOLLOW-ON (as instructed at session start): expand backtest.test.mjs coverage to test (1) stopMode 'atr' (volatility-scaled stops), (2) one-trade-per-level guard in anticipate mode, (3) alignment/trend gates now that they apply in anticipate mode. Assert against hand-computed values, not snapshots. After that: with intensity closed out and order-flow research complete, the project's known-signals thread is exhausted. Next phase is to improve the backtest/live infrastructure itself (position rotation, drawdown max, dynamic sizing refinements) or explore entirely new signal classes (not order-flow)."
   },
   "ledger": [
     {
@@ -60,6 +51,14 @@
       "agent": "executor",
       "action": "implement",
       "detail": "Built intensityfilter.mjs. Corrected a factual error in the assignment (trades column is available for all 20 pairs/full history, not just BTC/ETH/SOL/2026 -- that limitation only applies to buyVol/sellVol/maxTrade). Self-contained simulation replicating the live 4h anticipation-entry rule exactly (verified byte-for-byte against backtestMultiTF on all 20 pairs after fixing an entry/exit ordering bug the cross-check itself caught). Result: filtering high-intensity entries does not improve net R/t at any threshold in any regime -- CIs overlap throughout. Trade-intensity-as-filter is closed.",
+      "commit": "af0c640",
+      "tests": "7 passing"
+    },
+    {
+      "ts": "2026-07-30T20:28:00Z",
+      "agent": "verifier",
+      "action": "validate",
+      "detail": "Ran npm test (7/7 green). Deep-checked intensityfilter.mjs: perfect cross-check alignment to backtestMultiTF (byte-for-byte on all 20 pairs), 6,397 pooled entries with no n<30 cells, no suspicious pattern (all thresholds flat-to-worse, CIs overlapping). Conclusion sound and well-supported. Ready to proceed to follow-on test-expansion task.",
       "commit": "af0c640",
       "tests": "7 passing"
     }
