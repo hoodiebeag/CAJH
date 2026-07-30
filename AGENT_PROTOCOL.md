@@ -93,27 +93,30 @@ can work without consuming budget. A scheduled task can restart the loop on a cl
 if the cap is reached the next run simply fails until it resets. Plan the loop to be
 interruptible at every step — which rules 5 and 9 already guarantee.
 
-## The Architect is NOT in the routine loop (added after it became the bottleneck)
+## Pipeline shape: Architect feeds the Executor, the Executor feeds the Verifier
 
-Routing work through the Architect serialized everything and left both other agents idle
-waiting for a hop that added nothing. The queue items carry complete specs — file, task,
-and `done_when` — so no design step is needed to start one.
+The Architect stays in the loop, but **upstream and in batches** — not inline, gating one
+task at a time. Routing each item individually made the Architect a serialization point
+and left both other agents idle waiting for a hop that added nothing, since queue items
+already carry complete specs (`file`, `task`, `done_when`).
 
-**Self-serve rule.** Executor and Verifier pull their own next task:
+The flow is a pipeline, and each stage keeps the next one fed:
 
-- **Verifier, on green:** mark the finished item `"state": "done"`, immediately take the
-  next `"pending"` item (skipping any whose `depends_on` is unfinished), copy its
-  `file`/`task` into `control.target_file`/`control.objective`, set
-  `control.status: "EXECUTOR_PENDING"`, reset `iteration`. Do this in the SAME run as the
-  verification. Never hand back to the Architect just to advance a queue.
-- **Executor, on finding the queue item already satisfied:** don't idle — mark it done and
-  pull the next pending item yourself in the same run.
+- **Architect → Executor.** The Architect's standing duty is to keep
+  `blackboard.work_queue` deep enough that the Executor never runs dry — specs written
+  ahead of time, dependencies marked, each item sized to one run. Stocking the queue is
+  the job; approving each pull is not.
+- **Executor → Verifier.** Every completed Executor item is automatically the Verifier's
+  next job. The Executor keeps the Verifier busy simply by finishing work.
+- **Verifier → Executor.** On green, the Verifier marks the item `"state": "done"` and
+  pulls the next `"pending"` item into `control` (skipping any whose `depends_on` is
+  unfinished), setting `EXECUTOR_PENDING` in the SAME run. On red, it hands back with the
+  failure log. Either way the Executor has work immediately.
 
-**Only set `ARCHITECT_PENDING` when a genuine design decision blocks you** — a new file
-whose structure isn't specified, a contradiction between the objective and the code, or a
-task that cannot be done without touching a frozen path. "The next task needs assigning"
-is not a design decision.
+**Set `ARCHITECT_PENDING` only for a genuine design decision** — a new file whose
+structure isn't specified, an objective that contradicts the code, or work that cannot be
+done without touching a frozen path. "The next task needs assigning" is not one; pull it.
 
-**Never idle waiting for a human or another agent.** If your phase is done and the queue
-has pending work, take it. If the queue is empty, disable the scheduled task and exit —
-do not spin.
+**Never idle.** If your phase is done and the queue has pending work, take it. If the
+queue is empty, say so loudly in the ledger so the Architect restocks it — an empty queue
+is an Architect failure, not a reason for the loop to spin.

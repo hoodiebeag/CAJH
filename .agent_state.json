@@ -70,6 +70,30 @@
         "depends_on": "Q4",
         "task": "CONSOLIDATION 2/2: fold in overlay.mjs, trail.mjs, simple.mjs, flowverify.mjs, intensityfilter.mjs, intensityIC.mjs the same way - verify output matches, then delete each original.",
         "done_when": "All research scripts reachable via research.mjs, originals deleted, npm test green."
+      },
+      {
+        "id": "Q6",
+        "state": "pending",
+        "file": "walkforward.mjs",
+        "owner": "executor",
+        "task": "Build the walk-forward harness the ROADMAP has wanted since day one and never got. Rolling windows: train on N months, test on the next M, step forward, repeat - so every result is scored only on data the fit never saw. Must handle the SEALED-SYMBOL case too (hold out entire pairs, not just later dates), because time-only splits let a strategy overfit the cross-section. Reuse researchlib.mjs and backtestMultiTF; do not touch frozen paths.",
+        "done_when": "Runs on the daily strategy end-to-end and prints per-fold net R/t with CIs plus an aggregate. Result may well be negative - report it plainly."
+      },
+      {
+        "id": "Q7",
+        "state": "pending",
+        "file": "ROADMAP.md",
+        "owner": "executor",
+        "task": "DOCUMENTATION PASS, no code. ROADMAP.md has grown to a long append-only log. Add a SUMMARY section at the very top: what has been settled (with the killing numbers), what is still open, and what should never be re-tested. A future cold agent should be able to read only that section and avoid repeating any dead end. Do not delete history below it.",
+        "done_when": "Top-of-file summary exists, every settled finding listed with its number, npm test green."
+      },
+      {
+        "id": "Q8",
+        "state": "pending",
+        "file": "backtest.test.mjs",
+        "owner": "executor",
+        "task": "Second test pass: cover the exit engine, which carries the most subtle arithmetic in the repo. (a) partial scale-out - a partial leg must contribute exactly frac x the full-position net R; (b) trailing stop - exits trailR below the running peak, not at the peak; (c) cost model - entry fee on entry notional and exit fee on exit notional, asserted against a hand-computed value.",
+        "done_when": "npm test green with 3 new tests, hand-computed assertions."
       }
     ],
     "queue_rule": "Work ONE item per run, in order, smallest complete unit. Mark state done before moving on. If an item cannot be finished in one run, split it and add the remainder as a new item rather than leaving it half-built.",
@@ -82,7 +106,9 @@
       "orient_budget": "Read AGENT_PROTOCOL.md and the ROADMAP tail once per run. Do not re-read the whole ROADMAP or re-explore the repo - the blackboard already carries what is settled."
     },
     "flow_data": "EXTENDED BACKFILL COMPLETE. BTC/ETH/SOL order flow now spans 2026-01-01 -> 2026-07-29/30 (~2.3x the original window). This does NOT reopen the order-flow thread: intensity is dead on 11,195 independent samples across 20 pairs, and 15m imbalance is real (p=0.003) but worth only 1-6% of the 0.9% round-trip cost - more months cannot turn 1-6% into tradeable. Use this data only if a genuinely new aggressor-based feature is proposed.",
-    "routing_rule": "SELF-SERVE. The Architect is not in the routine loop - it was the bottleneck. Verifier on green marks the item done and pulls the next pending item into control in the SAME run, setting EXECUTOR_PENDING. Executor does the same if it finds its item already satisfied. Only set ARCHITECT_PENDING for a genuine design blocker (unspecified new file structure, objective contradicting the code, or work that would require touching a frozen path). Never idle waiting to be assigned."
+    "routing_rule": "SELF-SERVE. The Architect is not in the routine loop - it was the bottleneck. Verifier on green marks the item done and pulls the next pending item into control in the SAME run, setting EXECUTOR_PENDING. Executor does the same if it finds its item already satisfied. Only set ARCHITECT_PENDING for a genuine design blocker (unspecified new file structure, objective contradicting the code, or work that would require touching a frozen path). Never idle waiting to be assigned.",
+    "architect_duty": "Keep this queue at 3+ pending items at all times so the Executor never blocks. Stocking ahead is the Architect job; approving individual pulls is not. If the queue drops below 3 pending, that is the signal to restock.",
+    "pipeline": "Architect -> Executor -> Verifier -> (next item) -> Executor. Every finished Executor item is automatically the Verifier next job, so the Executor keeps the Verifier busy just by finishing work. The Verifier pulls the next pending item in the SAME run it verifies, so the Executor is never idle either."
   },
   "ledger": [
     {
