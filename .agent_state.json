@@ -14,13 +14,21 @@
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
-    "frozen_paths": ["scanner.js", "monitor.js", "trader.js", "bot.js", "strategy.js", "backtest.js", "commands.js"],
+    "frozen_paths": [
+      "scanner.js",
+      "monitor.js",
+      "trader.js",
+      "bot.js",
+      "strategy.js",
+      "backtest.js",
+      "commands.js"
+    ],
     "test_command": "npm test (7 tests currently passing)",
     "known_findings": "See ROADMAP.md. Settled with real numbers, do NOT re-test: the swing entry is statistically indistinguishable from random (8,203 trades); gross-of-cost expectancy ~0 so cheaper fills cannot rescue it; exit-model and stop-placement sweeps both negative; the simple daily strategy is beta not alpha (indistinguishable from random entries passing the same MA20 gate).",
-    "live_signal": "4h trade intensity was the one surviving candidate from flowsignal.mjs (non-overlapping IC -0.160, z=-1.90, CI [-0.325,+0.005], 48h horizon). intensityfilter.mjs then tested it as an entry filter on the live strategy's ACTUAL trade set: no improvement. p90/p75/p50 thresholds all read flat-to-slightly-worse net R/t vs no-filter in every regime, CIs overlapping throughout (6,397 pooled entries). The raw forward-return correlation does not translate into a usable filter on realized trade R -- likely because its economic size is far smaller than the swing-entry's own R variance. Treat trade intensity as closed unless new data changes the picture.",
+    "live_signal": "CLOSED. Trade intensity was re-tested on 11,195 independent non-overlapping samples (20 pairs, 2023-2026) after the Executor correctly established that trade COUNT is available for every pair, not just BTC/ETH/SOL/2026. Result: IC -0.0027, z=-0.29, p=0.751 pooled, with the sign FLIPPING positive in 2024. The earlier -0.160 (z=-1.90) on 142 samples was noise. No order-flow feature is both statistically real and economically tradeable: imbalance is real at 15m (p=0.003) but worth 1-6% of cost; cum-imbalance is noise (p=0.309); intensity is zero; big-print is nothing.",
     "data_correction": "Executor turn found the assignment's stated data limitation was factually wrong and corrected it before running: 'trades data is BTC/ETH/SOL+2026-only' is FALSE for the `trades` column itself -- Kraken's OHLCVT archive format carries a real trades-count column and data.js's ingestKrakenOHLCVT parses it (verified empirically: LTCUSD, archive-ingested only, has 1,293,046 of 1,293,047 bars with trades > 0). The limitation IS correct for buyVol/sellVol/maxTrade, which genuinely are zeroed on archive-ingested bars -- so aggressor-imbalance/big-print features really are BTC/ETH/SOL+2026-only, but trade-COUNT-based features (intensity) are available for all 20 watchlist pairs across full 2023-2026 history. Use the full watchlist for any future trades-count-only feature; keep the 3-pair/2026 restriction only for buyVol/sellVol/maxTrade-dependent features.",
     "in_flight": "Order-flow backfills extending BTC/ETH/SOL back to 2026-01-01 may still be running as background node processes (research.js flow) -- check before assuming idle. Do NOT kill node processes or touch candles/.",
-    "next_queue": "intensityfilter.mjs is done (see live_signal above) -- the order-flow research thread has a clean, closed answer now. Remaining from the prior queue: (a) expand backtest.test.mjs coverage for stopMode 'atr', the one-trade-per-level guard, and anticipate-mode alignment/trend gates now that they apply in that mode; (b) with trade intensity closed out, no further order-flow follow-up is queued unless new data or a new feature idea appears."
+    "next_queue": "Order-flow thread is closed end to end. Remaining: expand backtest.test.mjs coverage for stopMode atr, the one-trade-per-level guard, and anticipate-mode alignment/trend gates. No further order-flow follow-up unless a genuinely new feature or data source appears."
   },
   "ledger": [
     {

@@ -403,3 +403,44 @@ back to 2026-01-01.
 
 Working rule going forward: a signal must clear FDR **and** exceed cost. Neither alone is
 sufficient, and this run demonstrates why each check catches what the other misses.
+
+### Trade intensity: closed. 79× more data killed it.
+
+The Executor caught a factual error in the Architect's assignment that turned out to
+matter more than the assignment itself: **trade COUNT is available for all 20 pairs across
+2023–2026.** Kraken's OHLCVT archive carries a real trades column and
+`ingestKrakenOHLCVT` parses it — verified at 100% coverage on archive-only pairs (LTC, ADA,
+LINK, DOT). Only `buyVol`/`sellVol`/`maxTrade` are genuinely zeroed, so *aggressor*
+features remain BTC/ETH/SOL-2026-only, but intensity was never restricted at all.
+
+That unlocked the decisive test without waiting for any backfill — 11,195 independent
+non-overlapping samples instead of 142 (`intensityIC.mjs`):
+
+| window | samples | IC (non-overlapping) | z | p (block) |
+|---|---|---|---|---|
+| 2023 | 3,045 | −0.0053 | −0.29 | 0.771 |
+| 2024 | 3,476 | **+0.0142** | +0.84 | 0.475 |
+| 2025-26 | 4,674 | −0.0066 | −0.45 | 0.615 |
+| **ALL** | **11,195** | **−0.0027** | **−0.29** | **0.751** |
+
+**The effect is zero, and its sign flips between regimes.** The −0.160 measured on 142
+samples was noise, exactly as the borderline z=−1.90 warned it might be. Note the decile
+spread still reads +0.418% (and "exceeds cost" in 2024) — with IC ≈ 0 and p = 0.475 that
+is tail noise with no monotonic relationship behind it, and a reminder that a decile
+spread alone proves nothing.
+
+This also explains the Executor's filter result more simply than their own reading did:
+filtering high-intensity entries didn't fail because the effect was economically small
+relative to R variance — it failed because **there was no effect to capture.**
+
+**The order-flow thread is now closed end to end.** Aggressor imbalance: statistically
+real at 15m (p=0.003), economically worthless (1–6% of cost). Cumulative imbalance:
+noise (p=0.309). Trade intensity: zero on a large sample. Big-print share: nothing
+anywhere. The extended backfills running to 2026-01-01 are no longer needed for this
+question — more months of 3 pairs was the wrong axis; more pairs was the right one, and
+it was available the whole time.
+
+**Methodological lesson worth keeping:** every borderline result this project has produced
+(z = −1.90, p = 0.010, "clears cost") has died when given more independent data. The
+pattern is consistent enough to treat as a prior: a signal that needs careful statistics to
+look real is not real. The ones that matter announce themselves.
