@@ -785,7 +785,7 @@ export async function handleExcursion(message, state) {
   const shape = LIVE_ENTRY_TFS.filter(tf => perTf[tf]).map(tf => {
     const a = perTf[tf];
     return `**${tf}** (${a.n} entries) · ATR ${avg(a.atrPct).toFixed(2)}% of price · swing-low stop sits **${avg(a.struct).toFixed(2)} ATR** below entry\n` +
-           `    typical adverse move ${avg(a.mae).toFixed(2)} ATR · typical favourable move ${avg(a.mfe).toFixed(2)} ATR\n` +
+           `    range over the next 200 bars: ${avg(a.mae).toFixed(1)} ATR down / ${avg(a.mfe).toFixed(1)} ATR up (context only — it grows with the horizon)\n` +
            `    of trades that eventually ran 2+ ATR (${(avg(a.runnerShare) * 100).toFixed(0)}% of all), 75% first dipped ≤ **${avg(a.maeRunners).toFixed(2)} ATR**`;
   });
 
@@ -838,10 +838,23 @@ __Sealed-holdout check of the best training cell__ (${bestNetCell.tf} stop ${bes
       `(${holdOfBest.netPt.toFixed(3)}R/t on ${holdOfBest.n} unseen trades). That is worth pursuing — widen the grid around ` +
       `${bestNetCell.tf} stop ${bestNetCell.k}·ATR / target ${bestNetCell.m}·ATR and paper-trade before sizing.`;
   } else if (posNet.length) {
-    verdict = `🟡 **${posNet.length} of ${allCells.length} combinations are net-positive in training, but the best one does NOT hold on the sealed window.** ` +
-      `Picking the top of ~${allCells.length} correlated cells is itself a selection effect — a handful landing just above zero in-sample is what ` +
-      `chance produces. Note the direction, though: every survivor uses the TIGHTEST stop with the FARTHEST target (a lottery-ticket payoff, ~10% win rate), ` +
-      `not the wider stop the "stopped out too early" theory predicts.`;
+    // Describe the survivors from the data rather than assuming which way they lean —
+    // tight-stop/far-target survivors and wide-stop survivors mean opposite things.
+    const kMax = Math.max(...allCells.map(c => c.k)), kMin = Math.min(...allCells.map(c => c.k));
+    const wide = posNet.filter(c => c.k >= kMax).length, tight = posNet.filter(c => c.k <= kMin).length;
+    const lean = wide > tight
+      ? `Every net-positive cell sits at the WIDEST stop tested (${kMax}·ATR) — the direction your "stopped out too early" theory predicts. ` +
+        `Note what that costs: a ${kMax}·ATR stop is a very large invalidation, so position size shrinks proportionally and each loss is a full ${kMax}·ATR.`
+      : tight > wide
+      ? `Every net-positive cell sits at the TIGHTEST stop tested (${kMin}·ATR) with a far target — a lottery-ticket payoff, not the wider stop the ` +
+        `"stopped out too early" theory predicts.`
+      : `The net-positive cells do not lean consistently tight or wide.`;
+    const why = holdOfBest && holdOfBest.n >= 30
+      ? `but the best one does NOT hold on the sealed window (${holdOfBest.netPt.toFixed(3)}R/t on ${holdOfBest.n} unseen trades)`
+      : `and the sealed window has too few trades (${holdOfBest?.n ?? 0}) at that cell to confirm or refute it`;
+    verdict = `🟡 **${posNet.length} of ${allCells.length} combinations are net-positive in training, ${why}.** ` +
+      `Picking the top of ~${allCells.length} correlated cells is itself a selection effect — a few landing just above zero in-sample is what chance produces. ` +
+      lean;
   } else if (posGross.length) {
     verdict = `🟡 **${posGross.length} of ${allCells.length} combinations are positive GROSS but none survive costs.** ` +
       `Best gross: ${bestAny.tf} stop ${bestAny.k}·ATR → target ${bestAny.m}·ATR at ${bestAny.grossPt >= 0 ? "+" : ""}${bestAny.grossPt.toFixed(3)}R/t. ` +
@@ -855,7 +868,7 @@ __Sealed-holdout check of the best training cell__ (${bestNetCell.tf} stop ${bes
   await message.channel.send(
     `📐 **Excursion analysis — ${used} assets** (live anticipation entries, ATR-normalised)\n\n` +
     `__Move sizes (what the asset actually does after an entry):__\n${shape.join("\n")}\n\n` +
-    `__Stop × target grid (first passage, ${"" }gross vs net):__\n${gridLines.join("\n")}\n\n` + verdict
+    `__Stop × target grid (first passage, gross vs net · training window):__\n${gridLines.join("\n")}` + holdLine + `\n\n` + verdict
   );
 }
 
