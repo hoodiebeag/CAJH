@@ -92,3 +92,28 @@ Usage limits stop a session outright; no agent can resume itself afterward, and 
 can work without consuming budget. A scheduled task can restart the loop on a clock, but
 if the cap is reached the next run simply fails until it resets. Plan the loop to be
 interruptible at every step — which rules 5 and 9 already guarantee.
+
+## The Architect is NOT in the routine loop (added after it became the bottleneck)
+
+Routing work through the Architect serialized everything and left both other agents idle
+waiting for a hop that added nothing. The queue items carry complete specs — file, task,
+and `done_when` — so no design step is needed to start one.
+
+**Self-serve rule.** Executor and Verifier pull their own next task:
+
+- **Verifier, on green:** mark the finished item `"state": "done"`, immediately take the
+  next `"pending"` item (skipping any whose `depends_on` is unfinished), copy its
+  `file`/`task` into `control.target_file`/`control.objective`, set
+  `control.status: "EXECUTOR_PENDING"`, reset `iteration`. Do this in the SAME run as the
+  verification. Never hand back to the Architect just to advance a queue.
+- **Executor, on finding the queue item already satisfied:** don't idle — mark it done and
+  pull the next pending item yourself in the same run.
+
+**Only set `ARCHITECT_PENDING` when a genuine design decision blocks you** — a new file
+whose structure isn't specified, a contradiction between the objective and the code, or a
+task that cannot be done without touching a frozen path. "The next task needs assigning"
+is not a design decision.
+
+**Never idle waiting for a human or another agent.** If your phase is done and the queue
+has pending work, take it. If the queue is empty, disable the scheduled task and exit —
+do not spin.

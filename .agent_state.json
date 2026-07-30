@@ -81,7 +81,8 @@
       "batching": "Group queue items that touch the SAME FILE into one run. Three small tests in backtest.test.mjs is one coherent unit, not three - splitting them triples orient overhead (git pull + protocol + roadmap) and invites merge conflicts on one file.",
       "orient_budget": "Read AGENT_PROTOCOL.md and the ROADMAP tail once per run. Do not re-read the whole ROADMAP or re-explore the repo - the blackboard already carries what is settled."
     },
-    "flow_data": "EXTENDED BACKFILL COMPLETE. BTC/ETH/SOL order flow now spans 2026-01-01 -> 2026-07-29/30 (~2.3x the original window). This does NOT reopen the order-flow thread: intensity is dead on 11,195 independent samples across 20 pairs, and 15m imbalance is real (p=0.003) but worth only 1-6% of the 0.9% round-trip cost - more months cannot turn 1-6% into tradeable. Use this data only if a genuinely new aggressor-based feature is proposed."
+    "flow_data": "EXTENDED BACKFILL COMPLETE. BTC/ETH/SOL order flow now spans 2026-01-01 -> 2026-07-29/30 (~2.3x the original window). This does NOT reopen the order-flow thread: intensity is dead on 11,195 independent samples across 20 pairs, and 15m imbalance is real (p=0.003) but worth only 1-6% of the 0.9% round-trip cost - more months cannot turn 1-6% into tradeable. Use this data only if a genuinely new aggressor-based feature is proposed.",
+    "routing_rule": "SELF-SERVE. The Architect is not in the routine loop - it was the bottleneck. Verifier on green marks the item done and pulls the next pending item into control in the SAME run, setting EXECUTOR_PENDING. Executor does the same if it finds its item already satisfied. Only set ARCHITECT_PENDING for a genuine design blocker (unspecified new file structure, objective contradicting the code, or work that would require touching a frozen path). Never idle waiting to be assigned."
   },
   "ledger": [
     {
