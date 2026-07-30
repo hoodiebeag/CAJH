@@ -5,25 +5,48 @@ collision in this project on 2026-07-30, where one agent's `git checkout` silent
 discarded another's in-progress work. Every rule below exists because something went
 wrong without it.
 
-## The state file
+## The state file — shared blackboard and transaction ledger
 
-`.agent_state.json` is the single source of truth for whose turn it is. Schema:
+`.agent_state.json` serves three jobs at once, and they must not be conflated:
+
+- **`control`** — whose turn it is and what the current job is. Mutable; overwritten each
+  handoff.
+- **`blackboard`** — shared facts every agent should know before acting: frozen paths,
+  what has already been established (so nobody re-runs a settled experiment), and what is
+  in flight (so nobody kills a running job). Mutable, but *additive by default* — correct
+  a fact if it is wrong, don't casually delete one.
+- **`ledger`** — **append-only.** One entry per completed action. Never edit or remove a
+  prior entry; an audit trail you can rewrite is not an audit trail. Cap at the most
+  recent 100 entries and drop from the front only when that limit is hit.
 
 ```json
 {
-  "version": 1,
-  "status": "ARCHITECT_PENDING | EXECUTOR_PENDING | VERIFIER_PENDING | BLOCKED | DONE",
-  "target_file": "relative/path.js",
-  "objective": "one sentence, concrete and falsifiable",
-  "allow_live_edit": false,
-  "test_command": "npm test",
-  "iteration": 0,
-  "max_iterations": 10,
-  "notes": "handoff notes; failure logs go here for the Verifier loop",
-  "updated_by": "architect | executor | verifier",
-  "updated_at": "ISO-8601"
+  "version": 2,
+  "control": {
+    "status": "ARCHITECT_PENDING | EXECUTOR_PENDING | VERIFIER_PENDING | BLOCKED | DONE",
+    "target_file": "relative/path.js",
+    "objective": "one sentence, concrete and falsifiable",
+    "allow_live_edit": false,
+    "test_command": "npm test",
+    "iteration": 0,
+    "max_iterations": 10,
+    "notes": "handoff notes; failure logs go here for the Verifier loop",
+    "updated_by": "architect | executor | verifier",
+    "updated_at": "ISO-8601"
+  },
+  "blackboard": { "frozen_paths": [], "known_findings": "", "in_flight": "" },
+  "ledger": [
+    { "ts": "ISO-8601", "agent": "", "action": "", "detail": "", "commit": "", "tests": "" }
+  ]
 }
 ```
+
+**Writing it safely.** The turn discipline (`status` names exactly one agent) is what
+keeps two writers off this file. Write it *last*, after your code is committed, and write
+it atomically — serialize to `.agent_state.json.tmp`, then rename over the original — so a
+crash mid-write cannot leave the loop with an unparseable ledger and no way to recover.
+Always re-read the file immediately before writing so you append to the current ledger
+rather than clobbering entries another agent added while you worked.
 
 ## Hard rules (all agents)
 
