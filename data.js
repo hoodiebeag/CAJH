@@ -117,13 +117,17 @@ export function loadCandles(pair, tfMinutes) {
  * the Trades endpoint. Kraken's format is headerless: `timestamp,open,high,low,close,volume,
  * trades` (timestamp in seconds). Order-flow columns (buyVol/sellVol/maxTrade) aren't in the
  * archive, so they're zeroed — nothing in the current feature set uses them. Rows older than
- * `sinceSec` are skipped; the pair's store is overwritten. Get the archive from Kraken support.
+ * `sinceSec` are skipped. Get the archive from Kraken support.
+ *
+ * MERGES into the existing store (archive wins on overlapping minutes) so the quarterly
+ * incremental archives top a store up instead of wiping its history — ingesting a Q1-only
+ * file must not delete the prior 18 months.
  */
 export function ingestKrakenOHLCVT(pair, srcPath, sinceSec = 0) {
   if (!fs.existsSync(srcPath)) {
     throw new Error(`file not found: ${srcPath} — expected Kraken's OHLCVT 1-minute CSV (e.g. ${pair}_1.csv)`);
   }
-  const bars = new Map();
+  const bars = loadBarMap(pair);
   for (const line of fs.readFileSync(srcPath, "utf8").split("\n")) {
     if (!line.trim()) continue;
     const [t, o, h, l, c, v, trades] = line.split(",");
