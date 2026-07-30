@@ -21,7 +21,9 @@ import * as logger from './logger.js';
 const DATA_DIR  = process.env.DATA_DIR || ".";
 const STORE_DIR = path.join(DATA_DIR, "candles");
 const MINUTE    = 60;               // bar size, seconds
-const PAGE_DELAY_MS = 1500;         // public API ~1 req/s — stay polite
+// Public API is ~1 req/s. Raise PAGE_DELAY_MS when running several pairs at once so the
+// combined rate stays under the limit (3 pairs at 2500ms ≈ 1.2 req/s in total).
+const PAGE_DELAY_MS = Number(process.env.PAGE_DELAY_MS) || 1500;
 const COLUMNS   = "time,open,high,low,close,volume,buyVol,sellVol,trades,maxTrade";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -191,6 +193,52 @@ export async function backfill(pair, months = 18, log = logger.info) {
   writeBars(pair, bars);
   log(`[DATA] ${pair} done: ${bars.size} bars from ${totalTrades} trades over ${pages} pages.`);
   return bars.size;
+}
+
+/**
+ * Rebuild an explicit window [sinceSec, untilSec) from the Trades endpoint, restoring the
+ * order-flow columns (buyVol/sellVol/trades/maxTrade) the OHLCVT archive cannot provide.
+ *
+ * Unlike `backfill`, trades are aggregated into a FRESH map and then REPLACE the store's
+ * bars for those minutes. That distinction matters: `aggregateTrades` accumulates volume
+ * into whatever bar it finds, so folding trades into archive-derived bars that already
+ * carry a volume figure would silently double-count it. Bars outside the window are
+ * untouched.
+ */
+export async function backfillRange(pair, sinceSec, untilSec, log = logger.info) {
+  const fresh = new Map();
+  let sinceNs = String(Math.floor(sinceSec) * 1_000_000_000);
+  const untilNs = Math.floor(untilSec) * 1e9;
+  let pages = 0, totalTrades = 0;
+
+  log(`[FLOW] ${pair}: rebuilding ${new Date(sinceSec * 1000).toISOString().slice(0, 10)} → ${new Date(untilSec * 1000).toISOString().slice(0, 10)} from trades`);
+  for (;;) {
+    let page;
+    try {
+      page = await fetchTradesPage(pair, sinceNs);
+    } catch (e) {
+      log(`[FLOW] ${pair} page error: ${e.message} — backing off`);
+      await sleep(PAGE_DELAY_MS * 4);
+      continue;
+    }
+    if (!page.trades.length) break;
+    // Keep only trades inside the window; stop once we run past it.
+    const inWindow = page.trades.filter(t => Number(t[2]) >= sinceSec && Number(t[2]) < untilSec);
+    aggregateTrades(inWindow, fresh);
+    totalTrades += inWindow.length;
+    pages += 1;
+    if (pages % 25 === 0) log(`[FLOW] ${pair}: ${pages} pages, ${totalTrades} trades, ${fresh.size} bars…`);
+    if (!page.last || page.last === sinceNs) break;
+    sinceNs = page.last;
+    if (Number(sinceNs) >= untilNs) break;
+    await sleep(PAGE_DELAY_MS);
+  }
+
+  const bars = loadBarMap(pair);
+  for (const [t, bar] of fresh) bars.set(t, bar);   // replace, never accumulate
+  writeBars(pair, bars);
+  log(`[FLOW] ${pair} done: ${fresh.size} bars rebuilt with order flow (store now ${bars.size} bars, ${pages} pages).`);
+  return fresh.size;
 }
 
 /** Trust check: compare the store against Kraken's native 1m OHLC on the overlap. */

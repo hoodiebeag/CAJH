@@ -16,7 +16,7 @@
 import "dotenv/config";
 import { loadConfig, symbolToKrakenId } from "./storage.js";
 import { handleBacktest, handleDiscover, handleProfile, handleValidate, handleExits, handleExcursion } from "./commands.js";
-import { backfill, ingestKrakenOHLCVT } from "./data.js";
+import { backfill, backfillRange, ingestKrakenOHLCVT } from "./data.js";
 import * as logger from './logger.js';
 import path from "path";
 
@@ -48,6 +48,22 @@ const commands = {
       await backfill(id, 18);
     }
   },
+  // Rebuild a window from raw trades so buyVol/sellVol/maxTrade exist (the OHLCVT
+  // archive has no order flow). FLOW_FROM / FLOW_TO are YYYY-MM-DD; default last 90 days.
+  flow: async () => {
+    const day = 24 * 60 * 60;
+    const from = process.env.FLOW_FROM ? Date.parse(`${process.env.FLOW_FROM}T00:00:00Z`) / 1000
+                                       : Math.floor(Date.now() / 1000) - 90 * day;
+    const to   = process.env.FLOW_TO   ? Date.parse(`${process.env.FLOW_TO}T00:00:00Z`) / 1000
+                                       : Math.floor(Date.now() / 1000);
+    const syms = rest.length ? rest : state.watchlist.map((a) => a.symbol);
+    for (const sym of syms) {
+      const id = symbolToKrakenId(sym);
+      logger.info(`
+=== order-flow backfill ${sym} (${id}) ===`);
+      await backfillRange(id, from, to);
+    }
+  },
   ingest: async () => {
     const dir = process.env.ARCHIVE_DIR || "archive";
     // Default to the last ~18 months; INGEST_SINCE=YYYY-MM-DD reaches further back (the
@@ -72,7 +88,7 @@ const commands = {
 };
 
 if (!commands[cmd]) {
-  logger.error("Usage: node research.js <backtest [SYMBOL] | discover | profile | validate | exits | excursion | backfill SYM... | ingest SYM...>");
+  logger.error("Usage: node research.js <backtest [SYMBOL] | discover | profile | validate | exits | excursion | flow | backfill SYM... | ingest SYM...>");
   process.exitCode = 1;
 } else {
   logger.info(`[research] running "${cmd}${arg ? " " + arg : ""}" against local candles/ …`);

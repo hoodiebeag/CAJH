@@ -7,3 +7,4 @@ stats.json
 candles/
 archive/
 archive_full/
+flow_*.log
