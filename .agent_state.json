@@ -14,12 +14,72 @@
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
-    "frozen_paths": ["scanner.js", "monitor.js", "trader.js", "bot.js", "strategy.js", "backtest.js", "commands.js"],
+    "frozen_paths": [
+      "scanner.js",
+      "monitor.js",
+      "trader.js",
+      "bot.js",
+      "strategy.js",
+      "backtest.js",
+      "commands.js"
+    ],
     "test_command": "npm test (7 tests currently passing; backtest.test.mjs is frozen but can EXTEND with new tests)",
     "known_findings": "See ROADMAP.md. Settled with real numbers, do NOT re-test: the swing entry is statistically indistinguishable from random (8,203 trades); gross-of-cost expectancy ~0 so cheaper fills cannot rescue it; exit-model and stop-placement sweeps both negative; the simple daily strategy is beta not alpha; trade intensity as a filter does not improve net R/t. Order-flow research closed.",
     "live_features_needing_tests": "(1) stopMode 'atr' — atrStopK and atrPeriod params control stop placement via trailing ATR, not raw swing low. Used in backtest.js and live scanner, never directly tested. (2) one-trade-per-level guard — same structural level (indexed by pivot candle) cannot fire twice; protects against re-entry whipsaw. Implemented in scanner.js, backtest.js handles it via levelOnCooldown. (3) alignment/trend gates on anticipate mode — MIN/MAX_STOP_PCT, chopFilter, trendGate, trendGateMode all apply in anticipate mode after a 2026-07-30 fix; prior tests only exercised BOS mode gates.",
     "in_flight": "Order-flow backfills extending BTC/ETH/SOL back to 2026-01-01 may still be running as background node processes (research.js flow) — check before assuming idle. Do NOT kill node processes or touch candles/.",
-    "next_queue": "After test expansion: with order-flow and intensity research closed, the known-signals thread is exhausted. Next phase explores infrastructure (position rotation refinement, drawdown max enforcement, dynamic sizing) or new signal classes entirely."
+    "next_queue": "Q1 -> Q7 in order. One per run.",
+    "work_queue": [
+      {
+        "id": "Q1",
+        "state": "pending",
+        "file": "backtest.test.mjs",
+        "task": "ONE test only: stopMode \"atr\". Assert risk = atrStopK * ATR(period 14) computed to the PREVIOUS bar (k-1), not the swing low, and that a missing ATR yields no trade rather than a NaN-risk position.",
+        "done_when": "npm test green with 1 new test; no other file touched."
+      },
+      {
+        "id": "Q2",
+        "state": "pending",
+        "file": "backtest.test.mjs",
+        "task": "ONE test only: the one-trade-per-level guard in anticipate mode (antTradedIdx). Build a series where price crosses the same candidate trigger twice and assert exactly ONE trade opens on that level.",
+        "done_when": "npm test green with 1 new test."
+      },
+      {
+        "id": "Q3",
+        "state": "pending",
+        "file": "backtest.test.mjs",
+        "task": "ONE test only: alignment/trendGate in anticipate mode. These were silently ignored until commit 9041ea6 so they have never been tested. Assert alignMode \"all\" with a bearish higher TF blocks an entry that alignMode \"none\" allows.",
+        "done_when": "npm test green with 1 new test."
+      },
+      {
+        "id": "Q4",
+        "state": "pending",
+        "file": "funding.mjs",
+        "task": "COLLECTOR ONLY - no analysis. Fetch Kraken Futures historical funding rates (public, no auth: https://futures.kraken.com/derivatives/api/v4/historicalfundingrates?symbol=PF_XBTUSD) for PF_XBTUSD, PF_ETHUSD, PF_SOLUSD. Store to funding/<symbol>.csv with a header. Idempotent: re-running merges rather than duplicating. Print rows and date span per symbol.",
+        "done_when": "funding/*.csv exist with real rows and the date span is printed. No statistics in this task."
+      },
+      {
+        "id": "Q5",
+        "state": "pending",
+        "file": "fundingsignal.mjs",
+        "task": "ANALYSIS ONLY (requires Q4 done). Test whether extreme funding predicts forward returns at 8h/24h/72h. MANDATORY discipline: non-overlapping samples (stride = horizon), block-permutation p-values, BH-FDR across all cells, decile spread vs the 0.9% round-trip cost. Report gross AND net. Every borderline result in this repo has died under these checks - apply them, do not skip.",
+        "done_when": "A results table printed and appended to ROADMAP.md, including a plain statement if the answer is null."
+      },
+      {
+        "id": "Q6",
+        "state": "pending",
+        "file": "research.mjs",
+        "task": "CONSOLIDATION step 1 of 2: create research.mjs with subcommands wrapping ONLY baseline.mjs, isbeta.mjs and regime.mjs, sharing researchlib.mjs. Verify each subcommand reproduces its original output, THEN delete those three originals. Leave the other scripts alone this run.",
+        "done_when": "research.mjs runs all 3 subcommands with matching output; the 3 originals deleted; npm test green."
+      },
+      {
+        "id": "Q7",
+        "state": "pending",
+        "file": "research.mjs",
+        "task": "CONSOLIDATION step 2 of 2: fold in overlay.mjs, trail.mjs, simple.mjs, flowverify.mjs, intensityfilter.mjs, intensityIC.mjs the same way - verify output matches, then delete each original.",
+        "done_when": "All research scripts reachable via research.mjs; originals deleted; npm test green."
+      }
+    ],
+    "queue_rule": "Work ONE item per run, in order, smallest complete unit. Mark state done before moving on. If an item cannot be finished in one run, split it and add the remainder as a new item rather than leaving it half-built."
   },
   "ledger": [
     {
