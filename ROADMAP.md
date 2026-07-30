@@ -365,3 +365,41 @@ Next, in order: extend the flow backfill window (more independent 48h samples is
 thing that resolves z = −1.90 either way), then test it as a *filter* on the existing
 long-only strategy — "don't buy when 4h trade intensity is elevated" — rather than as a
 standalone signal, since a long-only bot cannot short the high-intensity leg.
+
+### Correction (same night): proper statistics kill the "clears cost" result
+
+`flowsignal.mjs` was rewritten to use a **block-permutation null** (blocks sized to the
+horizon, so the null carries the same overlap-driven autocorrelation as the alternative)
+plus **Benjamini-Hochberg FDR** across all 36 cells. Re-run on the same data:
+
+**0 of 36 cells survive FDR *and* clear the 0.9% round-trip cost.**
+
+Three things the correction revealed, none visible in the single-shuffle version:
+
+1. **The +1.081% "CLEARS" cell was noise.** Cumulative imbalance at 4h/48h scores
+   **p=0.309** under a block-permutation null. It had already failed the non-overlapping
+   resample (IC +0.016, z=0.19); two independent checks now agree it is nothing. An
+   uncorrected 36-cell scan producing one apparent winner is the textbook result, and it
+   is exactly what happened.
+
+2. **Some cells are statistically real and economically worthless.** 15m imbalance and
+   cumulative imbalance survive FDR at **p=0.003** — genuine, replicable structure
+   (buying pressure mildly precedes lower returns). Their decile spreads are 0.009%–0.051%,
+   or **1–6% of the round-trip cost**. Real is not the same as tradeable, and this is the
+   cleanest illustration of that distinction the project has produced.
+
+3. **Trade intensity still refuses to die, and still isn't proven.** At 4h it posts
+   p=0.010 / 0.010 / 0.033 across the three horizons — the lowest p-values in its block,
+   consistent in sign, with a −1.121% spread at 48h that does exceed cost in magnitude.
+   It misses the BH threshold (≈0.0097 at its rank) *by a hair*, just as it missed the
+   95% bar by a hair on non-overlapping samples (z=−1.90 vs 1.96).
+
+Three independent angles — non-overlapping resampling, block permutation, and sign
+consistency across horizons and pair sets — all land on the same verdict: **promising,
+not proven.** That convergence is what separates it from every dead end here; it is also
+precisely the pattern a weak-but-real effect and a lucky noise draw both produce. Only
+more independent samples separate them, which is why the flow window is being extended
+back to 2026-01-01.
+
+Working rule going forward: a signal must clear FDR **and** exceed cost. Neither alone is
+sufficient, and this run demonstrates why each check catches what the other misses.
