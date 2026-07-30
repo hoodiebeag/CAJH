@@ -267,14 +267,33 @@ export function backtestMultiTF({ series } = {}, {
     } else if (!pos && entryMode === "anticipate") {
       // ── anticipate mode ── mirrors live: enter the moment price trades ABOVE the
       // current unconfirmed candidate low's trigger (the candidate candle's high),
-      // instead of waiting for the confirming close. No alignment/trend gates (live
-      // has none) — only the per-TF stop band applies. Candidate state is updated at
-      // the END of each bar, so this check uses only information from bars < k.
+      // instead of waiting for the confirming close. Candidate state is updated at the
+      // END of each bar, so this check uses only information from bars < k. Higher-TF
+      // alignment and the trend gate apply here exactly as they do in "bos" mode —
+      // live runs alignMode "none", but the whole point of the sweep is being able to
+      // ask whether it should.
       if (antCand && k > antCand.index && antCand.index !== antTradedIdx && H[k] > antCand.trigger) {
         const entry = Math.max(O[k], antCand.trigger);   // a gap above the trigger fills at the open
         const stop  = antCand.price, risk = entry - stop;
+        const tClose = T[k] + entryMins * 60;
+        const hb = biasAsOfFns.map(fn => fn(tClose));
+        let aligned;
+        switch (alignMode) {
+          case "none":    aligned = true; break;
+          case "first":   aligned = hb.length === 0 || hb[0] === "bull"; break;
+          case "notbear": aligned = hb.every(b => b !== "bear"); break;
+          case "all":
+          default:        aligned = hb.every(b => b === "bull"); break;
+        }
+        let gateReason = aligned ? null : "notAligned";
+        if (aligned && chopFilter && !trendAsOf(tClose)) { aligned = false; gateReason = "trendGate"; }
+        if (aligned && trendGate) {
+          const tg = trendGateMode === "structure" ? trendAsOf(tClose) : aboveMaAsOf(tClose);
+          if (!tg) { aligned = false; gateReason = "trendGate"; }
+        }
         let reason = "taken";
         if (risk <= 0)                                     reason = "priceBelowStop";
+        else if (!aligned)                                 reason = gateReason;
         else if (maxStopPct && risk / entry > maxStopPct)  reason = "stopTooFar";
         else if (minStopPct && risk / entry < minStopPct)  reason = "stopTooTight";
         reasons[reason] = (reasons[reason] || 0) + 1;

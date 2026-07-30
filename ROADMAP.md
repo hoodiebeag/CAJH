@@ -185,3 +185,45 @@ predicts — and those same cells carry ruinous fee drag, because cost in R scal
 stays negative. Net-positive cells are a handful out of ~126 correlated in-sample tests,
 which is what selection alone produces; the command now re-checks the best training cell
 on the sealed Q1-2026 window instead of trusting an in-sample maximum.
+
+## 2026-07-30 (night) — the finding that reframes every earlier result
+
+**The test window was a savage alt bear market.** Buy & hold over Jan 2025 → Mar 2026
+averaged **−66% per pair, with 0 of 20 pairs up** (best −12%, worst −90%). Every
+"no edge" verdict in this file was measured on a period where the only winning
+long-only action was *not trading*. That does not make the verdicts wrong, but it
+narrows them: we have shown the trigger fails in a downtrend, and we have **no
+bull-market data to test it on**.
+
+**cajh's entries vs random entries** (`node baseline.mjs`), same exits, same costs:
+
+| entries | trades | R/trade | 95% CI |
+|---|---|---|---|
+| cajh live rule | 8,203 | −0.492 | [−0.528, −0.456] |
+| random bars | 8,203 | −0.449 | [−0.492, −0.406] |
+
+Difference −0.043 ±0.056 → **statistically indistinguishable from random.** So the loss
+is not hidden execution friction and not a coding defect: the trigger is not broken, it
+is empty. (Gross-of-cost expectancy was already ≈0, which rules friction out separately.)
+
+**Bug found by that test:** `alignMode` and `trendGate` were never applied in
+`entryMode:"anticipate"` — only in `"bos"`. The alignment comparison was silently
+testing nothing. Fixed; gates now apply in both modes.
+
+**Is timeframe alignment/confirmation necessary?** (`node regime.mjs`) — no:
+
+| gate | 1h R/t | 4h R/t | 1d R/t |
+|---|---|---|---|
+| none (live today) | −0.529 (4931t) | −0.462 (2763t) | −0.293 (509t) |
+| higher-TF alignment | −0.562 (855t) | −0.462 (1246t) | n/a (1d is top TF) |
+| MA trend gate | −0.555 (1766t) | −0.534 (932t) | **−0.107 (210t)** |
+| alignment + MA gate | −0.729 (317t) | −0.620 (476t) | −0.107 (210t) |
+
+Alignment never improves per-trade expectancy — it only removes trades. The one variant
+that helps is the **daily MA trend gate**: −0.293 → −0.107 R/t, total −149R → −22R, by
+cutting 509 trades to 210. Note what that is: not a better entry, but a switch that
+stops trading when the market is falling. In this window, "know when to quit" was the
+only thing that worked, which is consistent with the bear-market context above.
+
+Caveat on all of it: −0.107 ±0.248 is not distinguishable from zero. It is a direction,
+not a result.
