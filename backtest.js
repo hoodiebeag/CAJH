@@ -101,7 +101,14 @@ export function backtestMultiTF({ series } = {}, {
   trailStartR = 1,        // only start trailing once price has run this many R
   partialAtR = null,      // bank `partialFrac` of the position at this R (null = off)
   partialFrac = 0.5,
-  maxHold = MAX_HOLD      // bars before a stale position is closed at the market
+  maxHold = MAX_HOLD,     // bars before a stale position is closed at the market
+  // Stop placement. "structural" = the candidate swing low (what live does today).
+  // "atr" = a volatility-scaled stop atrStopK ATRs below entry, so the invalidation is
+  // the same "size of move" on a 1%-ATR major and a 8%-ATR alt. R scales with it, so a
+  // wider stop means a proportionally smaller position, not more risk.
+  stopMode = "structural",
+  atrStopK = 3,
+  atrPeriod = 14
 } = {}) {
   // `series` = timeframes ascending, e.g. [{label:"1h",mins:60,candles},{label:"4h",...},{label:"1d",...}].
   // The entry TF (entryTf label, default the lowest) trades; everything ABOVE it is the
@@ -274,7 +281,12 @@ export function backtestMultiTF({ series } = {}, {
       // ask whether it should.
       if (antCand && k > antCand.index && antCand.index !== antTradedIdx && H[k] > antCand.trigger) {
         const entry = Math.max(O[k], antCand.trigger);   // a gap above the trigger fills at the open
-        const stop  = antCand.price, risk = entry - stop;
+        // ATR is taken to the PREVIOUS bar so the entry candle can't inflate its own stop.
+        const aStop = stopMode === "atr" ? atr(H, L, C, k - 1, atrPeriod) : null;
+        const stop  = stopMode === "atr"
+          ? (aStop ? entry - atrStopK * aStop : NaN)
+          : antCand.price;
+        const risk = entry - stop;
         const tClose = T[k] + entryMins * 60;
         const hb = biasAsOfFns.map(fn => fn(tClose));
         let aligned;
@@ -292,7 +304,7 @@ export function backtestMultiTF({ series } = {}, {
           if (!tg) { aligned = false; gateReason = "trendGate"; }
         }
         let reason = "taken";
-        if (risk <= 0)                                     reason = "priceBelowStop";
+        if (!(risk > 0))                                   reason = "priceBelowStop";   // also catches a missing ATR
         else if (!aligned)                                 reason = gateReason;
         else if (maxStopPct && risk / entry > maxStopPct)  reason = "stopTooFar";
         else if (minStopPct && risk / entry < minStopPct)  reason = "stopTooTight";

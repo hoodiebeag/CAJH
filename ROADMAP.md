@@ -227,3 +227,49 @@ only thing that worked, which is consistent with the bear-market context above.
 
 Caveat on all of it: −0.107 ±0.248 is not distinguishable from zero. It is a direction,
 not a result.
+
+## 2026-07-31 — 2023-2024 ingested; the simple daily strategy tested across regimes
+
+**Data.** `INGEST_SINCE=YYYY-MM-DD` added to the ingest command (the 18-month default
+could not reach a bull market). All 20 pairs now span **2023-01-01 → 2026-03-31**
+(BTC to today), covering the 2023-24 bull and the 2025-26 bear.
+
+**ATR stops implemented** in the backtester (`stopMode:"atr"`, `atrStopK`): stop sits
+k·ATR below entry with ATR taken to the previous bar, so R scales with volatility and a
+wider stop means a smaller position rather than more risk.
+
+**The simple daily strategy** (`node simple.mjs`) — daily bars, anticipation entry,
+MA20 trend gate, 3·ATR stop, 3R target, *nothing else*:
+
+| window | trades | net R/t | gross R/t | total R | buy & hold |
+|---|---|---|---|---|---|
+| 2023 (unseen) | 65 | +0.227 ±0.441 | +0.287 | +15R | **+308%** |
+| 2024 (unseen) | 88 | +0.401 ±0.393 | +0.451 | +35R | **+52%** |
+| 2025-26 (bear) | 98 | −0.376 ±0.281 | −0.329 | −37R | −68% |
+| ALL | 273 | +0.049 ±0.201 | +0.099 | +13R | +49% |
+
+First non-negative result the project has produced, and it is robust to the knobs: all
+nine stop×target combinations on 2023-24 are positive (+0.145 → +0.504 R/t), so it is
+not fitted to one setting.
+
+**But it is beta, not alpha.** Two things say so. First, the sign tracks the market
+exactly — positive in both up years, negative in the down year. Second, the direct test
+(`node isbeta.mjs`) replaces the swing trigger with RANDOM entries that pass the same
+MA20 gate:
+
+| window | swing entry | random, same gate | difference |
+|---|---|---|---|
+| 2023 | +0.227 ±0.441 | −0.243 ±0.366 | +0.470 ±0.573 (same) |
+| 2024 | +0.401 ±0.393 | +0.215 ±0.381 | +0.187 ±0.548 (same) |
+| 2025-26 | −0.376 ±0.281 | −0.503 ±0.255 | +0.126 ±0.380 (same) |
+| ALL | +0.049 ±0.201 | −0.045 ±0.195 | +0.095 ±0.280 (same) |
+
+The trigger is never statistically distinguishable from a random entry in an uptrend.
+The trend gate is doing the work; the swing structure is decoration. And the scale
+settles it: +13R over 3.5 years is ≈ +6.5% of account at the configured 0.5% risk, while
+holding the same 20 coins returned ≈ +49%. **The strategy underperforms buying and
+holding by roughly an order of magnitude, while adding execution risk and 273 fee legs.**
+
+The consistent direction across all four windows (+0.095 R/t overall, always positive)
+is the one thread left, but it is inside the noise band everywhere; distinguishing it
+would need several times this many daily trades.

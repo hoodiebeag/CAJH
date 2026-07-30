@@ -50,7 +50,13 @@ const commands = {
   },
   ingest: async () => {
     const dir = process.env.ARCHIVE_DIR || "archive";
-    const sinceSec = Math.floor(Date.now() / 1000) - 18 * 30 * 24 * 60 * 60; // last ~18 months
+    // Default to the last ~18 months; INGEST_SINCE=YYYY-MM-DD reaches further back (the
+    // archive holds years, and testing across a bull AND a bear regime needs them).
+    const sinceSec = process.env.INGEST_SINCE
+      ? Math.floor(Date.parse(`${process.env.INGEST_SINCE}T00:00:00Z`) / 1000)
+      : Math.floor(Date.now() / 1000) - 18 * 30 * 24 * 60 * 60;
+    if (!Number.isFinite(sinceSec)) throw new Error(`INGEST_SINCE must be YYYY-MM-DD, got "${process.env.INGEST_SINCE}"`);
+    logger.info(`[INGEST] including bars from ${new Date(sinceSec * 1000).toISOString().slice(0, 10)} onward`);
     const syms = rest.length ? rest : state.watchlist.map((a) => a.symbol);
     for (const sym of syms) {
       const id = symbolToKrakenId(sym);
