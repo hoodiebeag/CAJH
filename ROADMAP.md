@@ -273,3 +273,47 @@ holding by roughly an order of magnitude, while adding execution risk and 273 fe
 The consistent direction across all four windows (+0.095 R/t overall, always positive)
 is the one thread left, but it is inside the noise band everywhere; distinguishing it
 would need several times this many daily trades.
+
+## 2026-07-31 (later) — overlay, uncapped trailing exits, and what data we actually have
+
+**Trend filter as a defensive overlay** (`node overlay.mjs`) — hold the coin while its
+daily close is above its own MA, sit in cash otherwise; signal on close, filled next
+open, every switch charged 0.45%:
+
+| window | buy & hold | MA20 | MA50 | MA100 |
+|---|---|---|---|---|
+| 2023 (bull) | **+302%** (DD −50%) | +79% | +53% | +61% |
+| 2024 (bull) | +52% (DD −61%) | **+66%** (DD −49%) | +34% | +11% |
+| 2025-26 (bear) | −68% (DD −78%) | −57% | −37% | **−26%** (DD −44%) |
+| ALL | **+49%** (DD −81%, ret/DD 0.61) | −20% | +21% | +24% (DD −65%, ret/DD 0.36) |
+
+It does exactly what a trend overlay is supposed to do in a bear market — MA100 beat
+buy & hold on **20/20 pairs** in 2025-26 and cut the average drawdown from −78% to −44%.
+But over the full sample buy & hold wins on return *and* on return-per-drawdown, because
+the 2023 bull cost the overlay ~220 points of upside to whipsaw. Slower MAs whipsaw less
+and did better; faster ones churned (MA20 switched 128 times per pair and finished −20%).
+So: a real risk-reduction tool, not a free lunch, and not an edge.
+
+**Removing the take-profit ceiling** (`node trail.mjs`) — same daily strategy, fixed
+target replaced with an ATR trailing stop:
+
+| exit | 2023 | 2024 | 2025-26 bear | ALL | biggest win |
+|---|---|---|---|---|---|
+| fixed 3R target | +0.232 | +0.456 | −0.351 | +0.079 ±0.222 | 3.0R |
+| trail 1R | +0.237 | +0.259 | −0.129 | +0.075 ±0.136 | 6.1R |
+| trail 3R | +0.173 | **+1.018** | −0.602 | **+0.255 ±0.368** | **16.9R** |
+| half@2R + trail 2R | +0.123 | +0.261 | −0.339 | +0.048 ±0.178 | 6.0R |
+
+The idea has real content: the cap was truncating winners at 3R when the biggest
+uncapped winner ran to 16.9R, and in the trending year the loose trail nearly doubled
+the result (+79R vs +39R). It is also the highest-variance choice — the ALL figure for
+trail 3R rests on one good year and a handful of outliers, its confidence interval is
+the widest in the table, and it was the *worst* model in the bear. Trail 1R is the
+opposite trade: tightest interval, 53% win rate, small. Neither is distinguishable from
+zero over the full sample.
+
+**Signal-class reality check.** Order-flow columns survive for only 9% of BTC's bars and
+0% of ETH's — the archive ingest zeroes buyVol/sellVol, and it overwrote the
+trades-derived bars on every overlapping minute. Any order-flow study needs a fresh
+Trades-endpoint backfill (~hours per pair), and funding rates, open interest and
+cross-exchange basis are not in this project's data at all.
