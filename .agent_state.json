@@ -27,59 +27,60 @@
     "known_findings": "See ROADMAP.md. Settled with real numbers, do NOT re-test: the swing entry is statistically indistinguishable from random (8,203 trades); gross-of-cost expectancy ~0 so cheaper fills cannot rescue it; exit-model and stop-placement sweeps both negative; the simple daily strategy is beta not alpha; trade intensity as a filter does not improve net R/t. Order-flow research closed.",
     "live_features_needing_tests": "(1) stopMode 'atr' — atrStopK and atrPeriod params control stop placement via trailing ATR, not raw swing low. Used in backtest.js and live scanner, never directly tested. (2) one-trade-per-level guard — same structural level (indexed by pivot candle) cannot fire twice; protects against re-entry whipsaw. Implemented in scanner.js, backtest.js handles it via levelOnCooldown. (3) alignment/trend gates on anticipate mode — MIN/MAX_STOP_PCT, chopFilter, trendGate, trendGateMode all apply in anticipate mode after a 2026-07-30 fix; prior tests only exercised BOS mode gates.",
     "in_flight": "Order-flow backfills extending BTC/ETH/SOL back to 2026-01-01 may still be running as background node processes (research.js flow) — check before assuming idle. Do NOT kill node processes or touch candles/.",
-    "next_queue": "Q1 -> Q7 in order. One per run.",
+    "next_queue": "Q1 -> Q5 in order, one item per run, Executor does the work and the Verifier does a fast bounded check.",
     "work_queue": [
       {
         "id": "Q1",
         "state": "pending",
         "file": "backtest.test.mjs",
-        "task": "ONE test only: stopMode \"atr\". Assert risk = atrStopK * ATR(period 14) computed to the PREVIOUS bar (k-1), not the swing low, and that a missing ATR yields no trade rather than a NaN-risk position.",
-        "done_when": "npm test green with 1 new test; no other file touched."
+        "owner": "executor",
+        "task": "Add THREE tests to this one file in a single run (they share the same file, so splitting them across runs would pay 3x orient cost and risk 3 conflicts): (a) stopMode \"atr\" - risk = atrStopK * ATR(14) taken to the PREVIOUS bar, and a missing ATR yields no trade rather than NaN risk; (b) the one-trade-per-level guard in anticipate mode - price crossing the same candidate trigger twice must open exactly ONE trade; (c) alignment/trendGate in anticipate mode - alignMode \"all\" with a bearish higher TF blocks an entry that alignMode \"none\" allows. These gates were silently ignored until 9041ea6 and have NEVER been tested.",
+        "done_when": "npm test green with 3 new tests, hand-computed assertions, no other file touched."
       },
       {
         "id": "Q2",
         "state": "pending",
-        "file": "backtest.test.mjs",
-        "task": "ONE test only: the one-trade-per-level guard in anticipate mode (antTradedIdx). Build a series where price crosses the same candidate trigger twice and assert exactly ONE trade opens on that level.",
-        "done_when": "npm test green with 1 new test."
+        "file": "funding.mjs",
+        "owner": "executor",
+        "task": "COLLECTOR ONLY, no analysis. Kraken Futures historical funding rates (public, no auth): https://futures.kraken.com/derivatives/api/v4/historicalfundingrates?symbol=PF_XBTUSD for PF_XBTUSD, PF_ETHUSD, PF_SOLUSD. Store funding/<symbol>.csv with header; idempotent merge on re-run. Print rows + date span per symbol.",
+        "done_when": "funding/*.csv exist with real rows, span printed. Zero statistics in this task."
       },
       {
         "id": "Q3",
         "state": "pending",
-        "file": "backtest.test.mjs",
-        "task": "ONE test only: alignment/trendGate in anticipate mode. These were silently ignored until commit 9041ea6 so they have never been tested. Assert alignMode \"all\" with a bearish higher TF blocks an entry that alignMode \"none\" allows.",
-        "done_when": "npm test green with 1 new test."
+        "file": "fundingsignal.mjs",
+        "owner": "executor",
+        "depends_on": "Q2",
+        "task": "ANALYSIS ONLY. Does extreme funding predict forward returns at 8h/24h/72h? MANDATORY: non-overlapping samples (stride=horizon), block-permutation p-values, BH-FDR across all cells, decile spread vs the 0.9% round-trip cost, gross AND net. Every borderline result in this repo has died under these checks - apply them.",
+        "done_when": "Results table printed and appended to ROADMAP.md, stating plainly if the answer is null."
       },
       {
         "id": "Q4",
         "state": "pending",
-        "file": "funding.mjs",
-        "task": "COLLECTOR ONLY - no analysis. Fetch Kraken Futures historical funding rates (public, no auth: https://futures.kraken.com/derivatives/api/v4/historicalfundingrates?symbol=PF_XBTUSD) for PF_XBTUSD, PF_ETHUSD, PF_SOLUSD. Store to funding/<symbol>.csv with a header. Idempotent: re-running merges rather than duplicating. Print rows and date span per symbol.",
-        "done_when": "funding/*.csv exist with real rows and the date span is printed. No statistics in this task."
+        "file": "research.mjs",
+        "owner": "executor",
+        "task": "CONSOLIDATION 1/2: research.mjs with subcommands wrapping baseline.mjs, isbeta.mjs, regime.mjs via researchlib.mjs. Verify each subcommand reproduces original output, THEN delete those three originals.",
+        "done_when": "3 subcommands match original output, 3 originals deleted, npm test green."
       },
       {
         "id": "Q5",
         "state": "pending",
-        "file": "fundingsignal.mjs",
-        "task": "ANALYSIS ONLY (requires Q4 done). Test whether extreme funding predicts forward returns at 8h/24h/72h. MANDATORY discipline: non-overlapping samples (stride = horizon), block-permutation p-values, BH-FDR across all cells, decile spread vs the 0.9% round-trip cost. Report gross AND net. Every borderline result in this repo has died under these checks - apply them, do not skip.",
-        "done_when": "A results table printed and appended to ROADMAP.md, including a plain statement if the answer is null."
-      },
-      {
-        "id": "Q6",
-        "state": "pending",
         "file": "research.mjs",
-        "task": "CONSOLIDATION step 1 of 2: create research.mjs with subcommands wrapping ONLY baseline.mjs, isbeta.mjs and regime.mjs, sharing researchlib.mjs. Verify each subcommand reproduces its original output, THEN delete those three originals. Leave the other scripts alone this run.",
-        "done_when": "research.mjs runs all 3 subcommands with matching output; the 3 originals deleted; npm test green."
-      },
-      {
-        "id": "Q7",
-        "state": "pending",
-        "file": "research.mjs",
-        "task": "CONSOLIDATION step 2 of 2: fold in overlay.mjs, trail.mjs, simple.mjs, flowverify.mjs, intensityfilter.mjs, intensityIC.mjs the same way - verify output matches, then delete each original.",
-        "done_when": "All research scripts reachable via research.mjs; originals deleted; npm test green."
+        "owner": "executor",
+        "depends_on": "Q4",
+        "task": "CONSOLIDATION 2/2: fold in overlay.mjs, trail.mjs, simple.mjs, flowverify.mjs, intensityfilter.mjs, intensityIC.mjs the same way - verify output matches, then delete each original.",
+        "done_when": "All research scripts reachable via research.mjs, originals deleted, npm test green."
       }
     ],
-    "queue_rule": "Work ONE item per run, in order, smallest complete unit. Mark state done before moving on. If an item cannot be finished in one run, split it and add the remainder as a new item rather than leaving it half-built."
+    "queue_rule": "Work ONE item per run, in order, smallest complete unit. Mark state done before moving on. If an item cannot be finished in one run, split it and add the remainder as a new item rather than leaving it half-built.",
+    "cost_policy": {
+      "principle": "Match effort to the job. The expensive part is reasoning, not tool calls - so the phase that needs judgement gets depth and the phase that needs a checklist gets brevity.",
+      "architect": "RARE. Only when a genuinely new design decision exists. Routine queue advance needs no architect - the runner copies the next item mechanically.",
+      "executor": "HEAVIEST and that is correct - this is where the actual work happens. Give it full effort.",
+      "verifier": "BOUNDED AND CHEAP. Run npm test, compare the result against the item done_when, sanity-check any headline number for the classic failure (a big improvement resting on a tiny surviving sample). Do NOT re-derive the Executor work or re-run the research. Target a handful of tool calls, not a work session. Fail it back with reasoning if it smells wrong - a fast skeptical read is the job, a deep audit is not.",
+      "batching": "Group queue items that touch the SAME FILE into one run. Three small tests in backtest.test.mjs is one coherent unit, not three - splitting them triples orient overhead (git pull + protocol + roadmap) and invites merge conflicts on one file.",
+      "orient_budget": "Read AGENT_PROTOCOL.md and the ROADMAP tail once per run. Do not re-read the whole ROADMAP or re-explore the repo - the blackboard already carries what is settled."
+    }
   },
   "ledger": [
     {
@@ -132,11 +133,13 @@
     }
   ],
   "budget": {
-    "window_started_at": "2026-07-30T20:23:34.550Z",
-    "expires_at": "2026-07-31T00:23:34.550Z",
-    "max_runs": 8,
+    "observed_usage_at_set": "88% of the 5h window consumed at 2026-07-30T20:28Z (reported by the human). ~12% headroom, so roughly 35 minutes equivalent.",
+    "window_started_at": "2026-07-30T20:26:34.634Z",
+    "expires_at": "2026-07-30T20:56:34.634Z",
+    "max_runs": 2,
     "runs_used": 0,
-    "on_exhausted": "Set control.status to PAUSED_BUDGET, append a ledger entry, and DISABLE the scheduled task cajh-swarm-loop via the scheduled-tasks tool (update_scheduled_task with enabled:false). Do not do any other work in that run.",
-    "note": "A run must check this BEFORE any other work so an exhausted budget costs almost nothing. To resume: raise max_runs, push expires_at forward, reset runs_used to 0, set control.status back to EXECUTOR_PENDING, and re-enable the task."
+    "sizing_rationale": "Modelled on REMAINING quota, not wall clock. At 88% consumed there is room for about two substantive runs, so the cap is 2 and the clock is 30 minutes - whichever trips first stops the loop. Deliberately pessimistic: over-running the quota mid-task is worse than stopping early, because a killed run can leave a half-built file.",
+    "on_exhausted": "Set control.status PAUSED_BUDGET, append a ledger entry, DISABLE the scheduled task cajh-swarm-loop via update_scheduled_task(enabled:false), then exit doing nothing else.",
+    "resume_after_reset": "When the 5h window resets: set runs_used 0, push expires_at forward, raise max_runs (8 is reasonable on a fresh window), set control.status back to EXECUTOR_PENDING, re-enable the task."
   }
 }
