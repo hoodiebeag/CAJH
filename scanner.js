@@ -129,7 +129,7 @@ const tradedLevels = new Map();
 const levelKey = (symbol, buy) => `${symbol}|${buy.tf}|${buy.pivotPrice}`;
 const COOLDOWN_BARS = 24;
 
-function levelOnCooldown(symbol, buy, tfMinutes) {
+function levelOnCooldown(symbol, buy) {
   const until = tradedLevels.get(levelKey(symbol, buy));
   if (until == null) return false;
   if (Date.now() >= until) { tradedLevels.delete(levelKey(symbol, buy)); return false; }
@@ -155,7 +155,7 @@ async function proposeBuyLocked(symbol, buy, channel) {
   if (getTrade(symbol))    return { traded: false, reason: "already in a position" };
 
   const tfMinutes = SCAN_INTERVALS.find(i => i.label === buy.tf)?.minutes ?? 60;
-  if (levelOnCooldown(symbol, buy, tfMinutes)) {
+  if (levelOnCooldown(symbol, buy)) {
     return { traded: false, reason: `this ${buy.tf} level was already traded recently (one trade per structural level)` };
   }
 

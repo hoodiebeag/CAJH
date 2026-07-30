@@ -37,7 +37,7 @@ export function buildLiveContext(state) {
     `cajh live state:`,
     `- trading: ${trading}`,
     `- watchlist: ${watch}`,
-    `- timeframes scanned: 15m, 1h, 4h`,
+    `- timeframes scanned: 1h, 4h, 1d`,
     `- open positions:\n${positions}`,
     `- last scan: ${state.lastScanTime ?? "none yet"}`
   ].join("\n");
