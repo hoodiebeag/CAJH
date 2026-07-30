@@ -95,7 +95,13 @@ export function backtestMultiTF({ series } = {}, {
   lockBreakeven = LOCK_BREAKEVEN, beTriggerR = BE_TRIGGER_R, beLockR = BE_LOCK_R, feeBufferPct = FEE_BUFFER_PCT,
   feeRate = FEE_RATE, slipPct = SLIPPAGE_PCT,
   trendGate = TREND_GATE, trendMa = TREND_MA, trendGateMode = TREND_GATE_MODE,
-  entryTf = null, alignMode = "all", minRoomR = 0, entryMode = "bos"
+  entryTf = null, alignMode = "all", minRoomR = 0, entryMode = "bos",
+  // Exit model (all optional; defaults reproduce the original 4R-or-die behaviour):
+  trailR = null,          // trailing stop distance in R below the running peak (null = off)
+  trailStartR = 1,        // only start trailing once price has run this many R
+  partialAtR = null,      // bank `partialFrac` of the position at this R (null = off)
+  partialFrac = 0.5,
+  maxHold = MAX_HOLD      // bars before a stale position is closed at the market
 } = {}) {
   // `series` = timeframes ascending, e.g. [{label:"1h",mins:60,candles},{label:"4h",...},{label:"1d",...}].
   // The entry TF (entryTf label, default the lowest) trades; everything ABOVE it is the
@@ -219,8 +225,10 @@ export function backtestMultiTF({ series } = {}, {
 
   const trades = [];
   const reasons = {};   // tally of why each candidate swing low was taken / rejected
+  const exits   = {};   // tally of HOW each trade ended (stop / target / trail-be / partial / timeout)
   let pos = null, prevLowPrice = null;
   let antCand = null, antHi = null;   // anticipate mode: running unconfirmed candidate low / high
+  let antTradedIdx = null;            // candidate index already traded (one trade per level, mirrors live)
 
   for (let k = n; k < entryCandles.length; k++) {
     const lowHere = lowAt.get(k); // a swing low confirmed at this candle on the entry TF?
@@ -254,7 +262,7 @@ export function backtestMultiTF({ series } = {}, {
       else if (minRoomR && (nearestResAbove(entry, tClose) - entry) / risk < minRoomR)    { ok = false; reason = "noRoom"; }
       else                                                                        { reason = "taken"; }
       reasons[reason] = (reasons[reason] || 0) + 1;
-      if (ok) pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k };
+      if (ok) pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: entry, trailing: false };
      }
     } else if (!pos && entryMode === "anticipate") {
       // ── anticipate mode ── mirrors live: enter the moment price trades ABOVE the
@@ -262,7 +270,7 @@ export function backtestMultiTF({ series } = {}, {
       // instead of waiting for the confirming close. No alignment/trend gates (live
       // has none) — only the per-TF stop band applies. Candidate state is updated at
       // the END of each bar, so this check uses only information from bars < k.
-      if (antCand && k > antCand.index && H[k] > antCand.trigger) {
+      if (antCand && k > antCand.index && antCand.index !== antTradedIdx && H[k] > antCand.trigger) {
         const entry = Math.max(O[k], antCand.trigger);   // a gap above the trigger fills at the open
         const stop  = antCand.price, risk = entry - stop;
         let reason = "taken";
@@ -271,7 +279,8 @@ export function backtestMultiTF({ series } = {}, {
         else if (minStopPct && risk / entry < minStopPct)  reason = "stopTooTight";
         reasons[reason] = (reasons[reason] || 0) + 1;
         if (reason === "taken") {
-          pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k };
+          antTradedIdx = antCand.index;   // one trade per structural level (mirrors live cooldown)
+          pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: entry, trailing: false };
           // Intrabar order is unknowable: if this bar also traded at/below the stop,
           // assume the worst and take the stop on the entry bar.
           if (L[k] <= stop) {
@@ -295,39 +304,67 @@ export function backtestMultiTF({ series } = {}, {
         else if (maxStopPct && risk / cand.entry > maxStopPct)  reason = "stopTooFar";
         else if (minStopPct && risk / cand.entry < minStopPct)  reason = "stopTooTight";
         reasons[reason] = (reasons[reason] || 0) + 1;
-        if (reason === "taken") pos = { entry: cand.entry, stop: cand.stop, risk, tp: cand.tp, beMoved: false, openedAt: k };
+        if (reason === "taken") pos = { entry: cand.entry, stop: cand.stop, risk, tp: cand.tp, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: cand.entry, trailing: false };
       }
     }
     if (lowHere) prevLowPrice = lowHere.price;
 
     if (pos && k > pos.openedAt) {
       const hi = H[k], lo = L[k];
-      // Round-trip cost (fees + slippage) in R units: entry leg on the entry notional,
-      // exit leg on the exit notional (matches how monitor.js reports live P&L).
-      const costR = (exit) => ((feeRate + slipPct) * (pos.entry + exit)) / pos.risk;
-      // Stop checked first against the stop as it stands entering this candle
-      // (conservative: if both stop and target are touched, assume stop hit first).
-      if (lo <= pos.stop) { trades.push((pos.stop - pos.entry) / pos.risk - costR(pos.stop)); pos = null; }
-      else if (hi >= pos.tp) { trades.push((pos.tp - pos.entry) / pos.risk - costR(pos.tp)); pos = null; }
+      // Net R of the FULL position exiting at `px`: gross R minus fees+slippage, with the
+      // entry leg on the entry notional and the exit leg on the exit notional (matches
+      // monitor.js's live P&L). A partial leg of fraction f is simply f × this value, so
+      // scale-outs stay exactly consistent with full exits.
+      const netAt = (px) => (px - pos.entry) / pos.risk - ((feeRate + slipPct) * (pos.entry + px)) / pos.risk;
+      // Close `frac` of what's left at `px`; bank the trade once nothing remains.
+      const closeLeg = (px, frac, why) => {
+        const f = Math.min(frac, pos.open);
+        pos.realized += f * netAt(px);
+        pos.open -= f;
+        if (pos.open <= 1e-9) {
+          trades.push(pos.realized);
+          exits[why] = (exits[why] || 0) + 1;
+          pos = null;
+        }
+      };
+
+      // Stop first, against the stop as it stood entering this candle (conservative: if
+      // both stop and target are touched in one bar, assume the stop hit first).
+      if (lo <= pos.stop) closeLeg(pos.stop, pos.open, pos.beMoved || pos.trailing ? "trail/be" : "stop");
+      else if (hi >= pos.tp) closeLeg(pos.tp, pos.open, "target");
+
+      // Partial scale-out: bank `partialFrac` at the partial target, let the rest run.
+      if (pos && partialAtR && !pos.partialDone) {
+        const px = pos.entry + partialAtR * pos.risk;
+        if (hi >= px) {
+          pos.partialDone = true;
+          closeLeg(px, partialFrac, "partial+runner");
+        }
+      }
+
+      // Trailing stop: once price has run trailStartR, keep the stop trailR below the
+      // running peak. Updated after the stop check, so it only binds on later candles.
+      if (pos && trailR) {
+        pos.peak = Math.max(pos.peak, hi);
+        if (pos.peak >= pos.entry + trailStartR * pos.risk) {
+          pos.stop = Math.max(pos.stop, pos.peak - trailR * pos.risk);
+          pos.trailing = true;
+        }
+      }
+
       // Breakeven-plus: once this candle's high reaches the trigger, lift the stop
       // above entry for subsequent candles.
       if (pos && lockBreakeven && !pos.beMoved) {
         const lockOffset = Math.max(beLockR * pos.risk, feeBufferPct * pos.entry);
         const armOffset  = Math.max(beTriggerR * pos.risk, lockOffset + 0.5 * pos.risk);
         if (hi >= pos.entry + armOffset) {
-          pos.stop = pos.entry + lockOffset;
+          pos.stop = Math.max(pos.stop, pos.entry + lockOffset);
           pos.beMoved = true;
         }
       }
       // Structure-based take-profit: a swing high confirmed here, while in profit.
-      if (pos && exitOnSwingHigh && highAt.has(k) && C[k] > pos.entry) {
-        trades.push((C[k] - pos.entry) / pos.risk - costR(C[k]));
-        pos = null;
-      }
-      if (pos && k - pos.openedAt >= MAX_HOLD) {
-        trades.push((C[k] - pos.entry) / pos.risk - costR(C[k]));
-        pos = null;
-      }
+      if (pos && exitOnSwingHigh && highAt.has(k) && C[k] > pos.entry) closeLeg(C[k], pos.open, "swingHigh");
+      if (pos && k - pos.openedAt >= maxHold) closeLeg(C[k], pos.open, "timeout");
     }
 
     // Anticipation candidate tracking — same transitions as detectSwings/pendingSwingLow,
@@ -353,6 +390,7 @@ export function backtestMultiTF({ series } = {}, {
     avgR: count ? totalR / count : 0,
     maxDrawdownR: maxDD,
     results: trades,  // raw per-trade R values, for pooling across pairs
+    exits,            // { stop, target, "trail/be", "partial+runner", swingHigh, timeout }
     reasons           // { taken, stopTooTight, stopTooFar, trendGate, notAligned, notHigherLow, priceBelowStop }
   };
 }

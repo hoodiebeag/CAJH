@@ -575,6 +575,149 @@ export async function handleOptimize(message, state) {
 }
 
 
+// ─── !exits ─────────────────────────────────────────────────────────────────
+// Exit-model sweep — the roadmap's "%-based exit model" test, and the most likely
+// place a real edge is being thrown away. The entry stays fixed (live anticipation
+// rule, all 3 TFs pooled); only the EXIT changes. Learn on everything up to the split,
+// then score the winner on a genuinely sealed holdout: Q1 2026 was not on this machine
+// until it was ingested today, so no earlier sweep could have peeked at it.
+const EXIT_SPLIT_TS = Date.UTC(2026, 0, 1) / 1000;   // 2026-01-01: train < split ≤ test
+
+const EXIT_MODELS = [
+  ["live: TP4 + BE-lock",   { tpR: 4, lockBreakeven: true }],
+  ["TP4, no BE",            { tpR: 4, lockBreakeven: false }],
+  ["TP2, no BE",            { tpR: 2, lockBreakeven: false }],
+  ["TP3, no BE",            { tpR: 3, lockBreakeven: false }],
+  ["TP6, no BE",            { tpR: 6, lockBreakeven: false }],
+  ["TP1.5, no BE",          { tpR: 1.5, lockBreakeven: false }],
+  ["trail 1R after 1R",     { tpR: 99, lockBreakeven: false, trailR: 1, trailStartR: 1 }],
+  ["trail 2R after 2R",     { tpR: 99, lockBreakeven: false, trailR: 2, trailStartR: 2 }],
+  ["trail 1.5R after 2R",   { tpR: 99, lockBreakeven: false, trailR: 1.5, trailStartR: 2 }],
+  ["half@1R + run to 4R",   { tpR: 4, lockBreakeven: false, partialAtR: 1, partialFrac: 0.5 }],
+  ["half@2R + run to 6R",   { tpR: 6, lockBreakeven: false, partialAtR: 2, partialFrac: 0.5 }],
+  ["half@1R + trail 1R",    { tpR: 99, lockBreakeven: false, partialAtR: 1, partialFrac: 0.5, trailR: 1, trailStartR: 1 }],
+];
+
+// Slice a timeframe series to a time window (seconds, [from, to)).
+const sliceSeries = (series, from, to) => series.map(s => ({
+  ...s, candles: s.candles.filter(c => { const t = parseInt(c.time); return t >= from && t < to; })
+}));
+
+export async function handleExits(message, state) {
+  const watchlist = state.watchlist || [];
+  if (!watchlist.length) return message.reply("Watchlist is empty.");
+
+  await message.reply(
+    `🚪 **Exit-model sweep** across **${watchlist.length}** assets — entry rule fixed (live anticipation, 1h/4h/1d pooled), ` +
+    `only the exit changes. Train before 2026-01-01, then score on the sealed Q1-2026 holdout. Few minutes…`
+  );
+
+  // Load each pair's series ONCE (resampling the 1m store is the expensive part).
+  const data = [];
+  for (const asset of watchlist) {
+    try {
+      const d = await tfCandles(asset.id);
+      if (haveAll(d)) data.push({ symbol: asset.symbol, series: seriesOf(d) });
+    } catch (err) { logger.error(`[EXITS] ${asset.symbol}:`, err.message); }
+  }
+  if (!data.length) return message.channel.send("⚠️ Couldn't load data for any pair.");
+
+  // Only pairs with real data in BOTH windows may take part, or the comparison is not
+  // like-for-like: several pairs were first ingested from the Q1-2026 archive and have
+  // no earlier history, so they would silently load the holdout with symbols the
+  // training set never saw.
+  const INF_TS = 4102444800; // 2100-01-01 — "no upper bound"
+  const enough = (series, from, to) => sliceSeries(series, from, to).every(s => s.candles.length >= 60);
+  const eligible = data.filter(d => enough(d.series, 0, EXIT_SPLIT_TS) && enough(d.series, EXIT_SPLIT_TS, INF_TS));
+  const excluded = data.filter(d => !eligible.includes(d)).map(d => d.symbol);
+  if (!eligible.length) return message.channel.send("⚠️ No pair has usable data in both the training and holdout windows.");
+
+  const run = (cfgExtra, from, to) => {
+    const pooled = []; let green = 0, pairs = 0; const exits = {};
+    for (const d of eligible) {
+      const series = sliceSeries(d.series, from, to);
+      pairs++;
+      let pairR = 0;
+      for (const tf of LIVE_ENTRY_TFS) {
+        const r = backtestMultiTF({ series }, { ...liveCfg(tf), ...cfgExtra });
+        pooled.push(...(r.results || []));
+        pairR += r.totalR;
+        for (const [k, v] of Object.entries(r.exits || {})) exits[k] = (exits[k] || 0) + v;
+      }
+      if (pairR > 0) green++;
+    }
+    const n = pooled.length, wins = pooled.filter(x => x > 0).length;
+    const net = pooled.reduce((a, b) => a + b, 0);
+    let eq = 0, peak = 0, maxDD = 0;
+    for (const r of pooled) { eq += r; peak = Math.max(peak, eq); maxDD = Math.min(maxDD, eq - peak); }
+    return { n, net, rpt: n ? net / n : 0, winRate: n ? wins / n : 0, green, pairs, maxDD, exits };
+  };
+
+  const rows = EXIT_MODELS.map(([label, cfg]) => ({
+    label, cfg,
+    is:  run(cfg, 0, EXIT_SPLIT_TS),
+    oos: run(cfg, EXIT_SPLIT_TS, INF_TS),
+  }));
+
+  // ── The decisive diagnostic ──
+  // Re-run the best exits with the cost switched off. Net = gross − costs, and costs are
+  // known exactly, so this separates the two possible worlds:
+  //   gross ≈ 0 or below  → the ENTRY has no predictive power; no fee tier can rescue it.
+  //   gross clearly > 0   → the entry does predict, and only costs are eating it, which
+  //                         makes maker/limit fills a real (buildable) lever.
+  // Maker rate reflects a limit-only fill at Kraken's low-volume maker tier.
+  const FEE_TIERS = [
+    ["gross (no costs)", { feeRate: 0,      slipPct: 0 }],
+    ["maker 0.16%",      { feeRate: 0.0016, slipPct: 0.0002 }],
+    ["taker 0.40%",      {}],   // the live assumption
+  ];
+  const probeModels = [EXIT_MODELS[0], ...[...rows].filter(r => r.is.n >= 50).sort((a, b) => b.is.rpt - a.is.rpt).slice(0, 1).map(r => [r.label, r.cfg])];
+  const feeLines = probeModels.map(([label, cfg]) => {
+    const cells = FEE_TIERS.map(([tier, fees]) => {
+      const e = run({ ...cfg, ...fees }, 0, EXIT_SPLIT_TS);
+      return `${tier}: **${e.rpt >= 0 ? "+" : ""}${e.rpt.toFixed(3)}**R/t`;
+    });
+    return `• **${label}** — ${cells.join("  ·  ")}`;
+  });
+
+  const fmt = (e) => `${e.n}t · ${e.net.toFixed(0)}R · **${e.rpt.toFixed(3)}**R/t · ${(e.winRate * 100).toFixed(0)}% · ${e.green}/${e.pairs}grn`;
+  const lines = rows.map(r => `• **${r.label}**\n    train ${fmt(r.is)}\n    hold  ${fmt(r.oos)}`);
+
+  const traded   = rows.filter(r => r.is.n >= 50);
+  const bestIS   = [...traded].sort((a, b) => b.is.rpt - a.is.rpt)[0];
+  const bestOOS  = [...rows.filter(r => r.oos.n >= 30)].sort((a, b) => b.oos.rpt - a.oos.rpt)[0];
+  const live     = rows[0];
+
+  let verdict;
+  if (!bestIS) {
+    verdict = `⚠️ No exit model produced a usable training sample — nothing to compare.`;
+  } else if (bestIS.is.rpt > 0 && bestIS.oos.rpt > 0) {
+    verdict = `🟢 **${bestIS.label}** is the best exit in training (${bestIS.is.rpt.toFixed(3)}R/t) **and stays positive on the sealed holdout** ` +
+      `(${bestIS.oos.rpt.toFixed(3)}R/t, ${bestIS.oos.green}/${bestIS.oos.pairs} pairs green). That is the first genuinely encouraging result this project has produced — ` +
+      `but one holdout quarter is one regime. Paper-trade it before risking size.`;
+  } else if (bestIS.is.rpt > 0) {
+    verdict = `🟡 **${bestIS.label}** leads in training (${bestIS.is.rpt.toFixed(3)}R/t) but does **not** hold on the sealed Q1-2026 quarter ` +
+      `(${bestIS.oos.rpt.toFixed(3)}R/t). That is what in-sample tuning looks like when the holdout is honest — the exit is not the missing piece.`;
+  } else {
+    verdict = `🔴 **Every exit model is net-negative in training.** Best is ${bestIS.label} at ${bestIS.is.rpt.toFixed(3)}R/t vs live ${live.is.rpt.toFixed(3)}R/t. ` +
+      `Changing the exit reshuffles the loss; it does not create an edge. The problem is upstream — the ENTRY has no predictive power, ` +
+      `so no exit rule can rescue it. Cheaper fills or a different entry are the only levers left.`;
+  }
+
+  const bestNote = bestOOS
+    ? `\nBest on the holdout alone: **${bestOOS.label}** (${bestOOS.oos.rpt.toFixed(3)}R/t) — noted, not trusted; picking the holdout winner *is* overfitting the holdout.`
+    : "";
+
+  await message.channel.send(
+    `🚪 **Exit-model sweep — ${eligible.length} assets, ${EXIT_MODELS.length} exits** (net of fees, entry rule unchanged)\n` +
+    `Train: history → 2025-12-31 · Holdout: Q1 2026 (sealed — ingested today)` +
+    (excluded.length ? `\n_Excluded (no history in both windows): ${excluded.join(", ")}_` : "") + `\n\n` +
+    lines.join("\n") + `\n\n` +
+    `**Cost sensitivity — is there an edge underneath the fees?** (training window)\n` +
+    feeLines.join("\n") + `\n\n` + verdict + bestNote
+  );
+}
+
 // ─── !why [symbol] ──────────────────────────────────────────────────────────
 // Diagnostic: replays the strategy over history with the CURRENT live config and
 // tallies WHY each candidate swing low was taken or rejected (which gate killed it).
@@ -611,9 +754,10 @@ export async function handleWhy(message, state, symbol) {
   const label = {
     taken: "✅ taken", stopTooTight: "❌ stop too tight (below floor)", stopTooFar: "❌ stop too far (above cap)",
     trendGate: "❌ trend gate (4h not trending up)", notAligned: "❌ 1h/4h not aligned",
-    notHigherLow: "❌ not a higher low", priceBelowStop: "❌ price already below stop"
+    notHigherLow: "❌ not a higher low", priceBelowStop: "❌ price already below stop",
+    noRoom: "❌ no room to the next resistance"
   };
-  const order = ["taken", "stopTooTight", "stopTooFar", "trendGate", "notAligned", "notHigherLow", "priceBelowStop"];
+  const order = ["taken", "stopTooTight", "stopTooFar", "trendGate", "notAligned", "notHigherLow", "noRoom", "priceBelowStop"];
   const lines = order.filter(k => agg[k]).map(k => `${label[k]}: **${agg[k]}** (${(agg[k] / total * 100).toFixed(0)}%)`);
 
   await message.channel.send(
@@ -748,8 +892,8 @@ export async function handleRoom(message, state) {
 const DISCOVER_UNIVERSE = [
   "BTC","ETH","SOL","XRP","ADA","DOGE","AVAX","LINK","LTC","DOT",
   "UNI","ATOM","POL","NEAR","FIL","APT","INJ","TAO","TIA","SUI",
-  "BCH","AAVE","ALGO","XLM","ETC","GRT","CRV","MKR","SNX","ICP",
-  "IMX","ARB","OP","SEI","RUNE","KSM","EOS","FLOW","SAND","MANA",
+  "BCH","AAVE","ALGO","XLM","ETC","GRT","CRV","SNX","ICP",
+  "IMX","ARB","OP","SEI","RUNE","KSM","FLOW","SAND","MANA",
 ];
 
 export async function handleDiscover(message, state) {

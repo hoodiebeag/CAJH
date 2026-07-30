@@ -12,7 +12,7 @@ import {
   handleHelp, handleWatchlist, handleWatch, handleUnwatch,
   handleSetChannel, handleStatus,
   handleScan, handleAnalyzeThat, handleChartRequest,
-  handleGeneral, handleManualTrade, handleBacktest, handleOptimize, handleWhy, handleAlign, handleRoom, handleModes, handleProfile, handleValidate, handleDiscover,
+  handleGeneral, handleManualTrade, handleBacktest, handleOptimize, handleWhy, handleAlign, handleRoom, handleModes, handleProfile, handleValidate, handleDiscover, handleExits,
   handleStop, handleResume, handleSell, handlePort, handleReconcile
 } from "./commands.js";
 import * as logger from './logger.js';
@@ -88,11 +88,24 @@ client.once("clientReady", async () => {
   // !setchannel redirects alerts without a restart.
   startMonitor(client, () => state.scanChannelId);
 
-  // Test-only safety: boot with live trading OFF so you can deploy and run !backtest
-  // without opening real positions. Set START_HALTED=true in Railway; !resume to go live.
-  if (process.env.START_HALTED === "true") {
+  // Boot HALTED unless live trading is explicitly switched on with LIVE_TRADING=true.
+  //
+  // This default is deliberate. Measured on 12 pairs over ~15 months (4,426 training
+  // trades) the current strategy is net-negative in EVERY exit configuration, and
+  // negative even with fees set to zero — so an accidental deploy or restart trading
+  // real money is a known-loss event, not an unknown. Opting in is one env var; opting
+  // out of a loss after the fact is not. `!resume` still enables trading for a session.
+  const liveOptIn = process.env.LIVE_TRADING === "true";
+  if (!liveOptIn || process.env.START_HALTED === "true") {
     haltManual();
-    logger.warn("[RISK] Booted HALTED (START_HALTED=true) — scans & backtests run, but NO live trades until !resume.");
+    logger.warn(
+      liveOptIn
+        ? "[RISK] Booted HALTED (START_HALTED=true) — scans & research run, but NO live trades until !resume."
+        : "[RISK] Booted HALTED (default) — set LIVE_TRADING=true to allow autonomous trading, or use !resume for this session. " +
+          "Backtests currently show this strategy losing money; see ROADMAP.md."
+    );
+  } else {
+    logger.warn("[RISK] LIVE TRADING ENABLED (LIVE_TRADING=true) — cajh will place real orders autonomously.");
   }
 
   // Scan every 15 minutes (right after each 15m candle closes). Quiet — only posts on a trade.
@@ -173,6 +186,7 @@ client.on("messageCreate", async (message) => {
   if (lower === "!profile")    return safe(handleProfile(message, state), message);
   if (lower === "!validate")   return safe(handleValidate(message, state), message);
   if (lower === "!discover")   return safe(handleDiscover(message, state), message);
+  if (lower === "!exits")      return safe(handleExits(message, state), message);
 
   if (lower === "!why" || lower.startsWith("!why ")) {
     return safe(handleWhy(message, state, raw.slice(4).trim() || null), message);

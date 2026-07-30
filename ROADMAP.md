@@ -114,3 +114,41 @@ _No code review can promise an edge exists. What's fixed is that the pipeline is
 - Backtester/profiler generalized to timeframe series; research commands re-run on
   1h/4h/1d; store: XBTUSD backfilled to now; Q1-2026 archive download pending
   (Google Drive per-file quota; retry loop running).
+
+
+## 2026-07-30 (later) — the decisive result
+
+Data first: the Q1-2026 archive was ingested (merge-safe), giving 12 pairs with
+continuous history from Jan 2025 → Mar 2026, plus BTC current to today. Seven pairs
+(NEAR/FIL/APT/INJ/TAO/TIA/SUI) exist **only** from Q1 2026 and DOGE has no store at
+all — they are excluded from train/holdout comparisons rather than silently loading
+the holdout.
+
+**Exit-model sweep (`!exits`, `node research.js exits`)** — entry rule held fixed,
+12 exit models swept, trained on history → 2025-12-31 and scored on Q1 2026, which
+was not present on this machine until today (a genuinely sealed holdout):
+
+- Every model is net-negative in both windows: −0.41 → −0.50 R/t train,
+  −0.51 → −0.69 R/t holdout. **0 of 12 pairs green in every configuration.**
+- Best exit (trail 1R after 1R) beats the live exit by ~0.07 R/t — it reshuffles the
+  loss, it does not create an edge.
+
+**Cost sensitivity — the finding that settles it.** Re-running with costs set to zero:
+
+| model | gross (no costs) | maker 0.16% | taker 0.40% |
+|---|---|---|---|
+| live: TP4 + BE-lock | −0.094 R/t | −0.249 R/t | −0.480 R/t |
+| trail 1R after 1R | −0.019 R/t | −0.176 R/t | −0.411 R/t |
+
+**Gross expectancy is zero-to-negative.** Costs are not what is killing this strategy;
+there is nothing underneath them. This closes the roadmap's "lower costs / maker fills"
+lever — building a post-only execution stack would be weeks of work to make a −0.02 R/t
+strategy into a −0.02 R/t strategy. It also closes "%-based exit model": tested, no.
+
+What remains open is the ENTRY. A swing-low anticipation trigger, taken on every
+occurrence across 1h/4h/1d, is a coin flip. Any future work should be spent finding a
+trigger with measurable gross edge *before* any execution or exit engineering — and the
+`exits` harness now measures exactly that in one command.
+
+**Live trading now defaults to OFF** (`LIVE_TRADING=true` to opt in), because deploying
+this strategy against real money is a known-loss event, not an unknown one.

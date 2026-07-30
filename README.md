@@ -56,10 +56,33 @@ to relax. Use `!backtest` to compare.
 
 ## Autonomous trading
 
-cajh places trades itself — there is **no confirmation step**. On a confirmed,
-aligned setup it buys immediately, posts the trade, and pings you (`BEAG_USER_ID`).
-Use `!stop` to halt new entries at any time, and `!sell <asset>` to exit a position
-you don't want.
+**cajh boots halted.** Autonomous trading only runs when `LIVE_TRADING=true` is set in
+the environment; otherwise scans, charts, and research work normally but no orders are
+placed. This default exists because the current strategy backtests net-negative — see
+"Does it work?" below. `!resume` enables trading for the running session.
+
+Once enabled, cajh places trades itself — there is **no confirmation step**. On a valid
+setup it buys immediately, posts the trade, and pings you (`BEAG_USER_ID`). Use `!stop`
+to halt new entries at any time, and `!sell <asset>` to exit a position you don't want.
+
+## Does it work?
+
+Not yet — and the tooling is built to say so plainly. Measured on 12 pairs over ~15
+months (4,426 trades, `node research.js exits`):
+
+| exit model | train R/trade | sealed holdout R/trade |
+|---|---|---|
+| live (TP4 + breakeven lock) | −0.480 | −0.633 |
+| best of 12 (trail 1R after 1R) | −0.411 | −0.512 |
+
+No configuration is profitable, and **no pair is green in any configuration**. The
+decisive number is the cost-sensitivity row: with fees and slippage set to **zero**, the
+strategy still returns −0.02 to −0.09 R/trade. Since costs can only subtract, cheaper
+(maker) fills cannot rescue it — the entry itself carries no predictive edge. `!discover`
+agrees: 3,838 candidates, no rule survived false-discovery control.
+
+Read that as the pipeline working correctly, not the project failing: it is now capable
+of detecting an edge honestly, and of telling you when there isn't one.
 
 ## How exits work
 

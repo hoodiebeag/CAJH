@@ -83,6 +83,43 @@ test("profileEntries resolves the confirmed candidate with identical netR", () =
     `netR ${records[0].netR} != expected ${netWinR(97.7, 2.7)}`);
 });
 
+// ── Exit-model accounting ────────────────────────────────────────────────────
+// Same BOS entry (97.7, risk 2.7). A partial leg of fraction f must contribute exactly
+// f × the full-position net R at that price, so scale-outs stay consistent with full exits.
+const netAt = (px, entry = 97.7, risk = 2.7) => (px - entry) / risk - (FEE * (entry + px)) / risk;
+
+const BASE_EXIT_CFG = {
+  entryTf: "1h", entryMode: "bos", alignMode: "none", trendGate: false, chopFilter: false,
+  requireHigherLow: false, maxStopPct: null, minStopPct: null, lockBreakeven: false,
+  feeRate: 0.004, slipPct: 0.0005,
+};
+
+test("partial scale-out: half banked at 1R, remainder runs to the 4R target", () => {
+  const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);   // then grinds up past both levels
+  const r = backtestMultiTF({ series }, { ...BASE_EXIT_CFG, tpR: 4, partialAtR: 1, partialFrac: 0.5 });
+  assert.equal(r.trades, 1);
+  const expected = 0.5 * netAt(97.7 + 1 * 2.7) + 0.5 * netAt(97.7 + 4 * 2.7);
+  assert.ok(Math.abs(r.results[0] - expected) < 1e-9, `R ${r.results[0]} != expected ${expected}`);
+  assert.equal(r.exits["partial+runner"], undefined); // the final leg exits at the target
+  assert.equal(r.exits.target, 1);
+});
+
+test("trailing stop: exits 1R below the running peak, not at the peak", () => {
+  // Rise in clean 1.00 steps (high = close) to a 109.7 peak, then one bar that dumps.
+  const rise = [];
+  for (let i = 1; i <= 12; i++) { const c = 97.7 + i; rise.push([c - 1, c, c - 1, c]); }
+  rise.push([109.7, 109.7, 100, 100]);
+  const series = buildSeries([[96, 97.8, 96, 97.7], ...rise], 100);
+  const r = backtestMultiTF({ series }, { ...BASE_EXIT_CFG, tpR: 99, trailR: 1, trailStartR: 1 });
+  // The dump forms a fresh swing low, so the recovery opens a second trade; only the
+  // first one exercises the trail, and it is the one being asserted here.
+  assert.ok(r.trades >= 1);
+  // Peak 109.7 → stop trails to 109.7 − 1R(2.7) = 107.0; the dump bar takes it.
+  const expected = netAt(107.0);
+  assert.ok(Math.abs(r.results[0] - expected) < 1e-9, `R ${r.results[0]} != expected ${expected}`);
+  assert.ok(r.exits["trail/be"] >= 1, "expected a trailing-stop exit");
+});
+
 test("profileEntries excludes candidates with a truncated resolution window", () => {
   const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
   const short = series.map(s => ({ ...s }));

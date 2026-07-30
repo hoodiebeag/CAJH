@@ -120,6 +120,29 @@ function summarize(symbol, biases, buy) {
 // racing each other into a double entry before getTrade() sees the first one.
 const pendingBuys = new Set();
 
+// Structural levels already traded, key → timestamp. Without this, a stop-out leaves
+// price ABOVE the same candidate's trigger, so the very next 15-minute scan re-buys the
+// identical setup — stop out, re-buy, stop out — bleeding a full stop plus round-trip
+// fees each cycle. One level, one trade, until the cooldown expires (24 bars of the
+// signal's own timeframe, so a 1h level frees up in a day, a 1d level in ~3 weeks).
+const tradedLevels = new Map();
+const levelKey = (symbol, buy) => `${symbol}|${buy.tf}|${buy.pivotPrice}`;
+const COOLDOWN_BARS = 24;
+
+function levelOnCooldown(symbol, buy, tfMinutes) {
+  const until = tradedLevels.get(levelKey(symbol, buy));
+  if (until == null) return false;
+  if (Date.now() >= until) { tradedLevels.delete(levelKey(symbol, buy)); return false; }
+  return true;
+}
+
+function markLevelTraded(symbol, buy, tfMinutes) {
+  // Prune expired keys so the map can't grow without bound over a long uptime.
+  const now = Date.now();
+  for (const [k, until] of tradedLevels) if (now >= until) tradedLevels.delete(k);
+  tradedLevels.set(levelKey(symbol, buy), now + COOLDOWN_BARS * tfMinutes * 60 * 1000);
+}
+
 async function proposeBuy(symbol, buy, channel) {
   if (pendingBuys.has(symbol)) return { traded: false, reason: "a buy for this symbol is already in flight" };
   pendingBuys.add(symbol);
@@ -131,19 +154,30 @@ async function proposeBuyLocked(symbol, buy, channel) {
   if (!isTradingEnabled()) return { traded: false, reason: "trading is halted (!resume to enable)" };
   if (getTrade(symbol))    return { traded: false, reason: "already in a position" };
 
+  const tfMinutes = SCAN_INTERVALS.find(i => i.label === buy.tf)?.minutes ?? 60;
+  if (levelOnCooldown(symbol, buy, tfMinutes)) {
+    return { traded: false, reason: `this ${buy.tf} level was already traded recently (one trade per structural level)` };
+  }
+
   // At the position cap, rotate: close the MOST PROFITABLE open position (bank the
   // winner) to make room for the newest signal. Only proceed if that close succeeds.
+  // A position is only rotated out while it is IN PROFIT — closing a loser to chase a
+  // fresh signal just pays two more fee legs to swap one drawdown for another.
   if (getOpenTrades().length >= MAX_OPEN_POSITIONS) {
     let best = null;
     for (const t of getOpenTrades()) {
       try {
         const p = await getCurrentPrice(t.symbol);
         if (!p) continue;
-        const r = (t.risk ?? (t.entry - t.stopLoss)) > 0 ? (p - t.entry) / (t.risk ?? (t.entry - t.stopLoss)) : 0;
+        const tRisk = t.risk ?? (t.entry - t.stopLoss);
+        const r = tRisk > 0 ? (p - t.entry) / tRisk : 0;
         if (!best || r > best.r) best = { trade: t, price: p, r };
       } catch { /* skip unpriceable positions */ }
     }
     if (!best) return { traded: false, reason: `max open positions (${MAX_OPEN_POSITIONS}) and no rotation candidate could be priced` };
+    if (best.r <= 0) {
+      return { traded: false, reason: `max open positions (${MAX_OPEN_POSITIONS}) — none are in profit, so nothing is rotated out` };
+    }
     const rotated = await closeTradeAtMarket(channel, best.trade.symbol, best.price, "rotated");
     if (!rotated) return { traded: false, reason: `max open positions — rotating out ${best.trade.symbol} failed` };
   }
@@ -176,9 +210,10 @@ async function proposeBuyLocked(symbol, buy, channel) {
   }
 
   const signal = `${buy.tf} swing low (${buy.mode ?? "confirmed"})`;
-  const tfMinutes = SCAN_INTERVALS.find(i => i.label === buy.tf)?.minutes ?? 60;
 
-  // Auto-execute — no confirmation needed. cajh places the trade itself.
+  // Auto-execute — no confirmation needed. cajh places the trade itself. The level is
+  // marked BEFORE the order so a mid-flight crash can't leave it re-triggerable.
+  markLevelTraded(symbol, buy, tfMinutes);
   try {
     const trade = await placeBuy({ symbol, capital, price: entry });
     // Recompute off the actual fill (trade.price), not the pre-trade quote — a market
