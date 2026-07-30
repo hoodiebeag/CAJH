@@ -7,7 +7,7 @@ import { analyzeChart }                   from "./analyzer.js";
 import { runScanner, scanSymbol, fetchCandles, SCAN_INTERVALS } from "./scanner.js";
 import { generateChartImage } from "./chart.js";
 import { SWING_WINDOW, TP_R, MIN_STOP_PCT, MAX_STOP_PCT_BY_TF } from "./strategy.js";
-import { backtestMultiTF, profileEntries } from "./backtest.js";
+import { backtestMultiTF, profileEntries, excursionProfile } from "./backtest.js";
 import { loadCandles } from "./data.js";
 import * as logger from './logger.js';
 import { buildLiveContext, looksLikeCodeQuestion, readSource } from "./context.js";
@@ -715,6 +715,147 @@ export async function handleExits(message, state) {
     lines.join("\n") + `\n\n` +
     `**Cost sensitivity — is there an edge underneath the fees?** (training window)\n` +
     feeLines.join("\n") + `\n\n` + verdict + bestNote
+  );
+}
+
+// ─── !excursion ─────────────────────────────────────────────────────────────
+// "Are the stops too tight?" — measured, not argued.
+//
+// For every live-rule entry this reports how far price ran AGAINST it before running
+// FOR it (MAE) and how far it ran in favour (MFE), in ATRs so every asset is on one
+// scale — that is the "expected size of a move" for each asset, volatility-adjusted.
+// Then a first-passage grid asks, for each stop k·ATR and target m·ATR, which is hit
+// first, and reports expectancy GROSS as well as net. Gross is the honest arbiter: if
+// a wider stop is genuinely the fix, some cell must show positive gross expectancy.
+export async function handleExcursion(message, state) {
+  const watchlist = state.watchlist || [];
+  if (!watchlist.length) return message.reply("Watchlist is empty.");
+
+  await message.reply(
+    `📐 **Excursion + stop/target grid** across **${watchlist.length}** assets — measuring how far trades go against ` +
+    `before they go for, in ATRs, then testing every stop×target combination. A few minutes…`
+  );
+
+  const perTf = {};   // tf → { agg fields }
+  const gridAcc = {}; // tf → key(k,m) → cell
+  const push = (tf, r) => {
+    if (!r?.n) return;
+    const a = perTf[tf] ??= { n: 0, atrPct: [], struct: [], mae: [], mfe: [], runnerShare: [], maeRunners: [] };
+    a.n += r.n;
+    a.atrPct.push(r.atrPctMean); a.struct.push(r.structStopATR.p50);
+    a.mae.push(r.mae.p50); a.mfe.push(r.mfe.p50);
+    a.maeRunners.push(r.maeOfRunners.p75); a.runnerShare.push(r.runnerShare);
+    const g = gridAcc[tf] ??= {};
+    for (const c of r.grid) {
+      const key = `${c.k}|${c.m}`;
+      const cell = g[key] ??= { k: c.k, m: c.m, wins: 0, losses: 0, open: 0, gross: 0, net: 0 };
+      cell.wins += c.wins; cell.losses += c.losses; cell.open += c.open; cell.gross += c.gross; cell.net += c.net;
+    }
+  };
+
+  const holdAcc = {};   // same grid, computed only on the sealed Q1-2026 window
+  const pushHold = (tf, r) => {
+    if (!r?.n) return;
+    const g = holdAcc[tf] ??= {};
+    for (const c of r.grid) {
+      const key = `${c.k}|${c.m}`;
+      const cell = g[key] ??= { k: c.k, m: c.m, wins: 0, losses: 0, open: 0, gross: 0, net: 0 };
+      cell.wins += c.wins; cell.losses += c.losses; cell.open += c.open; cell.gross += c.gross; cell.net += c.net;
+    }
+  };
+
+  let used = 0;
+  for (const asset of watchlist) {
+    try {
+      const d = await tfCandles(asset.id);
+      if (!haveAll(d)) continue;
+      const series = seriesOf(d);
+      const train = sliceSeries(series, 0, EXIT_SPLIT_TS);
+      const hold  = sliceSeries(series, EXIT_SPLIT_TS, 4102444800);
+      for (const tf of LIVE_ENTRY_TFS) {
+        push(tf, excursionProfile({ series: train }, { entryTf: tf }));
+        pushHold(tf, excursionProfile({ series: hold }, { entryTf: tf }));
+      }
+      used++;
+    } catch (err) { logger.error(`[EXCURSION] ${asset.symbol}:`, err.message); }
+  }
+  if (!used) return message.channel.send("⚠️ Couldn't load data for any pair.");
+
+  const avg = (a) => a.filter(x => x != null).reduce((s, x, _, arr) => s + x / arr.length, 0);
+  const shape = LIVE_ENTRY_TFS.filter(tf => perTf[tf]).map(tf => {
+    const a = perTf[tf];
+    return `**${tf}** (${a.n} entries) · ATR ${avg(a.atrPct).toFixed(2)}% of price · swing-low stop sits **${avg(a.struct).toFixed(2)} ATR** below entry\n` +
+           `    typical adverse move ${avg(a.mae).toFixed(2)} ATR · typical favourable move ${avg(a.mfe).toFixed(2)} ATR\n` +
+           `    of trades that eventually ran 2+ ATR (${(avg(a.runnerShare) * 100).toFixed(0)}% of all), 75% first dipped ≤ **${avg(a.maeRunners).toFixed(2)} ATR**`;
+  });
+
+  // Best cells by GROSS expectancy per trade — the test of whether stop placement is the fix.
+  const gridLines = LIVE_ENTRY_TFS.filter(tf => gridAcc[tf]).map(tf => {
+    const cells = Object.values(gridAcc[tf]).map(c => {
+      const n = c.wins + c.losses + c.open;
+      return { ...c, n, grossPt: n ? c.gross / n : 0, netPt: n ? c.net / n : 0, wr: n ? c.wins / n : 0 };
+    }).filter(c => c.n >= 100);
+    if (!cells.length) return `**${tf}** — too few entries to grid.`;
+    const best = [...cells].sort((a, b) => b.grossPt - a.grossPt).slice(0, 3);
+    const bestNet = [...cells].sort((a, b) => b.netPt - a.netPt)[0];
+    const positive = cells.filter(c => c.grossPt > 0).length;
+    return `**${tf}** — ${cells.length} stop×target cells, **${positive}** with positive GROSS expectancy\n` +
+      best.map(c => `    stop ${c.k}·ATR → target ${c.m}·ATR: gross ${c.grossPt >= 0 ? "+" : ""}${c.grossPt.toFixed(3)}R · net ${c.netPt >= 0 ? "+" : ""}${c.netPt.toFixed(3)}R · ${(c.wr * 100).toFixed(0)}% · ${c.n}t`).join("\n") +
+      `\n    best NET cell: stop ${bestNet.k}·ATR → target ${bestNet.m}·ATR = ${bestNet.netPt >= 0 ? "+" : ""}${bestNet.netPt.toFixed(3)}R/t`;
+  });
+
+  const allCells = LIVE_ENTRY_TFS.flatMap(tf => Object.values(gridAcc[tf] || {}).map(c => {
+    const n = c.wins + c.losses + c.open; return { tf, ...c, n, grossPt: n ? c.gross / n : 0, netPt: n ? c.net / n : 0 };
+  })).filter(c => c.n >= 100);
+  const posGross = allCells.filter(c => c.grossPt > 0);
+  const posNet   = allCells.filter(c => c.netPt > 0);
+  const bestAny  = [...allCells].sort((a, b) => b.grossPt - a.grossPt)[0];
+
+  // The best cell is the maximum of ~126 correlated in-sample statistics, so it is
+  // biased upward by selection alone. The only meaningful question is whether that same
+  // cell still works on the sealed window, so look it up there rather than re-picking.
+  const bestNetCell = [...allCells].sort((a, b) => b.netPt - a.netPt)[0];
+  let holdOfBest = null;
+  if (bestNetCell) {
+    const hc = (holdAcc[bestNetCell.tf] || {})[`${bestNetCell.k}|${bestNetCell.m}`];
+    if (hc) { const hn = hc.wins + hc.losses + hc.open; holdOfBest = { n: hn, netPt: hn ? hc.net / hn : 0, grossPt: hn ? hc.gross / hn : 0 }; }
+  }
+  const holdLine = bestNetCell
+    ? `
+
+__Sealed-holdout check of the best training cell__ (${bestNetCell.tf} stop ${bestNetCell.k}·ATR → target ${bestNetCell.m}·ATR, train ${bestNetCell.netPt >= 0 ? "+" : ""}${bestNetCell.netPt.toFixed(3)}R/t):
+` +
+      (holdOfBest && holdOfBest.n >= 30
+        ? `    Q1-2026: **${holdOfBest.netPt >= 0 ? "+" : ""}${holdOfBest.netPt.toFixed(3)}R/t net** (gross ${holdOfBest.grossPt >= 0 ? "+" : ""}${holdOfBest.grossPt.toFixed(3)}) over ${holdOfBest.n} trades`
+        : `    too few holdout trades (${holdOfBest?.n ?? 0}) to judge`)
+    : "";
+
+  let verdict;
+  if (!allCells.length) {
+    verdict = `⚠️ Not enough entries to judge stop placement.`;
+  } else if (posNet.length && holdOfBest && holdOfBest.n >= 30 && holdOfBest.netPt > 0) {
+    verdict = `🟢 **${posNet.length} of ${allCells.length} combinations are net-positive in training, and the best one HOLDS on the sealed window** ` +
+      `(${holdOfBest.netPt.toFixed(3)}R/t on ${holdOfBest.n} unseen trades). That is worth pursuing — widen the grid around ` +
+      `${bestNetCell.tf} stop ${bestNetCell.k}·ATR / target ${bestNetCell.m}·ATR and paper-trade before sizing.`;
+  } else if (posNet.length) {
+    verdict = `🟡 **${posNet.length} of ${allCells.length} combinations are net-positive in training, but the best one does NOT hold on the sealed window.** ` +
+      `Picking the top of ~${allCells.length} correlated cells is itself a selection effect — a handful landing just above zero in-sample is what ` +
+      `chance produces. Note the direction, though: every survivor uses the TIGHTEST stop with the FARTHEST target (a lottery-ticket payoff, ~10% win rate), ` +
+      `not the wider stop the "stopped out too early" theory predicts.`;
+  } else if (posGross.length) {
+    verdict = `🟡 **${posGross.length} of ${allCells.length} combinations are positive GROSS but none survive costs.** ` +
+      `Best gross: ${bestAny.tf} stop ${bestAny.k}·ATR → target ${bestAny.m}·ATR at ${bestAny.grossPt >= 0 ? "+" : ""}${bestAny.grossPt.toFixed(3)}R/t. ` +
+      `A wider stop helps, but not by enough to clear ~0.9% round-trip — this is where cheaper (maker) fills would finally matter.`;
+  } else {
+    verdict = `🔴 **Not one of the ${allCells.length} stop×target combinations has positive gross expectancy.** ` +
+      `Widening the stop does not rescue the entry: with a wider stop each loss is bigger, so the R-scale moves but the edge does not appear. ` +
+      `That is the signature of entries whose forward returns are a coin flip — the level to fix is the ENTRY, not the stop.`;
+  }
+
+  await message.channel.send(
+    `📐 **Excursion analysis — ${used} assets** (live anticipation entries, ATR-normalised)\n\n` +
+    `__Move sizes (what the asset actually does after an entry):__\n${shape.join("\n")}\n\n` +
+    `__Stop × target grid (first passage, ${"" }gross vs net):__\n${gridLines.join("\n")}\n\n` + verdict
   );
 }
 

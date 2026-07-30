@@ -13,7 +13,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { backtestMultiTF, profileEntries } from "./backtest.js";
+import { backtestMultiTF, profileEntries, excursionProfile } from "./backtest.js";
 
 const mk = (t, o, h, l, c) => ({ time: String(t), open: String(o), high: String(h), low: String(l), close: String(c), volume: "1" });
 const HOUR = 3600;
@@ -118,6 +118,24 @@ test("trailing stop: exits 1R below the running peak, not at the peak", () => {
   const expected = netAt(107.0);
   assert.ok(Math.abs(r.results[0] - expected) < 1e-9, `R ${r.results[0]} != expected ${expected}`);
   assert.ok(r.exits["trail/be"] >= 1, "expected a trailing-stop exit");
+});
+
+test("excursionProfile: every grid cell classifies exactly the same entries", () => {
+  // The stop×target grid is only interpretable if each cell accounts for every entry
+  // exactly once — a miscount would silently bias the expectancy it reports.
+  const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
+  const r = excursionProfile({ series }, { entryTf: "1h", horizon: 100 });
+  assert.ok(r.n > 0, "expected at least one entry");
+  for (const c of r.grid) {
+    assert.equal(c.wins + c.losses + c.open, r.n,
+      `cell k=${c.k} m=${c.m} classified ${c.wins + c.losses + c.open} of ${r.n} entries`);
+  }
+  // Excursions are magnitudes, and percentiles must be ordered.
+  for (const s of [r.mae, r.mfe]) {
+    assert.ok(s.p25 >= 0 && s.p50 >= s.p25 && s.p75 >= s.p50 && s.p90 >= s.p75, "excursion percentiles out of order");
+  }
+  // This series rallies monotonically after entry, so every cell's target is reached.
+  assert.ok(r.grid.every(c => c.wins === r.n), "expected all targets hit on a monotonic rally");
 });
 
 test("profileEntries excludes candidates with a truncated resolution window", () => {

@@ -12,7 +12,7 @@ import {
   handleHelp, handleWatchlist, handleWatch, handleUnwatch,
   handleSetChannel, handleStatus,
   handleScan, handleAnalyzeThat, handleChartRequest,
-  handleGeneral, handleManualTrade, handleBacktest, handleOptimize, handleWhy, handleAlign, handleRoom, handleModes, handleProfile, handleValidate, handleDiscover, handleExits,
+  handleGeneral, handleManualTrade, handleBacktest, handleOptimize, handleWhy, handleAlign, handleRoom, handleModes, handleProfile, handleValidate, handleDiscover, handleExits, handleExcursion,
   handleStop, handleResume, handleSell, handlePort, handleReconcile
 } from "./commands.js";
 import * as logger from './logger.js';
@@ -187,6 +187,7 @@ client.on("messageCreate", async (message) => {
   if (lower === "!validate")   return safe(handleValidate(message, state), message);
   if (lower === "!discover")   return safe(handleDiscover(message, state), message);
   if (lower === "!exits")      return safe(handleExits(message, state), message);
+  if (lower === "!excursion")  return safe(handleExcursion(message, state), message);
 
   if (lower === "!why" || lower.startsWith("!why ")) {
     return safe(handleWhy(message, state, raw.slice(4).trim() || null), message);

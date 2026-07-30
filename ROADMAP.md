@@ -152,3 +152,36 @@ trigger with measurable gross edge *before* any execution or exit engineering �
 
 **Live trading now defaults to OFF** (`LIVE_TRADING=true` to opt in), because deploying
 this strategy against real money is a known-loss event, not an unknown one.
+
+## 2026-07-30 (evening) — stop placement tested; data completed; archive pruned
+
+**Data.** The full-history archive (`Kraken_OHLCVT.zip`, still on the Desktop) supplied
+the missing history for the seven Q1-only pairs plus DOGE, so all **20 watchlist pairs
+now run Jan/Feb 2025 → Mar 2026** (BTC to today). Archive pruned from 1.9 GB to 443 MB:
+only the 1-minute files for pairs we actually use are kept (the store resamples the rest).
+
+**Exit sweep re-run on 20 pairs** — same answer, more power: live exit −0.470 R/t train
+(6,546 trades) / −0.642 R/t holdout, best-of-12 −0.405 R/t, **0/20 pairs green in every
+configuration**, gross −0.089 R/t.
+
+**Stop placement (`!excursion`, `node research.js excursion`).** Tests the "stops are too
+tight" hypothesis directly: for every live entry it measures how far price ran against
+before running for (in ATRs, so assets are comparable), then runs a first-passage grid
+over stop k·ATR × target m·ATR reporting GROSS and net.
+
+Two measurement traps were found and fixed while building it:
+- Max adverse excursion over a fixed 200-bar horizon is not "the dip before it worked" —
+  it is mostly the asset's range over 200 bars and grows with the horizon. It now measures
+  the dip *before price first ran 2 ATR in our favour*, which is the number that governs
+  stop placement.
+- Excursions now floor at zero (a trade that never traded below entry has no adverse
+  excursion, not a negative one).
+
+Findings: the swing-low stop sits ≈1.0 ATR below entry on all three timeframes. In the
+grid, positive-gross cells cluster at the **tightest** stop with the **farthest** target
+(≈10% win rate, lottery-ticket payoff) — the opposite of what "stopped out too early"
+predicts — and those same cells carry ruinous fee drag, because cost in R scales as
+0.9% ÷ stop-distance. Wider stops improve NET (less fee drag per R) while their gross
+stays negative. Net-positive cells are a handful out of ~126 correlated in-sample tests,
+which is what selection alone produces; the command now re-checks the best training cell
+on the sealed Q1-2026 window instead of trusting an in-sample maximum.

@@ -15,7 +15,7 @@
  */
 import "dotenv/config";
 import { loadConfig, symbolToKrakenId } from "./storage.js";
-import { handleBacktest, handleDiscover, handleProfile, handleValidate, handleExits } from "./commands.js";
+import { handleBacktest, handleDiscover, handleProfile, handleValidate, handleExits, handleExcursion } from "./commands.js";
 import { backfill, ingestKrakenOHLCVT } from "./data.js";
 import * as logger from './logger.js';
 import path from "path";
@@ -39,6 +39,7 @@ const commands = {
   profile:  () => handleProfile(message, state),
   validate: () => handleValidate(message, state),
   exits:    () => handleExits(message, state),
+  excursion:() => handleExcursion(message, state),
   backfill: async () => {
     const syms = rest.length ? rest : state.watchlist.map((a) => a.symbol);
     for (const sym of syms) {
@@ -65,7 +66,7 @@ const commands = {
 };
 
 if (!commands[cmd]) {
-  logger.error("Usage: node research.js <backtest [SYMBOL] | discover | profile | validate | exits | backfill SYM... | ingest SYM...>");
+  logger.error("Usage: node research.js <backtest [SYMBOL] | discover | profile | validate | exits | excursion | backfill SYM... | ingest SYM...>");
   process.exitCode = 1;
 } else {
   logger.info(`[research] running "${cmd}${arg ? " " + arg : ""}" against local candles/ …`);

@@ -22,7 +22,7 @@ import {
   EXIT_ON_SWING_HIGH, CHOP_FILTER, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT, FEE_RATE, SLIPPAGE_PCT,
   TREND_GATE, TREND_GATE_MODE, TREND_MA, detectSwings, isLeftLow, isLeftHigh
 } from "./strategy.js";
-import { atrPct, displacement, sweptLow, prevDayLevels, bullishFVGBelow, returnAsOf } from "./features.js";
+import { atr, atrPct, displacement, sweptLow, prevDayLevels, bullishFVGBelow, returnAsOf } from "./features.js";
 
 const MAX_HOLD = 100; // close a trade after this many candles if neither stop nor target hits
 
@@ -392,6 +392,127 @@ export function backtestMultiTF({ series } = {}, {
     results: trades,  // raw per-trade R values, for pooling across pairs
     exits,            // { stop, target, "trail/be", "partial+runner", swingHigh, timeout }
     reasons           // { taken, stopTooTight, stopTooFar, trendGate, notAligned, notHigherLow, priceBelowStop }
+  };
+}
+
+/**
+ * excursionProfile — "are the stops too tight?", answered from the data.
+ *
+ * For every live-rule entry (anticipation: price crossing an unconfirmed candidate swing
+ * low's trigger) this walks forward and records how far price ran AGAINST the entry before
+ * it ran FOR it — MAE (max adverse excursion) and MFE (max favorable excursion) — measured
+ * in ATRs, so a 3%-a-day alt and a 0.5%-a-day major are on one scale.
+ *
+ * It also runs a first-passage grid: for each candidate stop distance k·ATR and target
+ * m·ATR, which one price reaches FIRST. That turns "should the stop be wider?" into a
+ * measured surface rather than an opinion — and because expectancy is reported gross as
+ * well as net, it separates "the stop was wrong" from "there is nothing here to capture".
+ *
+ * Returns { n, atrPctMean, structStopATR, mae, mfe, maeOfRunners, grid }.
+ */
+export function excursionProfile({ series } = {}, {
+  entryTf = null, n = SWING_WINDOW, horizon = 200,
+  kGrid = [0.5, 0.75, 1, 1.5, 2, 3, 4], mGrid = [1, 1.5, 2, 3, 4, 6],
+  feeRate = FEE_RATE, slipPct = SLIPPAGE_PCT, atrPeriod = 14,
+} = {}) {
+  const empty = { n: 0, grid: [] };
+  if (!Array.isArray(series) || !series.length) return empty;
+  const ei = entryTf ? series.findIndex(s => s.label === entryTf) : 0;
+  if (ei < 0 || !series[ei]?.candles?.length) return empty;
+  const candles = series[ei].candles;
+
+  const O = candles.map(c => parseFloat(c.open));
+  const H = candles.map(c => parseFloat(c.high));
+  const L = candles.map(c => parseFloat(c.low));
+  const C = candles.map(c => parseFloat(c.close));
+
+  // Cells accumulate first-passage outcomes for every (stop k·ATR, target m·ATR) pair.
+  const grid = [];
+  for (const k of kGrid) for (const m of mGrid) grid.push({ k, m, wins: 0, losses: 0, open: 0, gross: 0, net: 0 });
+
+  const maes = [], mfes = [], structs = [], atrPcts = [], maeRunners = [];
+  let count = 0;
+  let cand = null, hi = null, tradedIdx = null;
+
+  for (let i = 0; i < candles.length; i++) {
+    // Entry check uses only candidate state built from bars < i (updated at bar end below).
+    if (cand && i > cand.index && cand.index !== tradedIdx && H[i] > cand.trigger) {
+      const a = atr(H, L, C, i - 1, atrPeriod);
+      if (a && a > 0 && i + horizon < candles.length) {
+        const entry = Math.max(O[i], cand.trigger);
+        tradedIdx = cand.index;
+        count++;
+        atrPcts.push((a / entry) * 100);
+        structs.push((entry - cand.price) / a);       // how many ATRs away the swing-low stop sits
+
+        // One forward walk records first-passage bars for every k and every m at once.
+        const stopBar = kGrid.map(() => Infinity), tgtBar = mGrid.map(() => Infinity);
+        let runMin = Infinity, runMax = -Infinity;
+        // maeBeforeRun is the number that actually governs stop placement: how deep the
+        // trade dipped BEFORE it first ran RUN_ATR in our favour. (Max adverse excursion
+        // over the whole horizon is not that number — it is mostly just the asset's range
+        // over `horizon` bars, and it keeps growing the longer you look.)
+        const RUN_ATR = 2;
+        let maeBeforeRun = 0, ranFar = false;
+        for (let j = i + 1; j <= i + horizon; j++) {
+          runMin = Math.min(runMin, L[j]); runMax = Math.max(runMax, H[j]);
+          if (!ranFar) {
+            maeBeforeRun = Math.max(maeBeforeRun, (entry - runMin) / a);
+            if (runMax >= entry + RUN_ATR * a) ranFar = true;
+          }
+          kGrid.forEach((k, ki) => { if (stopBar[ki] === Infinity && runMin <= entry - k * a) stopBar[ki] = j; });
+          mGrid.forEach((m, mi) => { if (tgtBar[mi] === Infinity && runMax >= entry + m * a) tgtBar[mi] = j; });
+        }
+        // Excursions are magnitudes and floor at zero: a trade that never traded below
+        // entry has NO adverse excursion, rather than a negative one.
+        const mae = Math.max(0, (entry - runMin) / a), mfe = Math.max(0, (runMax - entry) / a);
+        maes.push(mae); mfes.push(mfe);
+        if (ranFar) maeRunners.push(Math.max(0, maeBeforeRun));   // winners only: the dip they had to survive
+
+        let gi = 0;
+        for (let ki = 0; ki < kGrid.length; ki++) {
+          for (let mi = 0; mi < mGrid.length; mi++, gi++) {
+            const cell = grid[gi], risk = kGrid[ki] * a;
+            // Same-bar ambiguity resolves against us: a tie counts as the stop.
+            if (tgtBar[mi] < stopBar[ki]) {
+              const px = entry + mGrid[mi] * a;
+              cell.wins++; cell.gross += mGrid[mi] / kGrid[ki];
+              cell.net += mGrid[mi] / kGrid[ki] - ((feeRate + slipPct) * (entry + px)) / risk;
+            } else if (stopBar[ki] < Infinity) {
+              const px = entry - kGrid[ki] * a;
+              cell.losses++; cell.gross -= 1;
+              cell.net += -1 - ((feeRate + slipPct) * (entry + px)) / risk;
+            } else {
+              // Neither level reached inside the horizon — close at the horizon's price.
+              const px = C[i + horizon], r = (px - entry) / risk;
+              cell.open++; cell.gross += r;
+              cell.net += r - ((feeRate + slipPct) * (entry + px)) / risk;
+            }
+          }
+        }
+      }
+    }
+
+    // Candidate transitions (identical to pendingSwingLow / the anticipate backtest).
+    if (isLeftLow(L, i, n)  && (!cand || L[i] < cand.price)) cand = { index: i, price: L[i], trigger: H[i] };
+    if (isLeftHigh(H, i, n) && (!hi   || H[i] > hi.price))   hi   = { index: i, price: H[i] };
+    if (cand && i > cand.index && C[i] > cand.trigger) { cand = null; hi = null; }
+    else if (hi && i > hi.index && C[i] < L[hi.index])  { cand = null; hi = null; }
+  }
+
+  const q = (arr, p) => { if (!arr.length) return null; const s = [...arr].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(s.length * p))]; };
+  const summary = (arr) => ({ p25: q(arr, 0.25), p50: q(arr, 0.5), p75: q(arr, 0.75), p90: q(arr, 0.9) });
+  const mean = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+
+  return {
+    n: count,
+    atrPctMean: mean(atrPcts),
+    structStopATR: summary(structs),
+    mae: summary(maes),
+    mfe: summary(mfes),
+    maeOfRunners: summary(maeRunners),
+    runnerShare: count ? maeRunners.length / count : 0,
+    grid,
   };
 }
 
