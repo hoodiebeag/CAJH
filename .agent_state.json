@@ -8,7 +8,7 @@
     "test_command": "npm test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "Paused by human instruction. Q1 delivered 4 passing tests (7->11) covering stopMode atr (value + insufficient-history), the one-trade-per-level guard, and anticipate-mode alignment gating. Its run ended before committing, so the Architect committed the work to protect it. RESUME: set control.status EXECUTOR_PENDING with Q2 (funding.mjs collector), reset budget.runs_used to 0, push budget.expires_at forward, re-enable the cajh-swarm-loop scheduled task.",
+    "notes": "Paused by human instruction. Q1 delivered 4 passing tests (7->11) covering stopMode atr (value + insufficient-history), the one-trade-per-level guard, and anticipate-mode alignment gating. Its run ended before committing, so the Architect committed the work to protect it. RESUME: set control.status EXECUTOR_PENDING with Q2 (funding.mjs collector), reset budget.runs_used to 0, push budget.expires_at forward, re-enable the cajh-swarm-loop scheduled task. TIMING: one Executor task ~= one run; cron widened 30min -> 2h so a task can finish and be verified before the next fire.",
     "updated_by": "verifier",
     "updated_at": "2026-07-30T20:28:00Z"
   },
@@ -184,6 +184,14 @@
     "runs_used": 1,
     "sizing_rationale": "Extended on explicit human instruction to keep going (they are monitoring quota and will call the pause). Prior 2-run/30-min cap would have expired before the 30-minute cron ever fired, disabling the loop having done zero work - a cap that stops the loop before it starts is not a safety feature, it is a bug. 6 runs x 30min = 3h of cron opportunities inside a 2h clock, so the clock is the binding constraint and the run count is headroom.",
     "on_exhausted": "Set control.status PAUSED_BUDGET, append a ledger entry, DISABLE the scheduled task cajh-swarm-loop via update_scheduled_task(enabled:false), then exit doing nothing else.",
-    "resume_after_reset": "When the 5h window resets: set runs_used 0, push expires_at forward, raise max_runs (8 is reasonable on a fresh window), set control.status back to EXECUTOR_PENDING, re-enable the task."
+    "resume_after_reset": "When the 5h window resets: set runs_used 0, push expires_at forward, raise max_runs (8 is reasonable on a fresh window), set control.status back to EXECUTOR_PENDING, re-enable the task.",
+    "timing_observed": {
+      "measured_at": "2026-07-30T20:45Z",
+      "one_executor_run": "Q1 (3 specified tests, delivered 4) consumed ~1 loop run and finished inside a single cron slot. Cost was material - roughly the same order as several architect turns.",
+      "cron_was": "*/30 * * * * (every 30 min)",
+      "cron_now": "0 */2 * * * (every 2 hours)",
+      "why": "30 minutes was far too aggressive. It fires faster than a substantive Executor task completes, so runs stack up and quota drains with little marginal progress. A 2-hour cadence gives one task room to finish, be verified, and hand off cleanly before the next fire - and 12 runs/day instead of 48 is a ~4x reduction in idle-run overhead.",
+      "guidance_for_resume": "Match cadence to task size, not to impatience. Heavy items (walkforward.mjs, funding analysis) deserve 2h+. Light items (doc passes, small test additions) could run hourly. If a run ever finds the previous task still unfinished, the cadence is too fast - widen it rather than letting runs pile up."
+    }
   }
 }
