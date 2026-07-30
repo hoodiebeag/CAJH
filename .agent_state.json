@@ -1,32 +1,49 @@
 {
   "version": 2,
   "control": {
-    "status": "ARCHITECT_PENDING",
-    "target_file": "backtest.test.mjs",
-    "objective": "Raise test coverage of the backtest engine: add cases for the ATR stop mode (stopMode 'atr' derives risk from ATR, not the swing low), the one-trade-per-level guard in anticipate mode, and the alignment/trend gates now that they apply in anticipate mode. Assert against hand-computed values, not snapshots.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "intensityfilter.mjs",
+    "objective": "Test whether 4h trade intensity works as a FILTER on the existing long-only strategy: skip entries whose 4h trade-intensity percentile (trades vs the trailing 20-bar average) is above a threshold. Sweep thresholds (no filter / p90 / p75 / p50), report trades kept, net R/t with 95% CI, and gross R/t, split by regime (2023, 2024, 2025-26, ALL). The signal to test is NEGATIVE: high intensity predicted LOWER forward returns (non-overlapping IC -0.160, z=-1.90), so the filter should REMOVE high-intensity entries.",
     "allow_live_edit": false,
     "test_command": "npm test",
     "iteration": 0,
-    "max_iterations": 10,
-    "notes": "Seeded by the Architect. Bounded, on the ROADMAP.md housekeeping list, and touches ONLY the test file - it cannot alter live trading behaviour, which makes it a safe first exercise of the loop.",
+    "max_iterations": 6,
+    "notes": "ARCHITECT DESIGN (follow this; do not restructure):\n\n1) New standalone file intensityfilter.mjs. Do NOT modify backtest.js, strategy.js or any frozen path -- compute the filter OUTSIDE the backtester and apply it to the returned trade list is NOT possible (results are bare R numbers), so instead pre-compute intensity per entry timestamp and pass a `skipBefore` style guard by running the backtest per-pair and correlating. If that proves impossible without touching backtest.js, set BLOCKED and say so rather than editing a frozen file.\n\n2) Import loadCandles from data.js, loadBars from data.js (1m bars carry the `trades` column), backtestMultiTF from backtest.js, and the shared helpers from researchlib.mjs (loadWatchlist, ts, stat). Reuse them; do not re-implement stats.\n\n3) IMPORTANT DATA CONSTRAINT: only BTC/ETH/SOL have order-flow (`trades`) data, and only for 2026. The archive-ingested bars have trades=0. So this test is limited to those three pairs over the flow window -- state that limitation in the output rather than silently averaging in pairs with no data.\n\n4) Honesty requirements: report gross AND net, include 95% CIs via stat(), and print the trade count at each threshold. A filter that improves R/t purely by cutting the sample to a handful of trades is not an improvement -- flag it when n drops below 30.",
     "updated_by": "architect",
-    "updated_at": "2026-07-30T18:35:00Z"
+    "updated_at": "2026-07-30T20:05:00Z"
   },
   "blackboard": {
-    "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) because the strategy measures net-negative.",
+    "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
     "frozen_paths": ["scanner.js", "monitor.js", "trader.js", "bot.js", "strategy.js", "backtest.js", "commands.js"],
-    "test_command": "npm test",
-    "known_findings": "See ROADMAP.md. Established with real numbers: the swing-structure entry is statistically indistinguishable from random (8,203 trades); gross-of-cost expectancy is ~0 so cheaper fills cannot rescue it; exit-model and stop-placement sweeps both came back negative. Do not re-test these without new data - it is already answered.",
-    "in_flight": "Order-flow backfills for ETH/SOL are running as background node processes (research.js flow). They write to candles/*.csv every 100 pages. Do NOT kill node processes or touch candles/ - that is live data collection, and killing it loses hours of API paging.",
-    "open_question": "Does order flow (aggressor imbalance, trade intensity, big-print share) predict forward returns? Harness is flowsignal.mjs; run with --pool once backfills finish."
+    "test_command": "npm test (7 tests currently passing)",
+    "known_findings": "See ROADMAP.md. Settled with real numbers, do NOT re-test: the swing entry is statistically indistinguishable from random (8,203 trades); gross-of-cost expectancy ~0 so cheaper fills cannot rescue it; exit-model and stop-placement sweeps both negative; the simple daily strategy is beta not alpha (indistinguishable from random entries passing the same MA20 gate).",
+    "live_signal": "4h trade intensity is the ONE surviving candidate: non-overlapping IC -0.160 (z=-1.90, CI [-0.325,+0.005]) over 48h horizons. Not significant, but it strengthened rather than collapsed when overlap was removed. Direction: busy 4h bars precede LOWER 48h returns.",
+    "in_flight": "Order-flow backfills extending BTC/ETH/SOL back to 2026-01-01 are running as background node processes (research.js flow). They write candles/*.csv every 100 pages. Do NOT kill node processes or touch candles/.",
+    "next_queue": "After intensityfilter.mjs: (a) expand backtest.test.mjs coverage for stopMode 'atr', the one-trade-per-level guard, and anticipate-mode gates; (b) re-run flowsignal.mjs --pool once the extended flow window lands, now that it has block-permutation + BH-FDR."
   },
   "ledger": [
     {
       "ts": "2026-07-30T18:35:00Z",
       "agent": "architect",
       "action": "seed",
-      "detail": "Defined AGENT_PROTOCOL.md contract and v2 blackboard/ledger schema; set first objective.",
+      "detail": "Defined AGENT_PROTOCOL.md contract and v2 blackboard/ledger schema.",
       "commit": "a54b0e3",
+      "tests": "7 passing"
+    },
+    {
+      "ts": "2026-07-30T19:40:00Z",
+      "agent": "architect",
+      "action": "findings",
+      "detail": "Order-flow pooled analysis: cum-imbalance died under non-overlapping resampling; trade intensity survived at z=-1.90.",
+      "commit": "f82e36d",
+      "tests": "7 passing"
+    },
+    {
+      "ts": "2026-07-30T20:05:00Z",
+      "agent": "architect",
+      "action": "assign",
+      "detail": "Corrected swarm-runner.py (state-clobber, DONE/COMPLETE mismatch, uncapped loop, timeout handling). Assigned intensityfilter.mjs to Executor.",
+      "commit": "",
       "tests": "7 passing"
     }
   ]

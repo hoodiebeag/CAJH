@@ -1,0 +1,235 @@
+#!/usr/bin/env python3
+"""
+swarm-runner.py — Architect/Executor/Verifier loop driver.
+
+Corrected from the first draft. Each fix below prevents a failure that would either burn
+the usage budget with nothing to show, or destroy state the agents depend on. The
+contract it enforces lives in AGENT_PROTOCOL.md.
+
+Fixes vs the original draft:
+  1. Does NOT clobber .agent_state.json on start. The original called write_state() with
+     a flat dict on every launch, erasing `blackboard` and `ledger` — the two things the
+     file exists for. Now it read-modify-writes `control` only.
+  2. Terminal states actually terminate. The original broke only on "COMPLETE" while the
+     protocol and agents write "DONE", so a *successful* run looped forever. All of
+     DONE / COMPLETE / BLOCKED now halt.
+  3. Hard iteration cap + stall detection. `while True` with no cap meant a test the
+     Executor could not fix ping-ponged EXECUTOR<->VERIFIER indefinitely — the single
+     most expensive bug possible in a loop that costs money per invocation.
+  4. Timeouts kill the child and stop. The original printed "Forcing state shift" but
+     never shifted state and never killed the process, so it re-invoked the same agent
+     forever while orphaned `claude` processes accumulated.
+  5. cwd pinned to this file's directory, so agents cannot act on whatever directory the
+     shell happened to be in.
+  6. Git checkpoint after each phase — uncommitted work is work that gets lost.
+  7. Test logs truncated before entering `notes` (they can be megabytes).
+  8. The agent CLI is validated once, up front, instead of failing silently inside a
+     2-second spin loop.
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+STATE_FILE = os.path.join(HERE, ".agent_state.json")
+
+# How the headless agent is invoked; override with SWARM_AGENT_CMD if your CLI differs.
+# The original used `claude -y`; verify your CLI's non-interactive flag before trusting
+# it, because an invalid flag makes every invocation fail instantly.
+AGENT_CMD = os.environ.get("SWARM_AGENT_CMD", "claude -p").split()
+
+TERMINAL = {"DONE", "COMPLETE", "BLOCKED"}
+MAX_STALL = 2          # same status this many times running with no progress -> abort
+AGENT_TIMEOUT = 900    # seconds per agent invocation
+LOG_CAP = 4000         # chars of test output retained in notes
+
+
+def read_state():
+    if not os.path.exists(STATE_FILE) or os.path.getsize(STATE_FILE) == 0:
+        return None
+    try:
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"[SWARM] .agent_state.json is not valid JSON: {e}")
+        return None
+
+
+def write_state(state):
+    """Atomic: a crash mid-write must not leave an unparseable ledger."""
+    state.setdefault("control", {})["updated_at"] = datetime.now(timezone.utc).isoformat()
+    tmp = STATE_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2)
+    os.replace(tmp, STATE_FILE)
+
+
+def log_ledger(state, agent, action, detail, tests=""):
+    """Append-only, capped at 100. Never rewrites a prior entry."""
+    state.setdefault("ledger", []).append({
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "agent": agent, "action": action,
+        "detail": str(detail)[:500], "tests": str(tests)[:200],
+    })
+    state["ledger"] = state["ledger"][-100:]
+
+
+def git_checkpoint(label):
+    try:
+        subprocess.run(["git", "add", "-A"], cwd=HERE, capture_output=True, timeout=60)
+        r = subprocess.run(["git", "commit", "-q", "-m", f"swarm: {label}"],
+                           cwd=HERE, capture_output=True, text=True, timeout=60)
+        if r.returncode == 0:
+            print(f"   [git] committed: {label}")
+    except Exception as e:
+        print(f"   [git] checkpoint skipped: {e}")
+
+
+def run_agent(role, instructions):
+    print(f"\n[SWARM] Activating {role} ...")
+    prompt = (
+        f"{instructions}\n\n"
+        "Read AGENT_PROTOCOL.md and .agent_state.json first. Act ONLY if control.status "
+        "names your phase. Edit ONLY control.target_file. Never checkout/reset/stash files "
+        "you do not own. Do not kill node processes or touch candles/ — order-flow data "
+        "collection is running there. Commit and push your work, then append ONE ledger "
+        "entry and write the state file last."
+    )
+    p = None
+    try:
+        p = subprocess.Popen(AGENT_CMD, cwd=HERE, stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        out, err = p.communicate(input=prompt, timeout=AGENT_TIMEOUT)
+        if p.returncode != 0:
+            print(f"   [warn] {role} exited {p.returncode}: {(err or '')[:300]}")
+        return out
+    except subprocess.TimeoutExpired:
+        if p:
+            p.kill()
+            p.communicate()
+        print(f"   [error] {role} timed out after {AGENT_TIMEOUT}s; child killed.")
+        return None
+
+
+def main():
+    if not shutil.which(AGENT_CMD[0]):
+        print(f"[SWARM] Agent CLI '{AGENT_CMD[0]}' not found on PATH. "
+              f"Set SWARM_AGENT_CMD, e.g. SWARM_AGENT_CMD='claude -p'.")
+        sys.exit(1)
+
+    state = read_state()
+    if state is None:
+        print("[SWARM] No usable .agent_state.json. Seed it (see AGENT_PROTOCOL.md) first.")
+        sys.exit(1)
+    state.setdefault("control", {})
+
+    # Retarget from argv only when asked; otherwise keep the existing objective. The
+    # original overwrote target/objective AND wiped blackboard+ledger on every launch.
+    if len(sys.argv) >= 3:
+        state["control"].update({"target_file": sys.argv[1], "objective": sys.argv[2],
+                                 "status": "ARCHITECT_PENDING", "iteration": 0})
+        log_ledger(state, "runner", "retarget", f"{sys.argv[1]}: {sys.argv[2]}")
+        write_state(state)
+
+    ctl = state["control"]
+    print("=" * 62)
+    print("Autonomous 3-Agent Swarm")
+    print(f"  target    : {ctl.get('target_file')}")
+    print(f"  objective : {(ctl.get('objective') or '')[:100]}")
+    print(f"  max iters : {ctl.get('max_iterations', 10)}")
+    print("=" * 62)
+
+    last_status, stall = None, 0
+
+    while True:
+        state = read_state()
+        if state is None:
+            print("[SWARM] State file became unreadable. Halting.")
+            break
+        ctl = state.setdefault("control", {})
+        status = ctl.get("status")
+
+        if status in TERMINAL:
+            print(f"\n[SWARM] Terminal state: {status}. {str(ctl.get('notes',''))[:300]}")
+            break
+
+        if ctl.get("iteration", 0) >= ctl.get("max_iterations", 10):
+            ctl["status"] = "BLOCKED"
+            ctl["notes"] = f"Hit max_iterations ({ctl.get('max_iterations', 10)}) without converging."
+            log_ledger(state, "runner", "abort", ctl["notes"])
+            write_state(state)
+            print(f"\n[SWARM] {ctl['notes']} Halting.")
+            break
+
+        # Stall guard: an agent that exits without advancing status would otherwise be
+        # re-invoked forever at ~2s intervals, each invocation costing real money.
+        stall = stall + 1 if status == last_status else 0
+        if stall >= MAX_STALL:
+            ctl["status"] = "BLOCKED"
+            ctl["notes"] = f"No progress after {MAX_STALL + 1} invocations at status {status}."
+            log_ledger(state, "runner", "stall", ctl["notes"])
+            write_state(state)
+            print(f"\n[SWARM] {ctl['notes']} Halting.")
+            break
+        last_status = status
+
+        if status == "ARCHITECT_PENDING":
+            if run_agent("Agent 1 (Architect)",
+                f"You are the Architect. Objective: '{ctl.get('objective')}' in "
+                f"'{ctl.get('target_file')}'. Write imports, interfaces and function stubs ONLY, "
+                "each containing the exact marker '// TODO(Executor): Build logic here'. No inner "
+                "logic. Put your design rationale in control.notes and set control.status to "
+                "EXECUTOR_PENDING.") is None:
+                continue
+            git_checkpoint("architect phase")
+
+        elif status == "EXECUTOR_PENDING":
+            if run_agent("Agent 2 (Executor)",
+                f"You are the Executor. Fill the '// TODO(Executor)' stubs in "
+                f"'{ctl.get('target_file')}' with complete working code. Architect notes: "
+                f"{str(ctl.get('notes') or '')[:2000]}. Do not change exports, signatures or file "
+                "structure; if the design is wrong set control.status to BLOCKED with your "
+                "reasoning rather than silently redesigning. Set control.status to "
+                "VERIFIER_PENDING and clear control.notes when done.") is None:
+                continue
+            git_checkpoint("executor phase")
+
+        elif status == "VERIFIER_PENDING":
+            print("\n[SWARM] Verifier gate: running tests ...")
+            cmd = str(ctl.get("test_command", "npm test")).split()
+            try:
+                t = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True, timeout=600)
+                passed = t.returncode == 0
+                log = (t.stdout or "") + (t.stderr or "")
+            except subprocess.TimeoutExpired:
+                passed, log = False, "Test command timed out."
+
+            if passed:
+                ctl["status"] = "DONE"
+                ctl["notes"] = "Verifier: test suite green."
+                log_ledger(state, "verifier", "pass", "tests green", tests="pass")
+                print("   [verifier] PASS")
+            else:
+                ctl["status"] = "EXECUTOR_PENDING"
+                ctl["iteration"] = ctl.get("iteration", 0) + 1
+                ctl["notes"] = "Test failures:\n" + log[-LOG_CAP:]
+                log_ledger(state, "verifier", "fail", f"iteration {ctl['iteration']}", tests="fail")
+                print(f"   [verifier] FAIL -> back to Executor (iteration {ctl['iteration']})")
+            ctl["updated_by"] = "verifier"
+            write_state(state)
+            git_checkpoint("verifier gate")
+
+        else:
+            print(f"[SWARM] Unknown status '{status}'. Halting rather than guessing.")
+            break
+
+        time.sleep(2)
+
+
+if __name__ == "__main__":
+    main()
