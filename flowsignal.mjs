@@ -24,7 +24,9 @@ import "dotenv/config";
 import { loadBars } from "./data.js";
 import { symbolToKrakenId } from "./storage.js";
 
-const syms = process.argv.slice(2).length ? process.argv.slice(2) : ["BTC", "ETH", "SOL"];
+const args = process.argv.slice(2);
+const POOL = args.includes("--pool");
+const syms = args.filter(a => a !== "--pool").length ? args.filter(a => a !== "--pool") : ["BTC", "ETH", "SOL"];
 const COST_PCT = 0.9;               // round-trip taker + slippage, in percent
 const TFS = [15, 60, 240];          // decision bar sizes, minutes
 const HORIZONS = [1, 4, 12];        // forward bars to measure
@@ -67,6 +69,19 @@ function spearman(x, y) {
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const mean = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
 
+// Pooled mode: same feature/horizon cells, but (x, forward-return) pairs are pooled
+// across ALL symbols before computing IC. A single pair's 4h series is a few hundred
+// bars with heavy horizon overlap (adjacent samples share most of their window) — that
+// is a thin, easily-noisy sample. Pooling multiplies the sample without changing what's
+// being measured (features/returns are already normalized, so raw pooling is valid).
+const pooled = new Map();   // "feature|tf|horizon" -> { xs:[], ys:[] }
+const pushPooled = (fname, tf, h, xs, ys) => {
+  if (!POOL) return;
+  const key = `${fname}|${tf}|${h}`;
+  const bucket = pooled.get(key) ?? pooled.set(key, { xs: [], ys: [] }).get(key);
+  bucket.xs.push(...xs); bucket.ys.push(...ys);
+};
+
 for (const sym of syms) {
   const id = symbolToKrakenId(sym);
   const all = loadBars(id).filter(b => b.buyVol > 0 || b.sellVol > 0);   // flow-bearing bars only
@@ -91,8 +106,10 @@ for (const sym of syms) {
     const bigPrint = bars.map(b => b.volume > 0 ? b.maxTrade / b.volume : null);
 
     const FEATURES = [["imbalance", imb], ["cum imbalance(6)", cumImb], ["trade intensity", intensity], ["big-print share", bigPrint]];
-    console.log(`\n  ${tf}m bars (${bars.length})`);
-    console.log(`    feature            horizon   IC(real)   IC(shuffled)   top-decile fwd   bottom-decile   spread vs ${COST_PCT}% cost`);
+    if (!POOL) {
+      console.log(`\n  ${tf}m bars (${bars.length})`);
+      console.log(`    feature            horizon   IC(real)   IC(shuffled)   top-decile fwd   bottom-decile   spread vs ${COST_PCT}% cost`);
+    }
 
     for (const [fname, fvals] of FEATURES) {
       for (const h of HORIZONS) {
@@ -103,6 +120,9 @@ for (const sym of syms) {
           ys.push((C[i + h] - C[i]) / C[i] * 100);       // forward return, percent
         }
         if (xs.length < 200) continue;
+        pushPooled(fname, tf, h, xs, ys);
+        if (POOL) continue;   // pooled mode reports only the combined result, below
+
         const ic = spearman(xs, ys);
         const icNull = spearman(xs, shuffle(ys));
         // Decile spread: the tradeable size of the effect, before any costs.
@@ -120,6 +140,32 @@ for (const sym of syms) {
     }
   }
 }
+
+if (POOL) {
+  console.log(`\n=== Pooled across ${syms.join("/")} — same feature/horizon cells, samples combined ===\n`);
+  console.log("feature              tf   horizon   n        IC(real)   IC(shuffled)   spread      vs cost");
+  // Group by tf for readability, in the same tf/feature/horizon order as TFS/HORIZONS.
+  for (const tf of TFS) {
+    for (const [fname] of [["imbalance"], ["cum imbalance(6)"], ["trade intensity"], ["big-print share"]]) {
+      for (const h of HORIZONS) {
+        const bucket = pooled.get(`${fname}|${tf}|${h}`);
+        if (!bucket || bucket.xs.length < 500) continue;
+        const { xs, ys } = bucket;
+        const ic = spearman(xs, ys);
+        const icNull = spearman(xs, shuffle(ys));
+        const order = xs.map((v, i) => [v, ys[i]]).sort((a, b) => a[0] - b[0]);
+        const d = Math.max(1, Math.floor(order.length / 10));
+        const bot = mean(order.slice(0, d).map(o => o[1])), top = mean(order.slice(-d).map(o => o[1]));
+        const spread = top - bot;
+        const verdict = spread > COST_PCT ? "CLEARS" : `${(spread / COST_PCT * 100).toFixed(0)}% of cost`;
+        console.log(`${fname.padEnd(20)} ${String(tf + "m").padStart(4)}   ${String(h * tf + "m").padStart(6)}   ` +
+          `${String(xs.length).padStart(6)}   ${(ic >= 0 ? "+" : "") + ic.toFixed(4)}    ${(icNull >= 0 ? "+" : "") + icNull.toFixed(4)}      ` +
+          `${(spread >= 0 ? "+" : "") + spread.toFixed(3)}%   ${verdict}`);
+      }
+    }
+  }
+}
+
 console.log(`\nIC is the Spearman correlation between the feature and the forward return. The shuffled column is`);
 console.log(`the same computation on scrambled targets — anything the real IC does not clearly exceed is noise.`);
 console.log(`The decile spread is what a perfect long/short on that feature would capture BEFORE the ~${COST_PCT}% round trip.\n`);
