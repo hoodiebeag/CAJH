@@ -8,3 +8,7 @@ candles/
 archive/
 archive_full/
 flow_*.log
+
+# orchestration scratch (empty placeholders, not committed)
+swarm-runner.py
+agent-orchestrator.ps1

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "status": "ARCHITECT_PENDING",
+  "target_file": "backtest.test.mjs",
+  "objective": "Raise test coverage of the backtest engine: add cases for the ATR stop mode (stopMode 'atr' derives risk from ATR, not the swing low), the one-trade-per-level guard in anticipate mode, and the alignment/trend gates now that they apply in anticipate mode. Assert against hand-computed values, not snapshots.",
+  "allow_live_edit": false,
+  "test_command": "npm test",
+  "iteration": 0,
+  "max_iterations": 10,
+  "notes": "Seeded by the Architect. Objective chosen because it is outstanding housekeeping in ROADMAP.md, is bounded, and touches ONLY the test file - it cannot alter live trading behaviour, which makes it a safe first exercise of the loop. To retarget: edit target_file and objective, reset status to ARCHITECT_PENDING. Read AGENT_PROTOCOL.md first; the frozen-path rule and the never-discard-another-agent's-work rule are binding.",
+  "updated_by": "architect",
+  "updated_at": "2026-07-30T18:35:00Z"
+}
