@@ -130,5 +130,13 @@
       "commit": "af0c640",
       "tests": "7 passing"
     }
-  ]
+  ],
+  "budget": {
+    "window_started_at": "2026-07-30T20:23:34.550Z",
+    "expires_at": "2026-07-31T00:23:34.550Z",
+    "max_runs": 8,
+    "runs_used": 0,
+    "on_exhausted": "Set control.status to PAUSED_BUDGET, append a ledger entry, and DISABLE the scheduled task cajh-swarm-loop via the scheduled-tasks tool (update_scheduled_task with enabled:false). Do not do any other work in that run.",
+    "note": "A run must check this BEFORE any other work so an exhausted budget costs almost nothing. To resume: raise max_runs, push expires_at forward, reset runs_used to 0, set control.status back to EXECUTOR_PENDING, and re-enable the task."
+  }
 }
