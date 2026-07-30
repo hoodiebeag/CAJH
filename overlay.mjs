@@ -14,11 +14,9 @@
  */
 import "dotenv/config";
 import { loadCandles } from "./data.js";
-import { symbolToKrakenId, loadConfig } from "./storage.js";
+import { loadWatchlist, symbolToKrakenId, ts } from "./researchlib.mjs";
 
-const watch = (process.env.WATCHLIST || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
-const syms = watch.length ? watch : (loadConfig().watchlist || []).map(a => a.symbol);
-const ts = (d) => Date.parse(d + "T00:00:00Z") / 1000;
+const syms = loadWatchlist();
 const COST = 0.0045;   // one side: 0.40% taker + 0.05% slippage
 
 const WINDOWS = [

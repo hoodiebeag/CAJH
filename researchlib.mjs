@@ -19,6 +19,9 @@ export { symbolToKrakenId };
 /** "YYYY-MM-DD" → unix seconds at UTC midnight. */
 export const ts = (d) => Date.parse(d + "T00:00:00Z") / 1000;
 
+/** The live entry timeframes, [label, minutes] — duplicated verbatim in several scripts. */
+export const TFS = [["1h", 60], ["4h", 240], ["1d", 1440]];
+
 /**
  * Sample stats for an array of per-trade R values: mean, sample stdev (n-1), standard
  * error, 95% CI half-width, win rate, total, and the best single value. Every script's

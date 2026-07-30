@@ -20,11 +20,9 @@
 import "dotenv/config";
 import { loadCandles } from "./data.js";
 import { backtestMultiTF } from "./backtest.js";
-import { symbolToKrakenId, loadConfig } from "./storage.js";
+import { loadWatchlist, symbolToKrakenId, ts, stat } from "./researchlib.mjs";
 
-const watch = (process.env.WATCHLIST || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
-const syms = watch.length ? watch : (loadConfig().watchlist || []).map(a => a.symbol);
-const ts = (d) => Date.parse(d + "T00:00:00Z") / 1000;
+const syms = loadWatchlist();
 
 const WINDOWS = [
   ["2023 (unseen)",        ts("2023-01-01"), ts("2024-01-01")],
@@ -51,13 +49,6 @@ const load = () => syms.map(s => {
 const slice = (series, from, to) => series.map(s => ({
   ...s, candles: s.candles.filter(c => { const t = +c.time; return t >= from && t < to; })
 }));
-
-const stat = (arr) => {
-  const n = arr.length, mean = n ? arr.reduce((a, b) => a + b, 0) / n : 0;
-  const sd = n > 1 ? Math.sqrt(arr.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) : 0;
-  const ci = n ? 1.96 * sd / Math.sqrt(n) : 0;
-  return { n, mean, ci, total: mean * n, wr: n ? arr.filter(x => x > 0).length / n : 0 };
-};
 
 const data = load();
 console.log(`\n=== Simple daily strategy — ${data.length} pairs ===`);

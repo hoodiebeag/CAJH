@@ -16,12 +16,10 @@
 import "dotenv/config";
 import { loadCandles } from "./data.js";
 import { backtestMultiTF } from "./backtest.js";
-import { symbolToKrakenId, loadConfig } from "./storage.js";
 import { MIN_STOP_PCT, MAX_STOP_PCT_BY_TF, TP_R } from "./strategy.js";
+import { loadWatchlist, symbolToKrakenId, TFS, stat } from "./researchlib.mjs";
 
-const SYMS = (process.env.WATCHLIST || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
-const watch = SYMS.length ? SYMS : (loadConfig().watchlist || []).map(a => a.symbol);
-const TFS = [["1h", 60], ["4h", 240], ["1d", 1440]];
+const watch = loadWatchlist();
 const FEE = 0.004, SLIP = 0.0005;
 
 const seriesOf = (id) => TFS.map(([label, mins]) => ({ label, mins, candles: loadCandles(id, mins).slice(0, -1) }));
@@ -75,14 +73,6 @@ for (const sym of watch) {
     pooled.rand.push(...randomEntries(tfCandles, r.trades, 0.02, TP_R, 12345 + pairs));
   }
 }
-
-const stat = (arr) => {
-  const n = arr.length, sum = arr.reduce((a, b) => a + b, 0);
-  const mean = n ? sum / n : 0;
-  const sd = n > 1 ? Math.sqrt(arr.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) : 0;
-  const se = n ? sd / Math.sqrt(n) : 0;
-  return { n, mean, se, lo: mean - 1.96 * se, hi: mean + 1.96 * se, wr: n ? arr.filter(x => x > 0).length / n : 0 };
-};
 
 const c1 = stat(pooled.cajh), c2 = stat(pooled.rand), c3 = stat(pooled.aligned);
 const bhMean = pooled.bh.reduce((a, b) => a + b.pct, 0) / (pooled.bh.length || 1);

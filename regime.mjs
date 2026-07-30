@@ -12,12 +12,10 @@
 import "dotenv/config";
 import { loadCandles } from "./data.js";
 import { backtestMultiTF } from "./backtest.js";
-import { symbolToKrakenId, loadConfig } from "./storage.js";
 import { MIN_STOP_PCT, MAX_STOP_PCT_BY_TF, TP_R } from "./strategy.js";
+import { loadWatchlist, symbolToKrakenId, TFS, stat } from "./researchlib.mjs";
 
-const watch = (process.env.WATCHLIST || "").split(",").map(s=>s.trim().toUpperCase()).filter(Boolean);
-const syms = watch.length ? watch : (loadConfig().watchlist || []).map(a => a.symbol);
-const TFS = [["1h",60],["4h",240],["1d",1440]];
+const syms = loadWatchlist();
 const base = (tf) => ({ entryTf: tf, entryMode: "anticipate", requireHigherLow: false,
   minStopPct: MIN_STOP_PCT, maxStopPct: MAX_STOP_PCT_BY_TF[tf], tpR: TP_R, lockBreakeven: true });
 
@@ -41,11 +39,8 @@ for (const [tf] of TFS) {
   for (const [label, extra] of VARIANTS) {
     const pooled = [];
     for (const series of data) pooled.push(...(backtestMultiTF({ series }, { ...base(tf), ...extra }).results || []));
-    const n = pooled.length, sum = pooled.reduce((a,b)=>a+b,0);
-    const mean = n ? sum/n : 0;
-    const sd = n>1 ? Math.sqrt(pooled.reduce((a,b)=>a+(b-mean)**2,0)/(n-1)) : 0;
-    const ci = n ? 1.96*sd/Math.sqrt(n) : 0;
-    console.log(`  ${label.padEnd(22)} ${String(n).padStart(5)}t  ${mean>=0?"+":""}${mean.toFixed(3)}R/t ±${ci.toFixed(3)}  total ${sum.toFixed(0)}R`);
+    const s = stat(pooled);
+    console.log(`  ${label.padEnd(22)} ${String(s.n).padStart(5)}t  ${s.mean>=0?"+":""}${s.mean.toFixed(3)}R/t ±${s.ci.toFixed(3)}  total ${s.total.toFixed(0)}R`);
   }
   console.log("");
 }
