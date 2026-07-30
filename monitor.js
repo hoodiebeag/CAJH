@@ -145,13 +145,34 @@ export function reconcile(holdings, trades, { stables = RECON_STABLES, dustUsd =
   return { orphans, ghosts };
 }
 
-// Fetch live holdings and report any mismatch with tracked trades. Reports only — never sells.
-export async function reconcileHoldings(channel) {
+// Fetch live holdings and report any mismatch with tracked trades. Never sells.
+// With autoRemoveGhosts, tracked trades that Kraken doesn't hold (e.g. a position that
+// only exists in positions.json — the "PUMP listed on Discord but not on Kraken" bug)
+// are dropped from tracking automatically; removing a record sells nothing. Trades
+// opened in the last 10 minutes are exempt in case balances lag a fresh fill.
+export async function reconcileHoldings(channel, { autoRemoveGhosts = false } = {}) {
   let holdings;
   try { ({ holdings } = await getHoldings()); }
   catch (err) { logger.error("[RECONCILE] getHoldings failed:", err.message); return null; }
   const result = reconcile(holdings, getOpenTrades());
-  const { orphans, ghosts } = result;
+  const { orphans } = result;
+  let { ghosts } = result;
+
+  if (autoRemoveGhosts && ghosts.length) {
+    const removable = ghosts.filter(t => !t.openedAt || Date.now() - t.openedAt > 10 * 60 * 1000);
+    for (const t of removable) {
+      removeTrade(t.symbol);
+      logger.warn(`[RECONCILE] Auto-removed stale tracked position ${t.symbol} — not held on Kraken.`);
+    }
+    if (removable.length && channel) {
+      await channel.send(
+        `🧹 **Auto-removed ${removable.length} stale tracked position(s):** ` +
+        removable.map(t => `**${t.symbol}**`).join(", ") +
+        ` — tracked by cajh but not held on Kraken (closed or never filled). Nothing was sold; only the stale record was dropped.`
+      );
+    }
+    ghosts = ghosts.filter(t => !removable.includes(t));
+  }
   if (!orphans.length && !ghosts.length) {
     logger.info("[RECONCILE] Holdings match tracked trades.");
     if (channel) await channel.send("🔎 **Reconciliation:** Kraken holdings match cajh's tracked trades. Nothing orphaned.");
@@ -244,6 +265,7 @@ export async function postTradeClosed(channel, trade, exitPrice, reason) {
   const label  = reason === "tp"         ? "TP Hit ✅"
                : reason === "sl"         ? "SL Hit ❌"
                : reason === "swing-high" ? "Swing-High Take-Profit 📈"
+               : reason === "rotated"    ? "Rotated Out 🔄 (banked to make room for a new signal)"
                : reason === "manual"     ? "Manually Closed"
                : "Closed";
 
@@ -289,6 +311,17 @@ async function closePosition(channel, symbol, trade, price, reason) {
   return true;
 }
 
+/**
+ * Close a tracked position at market for an external reason (e.g. rotation at the
+ * position cap). Returns true only if the exchange sell succeeded; on failure the
+ * trade stays tracked, exactly like the stop/TP path.
+ */
+export async function closeTradeAtMarket(channel, symbol, price, reason = "manual") {
+  const trade = getTrade(symbol);
+  if (!trade) return false;
+  return closePosition(channel, symbol, trade, price, reason);
+}
+
 export function startMonitor(client, getChannelId, intervalMs = 30000) {
   logger.info("[MONITOR] Position monitor started");
   hydrateTrades();
@@ -302,11 +335,15 @@ export function startMonitor(client, getChannelId, intervalMs = 30000) {
     try { return await client.channels.fetch(id); } catch { return null; }
   };
 
-  // One-time boot reconciliation: surface any Kraken holdings cajh isn't tracking — e.g.
-  // positions a failed exit abandoned before the close-only-on-success fix.
-  resolveChannel()
-    .then(ch => reconcileHoldings(ch))
-      .catch(err => logger.error("[RECONCILE] boot check skipped:", err.message));
+  // Boot + periodic reconciliation: surface orphans (held but untracked) and AUTO-REMOVE
+  // ghosts (tracked but not held) so a phantom position can never sit in the Discord
+  // book for long. Removal drops the stale record only — nothing is ever sold.
+  const runReconcile = () =>
+    resolveChannel()
+      .then(ch => reconcileHoldings(ch, { autoRemoveGhosts: true }))
+      .catch(err => logger.error("[RECONCILE] check skipped:", err.message));
+  runReconcile();
+  setInterval(runReconcile, 6 * 60 * 60 * 1000);
 
   // Reset daily stats when the ET calendar day rolls over. Checked every minute instead
   // of computing "ms until midnight" — that math runs in the server's local timezone
@@ -378,7 +415,7 @@ export function startMonitor(client, getChannelId, intervalMs = 30000) {
           if (now - (trade._swingCheckedAt || 0) > 90_000) {
             trade._swingCheckedAt = now;
             try {
-              const candles = await fetchOHLC(symbolToPair(symbol), trade.tfMinutes || 15);
+              const candles = await fetchOHLC(symbolToPair(symbol), trade.tfMinutes || 60);
               const closed  = candles?.slice(0, -1) || [];
               const pivots  = detectSwings(closed, SWING_WINDOW);
               const last    = pivots[pivots.length - 1];

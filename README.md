@@ -22,18 +22,26 @@ confirms in ~1–2 candles instead of waiting `N` candles on the right, so signa
 timely without lowering the bar (same strong pivots, not more of them). `N` is
 `SWING_WINDOW` in `strategy.js` (default `5`).
 
-- **Entry trigger** — a 15m swing low that just confirmed by break of structure
-  (within `RECENT_BARS` candles, so scans catch setups that confirmed since the last scan).
-- **Trend filter** — the trade is only taken when the **1h and 4h** structural bias are
-  bullish (`REQUIRE_TF_ALIGNMENT`). Higher-timeframe trend, fast-timeframe entry.
+- **Entry trigger (anticipation)** — a candidate swing low exists on the **1h, 4h, or 1d**
+  and live price crosses **above the candidate candle's high** (the trigger): the
+  confirming close is *expected* to print, so cajh buys the crossing instead of chasing
+  the close. A low that already confirmed within `RECENT_BARS` also qualifies (covers
+  price gapping through the trigger between scans). Higher timeframes win ties (1d > 4h > 1h).
+- **No alignment gate** — any single timeframe can fire; risk-based sizing (below)
+  replaces the old 1h+4h trend filter.
 - **Sell arrows** — swing highs (confirmed when price breaks below them) are drawn and
   used for take-profit; cajh is long-only and does not short.
 
 ### Entry, stop, and targets
 
 - **Entry** — market buy when the setup is found on a scan.
-- **Size** — flat 10% of balance (`POSITION_PCT` in `scanner.js`).
-- **Stop** — the swing low that triggered the entry.
+- **Size (risk-based)** — risk `RISK_PCT` (0.5%) of free cash per trade: size =
+  risk budget ÷ stop distance, capped at `MAX_POSITION_PCT` (20%) of cash. A 1d setup
+  with an 8% stop and a 1h setup with a 1.5% stop carry the same dollar risk.
+- **Position cap with rotation** — at 6 open positions, a new signal closes the **most
+  profitable** open position (banks the winner) to make room.
+- **Stop** — the candidate swing low that triggered the entry. Stop-distance bands are
+  per timeframe (`MAX_STOP_PCT_BY_TF`): ≤4% on 1h, ≤6% on 4h, ≤10% on 1d, ≥1.5% everywhere.
 - **Target** — `risk = entry − stop`; a single take-profit at `entry + 4 × risk`
   (`TP_R` in `strategy.js`, full position, no scale-out).
 - **Breakeven-plus** — once price reaches `entry + 2 × risk` (`BE_TRIGGER_R`), the stop
@@ -67,16 +75,16 @@ redeploys (the filesystem is otherwise wiped on each deploy).
 ## Commands
 
 **Positions** — `!sell BTC`, `!sell BTC 50` (percent), `!port`, `!stop`, `!resume`
-**Signals** — `!scan` (auto every 15 minutes, right after each 15m candle closes), `!trade BTC` (one asset)
-**Backtest** — `!backtest BTC` (multi-timeframe: 15m entries gated by 1h+4h alignment)
+**Signals** — `!scan` (auto every 15 minutes — anticipation entries need frequent checks even on slow candles), `!trade BTC` (one asset)
+**Backtest** — `!backtest BTC` (anticipation entries per 1h/4h/1d timeframe, pooled)
 **Watchlist** — `!watchlist`, `!watch BTC ETH`, `!unwatch TAO`
 **Settings** — `!setchannel`, `!status`
-**AI (no trades)** — `@cajh show me BTC 15m`, `@cajh analyze that`. cajh also answers
+**AI (no trades)** — `@cajh show me BTC 4h`, `@cajh analyze that`. cajh also answers
 questions about its own live state and code.
 
 ## Backtesting
 
-`!backtest BTC` replays the strategy on recent Kraken history: trades, win rate, total
+`!backtest BTC` replays the strategy on deep local history (or live candles as fallback): trades, win rate, total
 R, avg R, and max drawdown in R. Simplified model (exact fills, stop assumed before
 target on the same candle, limited history) — a rough guide, not truth. Past results
 don't predict the future.

@@ -54,7 +54,7 @@ function niceStep(range, target = 6) {
 
 function fmtTime(unixSec, interval) {
   const d = new Date(unixSec * 1000);
-  if (interval === "4h") {
+  if (interval === "4h" || interval === "1d") {
     return d.toLocaleDateString("en-US", { day: "numeric", timeZone: "UTC" });
   }
   return d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" });

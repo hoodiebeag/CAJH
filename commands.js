@@ -6,7 +6,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { analyzeChart }                   from "./analyzer.js";
 import { runScanner, scanSymbol, fetchCandles, SCAN_INTERVALS } from "./scanner.js";
 import { generateChartImage } from "./chart.js";
-import { SWING_WINDOW } from "./strategy.js";
+import { SWING_WINDOW, TP_R, MIN_STOP_PCT, MAX_STOP_PCT_BY_TF } from "./strategy.js";
 import { backtestMultiTF, profileEntries } from "./backtest.js";
 import { loadCandles } from "./data.js";
 import * as logger from './logger.js';
@@ -29,13 +29,31 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Human-readable date span for a candle series — run transparency (deep store vs live 720).
 const spanOf = (c) => (c?.length ? `${new Date(parseInt(c[0].time) * 1000).toISOString().slice(0, 10)} → ${new Date(parseInt(c.at(-1).time) * 1000).toISOString().slice(0, 10)}` : "empty");
 async function tfCandles(id) {
-  const c15 = loadCandles(id, 15);
-  if (c15.length) return { c15, c1h: loadCandles(id, 60), c4h: loadCandles(id, 240) };
-  const live15 = await fetchCandles(id, 15);  await sleep(900);
-  const live1h = await fetchCandles(id, 60);  await sleep(900);
-  const live4h = await fetchCandles(id, 240);
-  return { c15: live15, c1h: live1h, c4h: live4h };
+  const c1h = loadCandles(id, 60);
+  if (c1h.length) return { c1h, c4h: loadCandles(id, 240), c1d: loadCandles(id, 1440) };
+  const live1h = await fetchCandles(id, 60);   await sleep(900);
+  const live4h = await fetchCandles(id, 240);  await sleep(900);
+  const live1d = await fetchCandles(id, 1440);
+  return { c1h: live1h, c4h: live4h, c1d: live1d };
 }
+
+const haveAll = (d) => d?.c1h?.length && d?.c4h?.length && d?.c1d?.length;
+
+// Timeframe series for the backtester/profiler: ascending TFs, closed candles only.
+const seriesOf = ({ c1h, c4h, c1d }) => [
+  { label: "1h", mins: 60,   candles: c1h.slice(0, -1) },
+  { label: "4h", mins: 240,  candles: c4h.slice(0, -1) },
+  { label: "1d", mins: 1440, candles: c1d.slice(0, -1) },
+];
+
+// Live-strategy backtest config: anticipation entries, no alignment/trend gates,
+// per-TF stop caps — mirrors scanner.js exactly. One entry TF per run; the live bot
+// trades all three, so "live" results pool the three runs.
+const LIVE_ENTRY_TFS = ["1h", "4h", "1d"];
+const liveCfg = (tf) => ({
+  entryTf: tf, entryMode: "anticipate", alignMode: "none", trendGate: false, chopFilter: false,
+  requireHigherLow: false, minStopPct: MIN_STOP_PCT, maxStopPct: MAX_STOP_PCT_BY_TF[tf], tpR: TP_R, lockBreakeven: true
+});
 
 // ─── !confirm ──────────────────────────────────────────────────────────────────
 
@@ -142,7 +160,7 @@ export async function handleHelp(message, state) {
   const status = isTradingEnabled() ? "🟢 Active" : "🔴 Halted";
   await message.reply(
     `**cajh — Swing-Fractal Trading Bot**\n` +
-    `Long-only spot. Enters on a 15m swing low confirmed by break of structure, only when the 1h and 4h trend are bullish, and self-manages exits by stop / take-profit / swing high.\n\n` +
+    `Long-only spot. Anticipates swing-low confirmations on the 1h/4h/1d — buying the moment price crosses a candidate low's trigger — sizes by risk (0.5% per trade), rotates the most profitable position out at the cap, and self-manages exits by stop / take-profit.\n\n` +
 
     `**Positions:**\n` +
     `> \`!sell BTC\` — Close cajh's position in an asset\n` +
@@ -162,7 +180,7 @@ export async function handleHelp(message, state) {
     `> \`!status\` — Bot status\n\n` +
 
     `**Extras (AI, no trades):**\n` +
-    `> \`@cajh show me BTC 15m\`  ·  \`@cajh analyze that\`\n\n` +
+    `> \`@cajh show me BTC 4h\`  ·  \`@cajh analyze that\`\n\n` +
 
     `**Status:** ${status}\n` +
     `**Watchlist:** ${state.watchlist.map(a => a.symbol).join(", ")}`
@@ -274,7 +292,7 @@ export async function handleAnalyzeThat(message, state) {
   const base64    = state.lastChartBase64    ?? saved?.base64;
   const mediaType = state.lastChartMediaType ?? saved?.mediaType;
 
-  if (!base64) return message.reply("No chart available yet. Ask for one first, e.g. `@cajh BTC 15m`.");
+  if (!base64) return message.reply("No chart available yet. Ask for one first, e.g. `@cajh BTC 4h`.");
 
   await message.reply("Reading last chart...");
   await analyzeChart(base64, mediaType, message.channel);
@@ -283,14 +301,14 @@ export async function handleAnalyzeThat(message, state) {
 // ─── cajh [chart request] ────────────────────────────────────────────────────────
 
 const TF_ALIASES = {
-  "15m": 15, "15": 15, "15min": 15,
   "1h": 60, "1hr": 60, "1hour": 60, "60m": 60,
-  "4h": 240, "4hr": 240, "4hour": 240
+  "4h": 240, "4hr": 240, "4hour": 240,
+  "1d": 1440, "1day": 1440, "daily": 1440, "24h": 1440
 };
 const CHART_STOPWORDS = new Set(["show", "me", "a", "the", "chart", "charts", "for", "of", "please", "pull", "up", "cajh", "on", "send", "give", "get"]);
 
 /**
- * `@cajh BTC` → posts all three (15m/1h/4h) charts. `@cajh BTC 15m` → just that one.
+ * `@cajh BTC` → posts all three (1h/4h/1d) charts. `@cajh BTC 4h` → just that one.
  * Generates the charts itself from Kraken data. Returns true if it handled a chart
  * request, false otherwise (so the caller falls through to general chat).
  */
@@ -358,9 +376,9 @@ export async function handleChartRequest(message, userMessage, state) {
 export async function handleGeneral(message, userMessage, state) {
   let system =
     `You are cajh, a long-only spot crypto trading bot on Kraken in a Discord server.\n` +
-    `Your trading is mechanical: you enter on a 15m swing low confirmed by break of\n` +
-    `structure (price closing back above it), only when the 1h and 4h trend are bullish,\n` +
-    `and exit on stop-loss / take-profit / a swing high. Answer questions about yourself,\n` +
+    `Your trading is mechanical: you anticipate swing-low confirmations on the 1h, 4h,\n` +
+    `and 1d — buying when price crosses above a candidate low's trigger — size by risk\n` +
+    `(0.5% of cash per trade), and exit on stop-loss / take-profit. Answer questions about yourself,\n` +
     `your live state, and your own code accurately and concisely. If you don't know, say so.\n\n` +
     buildLiveContext(state);
 
@@ -380,7 +398,7 @@ export async function handleGeneral(message, userMessage, state) {
 }
 
 // ─── !backtest <symbol> ────────────────────────────────────────────────────────
-// Multi-timeframe backtest: entries on 15m, gated by 1h + 4h alignment (the live rule).
+// Multi-timeframe backtest: anticipation entries per 1h/4h/1d timeframe (the live rule), pooled.
 
 export async function handleBacktest(message, state, arg) {
   const symbol = (arg || "").trim().split(/\s+/)[0]?.toUpperCase();
@@ -389,27 +407,26 @@ export async function handleBacktest(message, state, arg) {
   if (!symbol) return backtestWatchlist(message, state);
 
   const id = (state.watchlist || []).find(a => a.symbol === symbol)?.id || symbolToKrakenId(symbol);
-  await message.reply(`📈 Backtesting **${symbol}** across 15m/1h/4h (N=${SWING_WINDOW})...`);
+  await message.reply(`📈 Backtesting **${symbol}** — anticipation entries on 1h/4h/1d (N=${SWING_WINDOW}, live config)...`);
 
   try {
-    const { c15: candles15, c1h: candles1h, c4h: candles4h } = await tfCandles(id);
+    const d = await tfCandles(id);
+    if (!haveAll(d)) return message.reply(`⚠️ Couldn't fetch enough data for **${symbol}**.`);
+    const series = seriesOf(d);
 
-    if (!candles15?.length || !candles1h?.length || !candles4h?.length) {
-      return message.reply(`⚠️ Couldn't fetch enough data for **${symbol}**.`);
-    }
-
-    const r = backtestMultiTF({
-      candles15: candles15.slice(0, -1),
-      candles1h: candles1h.slice(0, -1),
-      candles4h: candles4h.slice(0, -1)
+    const pooled = [];
+    const lines = LIVE_ENTRY_TFS.map(tf => {
+      const r = backtestMultiTF({ series }, liveCfg(tf));
+      pooled.push(...(r.results || []));
+      return `**${tf}** — ${r.trades}t · ${(r.winRate * 100).toFixed(0)}% · ${r.totalR.toFixed(1)}R (maxDD ${r.maxDrawdownR.toFixed(1)}R)`;
     });
+    const n = pooled.length, wins = pooled.filter(x => x > 0).length;
+    const totalR = pooled.reduce((a, b) => a + b, 0);
 
     await message.reply(
-      `📊 **Backtest — ${symbol}** (15m entries, 1h+4h filter · ${candles15.length} bars · ${spanOf(candles15)})\n\n` +
-      `**Trades:** ${r.trades}\n` +
-      `**Win rate:** ${(r.winRate * 100).toFixed(0)}%\n` +
-      `**Total:** ${r.totalR.toFixed(1)}R   ·   **Avg:** ${r.avgR.toFixed(2)}R/trade\n` +
-      `**Max drawdown:** ${r.maxDrawdownR.toFixed(1)}R\n\n` +
+      `📊 **Backtest — ${symbol}** (anticipation entries per TF · ${d.c1h.length} 1h bars · ${spanOf(d.c1h)})\n\n` +
+      lines.join("\n") + `\n\n` +
+      `**Pooled:** ${n}t · ${n ? (wins / n * 100).toFixed(0) : 0}% · ${totalR.toFixed(1)}R · ${n ? (totalR / n).toFixed(2) : "0.00"}R/t\n\n` +
       `_Small samples mislead — judge on total R, not win rate alone. "R" = multiples of per-trade risk._`
     );
   } catch (err) {
@@ -424,18 +441,24 @@ async function backtestWatchlist(message, state) {
   const watchlist = state.watchlist || [];
   if (!watchlist.length) return message.reply("Your watchlist is empty — add assets with `!watch BTC ETH`.");
 
-  await message.reply(`📈 Backtesting all **${watchlist.length}** watchlist assets (15m entries, 1h+4h filter)... give me a minute.`);
+  await message.reply(`📈 Backtesting all **${watchlist.length}** watchlist assets (anticipation entries, 1h/4h/1d pooled)... give me a minute.`);
 
   const pooled = [];
   const lines  = [];
   for (const asset of watchlist) {
     try {
-      const { c15, c1h, c4h } = await tfCandles(asset.id);
-      if (!c15?.length || !c1h?.length || !c4h?.length) { lines.push(`**${asset.symbol}** — no data`); continue; }
+      const d = await tfCandles(asset.id);
+      if (!haveAll(d)) { lines.push(`**${asset.symbol}** — no data`); continue; }
+      const series = seriesOf(d);
 
-      const r = backtestMultiTF({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) });
-      pooled.push(...(r.results || []));
-      lines.push(`**${asset.symbol}** — ${r.trades}t · ${(r.winRate * 100).toFixed(0)}% · ${r.totalR.toFixed(1)}R`);
+      const assetR = [];
+      for (const tf of LIVE_ENTRY_TFS) {
+        const r = backtestMultiTF({ series }, liveCfg(tf));
+        assetR.push(...(r.results || []));
+      }
+      pooled.push(...assetR);
+      const wins = assetR.filter(x => x > 0).length, tot = assetR.reduce((a, b) => a + b, 0);
+      lines.push(`**${asset.symbol}** — ${assetR.length}t · ${assetR.length ? (wins / assetR.length * 100).toFixed(0) : 0}% · ${tot.toFixed(1)}R`);
     } catch (err) {
       logger.error(`[COMMAND] Backtest failed for ${asset.symbol}:`, err.message);
       lines.push(`**${asset.symbol}** — error`);
@@ -473,31 +496,33 @@ export async function handleOptimize(message, state) {
   const data = [];
   for (const asset of watchlist) {
     try {
-      const { c15, c1h, c4h } = await tfCandles(asset.id);
-      if (c15?.length && c1h?.length && c4h?.length) {
-        data.push({ symbol: asset.symbol, c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
-      }
+      const d = await tfCandles(asset.id);
+      if (haveAll(d)) data.push({ symbol: asset.symbol, series: seriesOf(d) });
     } catch (err) {
       logger.error(`[OPTIMIZE] fetch failed ${asset.symbol}:`, err.message);
     }
   }
   if (!data.length) return message.channel.send("⚠️ Couldn't fetch data for any pair.");
 
-  // 2) Config grid — all net-of-fees, per-pair trend gate on. Entry timeframe is the
-  // key variable: higher TFs give bigger stops that clear fees.
+  // 2) Config grid — all net-of-fees. Sweeps entry timeframe, entry mode (anticipation
+  // vs confirmed BOS), gate mode, and TP, with the per-TF stop cap the live bot uses.
   const grid = [];
-  for (const entryTf of ["15m", "1h", "4h"])
-    for (const trendGateMode of ["ma", "structure"])
-      for (const minStopPct of [0.015, 0.025])
+  for (const entryTf of ["1h", "4h", "1d"])
+    for (const entryMode of ["anticipate", "bos"])
+      for (const trendGate of [false, true])
         for (const tpR of [3, 4, 6])
-          grid.push({ entryTf, trendGateMode, minStopPct, tpR, trendMa: 20, lockBreakeven: true, trendGate: true });
+          grid.push({
+            entryTf, entryMode, tpR, trendGate, trendGateMode: "ma", trendMa: 20,
+            alignMode: "none", minStopPct: 0.015, maxStopPct: MAX_STOP_PCT_BY_TF[entryTf],
+            lockBreakeven: true
+          });
 
   // 3) Run every config across the cached pairs, pooling NET results.
   const ranked = grid.map(cfg => {
     const pooled = [];
     let green = 0;
     for (const d of data) {
-      const r = backtestMultiTF({ candles15: d.c15, candles1h: d.c1h, candles4h: d.c4h }, cfg);
+      const r = backtestMultiTF({ series: d.series }, cfg);
       pooled.push(...(r.results || []));
       if (r.totalR > 0) green++;
     }
@@ -514,7 +539,7 @@ export async function handleOptimize(message, state) {
   // (net R per trade) figure is the fee-drag signal: ≈ −0.1 to −0.2R means fees are
   // the killer (maker orders could help); worse than that means no edge to rescue.
   const fmt = r =>
-    `**${r.cfg.entryTf}/${r.cfg.trendGateMode === "structure" ? "struct" : "ma"}** · min${(r.cfg.minStopPct * 100).toFixed(1)}/TP${r.cfg.tpR}` +
+    `**${r.cfg.entryTf}/${r.cfg.entryMode}${r.cfg.trendGate ? "+gate" : ""}** · TP${r.cfg.tpR}` +
     ` → **${r.net.toFixed(1)}R** · ${r.n}t · ${r.n ? (r.net / r.n).toFixed(2) : "0.00"}R/t · ${(r.winRate * 100).toFixed(0)}% · ${r.green}/${r.pairs} grn`;
 
   const traded     = ranked.filter(r => r.n > 0);                       // already net-sorted
@@ -570,10 +595,13 @@ export async function handleWhy(message, state, symbol) {
   const agg = {};
   for (const asset of targets) {
     try {
-      const { c15, c1h, c4h } = await tfCandles(asset.id);
-      if (!c15?.length || !c1h?.length || !c4h?.length) continue;
-      const r = backtestMultiTF({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1) });
-      for (const [k, v] of Object.entries(r.reasons || {})) agg[k] = (agg[k] || 0) + v;
+      const d = await tfCandles(asset.id);
+      if (!haveAll(d)) continue;
+      const series = seriesOf(d);
+      for (const tf of LIVE_ENTRY_TFS) {
+        const r = backtestMultiTF({ series }, liveCfg(tf));
+        for (const [k, v] of Object.entries(r.reasons || {})) agg[k] = (agg[k] || 0) + v;
+      }
     } catch (err) { logger.error(`[WHY] ${asset.symbol}:`, err.message); }
   }
 
@@ -599,7 +627,7 @@ export async function handleWhy(message, state, symbol) {
 
 
 // ─── !align ─────────────────────────────────────────────────────────────────
-// Focused sweep: holds the live base config (15m / ma gate / min1.5 / TP4) and
+// Focused sweep: holds a gated base config (1h / ma gate / min1.5 / TP4) and
 // tries the four alignment rules, so we can see which one actually trades
 // net-positive instead of rejecting 85% of setups. Net of fees, with breadth.
 export async function handleAlign(message, state) {
@@ -611,14 +639,13 @@ export async function handleAlign(message, state) {
   const data = [];
   for (const asset of watchlist) {
     try {
-      const { c15, c1h, c4h } = await tfCandles(asset.id);
-      if (c15?.length && c1h?.length && c4h?.length)
-        data.push({ c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
+      const d = await tfCandles(asset.id);
+      if (haveAll(d)) data.push({ series: seriesOf(d) });
     } catch (err) { logger.error(`[ALIGN] ${asset.symbol}:`, err.message); }
   }
   if (!data.length) return message.channel.send("⚠️ Couldn't fetch data for any pair.");
 
-  const base = { entryTf: "15m", trendGate: true, trendGateMode: "ma", minStopPct: 0.015, tpR: 4, lockBreakeven: true };
+  const base = { entryTf: "1h", trendGate: true, trendGateMode: "ma", minStopPct: 0.015, maxStopPct: MAX_STOP_PCT_BY_TF["1h"], tpR: 4, lockBreakeven: true };
   const modes = [
     ["all",     "all 3 TFs bull (current)"],
     ["first",   "1h only"],
@@ -628,7 +655,7 @@ export async function handleAlign(message, state) {
   const rows = modes.map(([alignMode, label]) => {
     const pooled = []; let green = 0;
     for (const d of data) {
-      const r = backtestMultiTF({ candles15: d.c15, candles1h: d.c1h, candles4h: d.c4h }, { ...base, alignMode });
+      const r = backtestMultiTF({ series: d.series }, { ...base, alignMode });
       pooled.push(...(r.results || []));
       if (r.totalR > 0) green++;
     }
@@ -641,7 +668,7 @@ export async function handleAlign(message, state) {
   const best = [...rows].filter(r => r.n > 0).sort((a, b) => b.net - a.net)[0];
 
   await message.channel.send(
-    `⚖️ **Alignment sweep — ${data.length} assets (net of fees)**\nBase: 15m · ma gate · min1.5 · TP4\n\n` +
+    `⚖️ **Alignment sweep — ${data.length} assets (net of fees)**\nBase: 1h · ma gate · min1.5 · TP4\n\n` +
     rows.map(r => `• ${fmt(r)}`).join("\n") + `\n\n` +
     (best
       ? `Most net-positive: **${best.label}** (${best.net.toFixed(1)}R, ${best.green}/${best.pairs} pairs). Read **breadth**, not just the total — ` +
@@ -653,7 +680,7 @@ export async function handleAlign(message, state) {
 
 
 // ─── !room ──────────────────────────────────────────────────────────────────
-// Focused sweep: holds the promising loosened base (15m / ma gate / alignment off /
+// Focused sweep: holds the loosened base (1h / ma gate / alignment off /
 // min1.5 / TP4) and requires increasing "room" — clear air from entry up to the
 // nearest 4h resistance, in R — to see whether cutting into-the-ceiling trades
 // lifts R/t. Net of fees, with breadth.
@@ -666,18 +693,17 @@ export async function handleRoom(message, state) {
   const data = [];
   for (const asset of watchlist) {
     try {
-      const { c15, c1h, c4h } = await tfCandles(asset.id);
-      if (c15?.length && c1h?.length && c4h?.length)
-        data.push({ c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
+      const d = await tfCandles(asset.id);
+      if (haveAll(d)) data.push({ series: seriesOf(d) });
     } catch (err) { logger.error(`[ROOM] ${asset.symbol}:`, err.message); }
   }
   if (!data.length) return message.channel.send("⚠️ Couldn't fetch data for any pair.");
 
-  const base = { entryTf: "15m", trendGate: true, trendGateMode: "ma", alignMode: "none", minStopPct: 0.015, tpR: 4, lockBreakeven: true };
+  const base = { entryTf: "1h", trendGate: true, trendGateMode: "ma", alignMode: "none", minStopPct: 0.015, maxStopPct: MAX_STOP_PCT_BY_TF["1h"], tpR: 4, lockBreakeven: true };
   const rows = [0, 1, 2, 3, 4].map(minRoomR => {
     const pooled = []; let green = 0;
     for (const d of data) {
-      const r = backtestMultiTF({ candles15: d.c15, candles1h: d.c1h, candles4h: d.c4h }, { ...base, minRoomR });
+      const r = backtestMultiTF({ series: d.series }, { ...base, minRoomR });
       pooled.push(...(r.results || []));
       if (r.totalR > 0) green++;
     }
@@ -691,7 +717,7 @@ export async function handleRoom(message, state) {
   const best = traded.length ? [...traded].sort((a, b) => (b.net / b.n) - (a.net / a.n))[0] : null;
 
   await message.channel.send(
-    `📏 **Resistance-room sweep — ${data.length} assets (net of fees)**\nBase: 15m · ma gate · alignment off · min1.5 · TP4\n\n` +
+    `📏 **Resistance-room sweep — ${data.length} assets (net of fees)**\nBase: 1h · ma gate · alignment off · min1.5 · TP4\n\n` +
     rows.map(r => `• ${fmt(r)}`).join("\n") + `\n\n` +
     (best && best.minRoomR > 0 && best.n >= 5
       ? `Best R/t at **${best.minRoomR}R room** (${(best.net / best.n).toFixed(2)}R/t, ${best.green}/${best.pairs} pairs). ` +
@@ -737,10 +763,10 @@ export async function handleDiscover(message, state) {
   for (const sym of DISCOVER_UNIVERSE) {
     try {
       const id = symbolToKrakenId(sym);
-      const { c15, c1h, c4h } = await tfCandles(id);
-      if (!c15?.length || !c1h?.length || !c4h?.length) continue;
-      logger.info(`[DISCOVER] ${sym}: ${c15.length} 15m candles · ${spanOf(c15)}`);
-      const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1), btc4h }, { tpR: 4 });
+      const d = await tfCandles(id);
+      if (!haveAll(d)) continue;
+      logger.info(`[DISCOVER] ${sym}: ${d.c1h.length} 1h candles · ${spanOf(d.c1h)}`);
+      const { records } = profileEntries({ series: seriesOf(d), btc4h }, { tpR: 4 });
       all.push(...records);
       if (records.length) bySym.set(sym, records.length);
       fetched++;
@@ -774,9 +800,9 @@ export async function handleDiscover(message, state) {
     // so a "< 1%" rule can never select anything).
     ["stop < 2%",          r => r.stopPct != null && r.stopPct < 2],
     ["stop > 2%",          r => r.stopPct != null && r.stopPct > 2],
-    ["4h bull",            r => r.bias4h === "bull"],
-    ["4h not bull",        r => r.bias4h !== "bull"],
-    ["1h bull",            r => r.bias1h === "bull"],
+    ["4h bull",            r => r.biasMid === "bull"],
+    ["4h not bull",        r => r.biasMid !== "bull"],
+    ["1d bull",            r => r.biasHigh === "bull"],
     ["volume > 1.5x avg",  r => r.volRatio != null && r.volRatio > 1.5],
     ["ATR < 1% (low vol)", r => r.atrPct != null && r.atrPct < 1],
     ["ATR > 2% (high vol)",r => r.atrPct != null && r.atrPct > 2],
@@ -880,7 +906,7 @@ export async function handleDiscover(message, state) {
   }
 
   // Sample-imbalance readout: only backfilled pairs have deep history (720-candle live
-  // pulls span ~7.5 days of 15m bars), so one pair can dominate the pool — and the time
+  // pulls span ~30 days of 1h bars), so one pair can dominate the pool — and the time
   // splits then partly confound symbol with period. Surface it instead of hiding it.
   const topSym = [...bySym.entries()].sort((a, b) => b[1] - a[1])[0];
   const imbalance = topSym && topSym[1] / all.length > 0.3
@@ -908,9 +934,9 @@ export async function handleProfile(message, state) {
   const all = [];
   for (const asset of watchlist) {
     try {
-      const { c15, c1h, c4h } = await tfCandles(asset.id);
-      if (!c15?.length || !c1h?.length || !c4h?.length) continue;
-      const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1), btc4h }, { tpR: 4 });
+      const d = await tfCandles(asset.id);
+      if (!haveAll(d)) continue;
+      const { records } = profileEntries({ series: seriesOf(d), btc4h }, { tpR: 4 });
       all.push(...records);
     } catch (err) { logger.error(`[PROFILE] ${asset.symbol}:`, err.message); }
   }
@@ -931,7 +957,7 @@ export async function handleProfile(message, state) {
     ["BTC 24h ret %", "btc4hRetPct", 2],
   ];
   const bool = [
-    ["higher-low %", "higherLow", true], ["1h bull %", "bias1h", "bull"], ["4h bull %", "bias4h", "bull"],
+    ["higher-low %", "higherLow", true], ["4h bull %", "biasMid", "bull"], ["1d bull %", "biasHigh", "bull"],
     ["swept low %", "swept", true], ["bullish FVG %", "fvg", true],
     ["BTC 4h bull %", "btcBias4h", "bull"],
   ];
@@ -984,9 +1010,9 @@ export async function handleValidate(message, state) {
   const all = [];
   for (const asset of watchlist) {
     try {
-      const { c15, c1h, c4h } = await tfCandles(asset.id);
-      if (!c15?.length || !c1h?.length || !c4h?.length) continue;
-      const { records } = profileEntries({ candles15: c15.slice(0, -1), candles1h: c1h.slice(0, -1), candles4h: c4h.slice(0, -1), btc4h }, { tpR: 4 });
+      const d = await tfCandles(asset.id);
+      if (!haveAll(d)) continue;
+      const { records } = profileEntries({ series: seriesOf(d), btc4h }, { tpR: 4 });
       all.push(...records);
     } catch (err) { logger.error(`[VALIDATE] ${asset.symbol}:`, err.message); }
   }
@@ -1045,24 +1071,23 @@ export async function handleModes(message, state) {
   const data = [];
   for (const asset of watchlist) {
     try {
-      const { c15, c1h, c4h } = await tfCandles(asset.id);
-      if (c15?.length && c1h?.length && c4h?.length)
-        data.push({ c15: c15.slice(0, -1), c1h: c1h.slice(0, -1), c4h: c4h.slice(0, -1) });
+      const d = await tfCandles(asset.id);
+      if (haveAll(d)) data.push({ series: seriesOf(d) });
     } catch (err) { logger.error(`[MODES] ${asset.symbol}:`, err.message); }
   }
   if (!data.length) return message.channel.send("⚠️ Couldn't fetch data for any pair.");
 
   // BOS keeps its live gates; the dip-buy modes drop trend/alignment and run tight stops + high target.
   const cfgFor = mode => mode === "bos"
-    ? { entryMode: "bos", entryTf: "15m", trendGate: true, trendGateMode: "ma", minStopPct: 0.015, tpR: 4, lockBreakeven: true }
-    : { entryMode: mode, entryTf: "15m", trendGate: false, alignMode: "none", minStopPct: 0, tpR: 5, lockBreakeven: true };
+    ? { entryMode: "bos", entryTf: "1h", trendGate: true, trendGateMode: "ma", minStopPct: 0.015, maxStopPct: MAX_STOP_PCT_BY_TF["1h"], tpR: 4, lockBreakeven: true }
+    : { entryMode: mode, entryTf: "1h", trendGate: false, alignMode: "none", minStopPct: 0, tpR: 5, lockBreakeven: true };
   const modes = [["bos", "BOS (trend)"], ["support", "support bounce"], ["ma_dip", "MA dip"], ["rsi", "RSI oversold"], ["rev", "reversal (higher-low)"]];
 
   const rows = modes.map(([mode, label]) => {
     const cfg = cfgFor(mode);
     const pooled = []; let green = 0;
     for (const d of data) {
-      const r = backtestMultiTF({ candles15: d.c15, candles1h: d.c1h, candles4h: d.c4h }, cfg);
+      const r = backtestMultiTF({ series: d.series }, cfg);
       pooled.push(...(r.results || []));
       if (r.totalR > 0) green++;
     }

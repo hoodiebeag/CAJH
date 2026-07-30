@@ -29,8 +29,16 @@ export const SLIPPAGE_PCT   = 0.0005; // per-side slippage estimate for market f
 
 export const RECENT_BARS = 16; // a confirmed low is only "actionable" for this many candles after it confirms
 
+// ─── Anticipation entries + risk-based sizing (1h/4h/1d strategy) ───────────────
+export const PENDING_MAX_AGE   = 48;    // an unconfirmed candidate low older than this many entry-TF bars is stale
+export const RISK_PCT          = 0.005; // risk 0.5% of free cash per trade (position size = risk ÷ stop distance)
+export const MAX_POSITION_PCT  = 0.20;  // hard cap: no single position above 20% of free cash
+// Stop-distance cap per entry timeframe — wider TFs legitimately carry wider stops.
+// (MIN_STOP_PCT stays global: below ~1.5% the ~0.9% round-trip cost swamps the R.)
+export const MAX_STOP_PCT_BY_TF = { "1h": 0.04, "4h": 0.06, "1d": 0.10 };
+
 // Optional confidence filters. Set to false / null to disable.
-export const REQUIRE_HIGHER_LOW   = true;  // only buy if this swing low is above the previous one (bullish structure)
+export const REQUIRE_HIGHER_LOW   = false; // off: the strategy takes every swing-low signal the charts print (higher-low is a backtest filter, not a live gate)
 export const MAX_STOP_PCT         = 0.03;  // skip buys whose stop is further than 3% below entry; null to disable
 export const MIN_STOP_PCT         = 0.015; // skip buys whose stop is CLOSER than 1.5% — R that small is swamped by ~0.8% round-trip fees
 export const REQUIRE_TF_ALIGNMENT = true;  // require the higher-timeframe trend (1h AND 4h) to be bullish
@@ -64,14 +72,14 @@ export function isTrending(candles, n = SWING_WINDOW) {
 }
 
 /** Is candle i a strong local LOW vs the N candles before it? */
-function isLeftLow(lows, i, n) {
+export function isLeftLow(lows, i, n) {
   if (i < n) return false;
   for (let j = i - n; j < i; j++) if (lows[j] <= lows[i]) return false;
   return true;
 }
 
 /** Is candle i a strong local HIGH vs the N candles before it? */
-function isLeftHigh(highs, i, n) {
+export function isLeftHigh(highs, i, n) {
   if (i < n) return false;
   for (let j = i - n; j < i; j++) if (highs[j] >= highs[i]) return false;
   return true;
@@ -109,6 +117,45 @@ export function currentBias(candles, n = SWING_WINDOW) {
   const pivots = detectSwings(candles, n);
   if (!pivots.length) return null;
   return pivots[pivots.length - 1].type === "low" ? "bull" : "bear";
+}
+
+/**
+ * Anticipation signal: the current UNCONFIRMED candidate swing low, if any.
+ *
+ * detectSwings only reports a pivot once a candle CLOSES back above its high — one
+ * candle after the move has already happened. This returns the live candidate (a strong
+ * left-side low whose break-of-structure close hasn't printed yet) together with its
+ * `trigger` (the pivot candle's high). The moment price trades ABOVE the trigger, the
+ * confirmation is *expected* to print at this candle's close — that crossing is the
+ * anticipation entry. Stop stays the candidate low, exactly as with confirmed entries.
+ *
+ * Returns { pivotPrice, pivotIndex, trigger, prevSwingLow } or null (no candidate, the
+ * candidate is older than maxAgeBars, or the structure already confirmed).
+ */
+export function pendingSwingLow(candles, n = SWING_WINDOW, maxAgeBars = PENDING_MAX_AGE) {
+  const H = candles.map(c => parseFloat(c.high));
+  const L = candles.map(c => parseFloat(c.low));
+  const C = candles.map(c => parseFloat(c.close));
+  let loC = null, hiC = null;
+  const confirmedLows = [];
+  for (let i = 0; i < candles.length; i++) {
+    if (isLeftLow(L, i, n)  && (!loC || L[i] < loC.price)) loC = { index: i, price: L[i] };
+    if (isLeftHigh(H, i, n) && (!hiC || H[i] > hiC.price)) hiC = { index: i, price: H[i] };
+    if (loC && i > loC.index && C[i] > H[loC.index]) {
+      confirmedLows.push(loC.price);
+      loC = null; hiC = null;
+    } else if (hiC && i > hiC.index && C[i] < L[hiC.index]) {
+      loC = null; hiC = null;
+    }
+  }
+  if (!loC) return null;
+  if (candles.length - 1 - loC.index > maxAgeBars) return null;
+  return {
+    pivotPrice: loC.price,
+    pivotIndex: loC.index,
+    trigger: H[loC.index],
+    prevSwingLow: confirmedLows.length ? confirmedLows[confirmedLows.length - 1] : null
+  };
 }
 
 /**

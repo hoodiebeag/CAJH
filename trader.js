@@ -171,17 +171,54 @@ async function getFillPrice(txid, quotedPrice) {
 }
 
 /**
- * Places a spot market buy order.
- * Volume is (balance × sizePct) / price, rounded to the pair's lot decimals.
- * `price` is the actual average fill price (falls back to the pre-trade quote).
+ * Confirm a buy actually FILLED before the caller tracks it as a position. Throws if
+ * Kraken canceled/expired the order or never confirms the fill — a thrown error here
+ * means "do NOT register a trade", which is exactly what prevents phantom positions
+ * (a trade cajh lists on Discord that doesn't exist on Kraken). Returns the executed
+ * volume and average price so tracking matches reality, not the request.
  */
-export async function placeBuy({ symbol, sizePct, price }) {
+async function confirmBuyFill(txid, quotedPrice) {
+  if (!txid) throw new Error("Kraken returned no transaction id — order state unknown; run !reconcile before retrying.");
+  for (let attempt = 0; attempt < 10; attempt++) {
+    await new Promise(r => setTimeout(r, 700));
+    let order = null;
+    try {
+      const res = await kraken.api("QueryOrders", { txid });
+      order = res.result?.[txid] ?? null;
+    } catch (err) {
+      logger.error(`[TRADER] QueryOrders failed for ${txid}:`, err.message);
+      continue;
+    }
+    if (!order) continue;
+    if (order.status === "canceled" || order.status === "expired") {
+      throw new Error(`buy order ${txid} was ${order.status} by Kraken — nothing filled, position not tracked.`);
+    }
+    const volExec = parseFloat(order.vol_exec ?? 0);
+    if (order.status === "closed" && volExec > 0) {
+      return {
+        price:  parseFloat(order.price) || quotedPrice,
+        volume: volExec,
+        fee:    parseFloat(order.fee ?? 0)
+      };
+    }
+  }
+  throw new Error(
+    `could not confirm buy ${txid} filled — NOT tracking it. Run !reconcile: if the coin appears as an orphan, ` +
+    `the buy did go through and should be closed manually or re-tracked.`
+  );
+}
+
+/**
+ * Places a spot market buy order for `capital` USD.
+ * Volume is capital / price, rounded to the pair's lot decimals. The returned volume
+ * and price are the CONFIRMED executed values from Kraken (throws if unconfirmed).
+ */
+export async function placeBuy({ symbol, capital, price }) {
   const pair    = symbolToPair(symbol);
   const balance = await getAccountBalance();
-  const capital = balance * sizePct;
   const volume  = await normalizeVolume(pair, capital / price);
 
-  logger.info(`[TRADER] BUY ${volume} ${symbol} @ ~$${price} (${(sizePct * 100).toFixed(0)}% of balance)`);
+  logger.info(`[TRADER] BUY ${volume} ${symbol} @ ~$${price} ($${capital.toFixed(2)})`);
 
   const res = await kraken.api("AddOrder", {
     pair,
@@ -190,19 +227,19 @@ export async function placeBuy({ symbol, sizePct, price }) {
     volume
   });
 
-  const txid      = res.result?.txid?.[0];
-  const fillPrice = await getFillPrice(txid, price);
+  const txid = res.result?.txid?.[0];
+  const fill = await confirmBuyFill(txid, price);
 
   return {
     txid,
     symbol,
     pair,
     side:    "buy",
-    volume:  parseFloat(volume),
-    price:   fillPrice,
+    volume:  fill.volume,   // executed, not requested
+    price:   fill.price,
+    fee:     fill.fee,
     capital,
-    balance,
-    sizePct
+    balance
   };
 }
 

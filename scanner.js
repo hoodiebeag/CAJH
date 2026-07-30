@@ -1,20 +1,29 @@
 /**
  * scanner.js — Swing-fractal trading strategy (the core of cajh).
  *
- * Pure price structure, no indicators:
- *   • Swing low  (BUY)  = strong local low, confirmed when price breaks back above it.
- *   • Swing high (SELL) = strong local high, confirmed when price breaks below it.
- * Confirmation is by break of structure (~1-2 candles), not a fixed N-candle delay.
+ * Pure price structure, no indicators. Entries are ANTICIPATED, not chased:
+ *   • A candidate swing low (strong left-side low) exists on the 1h, 4h, or 1d.
+ *   • The moment live price trades ABOVE the candidate candle's high, the
+ *     break-of-structure confirmation is *expected* to print at this candle's
+ *     close — that crossing is the entry. Stop = the candidate low.
+ *   • A low that already confirmed within RECENT_BARS still counts (fallback for
+ *     price gapping through the trigger between scans).
+ * Any one of the three timeframes can fire (1d > 4h > 1h priority). There is no
+ * higher-timeframe alignment gate — sizing is risk-based instead, so wider stops
+ * on slower timeframes carry the same dollar risk.
  *
  * cajh is long-only spot: it ACTS on buy signals (opens a long) and only DISPLAYS
  * sell signals. Exits are handled by the position monitor via stop-loss / take-profit.
  */
 
 import { generateChartImage } from "./chart.js";
-import { entrySignal, currentBias, isTrending, aboveTrendMA, SWING_WINDOW, TP_R, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, MIN_STOP_PCT, REQUIRE_TF_ALIGNMENT, CHOP_FILTER, TREND_GATE, TREND_GATE_MODE, TREND_MA } from "./strategy.js";
+import {
+  entrySignal, pendingSwingLow, currentBias, SWING_WINDOW, TP_R,
+  REQUIRE_HIGHER_LOW, MIN_STOP_PCT, MAX_STOP_PCT_BY_TF, RISK_PCT, MAX_POSITION_PCT
+} from "./strategy.js";
 import { placeBuy, getCurrentPrice, fetchOHLC, getAccountBalance } from "./trader.js";
 import {
-  registerTrade, postTradeOpened, isTradingEnabled, getTrade, getOpenTrades
+  registerTrade, postTradeOpened, isTradingEnabled, getTrade, getOpenTrades, closeTradeAtMarket
 } from "./monitor.js";
 import { saveChart, symbolToKrakenId } from "./storage.js";
 import * as logger from './logger.js';
@@ -22,25 +31,29 @@ import * as logger from './logger.js';
 const BEAG = () => process.env.BEAG_USER_ID || "795521432783552552";
 
 export const SCAN_INTERVALS = [
-  { label: "15m", minutes: 15 },
-  { label: "1h",  minutes: 60 },
-  { label: "4h",  minutes: 240 }
+  { label: "1h", minutes: 60   },
+  { label: "4h", minutes: 240  },
+  { label: "1d", minutes: 1440 }
 ];
 
 // ─── Tunable strategy settings ─────────────────────────────────────────────────
-const POSITION_PCT        = 0.10;  // 10% of free cash per trade
-const MAX_OPEN_POSITIONS  = 6;     // never hold more than this many positions at once
-const MIN_POSITION_USD    = 10;    // skip if the 10% slice would be below Kraken's min order size
-// Swing window N, TP_R, and the optional filters live in strategy.js.
+const MAX_OPEN_POSITIONS  = 6;   // at the cap, the most profitable open position is rotated out for a new signal
+const MIN_POSITION_USD    = 10;  // skip if the computed size would be below Kraken's min order size
+// Swing window N, TP_R, RISK_PCT / MAX_POSITION_PCT and the stop bands live in strategy.js.
 
 // Candle fetching lives in trader.js (shared with the monitor); re-export the name
 // the rest of the app already uses.
 export const fetchCandles = fetchOHLC;
 
 // ─── Per-asset evaluation ──────────────────────────────────────────────────────
-// Returns { biases, aligned, buy, candlesByTf }. Entries TRIGGER on the fast 15m
-// timeframe (a recently break-of-structure-confirmed swing low); the 1h and 4h serve
-// as a higher-timeframe TREND filter (must be bullish when REQUIRE_TF_ALIGNMENT is on).
+// Returns { biases, buy, candlesByTf }. Each timeframe is checked independently —
+// highest first (1d > 4h > 1h), stronger structure wins when several fire at once:
+//   1. ANTICIPATION — an unconfirmed candidate swing low exists on the closed bars
+//      and live price has crossed above its trigger (the candidate candle's high),
+//      so the confirming close is expected to print.
+//   2. CONFIRMED fallback — a swing low that confirmed within RECENT_BARS (covers
+//      price gapping through the trigger between scans).
+// No alignment/trend gates — risk-based sizing replaces them (see proposeBuy).
 // Charts aren't rendered here — raw candles are kept so charts build only on a trade.
 async function evaluateAsset(asset) {
   const biases = {};
@@ -54,32 +67,27 @@ async function evaluateAsset(asset) {
     await new Promise(r => setTimeout(r, 2000)); // be gentle with Kraken
   }
 
-  // Trigger on a recently-confirmed 15m swing low.
   let buy = null;
-  const c15 = candlesByTf["15m"];
-  if (c15) {
-    const sig = entrySignal(c15.slice(0, -1), SWING_WINDOW);
-    if (sig) buy = { ...sig, tf: "15m" };
+  for (const interval of [...SCAN_INTERVALS].reverse()) {   // 1d first
+    const candles = candlesByTf[interval.label];
+    if (!candles?.length) continue;
+    const closed = candles.slice(0, -1);
+    // Live price = the still-open candle's latest close (fresher than any closed bar).
+    const livePrice = parseFloat(candles[candles.length - 1].close);
+
+    const pend = pendingSwingLow(closed, SWING_WINDOW);
+    if (pend && livePrice > pend.trigger) {
+      buy = { type: "buy", ...pend, tf: interval.label, mode: "anticipation" };
+      break;
+    }
+    const sig = entrySignal(closed, SWING_WINDOW);
+    if (sig) {
+      buy = { ...sig, tf: interval.label, mode: "confirmed" };
+      break;
+    }
   }
 
-  // Higher-timeframe trend filter: 1h AND 4h must be bullish.
-  const aligned = biases["1h"] === "bull" && biases["4h"] === "bull";
-  let pass = !REQUIRE_TF_ALIGNMENT || aligned;
-  // Chop filter: additionally require the 4h to be genuinely trending (HH + HL).
-  if (pass && CHOP_FILTER) {
-    const c4 = candlesByTf["4h"];
-    pass = c4 ? isTrending(c4.slice(0, -1), SWING_WINDOW) : false;
-  }
-  // Per-pair trend gate: this symbol's own 4h must be trending up.
-  if (pass && TREND_GATE) {
-    const c4 = candlesByTf["4h"];
-    if (!c4) pass = false;
-    else if (TREND_GATE_MODE === "structure") pass = isTrending(c4.slice(0, -1), SWING_WINDOW);
-    else pass = aboveTrendMA(c4.slice(0, -1), TREND_MA);
-  }
-  if (buy && !pass) buy = null;
-
-  return { biases, aligned, buy, candlesByTf };
+  return { biases, buy, candlesByTf };
 }
 
 /** Render the 3 timeframe charts for a symbol from already-fetched candles. */
@@ -94,13 +102,14 @@ function buildCharts(symbol, candlesByTf) {
   return buffers;
 }
 
-function summarize(symbol, biases, aligned) {
+function summarize(symbol, biases, buy) {
   const parts = SCAN_INTERVALS.map(i => {
     const b = biases[i.label];
     const tag = b === "bull" ? "▲ bull" : b === "bear" ? "▼ bear" : "· —";
     return `${i.label} ${tag}`;
   });
-  return `**${symbol}**  ·  ${parts.join("  ·  ")}  ·  ${aligned ? "**aligned ✅**" : "not aligned"}`;
+  const sig = buy ? `**signal: ${buy.tf} ${buy.mode ?? "confirmed"} ⚡**` : "no signal";
+  return `**${symbol}**  ·  ${parts.join("  ·  ")}  ·  ${sig}`;
 }
 
 // ─── Trade proposal (buy signals only) ─────────────────────────────────────────
@@ -121,39 +130,57 @@ async function proposeBuy(symbol, buy, channel) {
 async function proposeBuyLocked(symbol, buy, channel) {
   if (!isTradingEnabled()) return { traded: false, reason: "trading is halted (!resume to enable)" };
   if (getTrade(symbol))    return { traded: false, reason: "already in a position" };
+
+  // At the position cap, rotate: close the MOST PROFITABLE open position (bank the
+  // winner) to make room for the newest signal. Only proceed if that close succeeds.
   if (getOpenTrades().length >= MAX_OPEN_POSITIONS) {
-    return { traded: false, reason: `max open positions (${MAX_OPEN_POSITIONS}) reached` };
+    let best = null;
+    for (const t of getOpenTrades()) {
+      try {
+        const p = await getCurrentPrice(t.symbol);
+        if (!p) continue;
+        const r = (t.risk ?? (t.entry - t.stopLoss)) > 0 ? (p - t.entry) / (t.risk ?? (t.entry - t.stopLoss)) : 0;
+        if (!best || r > best.r) best = { trade: t, price: p, r };
+      } catch { /* skip unpriceable positions */ }
+    }
+    if (!best) return { traded: false, reason: `max open positions (${MAX_OPEN_POSITIONS}) and no rotation candidate could be priced` };
+    const rotated = await closeTradeAtMarket(channel, best.trade.symbol, best.price, "rotated");
+    if (!rotated) return { traded: false, reason: `max open positions — rotating out ${best.trade.symbol} failed` };
   }
 
   const entry    = await getCurrentPrice(symbol);
-  const stopLoss = buy.pivotPrice;   // the swing low = structural invalidation
+  const stopLoss = buy.pivotPrice;   // the candidate/confirmed swing low = structural invalidation
   const risk     = entry - stopLoss;
 
   if (!entry || risk <= 0) return { traded: false, reason: "price already at/below the swing low" };
 
-  // Don't attempt a buy whose size would fall below the exchange minimum.
-  const freeCash = await getAccountBalance();
-  if (freeCash * POSITION_PCT < MIN_POSITION_USD) {
-    return { traded: false, reason: `free cash too low (10% slice < $${MIN_POSITION_USD})` };
+  // Per-timeframe stop band: wider TFs legitimately carry wider stops.
+  const stopFrac = risk / entry;
+  const maxStop  = MAX_STOP_PCT_BY_TF[buy.tf] ?? 0.04;
+  if (stopFrac > maxStop) {
+    return { traded: false, reason: `stop too far (${(stopFrac * 100).toFixed(1)}% > ${(maxStop * 100).toFixed(0)}% for ${buy.tf})` };
   }
-
-  // Optional confidence filters (see strategy.js).
-  if (MAX_STOP_PCT && risk / entry > MAX_STOP_PCT) {
-    return { traded: false, reason: `stop too far (${(risk / entry * 100).toFixed(1)}% > ${(MAX_STOP_PCT * 100).toFixed(0)}%)` };
-  }
-  if (MIN_STOP_PCT && risk / entry < MIN_STOP_PCT) {
-    return { traded: false, reason: `stop too tight (${(risk / entry * 100).toFixed(1)}% < ${(MIN_STOP_PCT * 100).toFixed(1)}%) — R too small to clear fees` };
+  if (MIN_STOP_PCT && stopFrac < MIN_STOP_PCT) {
+    return { traded: false, reason: `stop too tight (${(stopFrac * 100).toFixed(1)}% < ${(MIN_STOP_PCT * 100).toFixed(1)}%) — R too small to clear fees` };
   }
   if (REQUIRE_HIGHER_LOW && buy.prevSwingLow != null && buy.pivotPrice <= buy.prevSwingLow) {
     return { traded: false, reason: "not a higher low (structure not yet bullish)" };
   }
 
-  const signal = `${buy.tf} swing low`;
-  const tfMinutes = SCAN_INTERVALS.find(i => i.label === buy.tf)?.minutes ?? 15;
+  // Risk-based sizing: risk RISK_PCT of free cash per trade, so the dollar risk is the
+  // same whether the stop is 1.5% (1h) or 8% (1d). Capped at MAX_POSITION_PCT.
+  const freeCash = await getAccountBalance();
+  const capital  = Math.min(freeCash * MAX_POSITION_PCT, (freeCash * RISK_PCT) / stopFrac);
+  if (capital < MIN_POSITION_USD) {
+    return { traded: false, reason: `computed size $${capital.toFixed(2)} below the $${MIN_POSITION_USD} exchange minimum` };
+  }
+
+  const signal = `${buy.tf} swing low (${buy.mode ?? "confirmed"})`;
+  const tfMinutes = SCAN_INTERVALS.find(i => i.label === buy.tf)?.minutes ?? 60;
 
   // Auto-execute — no confirmation needed. cajh places the trade itself.
   try {
-    const trade = await placeBuy({ symbol, sizePct: POSITION_PCT, price: entry });
+    const trade = await placeBuy({ symbol, capital, price: entry });
     // Recompute off the actual fill (trade.price), not the pre-trade quote — a market
     // order can fill away from the quote, and stop/target must track the real entry.
     const actualRisk  = trade.price - stopLoss;
@@ -162,7 +189,7 @@ async function proposeBuyLocked(symbol, buy, channel) {
     trade.takeProfit  = trade.entry + TP_R * actualRisk;
     trade.risk        = actualRisk;    // entry − stop, for R-based stop management
     trade.beMoved     = false;         // has the breakeven+ stop-raise happened yet?
-    trade.sizePct     = POSITION_PCT;
+    trade.sizePct     = trade.balance > 0 ? trade.capital / trade.balance : 0; // for display
     trade.signal      = signal;
     trade.tf          = buy.tf;          // entry timeframe (for swing-high exit)
     trade.tfMinutes   = tfMinutes;
@@ -204,7 +231,7 @@ export async function runScanner(channel, state, verbose = false) {
       if (Object.keys(candlesByTf).length === 0) { logger.warn(`[SCAN] no data for ${asset.symbol}`); continue; }
       checked++;
 
-      if (!buy) continue;   // no aligned fresh setup → stay silent
+      if (!buy) continue;   // no fresh setup on any timeframe → stay silent
 
       const res = await proposeBuy(asset.symbol, buy, channel);
       if (res.traded) {
@@ -249,7 +276,7 @@ export async function scanSymbol(symbol, channel, state) {
   await channel.send(`🔍 Checking **${upper}** on ${SCAN_INTERVALS.map(i => i.label).join("/")}...`);
 
   try {
-    const { biases, aligned, buy, candlesByTf } = await evaluateAsset(asset);
+    const { biases, buy, candlesByTf } = await evaluateAsset(asset);
     if (Object.keys(candlesByTf).length === 0) { await channel.send(`⚠️ No data for **${upper}**.`); return; }
 
     const buffers = buildCharts(upper, candlesByTf);
@@ -261,7 +288,7 @@ export async function scanSymbol(symbol, channel, state) {
     }
 
     await channel.send({
-      content: summarize(upper, biases, aligned),
+      content: summarize(upper, biases, buy),
       files:   buffers.map(b => ({ attachment: b.buffer, name: `${upper}_${b.label}.png` }))
     });
 
@@ -269,7 +296,7 @@ export async function scanSymbol(symbol, channel, state) {
       const res = await proposeBuy(upper, buy, channel);
       if (!res.traded) await channel.send(`ℹ️ **${upper}** setup not taken — ${res.reason}.`);
     } else {
-      await channel.send(`No confirmed setup on **${upper}** right now (needs a fresh swing low with all 3 timeframes aligned).`);
+      await channel.send(`No setup on **${upper}** right now (needs a candidate swing low on the 1h/4h/1d with price crossing its trigger, or a freshly confirmed one).`);
     }
   } catch (err) {
       logger.error(`[STRATEGY] scanSymbol error for ${upper}:`, err.message);

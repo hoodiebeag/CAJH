@@ -1,11 +1,14 @@
 /**
  * backtest.js — Simulate the strategy on historical candles (mirrors live rules).
  *
- * Entries TRIGGER on a 15m break-of-structure swing low (confirmed when price closes
- * back above the pivot candle's high), taken only when the 1h AND 4h trend bias are
- * bullish at that moment. Exits mirror live: stop, single take-profit (full position),
- * TP, and the optional swing-high take-profit. Results are in "R" (multiples of the
- * per-trade risk), independent of position size.
+ * Timeframe-generic: takes an ascending `series` of TFs (live: 1h/4h/1d) and trades one
+ * entry TF per run. The live rule is entryMode "anticipate" — enter the moment price
+ * crosses above the current unconfirmed candidate swing low's trigger (the candidate
+ * candle's high), stop at the candidate low, no alignment/trend gates. entryMode "bos"
+ * (confirmed break-of-structure close, optional higher-TF gates) is kept for comparison.
+ * Exits mirror live: stop, single take-profit (full position), and the optional
+ * swing-high take-profit. Results are in "R" (multiples of the per-trade risk),
+ * independent of position size.
  *
  * Caveats (read before trusting any number):
  *   • Fills are at the stop / target price, minus round-trip taker fees AND a slippage allowance (both in R).
@@ -17,7 +20,7 @@
 import {
   SWING_WINDOW, TP_R, REQUIRE_HIGHER_LOW, MAX_STOP_PCT, MIN_STOP_PCT,
   EXIT_ON_SWING_HIGH, CHOP_FILTER, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT, FEE_RATE, SLIPPAGE_PCT,
-  TREND_GATE, TREND_GATE_MODE, TREND_MA, detectSwings
+  TREND_GATE, TREND_GATE_MODE, TREND_MA, detectSwings, isLeftLow, isLeftHigh
 } from "./strategy.js";
 import { atrPct, displacement, sweptLow, prevDayLevels, bullishFVGBelow, returnAsOf } from "./features.js";
 
@@ -85,28 +88,24 @@ function biasTimeline(candles, intervalMin, n) {
   return timeline;
 }
 
-export function backtestMultiTF({ candles15, candles1h, candles4h }, {
+export function backtestMultiTF({ series } = {}, {
   n = SWING_WINDOW, tpR = TP_R,
   requireHigherLow = REQUIRE_HIGHER_LOW, maxStopPct = MAX_STOP_PCT, minStopPct = MIN_STOP_PCT,
   exitOnSwingHigh = EXIT_ON_SWING_HIGH, chopFilter = CHOP_FILTER,
   lockBreakeven = LOCK_BREAKEVEN, beTriggerR = BE_TRIGGER_R, beLockR = BE_LOCK_R, feeBufferPct = FEE_BUFFER_PCT,
   feeRate = FEE_RATE, slipPct = SLIPPAGE_PCT,
   trendGate = TREND_GATE, trendMa = TREND_MA, trendGateMode = TREND_GATE_MODE,
-  entryTf = "15m", alignMode = "all", minRoomR = 0, entryMode = "bos"
+  entryTf = null, alignMode = "all", minRoomR = 0, entryMode = "bos"
 } = {}) {
-  if (!candles15?.length || !candles1h?.length || !candles4h?.length) {
+  // `series` = timeframes ascending, e.g. [{label:"1h",mins:60,candles},{label:"4h",...},{label:"1d",...}].
+  // The entry TF (entryTf label, default the lowest) trades; everything ABOVE it is the
+  // bias filter, and the highest TF anchors the chop/MA gate.
+  if (!Array.isArray(series) || !series.length || series.some(s => !s?.candles?.length)) {
     return { trades: 0, winRate: 0, totalR: 0, avgR: 0, maxDrawdownR: 0, results: [] };
   }
-
-  // Pick the entry timeframe; everything ABOVE it becomes the bias filter, and the
-  // highest available TF anchors the chop/MA gate. entryTf="15m" reproduces the original.
-  const TFS = [
-    { tf: "15m", candles: candles15, mins: 15  },
-    { tf: "1h",  candles: candles1h, mins: 60  },
-    { tf: "4h",  candles: candles4h, mins: 240 },
-  ];
-  const ei = TFS.findIndex(t => t.tf === entryTf);
-  if (ei < 0 || !TFS[ei].candles?.length) {
+  const TFS = series;
+  const ei  = entryTf ? TFS.findIndex(t => t.label === entryTf) : 0;
+  if (ei < 0) {
     return { trades: 0, winRate: 0, totalR: 0, avgR: 0, maxDrawdownR: 0, results: [] };
   }
   const entryCandles = TFS[ei].candles;
@@ -114,6 +113,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
   const higher       = TFS.slice(ei + 1).filter(t => t.candles?.length);   // bias-filter TFs
   const trendSrc     = higher.length ? higher[higher.length - 1] : TFS[ei]; // chop/MA anchor
 
+  const O = entryCandles.map(c => parseFloat(c.open));
   const H = entryCandles.map(c => parseFloat(c.high));
   const L = entryCandles.map(c => parseFloat(c.low));
   const C = entryCandles.map(c => parseFloat(c.close));
@@ -220,6 +220,7 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
   const trades = [];
   const reasons = {};   // tally of why each candidate swing low was taken / rejected
   let pos = null, prevLowPrice = null;
+  let antCand = null, antHi = null;   // anticipate mode: running unconfirmed candidate low / high
 
   for (let k = n; k < entryCandles.length; k++) {
     const lowHere = lowAt.get(k); // a swing low confirmed at this candle on the entry TF?
@@ -255,6 +256,30 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
       reasons[reason] = (reasons[reason] || 0) + 1;
       if (ok) pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k };
      }
+    } else if (!pos && entryMode === "anticipate") {
+      // ── anticipate mode ── mirrors live: enter the moment price trades ABOVE the
+      // current unconfirmed candidate low's trigger (the candidate candle's high),
+      // instead of waiting for the confirming close. No alignment/trend gates (live
+      // has none) — only the per-TF stop band applies. Candidate state is updated at
+      // the END of each bar, so this check uses only information from bars < k.
+      if (antCand && k > antCand.index && H[k] > antCand.trigger) {
+        const entry = Math.max(O[k], antCand.trigger);   // a gap above the trigger fills at the open
+        const stop  = antCand.price, risk = entry - stop;
+        let reason = "taken";
+        if (risk <= 0)                                     reason = "priceBelowStop";
+        else if (maxStopPct && risk / entry > maxStopPct)  reason = "stopTooFar";
+        else if (minStopPct && risk / entry < minStopPct)  reason = "stopTooTight";
+        reasons[reason] = (reasons[reason] || 0) + 1;
+        if (reason === "taken") {
+          pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k };
+          // Intrabar order is unknowable: if this bar also traded at/below the stop,
+          // assume the worst and take the stop on the entry bar.
+          if (L[k] <= stop) {
+            trades.push((stop - entry) / risk - ((feeRate + slipPct) * (entry + stop)) / risk);
+            pos = null;
+          }
+        }
+      }
     } else if (!pos) {
       // Long dip-buy modes — no trend/alignment gate (the whole point), tight structural
       // stop + ambitious target. Only the stop-size sanity caps apply.
@@ -304,6 +329,15 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
         pos = null;
       }
     }
+
+    // Anticipation candidate tracking — same transitions as detectSwings/pendingSwingLow,
+    // updated at bar close so the entry check above never sees the current bar's own state.
+    if (entryMode === "anticipate") {
+      if (isLeftLow(L, k, n)  && (!antCand || L[k] < antCand.price)) antCand = { index: k, price: L[k], trigger: H[k] };
+      if (isLeftHigh(H, k, n) && (!antHi  || H[k] > antHi.price))    antHi  = { index: k, price: H[k] };
+      if (antCand && k > antCand.index && C[k] > antCand.trigger)   { antCand = null; antHi = null; }
+      else if (antHi && k > antHi.index && C[k] < L[antHi.index])   { antCand = null; antHi = null; }
+    }
   }
 
   const count  = trades.length;
@@ -333,22 +367,27 @@ export function backtestMultiTF({ candles15, candles1h, candles4h }, {
  * An edge is a feature where winners and losers DIVERGE; a feature they share is a
  * mirage. Breakeven is intentionally off so every entry resolves cleanly to win/loss.
  */
-export function profileEntries({ candles15, candles1h, candles4h, btc4h } = {}, { tpR = TP_R, n = SWING_WINDOW, feeRate = FEE_RATE, slipPct = SLIPPAGE_PCT } = {}) {
+export function profileEntries({ series, btc4h } = {}, { tpR = TP_R, n = SWING_WINDOW, feeRate = FEE_RATE, slipPct = SLIPPAGE_PCT } = {}) {
   const records = [];
-  if (!candles15?.length || !candles1h?.length || !candles4h?.length) return { records };
+  // `series` = timeframes ascending: series[0] is the entry TF that is profiled; the
+  // higher TFs feed the biasMid/biasHigh context fields.
+  if (!Array.isArray(series) || !series.length || series.some(s => !s?.candles?.length)) return { records };
+  const entryTf   = series[0];
+  const higherTfs = series.slice(1);
+  const candlesE  = entryTf.candles;
 
   // Uniform resolution window: every candidate gets exactly HORIZON bars to resolve, and
   // candidates whose window would be cut off by the end of the data are excluded entirely.
   // Without this, the tail of the data over-counts losers: losses resolve fast (stop is 1R
   // away) while tpR-multiple wins resolve slowly, so a truncated window censors wins
   // asymmetrically — and the tail is exactly the out-of-sample region discover scores on.
-  const HORIZON = 300; // 15m bars ≈ 3 days; "win/loss" now means "resolves within this window"
+  const HORIZON = 300; // entry-TF bars (1h ≈ 12.5 days); "win/loss" means "resolves within this window"
 
-  const C = candles15.map(c => parseFloat(c.close));
-  const H = candles15.map(c => parseFloat(c.high));
-  const L = candles15.map(c => parseFloat(c.low));
-  const V = candles15.map(c => parseFloat(c.volume) || 0);
-  const T = candles15.map(c => parseInt(c.time));
+  const C = candlesE.map(c => parseFloat(c.close));
+  const H = candlesE.map(c => parseFloat(c.high));
+  const L = candlesE.map(c => parseFloat(c.low));
+  const V = candlesE.map(c => parseFloat(c.volume) || 0);
+  const T = candlesE.map(c => parseInt(c.time));
 
   // RSI(14), Wilder
   const rsi = new Array(C.length).fill(null);
@@ -360,7 +399,7 @@ export function profileEntries({ candles15, candles1h, candles4h, btc4h } = {}, 
   }
   const maAt = (k) => { if (k < 19) return null; let s = 0; for (let j = k - 19; j <= k; j++) s += C[j]; return s / 20; };
 
-  const piv   = detectSwings(candles15, n);
+  const piv   = detectSwings(candlesE, n);
   const lows  = piv.filter(p => p.type === "low");
   const highs = piv.filter(p => p.type === "high");
 
@@ -393,7 +432,7 @@ export function profileEntries({ candles15, candles1h, candles4h, btc4h } = {}, 
     if (!outcome) continue;   // never resolved within the window — skip (uniform for every candidate)
 
     const m = maAt(k);
-    const tClose = T[k] + 15 * 60;
+    const tClose = T[k] + entryTf.mins * 60;
     let res = Infinity;
     for (const h of highs) if (h.confirmIndex < k && h.price > entry && h.price < res) res = h.price;
     let loN = L[k], hiN = H[k];
@@ -415,8 +454,8 @@ export function profileEntries({ candles15, candles1h, candles4h, btc4h } = {}, 
       rangePos: hiN > loN ? (entry - loN) / (hiN - loN) : null,
       higherLow: prevLow != null ? (low.price > prevLow) : null,
       stopPct: risk / entry * 100,
-      bias1h: biasAt(candles1h, 60, tClose),
-      bias4h: biasAt(candles4h, 240, tClose),
+      biasMid:  higherTfs[0] ? biasAt(higherTfs[0].candles, higherTfs[0].mins, tClose) : null,
+      biasHigh: higherTfs[1] ? biasAt(higherTfs[1].candles, higherTfs[1].mins, tClose) : null,
       volRatio: av > 0 ? V[k] / av : null,
       atrPct: atrPct(H, L, C, k),
       displacement: displacement(H, L, C, k),

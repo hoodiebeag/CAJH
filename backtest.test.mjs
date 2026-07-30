@@ -1,12 +1,12 @@
 /**
  * backtest.test.mjs — sanity tests for the backtest/profile engines (node --test).
  *
- * Synthetic-candle scenario: a downtrend forms a strong swing low at 95, a candle
- * closes back above the pivot's high (break of structure → entry 97.7, risk 2.7),
- * then price grinds cleanly to beyond the 4R target. Verifies:
- *   • the engine takes exactly that one trade,
- *   • the R math charges the entry fee on the entry notional and the exit fee on the
- *     exit notional (matching monitor.js's live P&L accounting),
+ * Synthetic-candle scenario on the 1h entry TF: a downtrend forms a strong swing low at
+ * 95 inside a candle whose high is 97.6 (the trigger). Verifies:
+ *   • BOS mode: entry at the confirming close, exact per-leg fees (entry fee on the
+ *     entry notional, exit fee on the exit notional — matching monitor.js live P&L),
+ *   • ANTICIPATE mode: entry the moment a later bar's high crosses the trigger (fill at
+ *     the trigger), before any close confirms — the live strategy's entry,
  *   • profileEntries resolves the same candidate identically, and
  *   • profileEntries excludes candidates whose resolution window would be truncated
  *     by the end of the data (the uniform-horizon censoring guard).
@@ -16,56 +16,77 @@ import assert from "node:assert/strict";
 import { backtestMultiTF, profileEntries } from "./backtest.js";
 
 const mk = (t, o, h, l, c) => ({ time: String(t), open: String(o), high: String(h), low: String(l), close: String(c), volume: "1" });
+const HOUR = 3600;
 
-function syntheticSeries() {
-  const candles15 = [];
+// Downtrend → pivot candle (low 95, high 97.6) → `next` bars → grind up from `p0`.
+function buildSeries(next, p0) {
+  const c1h = [];
   let t = 1_700_000_000, p = 100;
-  for (let i = 0; i < 30; i++) { candles15.push(mk(t, p, p + 0.05, p - 0.1, p - 0.08)); p -= 0.08; t += 900; }
-  candles15.push(mk(t, p, p, 95, 96)); t += 900;                 // pivot low 95, candle high 97.6
-  candles15.push(mk(t, 96, 97.8, 96, 97.7)); t += 900;           // confirm: close 97.7 > 97.6
-  p = 97.7;
-  for (let i = 0; i < 600; i++) { candles15.push(mk(t, p, p + 0.2, p - 0.05, p + 0.15)); p += 0.15; t += 900; }
+  for (let i = 0; i < 30; i++) { c1h.push(mk(t, p, p + 0.05, p - 0.1, p - 0.08)); p -= 0.08; t += HOUR; }
+  c1h.push(mk(t, p, p, 95, 96)); t += HOUR;                     // pivot: low 95, high ≈97.6
+  for (const bar of next) { c1h.push(mk(t, ...bar)); t += HOUR; }
+  p = p0;
+  for (let i = 0; i < 600; i++) { c1h.push(mk(t, p, p + 0.2, p - 0.05, p + 0.15)); p += 0.15; t += HOUR; }
 
   const resample = (span) => {
     const out = [];
-    for (let i = 0; i < candles15.length; i += span) {
-      const chunk = candles15.slice(i, i + span);
+    for (let i = 0; i < c1h.length; i += span) {
+      const chunk = c1h.slice(i, i + span);
       out.push(mk(chunk[0].time, chunk[0].open,
         Math.max(...chunk.map(c => +c.high)), Math.min(...chunk.map(c => +c.low)), chunk.at(-1).close));
     }
     return out;
   };
-  return { candles15, candles1h: resample(4), candles4h: resample(16) };
+  return [
+    { label: "1h", mins: 60,   candles: c1h },
+    { label: "4h", mins: 240,  candles: resample(4) },
+    { label: "1d", mins: 1440, candles: resample(24) },
+  ];
 }
 
-// entry 97.7, stop 95 → risk 2.7, target 108.5; fee+slip 0.45%/side on entry and exit notional
-const ENTRY = 97.7, RISK = 2.7, TARGET = ENTRY + 4 * RISK;
-const EXPECTED_WIN_R = 4 - (0.0045 * (ENTRY + TARGET)) / RISK;
+const FEE = 0.0045; // feeRate 0.004 + slippage 0.0005 per side
+const netWinR = (entry, risk) => 4 - (FEE * (entry + (entry + 4 * risk))) / risk;
 
-test("backtestMultiTF takes the synthetic setup and nets exact per-leg fees", () => {
-  const { candles15, candles1h, candles4h } = syntheticSeries();
-  const r = backtestMultiTF({ candles15, candles1h, candles4h }, {
-    alignMode: "none", trendGate: false, chopFilter: false,
+test("BOS mode: entry at the confirming close, exact per-leg fees", () => {
+  // Confirm candle closes 97.7 > trigger 97.6 → entry 97.7, risk 2.7.
+  const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
+  const r = backtestMultiTF({ series }, {
+    entryTf: "1h", entryMode: "bos", alignMode: "none", trendGate: false, chopFilter: false,
     requireHigherLow: false, maxStopPct: null, minStopPct: null, lockBreakeven: false, tpR: 4,
     feeRate: 0.004, slipPct: 0.0005,
   });
   assert.equal(r.trades, 1);
-  assert.ok(Math.abs(r.results[0] - EXPECTED_WIN_R) < 1e-9,
-    `winner R ${r.results[0]} != expected ${EXPECTED_WIN_R}`);
+  assert.ok(Math.abs(r.results[0] - netWinR(97.7, 2.7)) < 1e-9,
+    `winner R ${r.results[0]} != expected ${netWinR(97.7, 2.7)}`);
 });
 
-test("profileEntries resolves the same candidate with identical netR", () => {
-  const { candles15, candles1h, candles4h } = syntheticSeries();
-  const { records } = profileEntries({ candles15, candles1h, candles4h }, { tpR: 4 });
+test("ANTICIPATE mode: entry when the high crosses the trigger, before any confirming close", () => {
+  // Bar after the pivot: high 97.8 crosses the 97.6 trigger but CLOSES 97.5 (below it) —
+  // BOS would not enter here; anticipation fills at the trigger. Entry 97.6, risk 2.6.
+  const series = buildSeries([[96.5, 97.8, 96, 97.5]], 97.5);
+  const r = backtestMultiTF({ series }, {
+    entryTf: "1h", entryMode: "anticipate", alignMode: "none", trendGate: false, chopFilter: false,
+    requireHigherLow: false, maxStopPct: 0.04, minStopPct: 0.015, lockBreakeven: false, tpR: 4,
+    feeRate: 0.004, slipPct: 0.0005,
+  });
+  assert.equal(r.trades, 1);
+  assert.ok(Math.abs(r.results[0] - netWinR(97.6, 2.6)) < 1e-9,
+    `winner R ${r.results[0]} != expected ${netWinR(97.6, 2.6)}`);
+});
+
+test("profileEntries resolves the confirmed candidate with identical netR", () => {
+  const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
+  const { records } = profileEntries({ series }, { tpR: 4 });
   assert.equal(records.length, 1);
   assert.equal(records[0].outcome, "win");
-  assert.ok(Math.abs(records[0].netR - EXPECTED_WIN_R) < 1e-9,
-    `netR ${records[0].netR} != expected ${EXPECTED_WIN_R}`);
+  assert.ok(Math.abs(records[0].netR - netWinR(97.7, 2.7)) < 1e-9,
+    `netR ${records[0].netR} != expected ${netWinR(97.7, 2.7)}`);
 });
 
 test("profileEntries excludes candidates with a truncated resolution window", () => {
-  const { candles15, candles1h, candles4h } = syntheticSeries();
-  const short = candles15.slice(0, 32 + 250); // < HORIZON bars after the confirm candle
-  const { records } = profileEntries({ candles15: short, candles1h, candles4h }, { tpR: 4 });
+  const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
+  const short = series.map(s => ({ ...s }));
+  short[0] = { ...short[0], candles: short[0].candles.slice(0, 32 + 250) }; // < HORIZON bars after confirm
+  const { records } = profileEntries({ series: short }, { tpR: 4 });
   assert.equal(records.length, 0);
 });

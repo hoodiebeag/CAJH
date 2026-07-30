@@ -1,0 +1,116 @@
+# cajh — Progress & Roadmap
+
+_Status: research pipeline rebuilt and made statistically honest; live trading halted. Current finding: the 15m / 1.5–3%-stop / taker-fee search space is nearly empty — the strategy barely trades and shows no edge across regimes. Next: ingest ~20 liquid pairs and re-test on a real population._
+
+---
+
+## What we built
+
+### Data layer
+- **`data.js` — candle store + backfill.** Persistent 1-minute store, backfilled from Kraken's public **Trades** endpoint (raw trades → 1m bars + order-flow summary). Reaches deep history the OHLC endpoint (720-candle cap) can't.
+- **`loadCandles` resampler.** Turns stored 1m bars into 15m/1h/4h on demand — a drop-in for the live candle fetch.
+- **`verifyAgainstOHLC`.** Trust check: store vs Kraken's native OHLC on the overlap.
+- **Kraken OHLCVT archive ingester (`ingestKrakenOHLCVT` + `ingest`).** Loads Kraken's downloadable historical CSVs into the store — minutes per pair vs the ~15-hour Trades grind.
+
+### Research tooling
+- **`research.js` CLI.** Runs `backtest / discover / profile / validate / backfill / ingest` locally against the store — no Discord, no live bot. Research is an offline, local job; the Railway bot is for live execution only.
+- **Store-backed research (`tfCandles`).** Research commands read the deep store (with live fallback), so `discover`/`backtest` see 18 months, not 720 candles.
+
+### Honest statistics (the "judge")
+- **Slippage** in the backtest — perfect-fill results no longer overstate edge.
+- **Per-leg fee model** (reviewer) — each leg charged on its own notional.
+- **BH-FDR multiple-testing correction** in `discover` — testing many rules no longer manufactures false "edges."
+- **Day-block permutation** (reviewer) — the null preserves within-day cross-asset correlation, so p-values reflect the true (smaller) effective sample. The old i.i.d. shuffle was biased toward false positives.
+- **Right-censoring fix** (reviewer) — uniform resolution window, so fast losses and slow wins aren't counted asymmetrically near the data's end.
+- **Regime-aware reporting** — `discover` splits net-R/t by BTC regime (bull/bear/flat), so a regime-specific edge (or a uniform loss) is visible.
+- **Profiler-matches-live stop gate** — the profiler only counts setups in the tradeable 1.5–3% stop band, so the search tests the population the live strategy would actually take.
+- **Data-source readout** — per-asset candle count + date span, and an honest backtest header, so you always see what was loaded.
+- **Curated feature combinations** — a small set of theory-motivated AND-rules, through the same FDR.
+
+### Feature set (`features.js`, pure & no-lookahead)
+- ATR / volatility regime, displacement, **liquidity sweep** (flush-then-turn), FVG, previous-day high/low.
+- **BTC 4h context** (`btcBias4h`, `returnAsOf`) — bias + 24h return of BTC at each entry.
+
+### Bug fixes & safety
+- **False-close fix** — a position is only marked closed if the exchange sell actually succeeds (was silently abandoning positions on failed sells).
+- **Drawdown-spam fix** — the daily halt announces once, not every 30s.
+- **Durable kill switch** — `!stop` / `START_HALTED` survive the midnight reset; only `!resume` clears them.
+- **HTF look-ahead fix** — BTC context uses the last *closed* 4h bar (no leaking a still-open close into a 15m entry).
+- **Orphan reconciliation** — on boot and via `!reconcile`, compares Kraken holdings vs tracked trades and flags orphans.
+- **Live-safety (reviewer):** monitor always starts (stop-losses run even without a scan channel); `!scan` is owner-gated (it auto-buys); a double-buy race is locked in `scanner.js`.
+
+### Housekeeping
+- Logger migration (`console.*` → `logger.*`), gitignore fix (stop tracking runtime data + candle store), README corrected (single 4R TP + breakeven lock; 15-min scans), first unit tests (`npm test`).
+
+### The headline discovery
+Research had been **silently running on ~7.5 days of data**: `.env` set `DATA_DIR=/data` (a Railway path) locally, so `tfCandles` found no store and fell back to the 720-candle live pull. Every prior *local* `discover`/`backtest` verdict was drawn on a week of data. Fixed by commenting `DATA_DIR` out locally (keep it set on Railway, where it belongs).
+
+---
+
+## Current honest finding
+
+With the pipeline fixed and rigorous, on 18 months of BTC:
+- The strategy **barely trades** (5–7 trades in 18 months) — a 1.5% minimum stop on 15m majors almost never occurs.
+- After the stop-gate, `discover` found **~94 tradeable candidates across 38 assets and correctly refused to search** ("too few").
+- No edge across regimes (bull ≈ bear, both negative).
+
+The diagnosis isn't so much "no edge" as **the current search space is nearly empty.** Three levers could open a real one: more deep pairs, lower costs, higher-timeframe entries.
+
+---
+
+## Roadmap
+
+### Immediate
+1. **Ingest ~20 liquid pairs** via the archive (`node research.js ingest ETH SOL XRP …`) — skew to volatile alts; they produce more in-band stops than low-vol majors.
+2. **Re-run `discover`** on the multi-pair population; read the regime line.
+3. **Seal a holdout** — reserve recent months *and* a few entire symbols that no sweep ever touches.
+
+### Finding an edge (research)
+- **Walk-forward + sealed holdout** (time *and* symbol) — the honest final validation; the last piece of the judge.
+- **%-based exit model** (spec'd, not yet in the harness) — 3% stop / 10% target / partial + trail. Tests whether edge exists toward a modest/trailing target that the 4R-or-die exit throws away.
+- **Anticipation entries** — enter when the signal is *expected*, not after it confirms; addresses "BOS entries are late." Needs 1m/intrabar fill modeling.
+- **Lower costs** — post-only maker entries / limit TP exits (requires a fill-probability + adverse-selection simulation; not a free lunch).
+- **Higher-timeframe entries** (1h/4h) where stops naturally clear the fee floor (`!optimize` already sweeps `entryTf`).
+- **More features** — *only* if `discover` says the set is close-but-missing: momentum divergence, swing magnitude in ATRs, order-flow imbalance (needs the trades-based store, not the OHLCVT archive), volume profile, funding/OI.
+
+### Go-live checklist (before *ever* flipping live)
+- **Exchange-resident protective orders** — Kraken stop-loss/take-profit/OCO on the exchange; the 30s poller as backup only.
+- **Fills as events** — `cl_ord_id`, record actual fills/fees/partials via the execution stream; `getFillPrice` reads `QueryOrders` instead of estimating.
+- **Risk-based sizing + correlated-exposure cap** — size per stop distance & liquidity; cap total worst-case loss across correlated crypto longs.
+- **Sim/live fidelity** — model gap fills and the 30s exit poll; `RECENT_BARS` lets live enter up to 4h after confirmation while backtest enters at the confirm close; trigger stops on the bid or two consecutive ticks, not one stray print.
+- **Trade journal + drift tracking** — log every live trade (entry/exit reason, regime, R) and compare to backtest.
+- **Cross-restart persistence of the manual halt** — in-memory today; `START_HALTED` covers the restart case.
+
+### Housekeeping
+- Prune delisted pairs (MKR, EOS) from `DISCOVER_UNIVERSE`.
+- `handleWhy` label map is missing `noRoom`.
+- Finish any remaining `console.*`; expand the test suite beyond the current three.
+
+### Process discipline (non-negotiable — from the reviews)
+- **Never select on the same window twice.** Lockbox recent months.
+- A credible edge must survive **conservative costs + untouched data (time *and* symbol) + multiple regimes + a logged paper-trading period.** If it fails any of those, the right answer is **stay flat** — not another indicator.
+
+---
+
+_No code review can promise an edge exists. What's fixed is that the pipeline is now capable of detecting one honestly if it's there — and of telling you the truth when it isn't._
+
+---
+
+## 2026-07-30 — overnight build (autonomous session)
+
+- **Strategy moved to 1h/4h/1d** with **anticipation entries**: buy the moment price
+  crosses a candidate swing low's trigger (the candidate candle's high) on ANY of the
+  three TFs — the "enter when the signal is *expected* to print" item above, now live
+  and mirrored in the backtester (`entryMode: "anticipate"`, tested).
+- **Alignment gate removed from the live path** (it was rejecting ~everything);
+  replaced by **risk-based sizing** — 0.5% of cash risked per trade, 20% notional cap,
+  per-TF stop bands (≤4% 1h · ≤6% 4h · ≤10% 1d · ≥1.5% floor).
+- **Position rotation**: at the 6-position cap a new signal closes the most profitable
+  open position first (banks the winner), then opens.
+- **Phantom-position fix (the "PUMP" bug)**: buys are only tracked after Kraken
+  confirms the fill (`QueryOrders` status/vol_exec; canceled/unconfirmed ⇒ not
+  tracked), and reconciliation now runs on boot + every 6h and auto-removes ghosts
+  (tracked but not held). Removal drops the record only — nothing is ever sold.
+- Backtester/profiler generalized to timeframe series; research commands re-run on
+  1h/4h/1d; store: XBTUSD backfilled to now; Q1-2026 archive download pending
+  (Google Drive per-file quota; retry loop running).
