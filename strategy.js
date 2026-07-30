@@ -48,29 +48,6 @@ export const TREND_GATE           = true;  // when true, only trade a symbol who
 export const TREND_GATE_MODE      = "ma";  // "ma" = 4h close above its TREND_MA average; "structure" = 4h making higher highs AND higher lows (rejects bounces in chop/downtrends)
 export const TREND_MA             = 20;    // moving-average period for the "ma" gate mode
 
-/** Is the latest 4h close above its TREND_MA-period simple moving average? */
-export function aboveTrendMA(candles, period = TREND_MA) {
-  if (!candles || candles.length < period) return false;
-  const closes = candles.slice(-period).map(c => parseFloat(c.close));
-  const sma = closes.reduce((a, b) => a + b, 0) / period;
-  return parseFloat(candles[candles.length - 1].close) > sma;
-}
-
-/**
- * Is this timeframe in a clean uptrend — making higher highs AND higher lows?
- * Stricter than `currentBias` (which only checks the single most-recent pivot), so it
- * filters out bounces inside chop. Needs at least two confirmed highs and two lows.
- */
-export function isTrending(candles, n = SWING_WINDOW) {
-  const pivots = detectSwings(candles, n);
-  const lows  = pivots.filter(p => p.type === "low");
-  const highs = pivots.filter(p => p.type === "high");
-  if (lows.length < 2 || highs.length < 2) return false;
-  const higherLow  = lows[lows.length - 1].price  > lows[lows.length - 2].price;
-  const higherHigh = highs[highs.length - 1].price > highs[highs.length - 2].price;
-  return higherLow && higherHigh;
-}
-
 /** Is candle i a strong local LOW vs the N candles before it? */
 export function isLeftLow(lows, i, n) {
   if (i < n) return false;

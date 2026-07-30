@@ -211,6 +211,16 @@ export async function backfillRange(pair, sinceSec, untilSec, log = logger.info)
   const untilNs = Math.floor(untilSec) * 1e9;
   let pages = 0, totalTrades = 0;
 
+  // Merge-and-write periodically (not just at the end): if this process is killed
+  // mid-run — a session cutoff, a crash — the work already done survives, and a
+  // re-run naturally resumes from wherever the store's minutes stop being fresh.
+  const checkpoint = () => {
+    const bars = loadBarMap(pair);
+    for (const [t, bar] of fresh) bars.set(t, bar);   // replace, never accumulate
+    writeBars(pair, bars);
+    return bars.size;
+  };
+
   log(`[FLOW] ${pair}: rebuilding ${new Date(sinceSec * 1000).toISOString().slice(0, 10)} → ${new Date(untilSec * 1000).toISOString().slice(0, 10)} from trades`);
   for (;;) {
     let page;
@@ -227,17 +237,16 @@ export async function backfillRange(pair, sinceSec, untilSec, log = logger.info)
     aggregateTrades(inWindow, fresh);
     totalTrades += inWindow.length;
     pages += 1;
-    if (pages % 25 === 0) log(`[FLOW] ${pair}: ${pages} pages, ${totalTrades} trades, ${fresh.size} bars…`);
+    if (pages % 20 === 0) log(`[FLOW] ${pair}: ${pages} pages, ${totalTrades} trades, ${fresh.size} bars…`);
+    if (pages % 100 === 0) checkpoint();
     if (!page.last || page.last === sinceNs) break;
     sinceNs = page.last;
     if (Number(sinceNs) >= untilNs) break;
     await sleep(PAGE_DELAY_MS);
   }
 
-  const bars = loadBarMap(pair);
-  for (const [t, bar] of fresh) bars.set(t, bar);   // replace, never accumulate
-  writeBars(pair, bars);
-  log(`[FLOW] ${pair} done: ${fresh.size} bars rebuilt with order flow (store now ${bars.size} bars, ${pages} pages).`);
+  const total = checkpoint();
+  log(`[FLOW] ${pair} done: ${fresh.size} bars rebuilt with order flow (store now ${total} bars, ${pages} pages).`);
   return fresh.size;
 }
 
