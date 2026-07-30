@@ -1,14 +1,14 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "PAUSED_BUDGET",
     "target_file": "backtest.test.mjs",
     "objective": "Add THREE tests to this one file in a single run (they share the same file, so splitting them across runs would pay 3x orient cost and risk 3 conflicts): (a) stopMode \"atr\" - risk = atrStopK * ATR(14) taken to the PREVIOUS bar, and a missing ATR yields no trade rather than NaN risk; (b) the one-trade-per-level guard in anticipate mode - price crossing the same candidate trigger twice must open exactly ONE trade; (c) alignment/trendGate in anticipate mode - alignMode \"all\" with a bearish higher TF blocks an entry that alignMode \"none\" allows. These gates were silently ignored until 9041ea6 and have NEVER been tested.",
     "allow_live_edit": true,
     "test_command": "npm test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "No architect phase needed: three well-specified tests in one existing file, no new design. Batched deliberately - they share backtest.test.mjs, so separate runs would triple orient cost and invite conflicts.",
+    "notes": "Paused by human instruction. Q1 delivered 4 passing tests (7->11) covering stopMode atr (value + insufficient-history), the one-trade-per-level guard, and anticipate-mode alignment gating. Its run ended before committing, so the Architect committed the work to protect it. RESUME: set control.status EXECUTOR_PENDING with Q2 (funding.mjs collector), reset budget.runs_used to 0, push budget.expires_at forward, re-enable the cajh-swarm-loop scheduled task.",
     "updated_by": "verifier",
     "updated_at": "2026-07-30T20:28:00Z"
   },
@@ -31,7 +31,7 @@
     "work_queue": [
       {
         "id": "Q1",
-        "state": "started",
+        "state": "done",
         "file": "backtest.test.mjs",
         "owner": "executor",
         "task": "Add THREE tests to this one file in a single run (they share the same file, so splitting them across runs would pay 3x orient cost and risk 3 conflicts): (a) stopMode \"atr\" - risk = atrStopK * ATR(14) taken to the PREVIOUS bar, and a missing ATR yields no trade rather than NaN risk; (b) the one-trade-per-level guard in anticipate mode - price crossing the same candidate trigger twice must open exactly ONE trade; (c) alignment/trendGate in anticipate mode - alignMode \"all\" with a bearish higher TF blocks an entry that alignMode \"none\" allows. These gates were silently ignored until 9041ea6 and have NEVER been tested.",
@@ -166,6 +166,14 @@
       "detail": "Flipped ARCHITECT_PENDING -> EXECUTOR_PENDING for Q1 (no design needed; would have wasted a run under a 2-run budget). Recorded completion of the extended flow backfill.",
       "commit": "",
       "tests": "7 passing"
+    },
+    {
+      "ts": "2026-07-30T20:38:22.230Z",
+      "agent": "architect",
+      "action": "pause",
+      "detail": "Human called pause. Committed Q1 test work left uncommitted by the Executor run (4 tests, all green). Disabled the scheduled loop. Verified on the extended 7-month flow data that the settled order-flow claim still holds: 0 of 36 cells survive BH-FDR and clear cost.",
+      "commit": "",
+      "tests": "11 passing"
     }
   ],
   "budget": {
