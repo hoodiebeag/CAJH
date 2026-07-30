@@ -317,3 +317,51 @@ zero over the full sample.
 trades-derived bars on every overlapping minute. Any order-flow study needs a fresh
 Trades-endpoint backfill (~hours per pair), and funding rates, open interest and
 cross-exchange basis are not in this project's data at all.
+
+## 2026-07-30 (night) — order flow tested: the first signal that isn't flatly zero
+
+Order-flow data restored via the Trades endpoint for three pairs (the OHLCVT archive has
+no aggressor columns): **BTC 173k bars (Apr 1 → Jul 30), ETH 128k and SOL 128k (May 1 →
+Jul 29)** — ~430k flow-bearing 1-minute bars, zero duplicate minutes.
+
+`flowsignal.mjs BTC ETH SOL --pool` tested four features × 3 bar sizes × 3 horizons = 36
+cells, scoring the information coefficient against a shuffled null and the decile spread
+against the ~0.9% round-trip cost.
+
+**15m and 1h: nothing.** Every cell sits within noise of its shuffled null; the best
+decile spread reaches 38% of cost. Aggressor imbalance is mildly *negative* at 15m
+(IC ≈ −0.03), i.e. buying pressure slightly precedes lower returns — but far too small to
+trade and it flips sign at 4h, which is itself a tell that it is noise.
+
+**4h looked promising, and one of the two candidates died under scrutiny.** Two cells
+stood out at a 48h horizon: cumulative imbalance (+1.081% spread — the only cell in the
+whole grid to clear cost) and trade intensity (−1.121%, IC −0.085 vs shuffled +0.029).
+
+Both numbers are inflated by **overlapping windows**: a 48h horizon on 4h bars means 12
+consecutive samples share 11 of their 12 hours, so n=1707 is really ~142 independent
+observations and the standard errors are ~3.5× too small. `flowverify.mjs` recomputes
+with stride = horizon (non-overlapping):
+
+| feature | overlapping IC | non-overlapping IC | z | 95% CI | verdict |
+|---|---|---|---|---|---|
+| cum imbalance(6) | +0.0443 | **+0.0163** | +0.19 | [−0.149, +0.181] | dead — the "clears cost" cell was an overlap artifact |
+| trade intensity | −0.0847 | **−0.1603** | −1.90 | [−0.325, +0.005] | not significant, but it *strengthened* |
+
+Cumulative imbalance is finished: strip the overlap and the effect vanishes to nothing.
+
+**Trade intensity is the one live thread in this project.** Unlike everything tested
+before it, it does not evaporate under scrutiny — the effect *grew* on independent
+samples (−0.085 → −0.160), the sign is consistent across BTC alone, the pooled set, and
+both sampling schemes, and the direction is economically sensible: unusually busy 4h bars
+precede *lower* 48h returns (activity spikes at exhaustion, not continuation).
+
+It is still **not proven**: z = −1.90 misses the 95% bar, n = 142, one 3-month window and
+one regime, and it is one of 36 cells tested — with 36 tests, ~2 hitting p<0.05 by chance
+is the expectation, not the exception. What separates it from the project's other dead
+ends is that it is the first candidate whose evidence improves rather than collapses when
+the statistics are done honestly.
+
+Next, in order: extend the flow backfill window (more independent 48h samples is the only
+thing that resolves z = −1.90 either way), then test it as a *filter* on the existing
+long-only strategy — "don't buy when 4h trade intensity is elevated" — rather than as a
+standalone signal, since a long-only bot cannot short the high-intensity leg.
