@@ -14,12 +14,40 @@
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
-    "frozen_paths": ["scanner.js", "monitor.js", "trader.js", "bot.js", "strategy.js", "backtest.js", "commands.js"],
+    "frozen_paths": [
+      "scanner.js",
+      "monitor.js",
+      "trader.js",
+      "bot.js",
+      "strategy.js",
+      "backtest.js",
+      "commands.js"
+    ],
     "test_command": "npm test (7 tests currently passing)",
     "known_findings": "See ROADMAP.md. Settled with real numbers, do NOT re-test: the swing entry is statistically indistinguishable from random (8,203 trades); gross-of-cost expectancy ~0 so cheaper fills cannot rescue it; exit-model and stop-placement sweeps both negative; the simple daily strategy is beta not alpha (indistinguishable from random entries passing the same MA20 gate); trade intensity as a filter does not improve net R/t at any threshold (6,397 entries tested, CIs overlapping throughout).",
     "data_correction": "trades column is available for all 20 watchlist pairs across full 2023-2026 history (not BTC/ETH/SOL+2026-only as assigned). The limitation IS correct for buyVol/sellVol/maxTrade (genuinely zeroed on archive-ingested bars), but trade-COUNT-based features are available everywhere. Use full watchlist for trades-count-only features; restrict 3-pair/2026 only for buyVol/sellVol/maxTrade-dependent features.",
     "in_flight": "Order-flow backfills extending BTC/ETH/SOL back to 2026-01-01 may still be running as background node processes (research.js flow) — check before assuming idle. Do NOT kill node processes or touch candles/.",
-    "next_queue": "VERIFIER FOLLOW-ON (as instructed at session start): expand backtest.test.mjs coverage to test (1) stopMode 'atr' (volatility-scaled stops), (2) one-trade-per-level guard in anticipate mode, (3) alignment/trend gates now that they apply in anticipate mode. Assert against hand-computed values, not snapshots. After that: with intensity closed out and order-flow research complete, the project's known-signals thread is exhausted. Next phase is to improve the backtest/live infrastructure itself (position rotation, drawdown max, dynamic sizing refinements) or explore entirely new signal classes (not order-flow)."
+    "next_queue": "Q1 (verifier, backtest.test.mjs) then Q2 (executor, funding.mjs - last untested signal class) then Q3 (executor, consolidate research scripts). See work_queue for full specs.",
+    "work_queue": [
+      {
+        "id": "Q1",
+        "owner": "verifier",
+        "file": "backtest.test.mjs",
+        "task": "Expand coverage: stopMode \"atr\" (risk derives from ATR at the PREVIOUS bar, not the swing low), the one-trade-per-level guard in anticipate mode (antTradedIdx - a level must not re-fire), and the alignment/trendGate paths in anticipate mode (they were silently ignored until 9041ea6, so they have never been tested). Assert hand-computed values, not snapshots. This is the ONLY change allowed to touch a frozen path, and only because it is the test file for it."
+      },
+      {
+        "id": "Q2",
+        "owner": "executor",
+        "file": "funding.mjs",
+        "task": "NEW SIGNAL CLASS - the last untested one. Build a collector + tester for Kraken Futures funding rates (public endpoint, no auth: https://futures.kraken.com/derivatives/api/v4/historicalfundingrates?symbol=PF_XBTUSD). Store to funding/<symbol>.csv. Then test the standard hypothesis: extreme positive funding (crowded longs) precedes NEGATIVE forward returns at 8h/24h/72h. Use the SAME discipline as flowsignal.mjs: non-overlapping samples, block-permutation p-values, BH-FDR across all cells, and decile spread vs the 0.9% cost. Report gross and net. Do not skip the correction steps - every borderline result in this repo has died under them."
+      },
+      {
+        "id": "Q3",
+        "owner": "executor",
+        "file": "research/*",
+        "task": "CONSOLIDATION. Ten one-off .mjs research scripts now exist (baseline, isbeta, overlay, trail, simple, regime, flowsignal, flowverify, intensityfilter, intensityIC). Their FINDINGS are permanently recorded in ROADMAP.md, so the scripts are reproducible tools rather than history. Merge them into one research.mjs CLI with subcommands, sharing researchlib.mjs. Delete a script only after verifying its subcommand reproduces its output. Do not touch frozen paths."
+      }
+    ]
   },
   "ledger": [
     {
