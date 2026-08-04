@@ -6,11 +6,11 @@
     "objective": "Build deterministic tests and a parity matrix for every money path: eligibility, manual/cron race, position cap rotation, actual fills, partial exits, stop/TP/breakeven, drawdown, restart recovery, reconciliation, persistence failure, stale price, and exchange errors. Use hand-computed fixtures, not snapshots.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
-    "iteration": 0,
+    "iteration": 1,
     "max_iterations": 6,
-    "notes": "R-005 verified: npm.cmd test ran 39 tests and all passed. order-validation.test.mjs directly exercises supported symbols, finite positive order values, tracked-position entry/stop/target/risk/volume validation, and long stop/target geometry. Pulled next eligible item.",
+    "notes": "Verifier did not accept R-006 despite npm.cmd test passing 44/44. The tests exercise eligibility, resume gating, reconciliation, and sell state transitions, but PARITY_MATRIX.md still marks high-risk money paths as GAP: position-cap rotation, terminal buy-fill API seam, stop/TP live trigger fixture, breakeven/trailing live timing, stale quote rejection, and exchange retry/timeout behavior. This does not satisfy the objective to cover every money path; add focused deterministic coverage where exported seams exist, and for seams that cannot be tested without production refactor, classify them as blocked/follow-on explicitly rather than leaving them as unowned GAP rows.",
     "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:13:45.856Z"
+    "updated_at": "2026-08-04T11:16:58.129Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -1124,6 +1124,22 @@
       "detail": "R-005 validation boundary verified with npm.cmd test 39/39; order-validation tests exercise the change. Pulled R-006 into EXECUTOR_PENDING.",
       "commit": "f4f0d9f",
       "tests": "39 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:16:18.969Z",
+      "agent": "executor",
+      "action": "handoff",
+      "detail": "Added deterministic money-path tests and PARITY_MATRIX.md; matrix explicitly records covered paths and remaining API/timing gaps.",
+      "commit": "1d7214d",
+      "tests": "npm.cmd test: 44 passed, 0 failed"
+    },
+    {
+      "ts": "2026-08-04T11:16:58.129Z",
+      "agent": "verifier",
+      "action": "fail-back",
+      "detail": "R-006 npm.cmd test passed 44/44, but acceptance failed because the matrix still contains unowned high-risk GAP rows, so the passing run does not exercise the full requested money-path surface.",
+      "commit": "1d7214d",
+      "tests": "44 passing (npm.cmd test); acceptance failed on coverage/matrix completeness"
     }
   ],
   "budget": {
