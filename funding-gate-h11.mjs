@@ -28,5 +28,8 @@ export async function runFundingGateH11({ watchlist = loadWatchlist(), splitFrac
   }
   const train = score(assets, "train"), holdout = score(assets, "holdout");
   const promoted = train.trades >= 200 && holdout.trades >= 80 && train.avgR > 0 && holdout.avgR > 0 && holdout.positiveAssets / Math.max(1, holdout.assets) >= .5;
-  return { input: { specification: "funding-gate-h11/v1", threshold, splitFraction, minHistoryDays, eligibleAssets: assets.map((a) => a.symbol), config: cfg }, result: { train, holdout, perAsset: assets.map(({ symbol, train, holdout }) => ({ symbol, train: { trades: train.trades, avgR: train.avgR }, holdout: { trades: holdout.trades, avgR: holdout.avgR } })), promoted, verdict: promoted ? "H11 passed historical gate; paper trading only" : "H11 did not clear the pre-registered historical gate" } };
+  const verdict = !assets.length
+    ? "H11 unavailable: no asset had both valid local candles and the required continuous funding coverage"
+    : promoted ? "H11 passed historical gate; paper trading only" : "H11 did not clear the pre-registered historical gate";
+  return { input: { specification: "funding-gate-h11/v1", threshold, splitFraction, minHistoryDays, eligibleAssets: assets.map((a) => a.symbol), config: cfg }, result: { train, holdout, perAsset: assets.map(({ symbol, train, holdout }) => ({ symbol, train: { trades: train.trades, avgR: train.avgR }, holdout: { trades: holdout.trades, avgR: holdout.avgR } })), promoted, verdict } };
 }
