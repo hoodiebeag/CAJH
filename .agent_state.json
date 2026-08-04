@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "package.json, package-lock.json, DEPENDENCY_AUDIT.md",
-    "objective": "Resolve production dependency vulnerabilities reported by npm audit (axios/form-data/undici/discord.js transitive chain) with the smallest compatible updates. Record remaining advisories only when no safe fixed version exists and prove bot import/tests still pass.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "momentum.mjs, momentum.test.mjs",
+    "objective": "Implement the pre-registered daily cross-sectional momentum panel: stable-13 universe, weekly non-overlapping dates, L=30 trailing and H=7 strictly-future returns, minimum eight assets, and a tidy {date,asset,trailR,fwdR} output. Keep all Q1-only data separate.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "S1 executor handoff: updated axios to ^1.18.0, discord.js to ^14.27.0, refreshed transitive form-data/undici lockfile entries, and documented the audit. npm.cmd audit --json reports 0 vulnerabilities; npm.cmd test passed 89/89.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-04T11:57:11.409Z"
+    "notes": "S1 verified: npm.cmd audit --json reports 0 vulnerabilities and npm.cmd test ran 89 tests with all passing. DEPENDENCY_AUDIT.md records axios, discord.js, form-data, and undici-chain remediation. Pulled next eligible item into EXECUTOR_PENDING.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-04T11:57:44.029Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -347,7 +347,7 @@
       },
       {
         "id": "S1",
-        "state": "verifying",
+        "state": "done",
         "severity": "high",
         "file": "package.json, package-lock.json, DEPENDENCY_AUDIT.md",
         "owner": "executor",
@@ -361,7 +361,7 @@
       },
       {
         "id": "M1",
-        "state": "pending",
+        "state": "executing",
         "severity": "medium",
         "file": "momentum.mjs, momentum.test.mjs",
         "owner": "executor",
@@ -1616,6 +1616,14 @@
       "action": "implement",
       "detail": "S1: resolved production dependency advisories with small compatible updates for axios, discord.js, form-data, and undici chain; recorded audit result.",
       "commit": "6272f7f",
+      "tests": "npm.cmd audit --json: 0 vulnerabilities; npm.cmd test: 89 passing"
+    },
+    {
+      "ts": "2026-08-04T11:57:44.029Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "S1 dependency audit remediation verified with npm audit 0 vulnerabilities and npm.cmd test 89/89. Pulled M1 into EXECUTOR_PENDING.",
+      "commit": "3b6527b",
       "tests": "npm.cmd audit --json: 0 vulnerabilities; npm.cmd test: 89 passing"
     }
   ],
