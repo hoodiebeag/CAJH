@@ -121,3 +121,26 @@ done without touching a frozen path. "The next task needs assigning" is not one;
 **Never idle.** If your phase is done and the queue has pending work, take it. If the
 queue is empty, say so loudly in the ledger so the Architect restocks it — an empty queue
 is an Architect failure, not a reason for the loop to spin.
+
+## Red-baseline rule (amended — the naive version deadlocks)
+
+"If `npm test` is red, set BLOCKED and stop" is wrong as stated, and it deadlocked this
+repo on 2026-08-04: the baseline was red *because* the Executor's in-flight task
+(`rsi-reversion-study` / MR1) had its tests written but the implementation unfinished. The
+rule would have blocked the only agent able to fix it.
+
+**Amended rule — scope the failure before deciding:**
+
+1. Run `npm test` and list the failing test names.
+2. **If every failure belongs to the test file(s) named in `control.target_file`**, the
+   baseline is red because the current task is mid-flight. The assigned Executor **proceeds
+   — finishing those tests is the task.** Any *other* agent still treats it as blocking and
+   does not start unrelated work on a red tree.
+3. **If any failure lies outside the current `target_file`**, that is a genuine regression:
+   set `BLOCKED`, record the failing names in `control.notes`, and stop. Stacking work on a
+   broken baseline makes the cause unbisectable.
+4. Never mark an item `done`, and never advance to `VERIFIER_PENDING`, while any test is
+   red — including the task's own. Red means unfinished, not "ready for review."
+
+The principle: a red baseline is a signal about *whose* work is unfinished, not an
+unconditional halt. Distinguish "someone broke the repo" from "this task isn't done yet."
