@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "scanner.js, monitor.js, bot.js, scheduler.test.mjs",
     "objective": "Add single-flight guards to scheduled/manual scans and monitor ticks so an async interval cannot overlap itself or duplicate balance/exit work. Record skipped-overlap health telemetry.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 4,
-    "notes": "Verifier passed R-009: npm.cmd test ran 32 tests and all passed. Tests cover durable manual halt across fresh module load, refusal without LIVE_TRADING=true, refusal with unhealthy monitor, successful resume only with opt-in plus health, and unreadable persisted halt fail-closed. Next eligible item pulled.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:03:59.485Z"
+    "notes": "R-010 implementation is committed and pushed. npm.cmd test passed 35 tests. Review scheduler.test.mjs deferred-promise fixtures: overlapping scan is skipped while active, single-flight monitor primitive skips overlapping tick work, telemetry records skipped count, and execution resumes after completion.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:08:17.933Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -101,7 +101,7 @@
       },
       {
         "id": "R-010",
-        "state": "executing",
+        "state": "verifying",
         "severity": "high",
         "file": "scanner.js, monitor.js, bot.js, scheduler.test.mjs",
         "owner": "executor",
@@ -795,7 +795,7 @@
       "acceptance_criteria": [
         "Concurrent invocation tests prove only one active scan/tick per loop and no duplicate order path."
       ],
-      "state": "queued"
+      "state": "verifying"
     },
     {
       "id": "R-011",
@@ -1068,6 +1068,22 @@
       "detail": "R-009 durable halt safety verified. npm.cmd test passed 32/32; restart and opt-in tests exercise the change. Pulled next eligible item into EXECUTOR_PENDING.",
       "commit": "2af4580",
       "tests": "32 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:08:10.831Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-010: wrapped scanner runs and monitor ticks in single-flight guards; overlapping calls are skipped and telemetry records skipped counts.",
+      "commit": "c57975c",
+      "tests": "35 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:08:17.933Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-010: added single-flight guards for scanner and monitor tick paths, with skipped-overlap telemetry and deferred-promise scheduler tests.",
+      "commit": "c57975c",
+      "tests": "35 passing (npm.cmd test)"
     }
   ],
   "budget": {
