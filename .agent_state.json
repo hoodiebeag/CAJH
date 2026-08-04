@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "money-path.test.mjs, PARITY_MATRIX.md",
     "objective": "Build deterministic tests and a parity matrix for every money path: eligibility, manual/cron race, position cap rotation, actual fills, partial exits, stop/TP/breakeven, drawdown, restart recovery, reconciliation, persistence failure, stale price, and exchange errors. Use hand-computed fixtures, not snapshots.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 1,
     "max_iterations": 6,
-    "notes": "Verifier did not accept R-006 despite npm.cmd test passing 44/44. The tests exercise eligibility, resume gating, reconciliation, and sell state transitions, but PARITY_MATRIX.md still marks high-risk money paths as GAP: position-cap rotation, terminal buy-fill API seam, stop/TP live trigger fixture, breakeven/trailing live timing, stale quote rejection, and exchange retry/timeout behavior. This does not satisfy the objective to cover every money path; add focused deterministic coverage where exported seams exist, and for seams that cannot be tested without production refactor, classify them as blocked/follow-on explicitly rather than leaving them as unowned GAP rows.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:16:58.129Z"
+    "notes": "R-006 revised after verifier fail-back. npm.cmd test ran 47 tests and all passed. money-path.test.mjs now covers monitor eligibility, resume opt-in, single-flight overlap, structural-level cooldown expiry, reconciliation classification, confirmed full/partial/ambiguous exits, and exact 10% daily drawdown halt. PARITY_MATRIX.md classifies all listed money paths as COVERED, PARTIAL, or BLOCKED/FOLLOW-ON rather than leaving unowned GAP rows.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:18:08.974Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -143,7 +143,7 @@
       },
       {
         "id": "R-006",
-        "state": "executing",
+        "state": "verifying",
         "severity": "high",
         "file": "money-path.test.mjs, PARITY_MATRIX.md",
         "owner": "executor",
@@ -1140,6 +1140,14 @@
       "detail": "R-006 npm.cmd test passed 44/44, but acceptance failed because the matrix still contains unowned high-risk GAP rows, so the passing run does not exercise the full requested money-path surface.",
       "commit": "1d7214d",
       "tests": "44 passing (npm.cmd test); acceptance failed on coverage/matrix completeness"
+    },
+    {
+      "ts": "2026-08-04T11:18:08.974Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-006: expanded deterministic money-path tests for overlap suppression, structural cooldown expiry, and exact drawdown halt; rewrote parity matrix to classify every money path and explicitly route untestable API/timing seams as blocked follow-ons.",
+      "commit": "2022259",
+      "tests": "47 passing (npm.cmd test)"
     }
   ],
   "budget": {
