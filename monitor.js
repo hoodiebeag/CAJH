@@ -319,6 +319,15 @@ export function saveTradeState() {
   persist();
 }
 
+export function applyConfirmedSellToTrade(trade, sold) {
+  const executed = Number(sold?.volume);
+  if (!Number.isFinite(executed) || executed <= 0) return { status: "invalid" };
+  if (executed + 1e-12 >= trade.volume) return { status: "closed", remaining: 0 };
+  const remaining = Number((trade.volume - executed).toFixed(12));
+  trade.volume = remaining;
+  return { status: "partial", remaining };
+}
+
 // ─── Discord messages ──────────────────────────────────────────────────────────
 
 export async function postTradeOpened(channel, trade) {
@@ -385,16 +394,15 @@ async function closePosition(channel, symbol, trade, price, reason) {
     }
     return false;
   }
-  const executed = Number(sold.volume);
-  if (!Number.isFinite(executed) || executed <= 0) {
+  const applied = applyConfirmedSellToTrade(trade, sold);
+  if (applied.status === "invalid") {
     if (channel) await channel.send(`⚠️ **${symbol}** exit confirmation had no executed volume; position remains tracked.`);
     return false;
   }
-  if (executed < trade.volume) {
-    trade.volume -= executed;
+  if (applied.status === "partial") {
     const persisted = saveTradeState();
     if (channel) await channel.send(
-      `⚠️ **${symbol}** exit partially filled (${executed} sold); ` +
+      `⚠️ **${symbol}** exit partially filled (${sold.volume} sold); ` +
       `${trade.volume} remains tracked${persisted ? "." : ", but persistence failed — reconciliation required."}`
     );
     return false;
