@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "monitor.js, scanner.js, bot.js, monitor.test.mjs",
-    "objective": "Make manual and safety halts durable across restart, and require explicit opt-in before any resume can enable orders. Persist the halt reason; boot and resume must remain fail-closed when halt state cannot be read.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "scanner.js, monitor.js, bot.js, scheduler.test.mjs",
+    "objective": "Add single-flight guards to scheduled/manual scans and monitor ticks so an async interval cannot overlap itself or duplicate balance/exit work. Record skipped-overlap health telemetry.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 4,
-    "notes": "R-009 implementation/tests are committed and pushed. npm.cmd test passed 32 tests. Review durable halt coverage: manual halt survives fresh module load, resume refuses without LIVE_TRADING=true, resume also requires healthy monitor state, and unreadable persisted halt state restores fail-closed.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-04T11:03:38.266Z"
+    "notes": "Verifier passed R-009: npm.cmd test ran 32 tests and all passed. Tests cover durable manual halt across fresh module load, refusal without LIVE_TRADING=true, refusal with unhealthy monitor, successful resume only with opt-in plus health, and unreadable persisted halt fail-closed. Next eligible item pulled.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-04T11:03:59.485Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -90,7 +90,7 @@
       },
       {
         "id": "R-009",
-        "state": "verifying",
+        "state": "done",
         "severity": "critical",
         "file": "monitor.js, scanner.js, bot.js, monitor.test.mjs",
         "owner": "executor",
@@ -101,7 +101,7 @@
       },
       {
         "id": "R-010",
-        "state": "pending",
+        "state": "executing",
         "severity": "high",
         "file": "scanner.js, monitor.js, bot.js, scheduler.test.mjs",
         "owner": "executor",
@@ -773,7 +773,7 @@
         "Manual/safety halt survives restart.",
         "LIVE_TRADING false or unset cannot be overridden through Discord."
       ],
-      "state": "verifying"
+      "state": "done"
     },
     {
       "id": "R-010",
@@ -1058,6 +1058,14 @@
       "agent": "executor",
       "action": "implement",
       "detail": "R-009: added focused restart/opt-in/fail-closed halt tests around existing durable halt implementation. Manual halt persists, resume needs LIVE_TRADING=true plus healthy monitor state, unreadable halt state stays disabled.",
+      "commit": "2af4580",
+      "tests": "32 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:03:59.485Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "R-009 durable halt safety verified. npm.cmd test passed 32/32; restart and opt-in tests exercise the change. Pulled next eligible item into EXECUTOR_PENDING.",
       "commit": "2af4580",
       "tests": "32 passing (npm.cmd test)"
     }
