@@ -63,7 +63,12 @@ export function reversionTrades(candles, {
   const trades = [];
   let position = null;
 
-  for (let i = rsiPeriod; i + 1 < rows.length; i++) {
+  // The exit check only needs rows[i]; the entry-scan below additionally needs rows[i+1]
+  // for the t+1 fill, so ITS bound is guarded separately rather than shrinking this loop
+  // (an earlier draft used `i + 1 < rows.length` here, which meant a position could never
+  // exit on the very last available bar — a real bug, not just a test-fixture concern:
+  // it would silently leave a genuinely-qualifying exit unrecorded at the data boundary).
+  for (let i = rsiPeriod; i < rows.length; i++) {
     if (position) {
       // "the first SUBSEQUENT close at or above MA(20)" excludes the entry bar itself —
       // the entry fill and its own close cannot also be its exit signal.
@@ -92,6 +97,7 @@ export function reversionTrades(candles, {
       continue; // one position at a time — do not also scan for a new entry this bar
     }
 
+    if (i + 1 >= rows.length) continue; // no t+1 bar left to fill the entry
     if (rsi[i - 1] === null || rsi[i] === null) continue;
     const crossedUp = rsi[i - 1] < rsiThreshold && rsi[i] >= rsiThreshold;
     if (!crossedUp) continue;

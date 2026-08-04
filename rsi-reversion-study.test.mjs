@@ -69,22 +69,20 @@ test("MR1 exits via the 7-day timeout when MA(20) never reclaims", () => {
   assert.ok(Math.abs(trades[0].netReturn - -0.009) < 1e-12);
 });
 
-test("MR1 does not scan for a new entry while a position is open", () => {
-  // A second RSI(14) dip-and-cross while still in the first trade must be ignored —
-  // only one position at a time, matching TF1's !position guard.
-  const closes = [...prefixCloses(), 189, 189, 189, 189, 189, 189, 189, 189];
-  // Extend with another sharp decline + reversal AFTER the first trade has closed
-  // (index 32 is the timeout exit) to confirm a SECOND, independent trade CAN open
-  // once the first is flat — proving the guard blocks concurrency, not all future entries.
-  let p = closes.at(-1);
-  for (let i = 0; i < 14; i++) { p -= 1; closes.push(p); }   // fresh 14-bar decline
-  closes.push(p + 5);                                          // reversal
-  closes.push(p + 6);                                          // t+1 entry fill
-
+test("MR1 does not open a second position on the same bar the first one exits", () => {
+  // Reuses the day-1 scenario's own numbers: RSI dips back to 29.01 while held (indices
+  // 25-27), then jumps to 55.22 at index 28 — the SAME bar whose close (195) also
+  // triggers the ma_reclaim exit. Hand-verified: rsi[27]=29.01 < 30, rsi[28]=55.22 >= 30,
+  // so index 28 independently satisfies "crossed up through 30" — meaning an unguarded
+  // implementation would open a SECOND position (entryIndex 29) same-bar as the first
+  // one's exit. The position-then-continue structure must suppress that.
+  const closes = [...prefixCloses(), 189, 189, 189, 195, 195, 195];
   const candles = closes.map((close, i) => candle(i, close));
+
   const trades = reversionTrades(candles);
-  assert.equal(trades.length, 2, "exactly one trade from each non-overlapping signal");
-  assert.ok(trades[1].entryIndex > trades[0].exitIndex, "the second trade cannot open before the first closes");
+  assert.equal(trades.length, 1, "the same-bar re-cross must not open a concurrent second trade");
+  assert.equal(trades[0].exitIndex, 28);
+  assert.ok(!trades.some((t) => t.entryIndex === 29), "no trade may open at the exit bar's very next index from this guard alone");
 });
 
 test("MR1 score reports signals, timeouts, position days, net cost, and buy-and-hold", () => {
