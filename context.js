@@ -54,6 +54,17 @@ export function formatDecisionForContext(event) {
   return redactContextText(`${stamp}: ${event?.type ?? "unknown decision"}`);
 }
 
+export function buildMissionDigest({ config = {}, verdict = "not recorded", trading = "halted" } = {}) {
+  const symbols = (config.watchlist || []).map((asset) => asset.symbol).filter(Boolean).slice(0, 20);
+  return redactContextText([
+    "mission/limitations digest:",
+    "This is supplied system context generated from current runtime state and recorded research; it is not persistent self-awareness or memory.",
+    `Current configured watchlist: ${symbols.join(", ") || "none recorded"}; trading state: ${trading}; latest ROADMAP verdict: ${verdict}.`,
+    "The current strategy is not validated for autonomous live trading. Do not infer an edge from live samples, incomplete holdouts, or unavailable data.",
+    "Require chronological holdouts, realistic costs, adequate sample size, and explicit failure analysis before any paper-trading promotion."
+  ].join(" "));
+}
+
 export function buildLiveContext(state, { maxChars = 12000 } = {}) {
   const trading = isTradingEnabled() ? "active" : "halted";
   const open    = getOpenTrades();
@@ -94,6 +105,7 @@ export function buildLiveContext(state, { maxChars = 12000 } = {}) {
     `- monitor health: ${JSON.stringify({ ok: monitorHealth.ok, hydrated: monitorHealth.hydrated, reconciled: monitorHealth.reconciled, persistenceOk: monitorHealth.persistenceOk, tickOk: monitorHealth.tickOk, stale: monitorHealth.stale, exitProtection: monitorHealth.exitProtection })}`,
     `- storage health: ${JSON.stringify(Object.fromEntries(Object.entries(storageHealth).map(([key, value]) => [key, { ok: value.ok, source: value.source }])))}`,
     `- latest roadmap verdict: ${latestRoadmapVerdict()}`,
+    `- ${buildMissionDigest({ config, verdict: latestRoadmapVerdict(), trading })}`,
     `- in-memory decision records: ${recentDecisions.length} (persisted journal is authoritative when present)`,
     `- last scan: ${state.lastScanTime ?? "none yet"}`,
     `- durable decision history: ${journal.length} recent records loaded; ${setups.length} evaluated setups (${passed} passed), ${exits.length} realized exits, ${wins} wins, realized P&L $${totalPnl.toFixed(2)}`,

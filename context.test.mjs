@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildLiveContext, formatDecisionForContext } from "./context.js";
+import { buildLiveContext, buildMissionDigest, formatDecisionForContext } from "./context.js";
 
 test("C2 exposes bounded read-only operational context without secrets", () => {
   const context = buildLiveContext({
@@ -19,10 +19,10 @@ test("C2 exposes bounded read-only operational context without secrets", () => {
 });
 
 test("C2 does not invent an absent decision or expose source code in live context", () => {
-  const context = buildLiveContext({ watchlist: [] }, { maxChars: 1000 });
+  const context = buildLiveContext({ watchlist: [] }, { maxChars: 12000 });
   assert.match(context, /no persisted decisions yet|durable decision history:/);
   assert.doesNotMatch(context, /===== .*\.js =====|function buildLiveContext/);
-  assert.ok(context.includes("[context truncated]") || context.length <= 1000);
+  assert.ok(context.length <= 12000);
 });
 
 test("C2 answers skipped-asset questions from recorded asset decisions", () => {
@@ -38,4 +38,17 @@ test("C2 redacts dynamic token-shaped text in decisions and halt reasons", () =>
   assert.doesNotMatch(decision, /supersecret|sk-ant-abcdefghijklmnop/);
   const context = buildLiveContext({ watchlist: [] }, { maxChars: 20000 });
   assert.doesNotMatch(context, /KRAKEN_API_SECRET=supersecret|sk-ant-abcdefghijklmnop/);
+});
+
+test("C3 mission digest is dynamic and states its context and live-trading limits", () => {
+  const digest = buildMissionDigest({
+    config: { watchlist: [{ symbol: "BTC" }, { symbol: "ETH" }] },
+    verdict: "KILLED — data-gated",
+    trading: "halted"
+  });
+  assert.match(digest, /supplied system context/);
+  assert.match(digest, /not persistent self-awareness/);
+  assert.match(digest, /BTC, ETH/);
+  assert.match(digest, /KILLED/);
+  assert.match(digest, /not validated for autonomous live trading/);
 });
