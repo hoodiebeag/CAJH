@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "VERIFIER_PENDING",
+                    "status":  "EXECUTOR_PENDING",
                     "target_file":  "classifier.mjs, classifier.test.mjs",
-                    "objective":  "Create a research-only entry-time feature matrix from profileEntries, fixed tpR=4 label, whole-symbol train/holdout split, train-only z-score scaler, and class-balance/column reporting.",
+                    "objective":  "Implement deterministic, L2-regularized, class-weighted logistic regression and Mann-Whitney AUC in plain JS; choose lambda by inner train-only folds. Do not add trees, boosting, or neural models.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "P1 implemented in commit e055dcc. npm.cmd test passed 113/113, including classifier column/label, whole-symbol split, train-only scaler, and class-balance report tests.",
-                    "updated_by":  "executor",
-                    "updated_at":  "2026-08-04T12:26:13.3484010Z"
+                    "notes":  "P1 verified with npm.cmd test 112/112. Pulled P2 into EXECUTOR_PENDING.",
+                    "updated_by":  "verifier",
+                    "updated_at":  "2026-08-04T12:26:42.4807474Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -523,7 +523,7 @@
                                           },
                                           {
                                               "id":  "P1",
-                                              "state":  "verifying",
+                                              "state":  "done",
                                               "severity":  "medium",
                                               "file":  "classifier.mjs, classifier.test.mjs",
                                               "owner":  "executor",
@@ -539,7 +539,7 @@
                                           },
                                           {
                                               "id":  "P2",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "medium",
                                               "file":  "classifier.mjs, classifier.test.mjs",
                                               "owner":  "executor",
@@ -1817,6 +1817,14 @@
                        "detail":  "P1: added research-only classifier feature matrix from profileEntries-compatible records, fixed win/loss label, whole-symbol train/holdout split, train-only z-score scaler, and class-balance/column reporting.",
                        "commit":  "e055dcc",
                        "tests":  "node --check classifier.mjs classifier.test.mjs; npm.cmd test: 113 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:26:42.4807474Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "P1 classifier feature matrix verified. npm.cmd test passed 112/112; focused tests exercise fixed tpR labels/columns, whole-symbol holdout split, train-only z-score scaling, and entry-time categorical encoding.",
+                       "commit":  "4972b12",
+                       "tests":  "npm.cmd test: 112 passing"
                    }
                ],
     "budget":  {
