@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "EXECUTOR_PENDING",
+                    "status":  "VERIFIER_PENDING",
                     "target_file":  "momentum.mjs, momentum.test.mjs",
                     "objective":  "Implement raw, 90-day rolling BTC-residual, and trailing-volatility-normalized rank transforms using only data at or before each decision date.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "M2 verified with npm.cmd test 94/94. Pulled M3 into EXECUTOR_PENDING.",
-                    "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T12:03:13.5240444Z"
+                    "notes":  "M3 implemented in commit 1373729. npm.cmd test passed 96/96, including hand-computed BTC-residual and volatility-normalized transform tests.",
+                    "updated_by":  "executor",
+                    "updated_at":  "2026-08-04T12:05:17.7848352Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -393,7 +393,7 @@
                                           },
                                           {
                                               "id":  "M3",
-                                              "state":  "in_progress",
+                                              "state":  "verifying",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -1665,6 +1665,14 @@
                        "detail":  "M2 momentum scoring verified. npm.cmd test passed 94/94; focused tests exercise per-date Spearman IC, mean IC, deterministic date-vector null, block-bootstrap CI, and effective-N reporting.",
                        "commit":  "53a0f9a",
                        "tests":  "npm.cmd test: 94 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:05:17.7848352Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "M3: added raw/default, 90-day BTC-residual, and trailing-volatility-normalized momentum transforms using only data at or before each decision date.",
+                       "commit":  "1373729",
+                       "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 96 passing"
                    }
                ],
     "budget":  {
