@@ -4,7 +4,7 @@
  */
 
 import { getCurrentPrice, placeSell, getAccountBalance, fetchOHLC, symbolToPair, getHoldings, validateTrackedTrade } from "./trader.js";
-import { saveTrades, loadTradesResult, saveStats, loadStats, getStorageHealth } from "./storage.js";
+import { saveTrades, loadTradesResult, saveStats, loadStats, getStorageHealth, checkStoragePreflight, appendDecisionEvent } from "./storage.js";
 import { detectSwings, SWING_WINDOW, EXIT_ON_SWING_HIGH, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT, FEE_RATE } from "./strategy.js";
 import * as logger from './logger.js';
 
@@ -121,8 +121,17 @@ export function haltManual(reason = "manual") {
   persistStats();
 }
 export function resumeManual() {
-  if (!canResume({ liveOptIn: process.env.LIVE_TRADING === "true", monitorHealthy: getMonitorHealth().ok })) {
-    haltManual(process.env.LIVE_TRADING === "true" ? "monitor health required" : "LIVE_TRADING opt-in required");
+  const storagePreflight = checkStoragePreflight();
+  if (!canResume({
+    liveOptIn: process.env.LIVE_TRADING === "true",
+    monitorHealthy: getMonitorHealth().ok,
+    storageHealthy: storagePreflight.ok
+  })) {
+    haltManual(
+      process.env.LIVE_TRADING !== "true" ? "LIVE_TRADING opt-in required" :
+      !getMonitorHealth().ok ? "monitor health required" :
+      storagePreflight.reason
+    );
     return false;
   }
   manualHalt = false;
@@ -139,7 +148,9 @@ export function resumeManual() {
   return true;
 }
 export function isManualHalt()      { return manualHalt; }
-export function canResume({ liveOptIn, monitorHealthy }) { return liveOptIn === true && monitorHealthy === true; }
+export function canResume({ liveOptIn, monitorHealthy, storageHealthy = true }) {
+  return liveOptIn === true && monitorHealthy === true && storageHealthy === true;
+}
 export function getHaltState() { return { active: manualHalt || drawdownHalted, reason: haltReason, haltedAt }; }
 
 export function prepareFatalShutdown(reason = "fatal integrity loss") {
@@ -281,6 +292,7 @@ export function registerTrade(trade) {
   tradesToday++;
   persist();
   persistStats();
+  appendDecisionEvent({ type: "entry", trade: { symbol: trade.symbol, entry: trade.entry, stopLoss: trade.stopLoss, takeProfit: trade.takeProfit, volume: trade.volume, capital: trade.capital, risk: trade.risk, signal: trade.signal, tf: trade.tf, openedAt: trade.openedAt } });
   logger.info(`[MONITOR] Tracking ${trade.symbol} — entry: ${usd(trade.entry)}`);
 }
 
@@ -324,6 +336,7 @@ export async function reconcileHoldings(channel, { autoRemoveGhosts = false, ann
     return null;
   }
   const result = reconcile(holdings, getOpenTrades());
+  appendDecisionEvent({ type: "reconciliation", orphans: result.orphans.map((h) => h.asset), ghosts: result.ghosts.map((t) => t.symbol) });
   const { orphans } = result;
   let { ghosts } = result;
 
@@ -456,6 +469,7 @@ export async function postTradeClosed(channel, trade, exitPrice, reason) {
 
   dailyPnl += pnl;
   persistStats();
+  appendDecisionEvent({ type: "exit", trade: { symbol: trade.symbol, entry: trade.entry, volume: trade.volume, capital: trade.capital, signal: trade.signal, tf: trade.tf, openedAt: trade.openedAt }, exit: { price: exitPrice, reason, gross, fees, pnl, pnlPct, rMultiple: trade.risk > 0 ? (exitPrice - trade.entry) / trade.risk : null } });
 
   if (!channel) return;
   const beag = process.env.BEAG_USER_ID || "795521432783552552";

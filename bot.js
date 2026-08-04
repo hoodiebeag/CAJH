@@ -6,7 +6,7 @@ import "dotenv/config";
 import { Client, GatewayIntentBits } from "discord.js";
 import cron from "node-cron";
 import { runScanner }      from "./scanner.js";
-import { loadConfig, saveConfig, isOwner } from "./storage.js";
+import { loadConfig, saveConfig, isOwner, checkStoragePreflight } from "./storage.js";
 import { startMonitor, setDailyStartBalance, postDailySummary, disableTrading, haltManual, prepareFatalShutdown } from "./monitor.js";
 import {
   handleHelp, handleWatchlist, handleWatch, handleUnwatch,
@@ -162,11 +162,12 @@ client.once("clientReady", async () => {
   // real money is a known-loss event, not an unknown. Opting in is one env var; opting
   // out of a loss after the fact is not. `!resume` still enables trading for a session.
   const liveOptIn = process.env.LIVE_TRADING === "true";
-  if (!liveOptIn || process.env.START_HALTED === "true") {
-    haltManual();
+  const storagePreflight = checkStoragePreflight();
+  if (!liveOptIn || process.env.START_HALTED === "true" || !storagePreflight.ok) {
+    haltManual(!storagePreflight.ok && liveOptIn ? storagePreflight.reason : "manual");
     logger.warn(
       liveOptIn
-        ? "[RISK] Booted HALTED (START_HALTED=true) — scans & research run, but NO live trades until !resume."
+        ? `[RISK] Booted HALTED (${process.env.START_HALTED === "true" ? "START_HALTED=true" : storagePreflight.reason}) — scans & research run, but NO live trades until storage preflight and !resume pass.`
         : "[RISK] Booted HALTED (default) — set LIVE_TRADING=true to allow autonomous trading, or use !resume for this session. " +
           "Backtests currently show this strategy losing money; see ROADMAP.md."
     );

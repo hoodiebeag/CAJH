@@ -56,9 +56,10 @@ timely without lowering the bar (same strong pivots, not more of them). `N` is
   `TREND_GATE`, `TREND_GATE_MODE`, `TREND_MA`, plus backtest-only exit options like
   ATR stops, partial exits, trailing stops, and max hold. These are swept by research
   commands but are **not live entry gates** unless scanner imports them.
-- **Live environment controls:** `LIVE_TRADING=true` is required before `!resume` can
-  enable orders. `DATA_DIR` should point at durable storage only on deployment; locally
-  leave it unset unless you intentionally want a separate state/data directory.
+- **Live environment controls:** `LIVE_TRADING=true` and an explicit, writable
+  `DATA_DIR` are both required before `!resume` can enable orders. Backtests/research
+  can run with `DATA_DIR` unset, but live trading cannot: open positions, halt state,
+  stats, config, and structural-level cooldowns must survive restart/redeploy.
 
 Current live scanner truth: anticipation entries on 1h/4h/1d, no alignment gate, no
 trend gate, per-timeframe stop caps, risk-based sizing, six-position cap with winner
@@ -69,7 +70,8 @@ rotation, software-polled exits.
 **cajh boots halted.** Autonomous trading only runs when `LIVE_TRADING=true` is set in
 the environment; otherwise scans, charts, and research work normally but no orders are
 placed. This default exists because the current strategy backtests net-negative — see
-"Does it work?" below. `!resume` enables trading for the running session.
+"Does it work?" below. `!resume` only enables trading when `LIVE_TRADING=true`, monitor
+health is good, and storage preflight proves `DATA_DIR` is explicit and writable.
 
 Once enabled, cajh places trades itself — there is **no confirmation step**. On a valid
 setup it buys immediately, posts the trade, and pings you (`BEAG_USER_ID`). Use `!stop`
@@ -103,7 +105,8 @@ so a restart recovers and keeps managing them.
 
 **Important:** because exits depend on the bot running, downtime = no protection.
 On Railway, attach a volume and set `DATA_DIR` to its mount path so positions survive
-redeploys (the filesystem is otherwise wiped on each deploy).
+redeploys (the filesystem is otherwise wiped on each deploy). Live trading refuses to
+resume without that explicit writable durable directory; research commands still work.
 
 ## Commands
 
