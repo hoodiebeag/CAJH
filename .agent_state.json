@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "VERIFIER_PENDING",
-                    "target_file":  "momentum.mjs, momentum.test.mjs",
-                    "objective":  "Report forward raw return and forward risk-adjusted return/vol side by side for every rank mode, guarding zero/invalid forward volatility.",
+                    "status":  "EXECUTOR_PENDING",
+                    "target_file":  "momentum.mjs",
+                    "objective":  "Run low-volatility and low-beta through the sealed-holdout/cost harness and add a pre-specified size/liquidity control to distinguish a real anomaly from merely holding majors.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "B2 implemented in commit fb9dfa2. npm.cmd test passed 108/108, including raw/risk-adjusted forward return and zero-volatility guard tests.",
-                    "updated_by":  "executor",
-                    "updated_at":  "2026-08-04T12:16:43.3609607Z"
+                    "notes":  "B2 verified with npm.cmd test 108/108. Pulled B3 into EXECUTOR_PENDING.",
+                    "updated_by":  "verifier",
+                    "updated_at":  "2026-08-04T12:17:13.9651239Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -479,7 +479,7 @@
                                           },
                                           {
                                               "id":  "B2",
-                                              "state":  "verifying",
+                                              "state":  "done",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -493,7 +493,7 @@
                                           },
                                           {
                                               "id":  "B3",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs",
                                               "owner":  "executor",
@@ -1769,6 +1769,14 @@
                        "detail":  "B2: added opt-in forward raw and forward risk-adjusted return reporting for each rank mode, with zero/invalid forward volatility guarded out of risk-adjusted scoring.",
                        "commit":  "fb9dfa2",
                        "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 108 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:17:13.9651239Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "B2 forward risk-adjusted reporting verified. npm.cmd test passed 108/108; tests exercise side-by-side raw/risk-adjusted outputs for rank modes and zero-volatility guard behavior.",
+                       "commit":  "e95fd37",
+                       "tests":  "npm.cmd test: 108 passing"
                    }
                ],
     "budget":  {
