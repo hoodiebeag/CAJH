@@ -69,3 +69,13 @@ two disjoint symbol partitions cannot both satisfy the minimum (8 + 8 > 13). An 
 undersized symbol holdout is therefore a **BLOCKED design result**, not a null score or a
 passing fallback to the Q1-only pairs. Route it to `ARCHITECT_PENDING` to choose a pre-registered
 feasible split or explicitly downgrade/remove that holdout axis; never silently lower `minAssets`.
+
+### M6 economic-view gate
+
+Approve M6 only with hand-calculated price-level fixtures showing that a rank formed at
+`close[t]` enters at `close[t+1]`; it must not reuse the IC's `close[t]` to
+`close[t+H]` forward return as a tradable return. The fixture must cover tercile, top-3,
+and top-5 selections, a universe baseline for every reported spread, exact turnover from
+successive holdings, and the stated round-trip cost deduction. Missing next-bar prices must
+exclude the observation. A gross-only or same-bar economic result is fail-closed research
+output, never an execution conclusion.
