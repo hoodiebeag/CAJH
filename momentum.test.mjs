@@ -7,6 +7,7 @@ import {
   dateVectorPermutationP,
   economicMomentumViews,
   effectiveN,
+  applySizeLiquidityControl,
   forwardViewsByRank,
   economicViews,
   perDateIC,
@@ -328,6 +329,48 @@ test("B2 forwardViewsByRank scores raw and risk-adjusted forward returns and gua
   });
   assert.equal(guarded.return.raw.nRows > 0, true);
   assert.equal(guarded.return.riskAdjusted.nRows, 0);
+});
+
+test("B3 sealed low-risk views report raw and risk-adjusted holdout outcomes with a size control", () => {
+  const assets = ["BTC", "ETH", "SOL", "XRP"];
+  const series = new Map(assets.map((asset, assetIndex) => [
+    asset,
+    Array.from({ length: 120 }, (_, i) => candle(i, 100 + assetIndex * 10 + i * (assetIndex + 1)))
+  ]));
+  const control = applySizeLiquidityControl(assets, {
+    BTC: { size: 4, dollarVolume: 100 },
+    ETH: { size: 3, dollarVolume: 100 },
+    SOL: { size: 2, dollarVolume: 100 },
+    XRP: { size: 1, dollarVolume: 100 }
+  }, { excludeLargestN: 1, minDollarVolume: 50 });
+  assert.deepEqual(control.universe, ["ETH", "SOL", "XRP"]);
+  assert.deepEqual(control.excluded, [{ asset: "BTC", reason: "largest" }]);
+
+  const study = runSealedMomentumPanelStudy(series, {
+    primaryUniverse: assets,
+    symbolHoldoutUniverse: [],
+    lookbacks: [2],
+    horizons: [1],
+    transforms: ["raw"],
+    rankModes: ["negVol", "negBeta"],
+    liquidityControls: {
+      BTC: { size: 4, dollarVolume: 100 },
+      ETH: { size: 3, dollarVolume: 100 },
+      SOL: { size: 2, dollarVolume: 100 },
+      XRP: { size: 1, dollarVolume: 100 }
+    },
+    liquidityControl: { excludeLargestN: 1, minDollarVolume: 50 },
+    minAssets: 3,
+    recentHoldoutDates: 2,
+    permutations: 5,
+    bootstrapIterations: 5
+  });
+  assert.deepEqual(study.controlledUniverse, ["ETH", "SOL", "XRP"]);
+  for (const rank of ["negVol", "negBeta"]) {
+    assert.equal(study.byRank[rank].raw.nRows > 0, true);
+    assert.equal(study.byRank[rank].riskAdjusted.nRows > 0, true);
+  }
+  assert.equal(study.exploratory.every((row) => row.rank === "negVol" || row.rank === "negBeta"), true);
 });
 
 test("rank correlation identifies a planted monotonic cross-section", () => {
