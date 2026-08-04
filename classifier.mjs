@@ -442,3 +442,58 @@ export function scoreClassifierHoldouts(rows, {
 }
 
 export const scoreSealedHoldouts = scoreClassifierHoldouts;
+
+export function standardizedCoefficientReadout(model, columns = CLASSIFIER_COLUMNS) {
+  assertScorableModel(model);
+  return columns.map((column, index) => ({ column, coefficient: model.weights[index] ?? 0 }))
+    .sort((a, b) => Math.abs(b.coefficient) - Math.abs(a.coefficient));
+}
+
+export function precisionRecallAtThreshold(scores, labels, threshold = 0.5) {
+  if (scores.length !== labels.length) throw new Error("scores and labels must have the same length");
+  let tp = 0, fp = 0, fn = 0;
+  for (let i = 0; i < scores.length; i++) {
+    const predicted = scores[i] >= threshold;
+    if (predicted && labels[i] === 1) tp++;
+    else if (predicted) fp++;
+    else if (labels[i] === 1) fn++;
+  }
+  return { threshold, tp, fp, fn, precision: tp + fp ? tp / (tp + fp) : null, recall: tp + fn ? tp / (tp + fn) : null };
+}
+
+export function economicLiftNetOfCost(rows, scores, { threshold = 0.5, roundTripCost = 0 } = {}) {
+  if (rows.length !== scores.length) throw new Error("rows and scores must have the same length");
+  const selected = rows.filter((_, i) => scores[i] >= threshold);
+  const net = (subset) => subset.length ? mean(subset.map((row) => Number(row.netR) - roundTripCost)) : null;
+  const selectedNet = net(selected);
+  const baselineNet = net(rows);
+  return {
+    threshold,
+    selectedRows: selected.length,
+    totalRows: rows.length,
+    selectedNet,
+    baselineNet,
+    lift: selectedNet === null || baselineNet === null ? null : selectedNet - baselineNet,
+    roundTripCost
+  };
+}
+
+export function classifierOutcomeReport({ model, columns = CLASSIFIER_COLUMNS, train = [], holdout = [], threshold = 0.5, roundTripCost = 0 } = {}) {
+  assertScorableModel(model);
+  const score = (rows) => rows.map((row) => predictLogistic(model, row));
+  const trainScores = score(train), holdoutScores = score(holdout);
+  return {
+    coefficients: standardizedCoefficientReadout(model, columns),
+    threshold,
+    train: precisionRecallAtThreshold(trainScores, train.map((row) => row.y), threshold),
+    holdout: precisionRecallAtThreshold(holdoutScores, holdout.map((row) => row.y), threshold),
+    economic: economicLiftNetOfCost(holdout, holdoutScores, { threshold, roundTripCost }),
+    caveats: [
+      "AUC and precision/recall are conditional on fixed tpR=4 labels and the structural stop.",
+      "Class imbalance is reported; precision/recall depend on the fixed threshold.",
+      "Whole-symbol holdout is required because entries within a symbol are correlated.",
+      "The surviving-symbol universe is subject to survivorship bias.",
+      "Economic lift is research-only and net of the explicit round-trip cost."
+    ]
+  };
+}

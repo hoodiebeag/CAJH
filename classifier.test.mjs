@@ -6,14 +6,18 @@ import {
   balancedClassWeights,
   buildFeatureMatrix,
   chooseLambdaByCv,
+  classifierOutcomeReport,
+  economicLiftNetOfCost,
   featureVector,
   fitLogisticRegression,
   fitZScoreScaler,
   makeInnerFolds,
   mannWhitneyAuc,
   predictLogistic,
+  precisionRecallAtThreshold,
   scoreClassifierHoldouts,
   scaleTrainHoldout,
+  standardizedCoefficientReadout,
   splitTrainHoldout
 } from "./classifier.mjs";
 
@@ -220,4 +224,41 @@ test("P3 returns unavailable instead of claiming AUC for tiny or single-class ho
   const tiny = scoreClassifierHoldouts(rows, { holdoutSymbols: ["BTC"], permutations: 100, lambdas: [0.1], folds: 2 });
   assert.equal(tiny.primary.status, "unavailable");
   assert.match(tiny.primary.reason, /too small/);
+});
+
+test("P4 reports standardized coefficients and fixed-threshold precision/recall", () => {
+  const rows = [
+    { y: 0, x: [-2], netR: -1 }, { y: 0, x: [-1], netR: -1 },
+    { y: 1, x: [1], netR: 3 }, { y: 1, x: [2], netR: 3 }
+  ];
+  const model = fitLogisticRegression(rows, { lambda: 0.1, iterations: 800 });
+  const coefficients = standardizedCoefficientReadout(model, ["signal"]);
+  assert.equal(coefficients[0].column, "signal");
+  assert.ok(coefficients[0].coefficient > 0);
+  assert.deepEqual(precisionRecallAtThreshold([.2, .4, .8, .9], [0, 1, 1, 1]), {
+    threshold: .5, tp: 2, fp: 0, fn: 1, precision: 1, recall: 2 / 3
+  });
+});
+
+test("P4 calculates economic lift only after explicit round-trip cost", () => {
+  const result = economicLiftNetOfCost(
+    [{ netR: -1 }, { netR: 1 }, { netR: 3 }],
+    [.1, .6, .9],
+    { threshold: .5, roundTripCost: .25 }
+  );
+  assert.equal(result.selectedRows, 2);
+  assert.equal(result.selectedNet, 1.75);
+  assert.equal(result.baselineNet, 0.75);
+  assert.equal(result.lift, 1);
+});
+
+test("P4 outcome report includes required imbalance and survivorship caveats", () => {
+  const rows = [{ y: 0, x: [-2], netR: -1 }, { y: 0, x: [-1], netR: -1 }, { y: 1, x: [1], netR: 3 }, { y: 1, x: [2], netR: 3 }];
+  const model = fitLogisticRegression(rows, { lambda: 0.1, iterations: 800 });
+  const report = classifierOutcomeReport({ model, columns: ["signal"], train: rows, holdout: rows, roundTripCost: .25 });
+  assert.equal(report.coefficients[0].column, "signal");
+  assert.equal(report.threshold, .5);
+  assert.equal(report.economic.roundTripCost, .25);
+  assert.equal(report.caveats.some((text) => text.includes("survivorship")), true);
+  assert.equal(report.caveats.some((text) => text.includes("Class imbalance")), true);
 });
