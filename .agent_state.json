@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "VERIFIER_PENDING",
+                    "status":  "EXECUTOR_PENDING",
                     "target_file":  "momentum.mjs, momentum.test.mjs",
-                    "objective":  "Tag every rebalance date bull/bear/flat from BTC versus its 200-day MA and report IC/count per regime without changing the primary full-sample statistic.",
+                    "objective":  "Build sealed whole-symbol primary holdout plus recent-month secondary holdout. Freeze stable-13 primary; run LxH exploratory grid only on train, non-overlapping at each H, with one BH-FDR family across grid/transforms/regimes.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "M4 implemented in commit 56af5f2. npm.cmd test passed 97/97, including regime tagging/summarization test.",
-                    "updated_by":  "executor",
-                    "updated_at":  "2026-08-04T12:07:02.4573193Z"
+                    "notes":  "M4 verified with npm.cmd test 97/97. Pulled M5 into EXECUTOR_PENDING.",
+                    "updated_by":  "verifier",
+                    "updated_at":  "2026-08-04T12:07:29.7298123Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -407,7 +407,7 @@
                                           },
                                           {
                                               "id":  "M4",
-                                              "state":  "verifying",
+                                              "state":  "done",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -421,7 +421,7 @@
                                           },
                                           {
                                               "id":  "M5",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -1689,6 +1689,14 @@
                        "detail":  "M4: added BTC 200-day MA regime tagging for rebalance dates and regime IC/count summaries without changing the primary full-sample IC statistic.",
                        "commit":  "56af5f2",
                        "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 97 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:07:29.7298123Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "M4 regime overlay verified. npm.cmd test passed 97/97; focused test confirms BTC-vs-200MA tags produce regime IC/count summaries without changing full-sample mean IC.",
+                       "commit":  "1677415",
+                       "tests":  "npm.cmd test: 97 passing"
                    }
                ],
     "budget":  {
