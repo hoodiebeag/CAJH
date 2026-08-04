@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "storage.js, monitor.js, bot.js, storage-preflight.test.mjs, README.md",
     "objective": "Require an explicit, writable durable DATA_DIR and healthy persistence/recovery preflight before LIVE_TRADING can ever be resumed. Keep analysis/backtests usable without this preflight and document the deployment contract.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-015 verified: npm.cmd test ran 73 tests and all passed. Scheduler tests cover scanner failure rollback, config persistence failure rollback, successful timestamp persistence, and missing-channel containment without cron rejection.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:35:58.187Z"
+    "notes": "R-016 executor handoff: added explicit writable DATA_DIR storage preflight to boot and resume paths; analysis/research storage remains usable when DATA_DIR is unset; added storage-preflight coverage. npm.cmd test passed 79/79.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:41:15.808Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -264,7 +264,7 @@
       },
       {
         "id": "R-016",
-        "state": "executing",
+        "state": "verifying",
         "severity": "high",
         "file": "storage.js, monitor.js, bot.js, storage-preflight.test.mjs, README.md",
         "owner": "executor",
@@ -1513,6 +1513,14 @@
       "detail": "R-015 scheduled scan containment verified with npm.cmd test 73/73. Pulled R-016 into EXECUTOR_PENDING.",
       "commit": "2547aa8",
       "tests": "73 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:41:15.808Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-016: required explicit writable DATA_DIR plus healthy persistence preflight before boot/resume can enable live trading; default research/backtest storage remains usable without DATA_DIR; documented durable deployment contract.",
+      "commit": "4f56e40",
+      "tests": "79 passing (npm.cmd test); node --check storage.js monitor.js bot.js storage-preflight.test.mjs"
     }
   ],
   "budget": {
