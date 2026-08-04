@@ -162,6 +162,31 @@ export function loadBars(pair) {
 /** Load stored bars keyed by minute, for resuming/merging a backfill. */
 const loadBarMap = (pair) => new Map(loadBars(pair).map((b) => [b.time, b]));
 
+export function resampleBars(bars, tfMinutes, { nowSec = Infinity, gapPolicy = "allow" } = {}) {
+  if (!Number.isInteger(tfMinutes) || tfMinutes < 1) throw new Error("tfMinutes must be a positive integer");
+  if (gapPolicy !== "allow" && gapPolicy !== "error") throw new Error("gapPolicy must be allow or error");
+  const span = tfMinutes * 60;
+  const sorted = bars.map(validateBar).sort((a, b) => a.time - b.time);
+  const gaps = [];
+  for (let i = 1; i < sorted.length; i++) {
+    const gap = sorted[i].time - sorted[i - 1].time;
+    if (gap > MINUTE) gaps.push({ from: sorted[i - 1].time, to: sorted[i].time, seconds: gap - MINUTE });
+  }
+  if (gapPolicy === "error" && gaps.length) throw new Error(`candle gap detected: ${gaps[0].seconds}s missing after ${gaps[0].from}`);
+  const out = new Map();
+  for (const b of sorted) {
+    const t = Math.floor(b.time / span) * span;
+    if (t + span > nowSec) continue;
+    let c = out.get(t);
+    if (!c) { c = { time: t, open: b.open, high: b.high, low: b.low, close: b.close, volume: 0 }; out.set(t, c); }
+    if (b.high > c.high) c.high = b.high;
+    if (b.low  < c.low)  c.low  = b.low;
+    c.close   = b.close;
+    c.volume += b.volume;
+  }
+  return { candles: [...out.values()].sort((a, b) => a.time - b.time), gaps };
+}
+
 /**
  * Resample stored 1m bars up to `tfMinutes` candles, in the same shape trader.fetchOHLC
  * returns ({ time, open, high, low, close, volume }, OHLCV as strings) — a drop-in for
@@ -169,18 +194,8 @@ const loadBarMap = (pair) => new Map(loadBars(pair).map((b) => [b.time, b]));
  * Kraken's 720-candle live cap.
  */
 export function loadCandles(pair, tfMinutes) {
-  const span = tfMinutes * 60;
-  const out = new Map();
-  for (const b of loadBars(pair)) {
-    const t = Math.floor(b.time / span) * span;
-    let c = out.get(t);
-    if (!c) { c = { time: t, open: b.open, high: b.high, low: b.low, close: b.close, volume: 0 }; out.set(t, c); }
-    if (b.high > c.high) c.high = b.high;
-    if (b.low  < c.low)  c.low  = b.low;
-    c.close   = b.close;       // bars are stored ascending, so the last one wins
-    c.volume += b.volume;
-  }
-  return [...out.values()].sort((a, b) => a.time - b.time).map((c) => ({
+  const { candles } = resampleBars(loadBars(pair), tfMinutes);
+  return candles.map((c) => ({
     time: c.time,
     open: String(c.open), high: String(c.high), low: String(c.low), close: String(c.close), volume: String(c.volume),
   }));

@@ -2,6 +2,7 @@
 import fs from "fs";
 import path from "path";
 import { loadWatchlist, symbolToKrakenId } from "./researchlib.mjs";
+import { loadBars, resampleBars } from "./data.js";
 
 const dataDir = () => process.env.DATA_DIR || ".";
 const finite = (x) => Number.isFinite(Number(x));
@@ -41,29 +42,40 @@ export function dataManifest(watchlist = loadWatchlist()) {
  * needlessly expensive; each timeframe cache is invalidated when its source changes.
  */
 export function loadResearchCandles(pair, minutes = 1440) {
+  return loadResearchCandlesWithQuality(pair, minutes).candles;
+}
+
+export function loadResearchCandlesWithQuality(pair, minutes = 1440, { gapPolicy = "allow", nowSec = Infinity } = {}) {
   if (!/^[A-Za-z0-9]+$/.test(pair)) throw new Error(`Invalid pair: ${pair}`);
   if (!Number.isInteger(minutes) || minutes < 1) throw new Error("minutes must be a positive integer");
   const source = path.join(dataDir(), "candles", `${pair}.csv`);
-  if (!fs.existsSync(source)) return [];
+  if (!fs.existsSync(source)) return { schema: "cajh-research-cache/v1", minutes, gapPolicy, nowSec: null, candles: [], gaps: [] };
+  if (gapPolicy !== "allow" && gapPolicy !== "error") throw new Error("gapPolicy must be allow or error");
+  const cacheNowSec = Number.isFinite(nowSec) ? nowSec : null;
   const cacheDir = path.join(dataDir(), "research-cache", `tf-${minutes}`);
   const cache = path.join(cacheDir, `${pair}.json`); const sourceStat = fs.statSync(source);
   if (fs.existsSync(cache)) {
-    const saved = JSON.parse(fs.readFileSync(cache, "utf8"));
-    if (saved.sourceMtimeMs === sourceStat.mtimeMs && saved.sourceSize === sourceStat.size) return saved.candles;
+    try {
+      const saved = JSON.parse(fs.readFileSync(cache, "utf8"));
+      if (
+        saved.schema === "cajh-research-cache/v1" &&
+        saved.sourceMtimeMs === sourceStat.mtimeMs &&
+        saved.sourceSize === sourceStat.size &&
+        saved.minutes === minutes &&
+        saved.gapPolicy === gapPolicy &&
+        saved.nowSec === cacheNowSec &&
+        Array.isArray(saved.candles) &&
+        Array.isArray(saved.gaps)
+      ) return saved;
+    } catch {
+      // Corrupt caches are disposable derivations; rebuild from validated candle CSV.
+    }
   }
-  const text = fs.readFileSync(source, "utf8"); const out = new Map(), span = minutes * 60;
-  for (const line of text.split("\n").slice(1)) {
-    if (!line) continue;
-    const [time, open, high, low, close, volume] = line.split(",").map(Number);
-    if (![time, open, high, low, close, volume].every(Number.isFinite)) continue;
-    const bucket = Math.floor(time / span) * span; let bar = out.get(bucket);
-    if (!bar) { bar = { time: bucket, open, high, low, close, volume: 0 }; out.set(bucket, bar); }
-    else { bar.high = Math.max(bar.high, high); bar.low = Math.min(bar.low, low); bar.close = close; }
-    bar.volume += volume;
-  }
-  const candles = [...out.values()]; fs.mkdirSync(cacheDir, { recursive: true });
-  fs.writeFileSync(cache, JSON.stringify({ sourceMtimeMs: sourceStat.mtimeMs, sourceSize: sourceStat.size, candles }) + "\n");
-  return candles;
+  const { candles, gaps } = resampleBars(loadBars(pair), minutes, { gapPolicy, nowSec });
+  const payload = { schema: "cajh-research-cache/v1", sourceMtimeMs: sourceStat.mtimeMs, sourceSize: sourceStat.size, minutes, gapPolicy, nowSec: cacheNowSec, candles, gaps };
+  fs.mkdirSync(cacheDir, { recursive: true });
+  fs.writeFileSync(cache, JSON.stringify(payload) + "\n");
+  return payload;
 }
 
 export const loadDailyCandles = (pair) => loadResearchCandles(pair, 1440);
