@@ -8,8 +8,9 @@
 
 import fs   from "fs";
 import path from "path";
-import { getOpenTrades, isTradingEnabled } from "./monitor.js";
-import { loadDecisionJournal } from "./storage.js";
+import { getOpenTrades, isTradingEnabled, getHaltState, getMonitorHealth } from "./monitor.js";
+import { getStorageHealth, loadConfig, loadDecisionJournal } from "./storage.js";
+import { getRecentDecisions } from "./logger.js";
 
 const SOURCE_FILES = [
   "tournament.mjs", "researchlab.mjs", "portfolio.mjs",
@@ -25,7 +26,15 @@ const CODE_HINTS = [
   "backtest", "position siz", "filter", "your "
 ];
 
-export function buildLiveContext(state) {
+function latestRoadmapVerdict(maxBytes = 120000) {
+  try {
+    const text = fs.readFileSync(path.join(process.cwd(), "ROADMAP.md"), "utf8").slice(-maxBytes);
+    const matches = [...text.matchAll(/\*\*VERDICT:\s*([^*]+)\*\*/gi)];
+    return matches.at(-1)?.[1].trim() || "not recorded";
+  } catch { return "not available"; }
+}
+
+export function buildLiveContext(state, { maxChars = 12000 } = {}) {
   const trading = isTradingEnabled() ? "active" : "halted";
   const open    = getOpenTrades();
   const positions = open.length
@@ -35,8 +44,13 @@ export function buildLiveContext(state) {
     : "none";
   const watch = (state.watchlist || []).map(a => a.symbol).join(", ") || "empty";
   const journal = loadDecisionJournal({ limit: 100 });
+  const recentDecisions = getRecentDecisions({ limit: 20 });
+  const monitorHealth = getMonitorHealth();
+  const halt = getHaltState();
+  const storageHealth = getStorageHealth();
+  const config = loadConfig();
   const exits = journal.filter((event) => event.type === "exit" && Number.isFinite(event.exit?.pnl));
-  const setups = journal.filter((event) => event.type === "setup_decision");
+  const setups = journal.filter((event) => event.type === "setup_decision" || event.type === "asset_decision");
   const passed = setups.filter((event) => !event.result?.traded).length;
   const totalPnl = exits.reduce((sum, event) => sum + event.exit.pnl, 0);
   const wins = exits.filter((event) => event.exit.pnl > 0).length;
@@ -48,7 +62,12 @@ export function buildLiveContext(state) {
     return `${event.at}: ${event.type}`;
   }).join("\n") || "no persisted decisions yet";
 
-  return [
+  const safeConfig = {
+    scanChannelConfigured: Boolean(config.scanChannelId),
+    watchlistSymbols: (config.watchlist || []).map((asset) => asset.symbol).filter(Boolean).slice(0, 100),
+    lastScanTime: config.lastScanTime ?? null
+  };
+  const context = [
     `cajh live state:`,
     `- trading: ${trading}`,
     `- watchlist: ${watch}`,
@@ -56,10 +75,17 @@ export function buildLiveContext(state) {
     `- live entry gates: anticipation swing-low trigger, per-timeframe stop band, min stop floor, monitor health, durable halt; no alignment/trend gate`,
     `- sizing/exits: risk-based at 0.5% cash risk, 20% notional cap, six-position cap with winner rotation, software-polled stop/TP`,
     `- open positions:\n${positions}`,
+    `- effective safe config: ${JSON.stringify(safeConfig)}`,
+    `- halt state: ${JSON.stringify({ active: halt.active, reason: halt.reason, haltedAt: halt.haltedAt })}`,
+    `- monitor health: ${JSON.stringify({ ok: monitorHealth.ok, hydrated: monitorHealth.hydrated, reconciled: monitorHealth.reconciled, persistenceOk: monitorHealth.persistenceOk, tickOk: monitorHealth.tickOk, stale: monitorHealth.stale, exitProtection: monitorHealth.exitProtection })}`,
+    `- storage health: ${JSON.stringify(Object.fromEntries(Object.entries(storageHealth).map(([key, value]) => [key, { ok: value.ok, source: value.source }])))}`,
+    `- latest roadmap verdict: ${latestRoadmapVerdict()}`,
+    `- in-memory decision records: ${recentDecisions.length} (persisted journal is authoritative when present)`,
     `- last scan: ${state.lastScanTime ?? "none yet"}`,
     `- durable decision history: ${journal.length} recent records loaded; ${setups.length} evaluated setups (${passed} passed), ${exits.length} realized exits, ${wins} wins, realized P&L $${totalPnl.toFixed(2)}`,
     `- most recent decisions (persisted across deployments when DATA_DIR is a mounted volume):\n${recent}`
   ].join("\n");
+  return context.length <= maxChars ? context : `${context.slice(0, Math.max(0, maxChars - 26))}\n[context truncated]`;
 }
 
 export const RESEARCH_MISSION = `
