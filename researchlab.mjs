@@ -143,3 +143,23 @@ export function saveExperiment(kind, input, result) {
   fs.writeFileSync(file, JSON.stringify(payload, null, 2) + "\n");
   return file;
 }
+
+/** Return the newest intact result of a research family, without rerunning it. */
+export function loadLatestExperiment(kind) {
+  if (!/^[a-z0-9-]+$/i.test(kind)) throw new Error("Experiment kind must be alphanumeric or hyphenated");
+  const dir = path.join(dataDir(), "research-runs");
+  if (!fs.existsSync(dir)) return null;
+  const files = fs.readdirSync(dir)
+    .filter((name) => name.endsWith(`-${kind}.json`))
+    .sort()
+    .reverse();
+  for (const name of files) {
+    try {
+      const record = JSON.parse(fs.readFileSync(path.join(dir, name), "utf8"));
+      if (record?.schema === "cajh-research-run/v1" && record.kind === kind && record.result) return record;
+    } catch {
+      // A partial/corrupt run must never be treated as evidence.
+    }
+  }
+  return null;
+}

@@ -33,14 +33,31 @@ function asksForStrategyResearch(text) {
 
 /** Run the same local tournament used by research.js before asking the Discord AI to interpret it. */
 async function currentResearchEvidence(state) {
-  const { runTournament } = await import("./tournament.mjs");
-  const report = runTournament({ watchlist: state.watchlist || [] });
-  const eligible = report.input.assets.length;
-  if (!eligible) return "Research runner result: zero eligible datasets. This is a data/watchlist configuration problem, not evidence for or against a strategy. Do not speculate about signal filters; state that the configured research watchlist has no assets with all required local timeframes.";
+  const { loadLatestExperiment } = await import("./researchlab.mjs");
+  const report = loadLatestExperiment("tournament");
+  if (!report) return "No persisted tournament result is available yet. Do not run a full tournament in response to this message. Tell the user to use !tournament, which deliberately runs the expensive study and persists its result for later discussion.";
+  const eligible = report.input?.assets?.length ?? 0;
+  if (!eligible) return "Latest persisted tournament result: zero eligible datasets. This is a data/watchlist configuration problem, not evidence for or against a strategy.";
   const rows = report.result.rows.map((row) =>
     `${row.id}: train ${row.train.trades} trades, ${row.train.avgR.toFixed(3)}R/trade; holdout ${row.holdout.trades} trades, ${row.holdout.avgR.toFixed(3)}R/trade; promoted=${row.promoted}`
   );
-  return `Research runner result (just executed; ${eligible} eligible assets):\n${rows.join("\n")}\nVerdict: ${report.result.verdict}`;
+  return `Latest persisted tournament (${report.createdAt}; ${eligible} eligible assets):\n${rows.join("\n")}\nVerdict: ${report.result.verdict}`;
+}
+
+/** Explicit, intentionally slow research job. General Discord conversation reads its saved result. */
+export async function handleTournament(message, state) {
+  await message.reply("🔬 Running the full historical tournament and saving the result for CAJH's future analysis. This can take a few minutes.");
+  const [{ runTournament }, { saveExperiment }] = await Promise.all([
+    import("./tournament.mjs"), import("./researchlab.mjs")
+  ]);
+  const report = runTournament({ watchlist: state.watchlist || [] });
+  saveExperiment("tournament", report.input, report.result);
+  const eligible = report.input.assets.length;
+  const promoted = report.result.rows.filter((row) => row.promoted).map((row) => row.id);
+  await message.channel.send(
+    `🔬 Tournament saved — ${eligible} eligible assets; ${report.result.rows.length} families tested; ` +
+    (promoted.length ? `promoted: ${promoted.join(", ")}.` : "no candidate promoted.")
+  );
 }
 
 // Human-readable date span for a candle series — run transparency (deep store vs live 720).
