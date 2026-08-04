@@ -230,7 +230,9 @@ test("economicMomentumViews reports tercile/top-N gross, turnover, and explicit 
   assert.equal(views.observations, 2);
   assert.equal(views.tercile.grossSpread, ((0.06 - -0.01) + (0.04 - 0)) / 2);
   assert.equal(views.tercile.netSpread, (((0.06 - -0.01) - 0.02) + ((0.04 - 0) - 0.01)) / 2);
-  assert.deepEqual(views.topN["1"], { avgTurnover: 1, grossReturn: 0.05, netReturn: 0.04 });
+  assert.equal(views.topN["1"].avgTurnover, 1);
+  assert.equal(views.topN["1"].grossReturn, 0.05);
+  assert.ok(Math.abs(views.topN["1"].netReturn - 0.04) < 1e-12);
   assert.equal(views.topN["2"].avgTurnover, 0.5);
   assert.equal(views.topN["2"].grossReturn, ((0.06 + 0.03) / 2 + (0.04 + 0.02) / 2) / 2);
   assert.equal(views.topN["2"].netReturn, (((0.06 + 0.03) / 2 - 0.01) + ((0.04 + 0.02) / 2)) / 2);

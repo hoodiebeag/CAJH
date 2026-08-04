@@ -306,11 +306,12 @@ export function buildMomentumPanel(series, {
   const rows = [];
   const q1Only = [];
 
-  for (let i = lookback; i + entryDelay + horizon < calendarSource.length; i += step) {
+  if (entryDelay >= horizon) throw new Error("entryDelay must be smaller than horizon");
+  for (let i = lookback; i + horizon < calendarSource.length; i += step) {
     const date = dateOf(calendarSource[i].time);
     const trailingDate = dateOf(calendarSource[i - lookback].time);
     const entryDate = dateOf(calendarSource[i + entryDelay].time);
-    const forwardDate = dateOf(calendarSource[i + entryDelay + horizon].time);
+    const forwardDate = dateOf(calendarSource[i + horizon].time);
     const bucket = [];
 
     for (const asset of names) {
