@@ -404,6 +404,60 @@ back to 2026-01-01.
 Working rule going forward: a signal must clear FDR **and** exceed cost. Neither alone is
 sufficient, and this run demonstrates why each check catches what the other misses.
 
+### Momentum M7: KILLED on the sealed harness
+
+**Pre-registration (frozen before holdout):** L=30d · H=7d · rebalance=weekly · primary
+transform = **residual (T2)**, β-window 90d · holdout = time plus whole-symbol (recent:
+180d; whole-symbol: ATOM/DOT/LTC). Universe stable-13:
+[BTC, ETH, SOL, XRP, ADA, DOGE, AVAX, LINK, DOT, LTC, BCH, ATOM, XLM]. Q1-2026-only
+excluded early: [NEAR, FIL, APT, INJ, TAO, TIA, SUI].
+
+The current harness was run with 1,000 date permutations and the stored stable-13 data.
+The whole-symbol arm is not estimable here: five held symbols are below the registered
+eight-asset cross-sectional minimum, so it is reported as unavailable rather than
+zero-filled.
+
+**Primary confirmatory result (residual IC, stable-13):**
+
+| window | N assets | D dates | mean IC | block-perm p | 95% CI | detectable-IC floor |
+|---|---:|---:|---:|---:|---|---|
+| train | 10 | 22 | 0.1114 | 0.5375 | [-0.0841, 0.3144] | — |
+| **sealed recent holdout** | 10 | 26 | -0.1026 | 0.9600 | [-0.2712, 0.0532] | — |
+| sealed whole-symbol holdout | 5 (<8 required) | 0 | — | — | — | — |
+
+**Interpretation matrix (residual vs raw, primary cell):**
+
+| | raw IC | residual IC | reading |
+|---|---:|---:|---|
+| train | — | 0.1114 (p=0.5375) | positive point estimate, not significant |
+| holdout | — | -0.1026 (p=0.9600) | sign reversal; no confirmation |
+
+**Per-regime (residual IC, train):**
+
+| regime | dates | mean IC | p |
+|---|---:|---:|---:|
+| BTC bull | 22 | 0.1114 | — |
+| BTC bear | 0 | — | — |
+| BTC flat | 0 | — | — |
+
+**Exploratory grid:** all 36 train-only cells were included in one grid/transform/regime
+BH-FDR family. No cell survived correction (all reported q-values were 1.0); the largest
+uncorrected residual point estimate was 0.3433 at L=14/H=30, p=0.1019.
+
+**Economic (enter close_{t+1}, round-trip cost 0.9%):**
+
+| metric | gross | net |
+|---|---:|---:|
+| top-tercile − universe forward return | -0.8410% | -1.0728% (turnover 25.76%) |
+| top-3 harvest | -0.8410% | -1.0728% |
+| top-5 harvest | -0.1319% | -0.3447% (turnover 23.64%) |
+
+**VERDICT: KILLED** — deciding numbers: train p=0.5375, recent-holdout IC=-0.1026,
+and net top-tercile spread=-1.0728%.
+
+**Survivorship caveat:** the universe is survivors-only; this weakens any positive result,
+while the present null/sign reversal is conservative evidence against a robust edge.
+
 ### Trade intensity: closed. 79× more data killed it.
 
 The Executor caught a factual error in the Architect's assignment that turned out to
