@@ -15,7 +15,8 @@ import { loadChart, saveConfig, symbolToKrakenId, isOwner } from "./storage.js";
 import { getCurrentPrice, placeSell, getHoldings } from "./trader.js";
 import {
   haltManual, resumeManual, isTradingEnabled,
-  getTrade, removeTrade, saveTradeState, postTradeClosed, getOpenTrades, reconcileHoldings
+  getTrade, removeTrade, saveTradeState, postTradeClosed, getOpenTrades, reconcileHoldings,
+  applyConfirmedSellToTrade
 } from "./monitor.js";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -84,13 +85,15 @@ export async function handleSell(message, symbol, percentArg) {
     const quote = await getCurrentPrice(upper);
     const sold  = await placeSell({ symbol: upper, volume, price: quote });
 
-    if (pct >= 100) {
+    const result = applyConfirmedSellToTrade(trade, sold);
+    if (result.status === "invalid") throw new Error("confirmed sell volume is invalid");
+    if (result.status === "closed") {
       await postTradeClosed(message.channel, trade, sold.price, "manual");
       removeTrade(upper);
     } else {
-      trade.volume -= sold.volume;   // actual executed volume, not the requested amount
-      saveTradeState();
-      await message.reply(`✅ Sold ${pct}% of **${upper}** at ~$${sold.price}. Remaining: ${trade.volume} ${upper}.`);
+      const persisted = saveTradeState();
+      await message.reply(`✅ Sold ${pct}% of **${upper}** at ~$${sold.price}. Remaining: ${trade.volume} ${upper}.` +
+        (persisted ? "" : " Persistence failed; run !reconcile."));
     }
   } catch (err) {
     logger.error(`[COMMAND] Sell failed for ${upper}:`, err.message);
