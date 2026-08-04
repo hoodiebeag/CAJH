@@ -12,6 +12,7 @@ import { getOpenTrades, isTradingEnabled } from "./monitor.js";
 import { loadDecisionJournal } from "./storage.js";
 
 const SOURCE_FILES = [
+  "tournament.mjs", "researchlab.mjs", "portfolio.mjs",
   "bot.js", "strategy.js", "scanner.js", "backtest.js", "trader.js",
   "monitor.js", "commands.js", "chart.js", "storage.js",
   "analyzer.js", "context.js"

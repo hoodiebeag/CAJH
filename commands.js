@@ -27,6 +27,22 @@ const MODEL     = "claude-sonnet-4-6";
 // scanner still calls fetchCandles directly — only analysis/backtests read the store.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function asksForStrategyResearch(text) {
+  return /\b(strategy|experiment|research|holdout|backtest|profitable|profitability|what.*learned|what.*wrong|what.*right)\b/i.test(text);
+}
+
+/** Run the same local tournament used by research.js before asking the Discord AI to interpret it. */
+async function currentResearchEvidence(state) {
+  const { runTournament } = await import("./tournament.mjs");
+  const report = runTournament({ watchlist: state.watchlist || [] });
+  const eligible = report.input.assets.length;
+  if (!eligible) return "Research runner result: zero eligible datasets. This is a data/watchlist configuration problem, not evidence for or against a strategy. Do not speculate about signal filters; state that the configured research watchlist has no assets with all required local timeframes.";
+  const rows = report.result.rows.slice(0, 3).map((row) =>
+    `${row.id}: train ${row.train.trades} trades, ${row.train.avgR.toFixed(3)}R/trade; holdout ${row.holdout.trades} trades, ${row.holdout.avgR.toFixed(3)}R/trade; promoted=${row.promoted}`
+  );
+  return `Research runner result (just executed; ${eligible} eligible assets):\n${rows.join("\n")}\nVerdict: ${report.result.verdict}`;
+}
+
 // Human-readable date span for a candle series — run transparency (deep store vs live 720).
 const spanOf = (c) => (c?.length ? `${new Date(parseInt(c[0].time) * 1000).toISOString().slice(0, 10)} → ${new Date(parseInt(c.at(-1).time) * 1000).toISOString().slice(0, 10)}` : "empty");
 async function tfCandles(id) {
@@ -384,6 +400,10 @@ export async function handleGeneral(message, userMessage, state) {
     `(0.5% of cash per trade), use no live alignment/trend gate, and exit on software-polled stop-loss / take-profit. Answer questions about yourself,\n` +
     `your live state, durable trade/decision history, and your own code accurately and concisely. Use the persisted decision history below when asked what went right or wrong; do not invent missing evidence. If you don't know, say so.\n\n` +
     buildLiveContext(state);
+
+  if (asksForStrategyResearch(userMessage)) {
+    system += `\n\n${await currentResearchEvidence(state)}`;
+  }
 
   if (looksLikeCodeQuestion(userMessage) && isOwner(message.author.id)) {
     system += `\n\nYour current source code follows — use it to answer accurately:\n` + readSource();
