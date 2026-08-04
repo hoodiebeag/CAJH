@@ -331,3 +331,114 @@ export function chooseLambdaByCv(rows, {
     model
   };
 }
+
+function seededRandom(seed) {
+  let state = (seed >>> 0) || 1;
+  return () => {
+    state = (1664525 * state + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+function shuffledLabels(rows, random) {
+  const labels = rows.map((row) => row.y);
+  for (let i = labels.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [labels[i], labels[j]] = [labels[j], labels[i]];
+  }
+  return rows.map((row, i) => ({ ...row, y: labels[i] }));
+}
+
+function unavailable(reason, extra = {}) {
+  return { status: "unavailable", reason, trainRows: 0, holdoutRows: 0, trainAuc: null, holdoutAuc: null, gap: null, K: 0, validNull: 0, exceedances: 0, p: null, ...extra };
+}
+
+function scoreSealedSplit(trainRows, holdoutRows, {
+  permutations = 100,
+  seed = 20260804,
+  lambdas = DEFAULT_LAMBDAS,
+  folds = 3,
+  iterations = 800,
+  learningRate = 0.1,
+  minHoldoutRows = 4
+} = {}) {
+  if (holdoutRows.length < minHoldoutRows) return unavailable("holdout too small", { trainRows: trainRows.length, holdoutRows: holdoutRows.length, K: permutations });
+  if (new Set(holdoutRows.map((row) => row.y)).size < 2) return unavailable("holdout has one class", { trainRows: trainRows.length, holdoutRows: holdoutRows.length, K: permutations });
+  if (new Set(trainRows.map((row) => row.y)).size < 2) return unavailable("train has one class", { trainRows: trainRows.length, holdoutRows: holdoutRows.length, K: permutations });
+  if (permutations < 100) return unavailable("fewer than 100 requested permutations", { trainRows: trainRows.length, holdoutRows: holdoutRows.length, K: permutations });
+
+  let scaled;
+  let selected;
+  try {
+    scaled = scaleTrainHoldout({ columns: [], train: trainRows, holdout: holdoutRows });
+    selected = chooseLambdaByCv(scaled.train, { lambdas, folds, iterations, learningRate });
+  } catch (error) {
+    return unavailable(`model fit failed: ${error.message}`, { trainRows: trainRows.length, holdoutRows: holdoutRows.length, K: permutations });
+  }
+  const trainScores = scaled.train.map((row) => predictLogistic(selected.model, row));
+  const holdoutScores = scaled.holdout.map((row) => predictLogistic(selected.model, row));
+  const trainAuc = mannWhitneyAuc(trainScores, scaled.train.map((row) => row.y));
+  const holdoutAuc = mannWhitneyAuc(holdoutScores, scaled.holdout.map((row) => row.y));
+  if (trainAuc === null || holdoutAuc === null) return unavailable("AUC unavailable for single-class data", { trainRows: trainRows.length, holdoutRows: holdoutRows.length, K: permutations });
+
+  const random = seededRandom(seed);
+  const nullAucs = [];
+  const selectedLambdas = [];
+  const scalerMeans = [];
+  for (let k = 0; k < permutations; k++) {
+    try {
+      const permutedTrain = shuffledLabels(trainRows, random);
+      if (new Set(permutedTrain.map((row) => row.y)).size < 2) continue;
+      const permuted = scaleTrainHoldout({ columns: [], train: permutedTrain, holdout: holdoutRows });
+      const nullSelected = chooseLambdaByCv(permuted.train, { lambdas, folds, iterations, learningRate });
+      const scores = permuted.holdout.map((row) => predictLogistic(nullSelected.model, row));
+      const auc = mannWhitneyAuc(scores, permuted.holdout.map((row) => row.y));
+      if (auc === null) continue;
+      nullAucs.push(auc);
+      selectedLambdas.push(nullSelected.lambda);
+      scalerMeans.push(permuted.scaler.means);
+    } catch {
+      // A failed permutation is invalid, never silently counted as a null result.
+    }
+  }
+  const exceedances = nullAucs.filter((auc) => auc >= holdoutAuc).length;
+  if (nullAucs.length < 100) return unavailable("fewer than 100 valid permutations", { trainRows: trainRows.length, holdoutRows: holdoutRows.length, K: permutations, validNull: nullAucs.length, exceedances, nullAucs, selectedLambdas, scalerMeans });
+  return {
+    status: "available",
+    trainRows: trainRows.length,
+    holdoutRows: holdoutRows.length,
+    positives: { train: trainRows.filter((row) => row.y === 1).length, holdout: holdoutRows.filter((row) => row.y === 1).length },
+    trainAuc,
+    holdoutAuc,
+    gap: trainAuc - holdoutAuc,
+    K: permutations,
+    validNull: nullAucs.length,
+    exceedances,
+    p: (exceedances + 1) / (nullAucs.length + 1),
+    selectedLambda: selected.lambda,
+    converged: selected.model.converged,
+    scalerMeans: scaled.scaler.means,
+    nullAucs,
+    selectedLambdas,
+    scalerMeans
+  };
+}
+
+export function scoreClassifierHoldouts(rows, {
+  holdoutSymbols = [],
+  recentHoldoutTime = null,
+  ...options
+} = {}) {
+  const held = new Set(holdoutSymbols);
+  const primaryTrain = rows.filter((row) => !held.has(row.symbol));
+  const primaryHoldout = rows.filter((row) => held.has(row.symbol));
+  const recentPool = primaryTrain;
+  const recent = recentHoldoutTime == null ? [] : recentPool.filter((row) => row.t >= recentHoldoutTime);
+  const recentTrain = recentHoldoutTime == null ? [] : recentPool.filter((row) => row.t < recentHoldoutTime);
+  return {
+    primary: scoreSealedSplit(primaryTrain, primaryHoldout, options),
+    recent: scoreSealedSplit(recentTrain, recent, options)
+  };
+}
+
+export const scoreSealedHoldouts = scoreClassifierHoldouts;

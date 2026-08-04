@@ -12,6 +12,7 @@ import {
   makeInnerFolds,
   mannWhitneyAuc,
   predictLogistic,
+  scoreClassifierHoldouts,
   scaleTrainHoldout,
   splitTrainHoldout
 } from "./classifier.mjs";
@@ -168,4 +169,55 @@ test("P2 refuses to score a non-converged CV fit", () => {
     () => chooseLambdaByCv(rows, { lambdas: [0.1], folds: 2, iterations: 1, learningRate: 0.1 }),
     /did not converge/
   );
+});
+
+test("P3 refits the full pipeline per permutation and reports the exact p formula", () => {
+  const rows = Array.from({ length: 12 }, (_, i) => ({
+    symbol: i < 8 ? (i % 2 ? "ETH" : "BTC") : "SOL",
+    t: i + 1,
+    y: i % 2,
+    x: [i - 5]
+  }));
+  const result = scoreClassifierHoldouts(rows, {
+    holdoutSymbols: ["SOL"], recentHoldoutTime: 5, permutations: 100,
+    lambdas: [0.1, 1], folds: 2, iterations: 800, seed: 17
+  });
+
+  assert.equal(result.primary.status, "available");
+  assert.equal(result.primary.K, 100);
+  assert.equal(result.primary.validNull, 100);
+  assert.equal(result.primary.nullAucs.length, 100);
+  assert.equal(result.primary.selectedLambdas.length, 100);
+  assert.equal(result.primary.scalerMeans[0][0], -1.5);
+  assert.equal(result.primary.p, (result.primary.exceedances + 1) / (result.primary.validNull + 1));
+  assert.equal(result.recent.status, "available");
+  assert.equal(result.recent.trainRows, 4);
+  assert.equal(result.recent.holdoutRows, 4);
+});
+
+test("P3 holdout rows cannot influence train scaling or lambda selection", () => {
+  const train = Array.from({ length: 8 }, (_, i) => ({ symbol: "BTC", t: i + 1, y: i % 2, x: [i] }));
+  const make = (values) => scoreClassifierHoldouts([...train, ...values.map((x, i) => ({ symbol: "ETH", t: i + 9, y: i % 2, x: [x] }))], {
+    holdoutSymbols: ["ETH"], permutations: 100, lambdas: [0.1, 1], folds: 2, iterations: 800, seed: 2
+  });
+  const base = make([1000, 1001, 1002, 1003]);
+  const changed = make([-1000, -999, -998, -997]);
+  assert.equal(base.primary.scalerMeans[0][0], 3.5);
+  assert.equal(changed.primary.scalerMeans[0][0], 3.5);
+  assert.equal(base.primary.selectedLambda, changed.primary.selectedLambda);
+});
+
+test("P3 returns unavailable instead of claiming AUC for tiny or single-class holdouts", () => {
+  const rows = [
+    { symbol: "BTC", t: 1, y: 0, x: [0] }, { symbol: "BTC", t: 2, y: 1, x: [1] },
+    { symbol: "ETH", t: 3, y: 1, x: [2] }, { symbol: "ETH", t: 4, y: 1, x: [3] },
+    { symbol: "ETH", t: 5, y: 1, x: [4] }, { symbol: "ETH", t: 6, y: 1, x: [5] }
+  ];
+  const result = scoreClassifierHoldouts(rows, { holdoutSymbols: ["ETH"], permutations: 100, lambdas: [0.1], folds: 2 });
+  assert.equal(result.primary.status, "unavailable");
+  assert.equal(result.primary.holdoutAuc, null);
+  assert.match(result.primary.reason, /one class/);
+  const tiny = scoreClassifierHoldouts(rows, { holdoutSymbols: ["BTC"], permutations: 100, lambdas: [0.1], folds: 2 });
+  assert.equal(tiny.primary.status, "unavailable");
+  assert.match(tiny.primary.reason, /too small/);
 });
