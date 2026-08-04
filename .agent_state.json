@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "scanner.js, storage.js, scanner.test.mjs",
     "objective": "Persist one-trade-per-structural-level cooldowns with expiry and validate them during restart hydration, so a restart cannot immediately re-enter a stopped-out level.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 4,
-    "notes": "Verifier passed R-002: npm.cmd test ran 19 tests and all passed. Checked that monitor.test.mjs covers fail-closed startup health, stale heartbeat, failed persistence, and healthy readiness; scanner.js calls requireMonitorHealthForEntry before order sizing or placeBuy. Next eligible item pulled for Executor.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T10:50:42.453Z"
+    "notes": "R-003 implementation is committed and pushed. npm.cmd test passed 22 tests. Review scanner.test.mjs restart fixtures: unexpired level survives restart, expired lock prunes, unreadable cooldown state blocks entry fail-closed.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T10:52:30.488Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -65,7 +65,7 @@
       },
       {
         "id": "R-003",
-        "state": "executing",
+        "state": "verifying",
         "severity": "critical",
         "file": "scanner.js, storage.js, scanner.test.mjs",
         "owner": "executor",
@@ -628,7 +628,7 @@
       "acceptance_criteria": [
         "Restart preserves unexpired cooldowns, prunes expired cooldowns, and cannot block unrelated levels."
       ],
-      "state": "queued"
+      "state": "verifying"
     },
     {
       "id": "R-004",
@@ -996,6 +996,14 @@
       "detail": "R-002 monitor health contract verified. npm.cmd test passed 19/19; tests cover fail-closed prerequisites and healthy readiness, and scanner entry wiring blocks before order placement. Pulled next eligible item into EXECUTOR_PENDING.",
       "commit": "3b5a6a9",
       "tests": "19 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T10:52:30.488Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-003: persisted one-trade-per-structural-level cooldowns with versioned atomic storage; scanner hydrates/prunes locks on restart and fails closed if cooldown state is unreadable.",
+      "commit": "58458ba",
+      "tests": "22 passing (npm.cmd test)"
     }
   ],
   "budget": {
