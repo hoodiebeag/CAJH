@@ -753,6 +753,50 @@
                                               "done_when":  "Fixtures prove inventory cap, fee math, and adverse handling of ambiguous multi-level bars; output reports fingerprint, activated/ambiguous bars, fills, maximum inventory, gross/net PnL, both sealed holdouts, and PASS/KILLED/CONTEXT-ONLY verdict; npm.cmd test is green.",
                                               "fail_closed":  "Any assumed intrabar fill priority, unresolved ambiguity, inventory-cap breach, insufficient holdout activity, or non-positive net holdout result makes the result KILLED or CONTEXT-ONLY.",
                                               "expected_failure_modes":  "OHLC data cannot establish maker-fill order; range filter leaks into trends; inventory accumulates into breakouts; fees/adverse selection consume grid capture."
+                                          },
+                                          {
+                                              "id":  "C1B",
+                                              "state":  "pending",
+                                              "severity":  "high",
+                                              "file":  "scanner.js, logger.js, storage.js, decision-log.test.mjs",
+                                              "owner":  "executor",
+                                              "allow_live_edit":  true,
+                                              "depends_on":  [
+                                                                 "C1",
+                                                                 "C2"
+                                                             ],
+                                              "task":  "Repair the C1 safety gap. Decision recording must never synchronously write/fsync on the scanner decision path, throw for cyclic/non-serializable decision context, or change entry/submit control flow when logging is slow or unavailable. Use a bounded best-effort queue with explicit dropped-record telemetry; persistence may run asynchronously but must not be awaited by a decision. Preserve append-only records and redact/sanitize fields before persistence.",
+                                              "done_when":  "Focused tests prove cyclic input, a throwing serializer, a failing/slow sink, and a full queue neither throw nor change the proposal/submit result; the queue has a fixed bound and reports drops; a valid structured event still reaches the durable journal eventually; npm.cmd test is green.",
+                                              "fail_closed":  "Logging may lose a noncritical record with observable telemetry, but may never delay, reject, enable, disable, or otherwise alter a trade decision.",
+                                              "expected_failure_modes":  "Synchronous fsync stalls scans; serialization exceptions escape; an unbounded queue exhausts memory; journal-health mutations accidentally affect entry eligibility."
+                                          },
+                                          {
+                                              "id":  "A1",
+                                              "state":  "pending",
+                                              "severity":  "medium",
+                                              "file":  "agent-state-validator.ps1, agent-orchestrator.ps1",
+                                              "owner":  "executor",
+                                              "allow_live_edit":  false,
+                                              "depends_on":  [],
+                                              "task":  "Add a read-only UTF-8 state preflight for the autonomous loop. It must validate JSON shape, a single active writer/lease, control target/objective/test command, required queue fields (id, state, file, owner, allow_live_edit, task, done_when, fail_closed), known dependencies without cycles, and that frozen paths cannot be targeted unless allow_live_edit is true. The orchestrator must log and refuse dispatch on a failed preflight; it must not rewrite state while validating.",
+                                              "done_when":  "A PowerShell fixture or self-test accepts the current valid state and rejects malformed JSON, duplicate active ownership, unknown/cyclic dependencies, an incomplete task, and a frozen-path task lacking permission; `powershell -NoProfile -ExecutionPolicy Bypass -File .\\agent-state-validator.ps1 -StatePath .\\.agent_state.json` succeeds on the real state; npm.cmd test remains green.",
+                                              "fail_closed":  "Invalid or ambiguous control state dispatches no agent and logs the exact rejection reason.",
+                                              "expected_failure_modes":  "Windows default encoding corrupts UTF-8 state; a validator rewrites a concurrently-owned file; a valid queued task is incorrectly rejected because optional historical fields are absent."
+                                          },
+                                          {
+                                              "id":  "V1",
+                                              "state":  "pending",
+                                              "severity":  "medium",
+                                              "file":  "research-verdict.mjs, research-verdict.test.mjs",
+                                              "owner":  "executor",
+                                              "allow_live_edit":  false,
+                                              "depends_on":  [
+                                                                 "DQ3"
+                                                             ],
+                                              "task":  "Create a small pure validator for saved research-study verdicts. It must require immutable provenance, explicit universe and train/whole-symbol/recent holdout dates and row counts, gross and net results, declared cost rule, p/q-or-unavailable evidence status, and exactly PASS/KILLED/CONTEXT-ONLY with a reason. It must reject a PASS lacking eligible sealed holdout or net-of-cost support. Do not select strategies, read live state, or change any existing study output in this task.",
+                                              "done_when":  "Tests accept a complete KILLED record and reject missing provenance, holdout leakage/missing counts, gross-only PASS, unsupported PASS, and an unknown verdict; module stays deterministic and npm.cmd test is green.",
+                                              "fail_closed":  "An incomplete or unsupported study is CONTEXT-ONLY/KILLED, never PASS.",
+                                              "expected_failure_modes":  "A generic schema obscures a missing holdout; p/q values are treated as mandatory despite insufficient samples; a validator silently coerces malformed evidence into a PASS."
                                           }
                                       ],
                        "queue_rule":  "Work ONE item per run, in order, smallest complete unit. Mark state done before moving on. If an item cannot be finished in one run, split it and add the remainder as a new item rather than leaving it half-built.",
@@ -2037,6 +2081,14 @@
                        "detail":  "C3 mission/limitations digest verified. npm.cmd test passed 132/132; focused test proves digest is dynamic from config/verdict/trading state and states supplied system context, not persistent self-awareness, and no autonomous live-trading validation.",
                        "commit":  "83518e0",
                        "tests":  "npm.cmd test: 132 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:40:00Z",
+                       "agent":  "architect",
+                       "action":  "queue-stock",
+                       "detail":  "Queued C1B to correct the independently reproduced non-blocking decision-log safety gap, A1 for fail-closed autonomous-state preflight, and V1 for a deterministic research-verdict evidence gate. All have exact scope, tests, and failure modes.",
+                       "commit":  null,
+                       "tests":  "State JSON parsed; no executor source files modified"
                    }
                ],
     "budget":  {
