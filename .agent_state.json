@@ -24,7 +24,7 @@
       "commands.js",
       "storage.js"
     ],
-    "test_command": "npm test (7 tests currently passing; backtest.test.mjs is frozen but can EXTEND with new tests)",
+    "test_command": "npm.cmd test (13 tests passing on 2026-08-04)",
     "known_findings": "See ROADMAP.md. Settled with real numbers, do NOT re-test: the swing entry is statistically indistinguishable from random (8,203 trades); gross-of-cost expectancy ~0 so cheaper fills cannot rescue it; exit-model and stop-placement sweeps both negative; the simple daily strategy is beta not alpha; trade intensity as a filter does not improve net R/t. Order-flow research closed.",
     "live_features_needing_tests": "(1) stopMode 'atr' — atrStopK and atrPeriod params control stop placement via trailing ATR, not raw swing low. Used in backtest.js and live scanner, never directly tested. (2) one-trade-per-level guard — same structural level (indexed by pivot candle) cannot fire twice; protects against re-entry whipsaw. Implemented in scanner.js, backtest.js handles it via levelOnCooldown. (3) alignment/trend gates on anticipate mode — MIN/MAX_STOP_PCT, chopFilter, trendGate, trendGateMode all apply in anticipate mode after a 2026-07-30 fix; prior tests only exercised BOS mode gates.",
     "in_flight": "Order-flow backfills extending BTC/ETH/SOL back to 2026-01-01 may still be running as background node processes (research.js flow) — check before assuming idle. Do NOT kill node processes or touch candles/.",
@@ -72,6 +72,40 @@
         "task": "Persist one-trade-per-structural-level cooldowns with expiry and validate them during restart hydration, so a restart cannot immediately re-enter a stopped-out level.",
         "done_when": "A restart fixture retains an unexpired level lock, prunes an expired lock, and blocks duplicate entry without blocking unrelated levels.",
         "fail_closed": "Unreadable cooldown state blocks entries until reconciliation rather than allowing duplicate re-entry."
+      },
+      {
+        "id": "R-008",
+        "state": "pending",
+        "severity": "critical",
+        "file": "trader.js, monitor.js, trader.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "task": "Require an explicit Kraken terminal execution confirmation before a sell removes or reduces a tracked position. An unknown, canceled, expired, rejected, or partial sell must leave tracked state intact (or reduce it only by confirmed executed volume) and raise a reconciliation alert.",
+        "done_when": "Fixtures prove confirmed full sell removes a trade, confirmed partial sell retains exact remainder, and every unknown/non-terminal result retains the original tracked position; npm.cmd test is green.",
+        "fail_closed": "Never infer a sell fill from a quote or AddOrder acknowledgement."
+      },
+      {
+        "id": "R-009",
+        "state": "pending",
+        "severity": "critical",
+        "file": "monitor.js, scanner.js, bot.js, monitor.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "task": "Make manual and safety halts durable across restart, and require explicit opt-in before any resume can enable orders. Persist the halt reason; boot and resume must remain fail-closed when halt state cannot be read.",
+        "done_when": "Restart fixtures preserve manual/safety halt; LIVE_TRADING absent or false cannot be overridden by !resume; a valid explicit opt-in plus owner action is the only enabling path; npm.cmd test is green.",
+        "fail_closed": "A restart, config parse error, or Discord command cannot accidentally turn real order placement on."
+      },
+      {
+        "id": "R-010",
+        "state": "pending",
+        "severity": "high",
+        "file": "scanner.js, monitor.js, bot.js, scheduler.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "depends_on": ["R-002"],
+        "task": "Add single-flight guards to scheduled/manual scans and monitor ticks so an async interval cannot overlap itself or duplicate balance/exit work. Record skipped-overlap health telemetry.",
+        "done_when": "Deferred-promise fixtures prove a second scan/tick is skipped while the first is active and runs normally after completion; no existing entry/exit path is changed otherwise.",
+        "fail_closed": "Overload or a hung API call must reduce activity, never multiply orders or exits."
       },
       {
         "id": "Q2",
@@ -244,6 +278,48 @@
       "dependencies": ["R-001", "R-002", "R-003", "R-005"],
       "acceptance_criteria": ["Every exported setting has one classification and executable behavior matches README/Discord/context claims."],
       "state": "discovered"
+    },
+    {
+      "id": "R-008",
+      "category": "safety",
+      "severity": "critical",
+      "evidence": "trader.js:151-170 substitutes a quote when QueryOrders cannot confirm a sell, while monitor.js:309-310 removes the tracked position after placeSell returns.",
+      "risk": "A timed-out, rejected, canceled, or unknown sell can be reported as closed and removed from monitoring while Kraken still holds the asset.",
+      "affected_paths": ["trader.js", "monitor.js", "commands.js"],
+      "proposed_resolution": "Require confirmed executed volume and terminal order status for sells; retain or precisely reduce tracked state otherwise and alert/reconcile.",
+      "requires_design": true,
+      "requires_live_edit": true,
+      "dependencies": [],
+      "acceptance_criteria": ["Unknown sell state never removes a tracked position.", "Confirmed partial sell preserves the exact remaining volume."],
+      "state": "queued"
+    },
+    {
+      "id": "R-009",
+      "category": "safety",
+      "severity": "critical",
+      "evidence": "monitor.js:35-40 stores manual halt only in process memory; bot.js:98-108 enables trading after restart when LIVE_TRADING=true, and commands.js:152-155 resumes without checking opt-in.",
+      "risk": "A restart or owner typo can re-enable real orders despite a previously issued halt or the intended disabled-by-default posture.",
+      "affected_paths": ["monitor.js", "bot.js", "commands.js", "storage.js"],
+      "proposed_resolution": "Persist halt reason and gate resume on explicit environment opt-in plus healthy safety state.",
+      "requires_design": true,
+      "requires_live_edit": true,
+      "dependencies": ["R-001"],
+      "acceptance_criteria": ["Manual/safety halt survives restart.", "LIVE_TRADING false or unset cannot be overridden through Discord."],
+      "state": "queued"
+    },
+    {
+      "id": "R-010",
+      "category": "reliability",
+      "severity": "high",
+      "evidence": "scanner.js:248 and monitor.js:361 use async work from independent invocations/setInterval without a single-flight guard.",
+      "risk": "Slow Kraken/Discord calls can overlap scans or monitor ticks, causing duplicate work and race-prone state changes.",
+      "affected_paths": ["scanner.js", "monitor.js", "bot.js"],
+      "proposed_resolution": "Use scoped single-flight guards and health telemetry for overlapping scan and monitor cycles.",
+      "requires_design": true,
+      "requires_live_edit": true,
+      "dependencies": ["R-002"],
+      "acceptance_criteria": ["Concurrent invocation tests prove only one active scan/tick per loop and no duplicate order path."],
+      "state": "queued"
     }
   ],
   "ledger": [
@@ -326,6 +402,14 @@
       "detail": "Completed the initial read-only safety audit, recorded R-001 through R-007, moved P0 remediation ahead of research, and handed R-001 atomic persistence plus focused tests to the Executor. Baseline uses npm.cmd test because PowerShell blocks npm.ps1.",
       "commit": "",
       "tests": "13 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T00:10:00Z",
+      "agent": "architect",
+      "action": "queue-replenish",
+      "detail": "Extended the safety queue with confirmed-sell handling (R-008), durable halt/explicit resume control (R-009), and single-flight scheduling (R-010), all ahead of research.",
+      "commit": "",
+      "tests": "baseline previously green: 13 passing (npm.cmd test)"
     }
   ],
   "budget": {
