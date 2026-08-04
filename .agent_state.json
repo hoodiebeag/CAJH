@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "data.js, researchlab.mjs, research-data.test.mjs",
     "objective": "Make resampling/cache behavior quality-aware: sort inputs, exclude incomplete current buckets, expose gaps under an explicit policy, and rebuild corrupt research caches rather than trusting them.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "DQ1 verified: npm.cmd test ran 83 tests and all passed. data.test.mjs directly covers deterministic valid archive merge, missing volume/trades coercion prevention, malformed/non-finite/negative/OHLC/off-minute rejection, and duplicate/non-monotonic stored/archive rows. Pulled next eligible item into EXECUTOR_PENDING.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:49:45.064Z"
+    "notes": "DQ2 executor handoff: added shared quality-aware resampling, incomplete current bucket exclusion, explicit gap policy, and research cache schema validation/rebuild on corruption. npm.cmd test passed 86/86; node --check data.js researchlab.mjs research-data.test.mjs passed.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:52:00.170Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -319,7 +319,7 @@
       },
       {
         "id": "DQ2",
-        "state": "executing",
+        "state": "verifying",
         "severity": "medium",
         "file": "data.js, researchlab.mjs, research-data.test.mjs",
         "owner": "executor",
@@ -1577,6 +1577,14 @@
       "detail": "DQ1 candle-store validation verified with npm.cmd test 83/83 and focused malformed-row fixtures. Pulled DQ2 into EXECUTOR_PENDING.",
       "commit": "2851f7e",
       "tests": "83 passing (npm.cmd test); node --check data.js data.test.mjs"
+    },
+    {
+      "ts": "2026-08-04T11:52:00.170Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "DQ2: made resampling and research caches quality-aware: sorted validated inputs, incomplete bucket exclusion, explicit gap allow/error policy, and corrupt-cache rebuild.",
+      "commit": "64f0660",
+      "tests": "86 passing (npm.cmd test); node --check data.js researchlab.mjs research-data.test.mjs"
     }
   ],
   "budget": {
