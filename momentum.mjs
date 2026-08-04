@@ -102,7 +102,9 @@ export function perDateIC(rows, { minAssets = 8 } = {}) {
     const trail = dateRows.map((r) => r.trailR);
     const forward = dateRows.map((r) => r.fwdR);
     const ic = spearman(trail, forward);
-    return ic === null ? [] : [{ date, nAssets: dateRows.length, ic, trail, forward }];
+    const regimes = [...new Set(dateRows.map((r) => r.regime).filter(Boolean))];
+    const tagged = regimes.length === 1 ? { regime: regimes[0] } : {};
+    return ic === null ? [] : [{ date, nAssets: dateRows.length, ic, trail, forward, ...tagged }];
   });
 }
 
@@ -152,8 +154,31 @@ export function scoreMomentumPanelRows(rows, {
     meanIC: values.length ? mean(values) : null,
     ci95: blockBootstrapCI(values, { iterations: bootstrapIterations, blockSize, seed: seed + 1 }),
     p: dateVectorPermutationP(datePanels, { iterations: permutations, seed }),
+    regimes: Object.fromEntries(["bull", "bear", "flat", "unknown"].map((regimeName) => {
+      const regimeValues = datePanels.filter((p) => (p.regime || "unknown") === regimeName).map((p) => p.ic);
+      return [regimeName, { n: regimeValues.length, meanIC: regimeValues.length ? mean(regimeValues) : null }];
+    })),
     perDate: datePanels.map(({ date, nAssets, ic }) => ({ date, nAssets, ic }))
   };
+}
+
+export function btcRegimeMap(btcCandles, { maWindow = 200, band = 0.01 } = {}) {
+  const out = new Map();
+  for (let i = 0; i < btcCandles.length; i++) {
+    const date = dateOf(btcCandles[i].time);
+    if (i + 1 < maWindow) {
+      out.set(date, "unknown");
+      continue;
+    }
+    const ma = mean(btcCandles.slice(i - maWindow + 1, i + 1).map((x) => x.close));
+    out.set(date, btcCandles[i].close > ma * (1 + band) ? "bull" : btcCandles[i].close < ma * (1 - band) ? "bear" : "flat");
+  }
+  return out;
+}
+
+export function tagMomentumRegimes(rows, btcCandles, options = {}) {
+  const regimes = btcRegimeMap(btcCandles, options);
+  return rows.map((row) => ({ ...row, regime: regimes.get(row.date) || "unknown" }));
 }
 
 export function buildMomentumPanel(series, {
@@ -166,6 +191,7 @@ export function buildMomentumPanel(series, {
   factorAsset = "BTC",
   residualWindow = 90,
   volWindow = lookback,
+  tagRegime = false,
   q1Start = Q1_ONLY_START,
   q1End = Q1_ONLY_END
 } = {}) {
@@ -215,8 +241,9 @@ export function buildMomentumPanel(series, {
     }
 
     if (bucket.length < minAssets) continue;
-    if (inDateWindow(date, q1Start, q1End)) q1Only.push(...bucket);
-    else rows.push(...bucket);
+    const taggedBucket = tagRegime ? tagMomentumRegimes(bucket, factorRows) : bucket;
+    if (inDateWindow(date, q1Start, q1End)) q1Only.push(...taggedBucket);
+    else rows.push(...taggedBucket);
   }
 
   return { rows, q1Only };

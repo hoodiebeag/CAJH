@@ -9,6 +9,7 @@ import {
   ranks,
   scoreMomentumPanelRows,
   spearman,
+  tagMomentumRegimes,
   permutationP,
   bootstrapCI
 } from "./momentum.mjs";
@@ -135,6 +136,27 @@ test("buildMomentumPanel volNormalized divides by trailing volatility known at t
   assert.equal(rows[0].date, "2025-01-04");
   assert.ok(Math.abs(rows[0].trailR - ((145.2 / 110 - 1) / 0.05)) < 1e-12);
   assert.equal(rows[0].fwdR, 174.24 / 145.2 - 1);
+});
+
+test("tagMomentumRegimes labels BTC-vs-200MA state without changing full-sample IC", () => {
+  const rows = [
+    { date: "2025-07-20", asset: "A", trailR: 1, fwdR: 3 },
+    { date: "2025-07-20", asset: "B", trailR: 2, fwdR: 2 },
+    { date: "2025-07-20", asset: "C", trailR: 3, fwdR: 1 },
+    { date: "2025-07-27", asset: "A", trailR: 1, fwdR: 1 },
+    { date: "2025-07-27", asset: "B", trailR: 2, fwdR: 2 },
+    { date: "2025-07-27", asset: "C", trailR: 3, fwdR: 3 }
+  ];
+  const btc = Array.from({ length: 208 }, (_, i) => candle(i, i < 200 ? 100 : 130));
+
+  const untagged = scoreMomentumPanelRows(rows, { minAssets: 3, permutations: 10, bootstrapIterations: 10 });
+  const tagged = scoreMomentumPanelRows(tagMomentumRegimes(rows, btc), { minAssets: 3, permutations: 10, bootstrapIterations: 10 });
+
+  assert.equal(untagged.meanIC, 0);
+  assert.equal(tagged.meanIC, 0);
+  assert.deepEqual(tagged.regimes.bull, { n: 2, meanIC: 0 });
+  assert.deepEqual(tagged.regimes.bear, { n: 0, meanIC: null });
+  assert.deepEqual(tagged.regimes.flat, { n: 0, meanIC: null });
 });
 
 test("rank correlation identifies a planted monotonic cross-section", () => {
