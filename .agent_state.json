@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "scanner.js, monitor.js, monitor.test.mjs",
-    "objective": "Add a monitor-health contract: entries are refused unless startup hydration, reconciliation, persistence, and the current monitor tick are healthy. A monitor/persistence failure halts entries but keeps exit monitoring best-effort and emits an alert.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "scanner.js, storage.js, scanner.test.mjs",
+    "objective": "Persist one-trade-per-structural-level cooldowns with expiry and validate them during restart hydration, so a restart cannot immediately re-enter a stopped-out level.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 4,
-    "notes": "R-002 implementation is committed and pushed. npm.cmd test passes 19 tests, including monitor-health contract tests. Review failed-tick heartbeat behavior, unresolved reconciliation ghosts, persistence failure handling, and entry gate wiring.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-04T10:50:07.819Z"
+    "notes": "Verifier passed R-002: npm.cmd test ran 19 tests and all passed. Checked that monitor.test.mjs covers fail-closed startup health, stale heartbeat, failed persistence, and healthy readiness; scanner.js calls requireMonitorHealthForEntry before order sizing or placeBuy. Next eligible item pulled for Executor.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-04T10:50:42.453Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -51,7 +51,7 @@
       },
       {
         "id": "R-002",
-        "state": "executing",
+        "state": "done",
         "severity": "critical",
         "file": "scanner.js, monitor.js, monitor.test.mjs",
         "owner": "executor",
@@ -65,7 +65,7 @@
       },
       {
         "id": "R-003",
-        "state": "pending",
+        "state": "executing",
         "severity": "critical",
         "file": "scanner.js, storage.js, scanner.test.mjs",
         "owner": "executor",
@@ -607,7 +607,7 @@
         "Unhealthy startup, stale heartbeat, failed persistence, and fatal error each block new orders.",
         "Existing exit loop remains best-effort and alerts rather than silently claiming health."
       ],
-      "state": "verifying"
+      "state": "done"
     },
     {
       "id": "R-003",
@@ -988,6 +988,14 @@
       "detail": "Queued the complete known remediation and canonical research program: P0/P1 safety, money-path tests, config parity, momentum M1-M7, low-vol B1-B4, classifier P1-P5, and self-knowledge C1-C3. Legacy Q2-Q8 remain deferred pending dedicated pre-registration or reconciliation.",
       "commit": "",
       "tests": "baseline from executor: 19 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T10:50:42.453Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "R-002 monitor health contract verified. npm.cmd test passed 19/19; tests cover fail-closed prerequisites and healthy readiness, and scanner entry wiring blocks before order placement. Pulled next eligible item into EXECUTOR_PENDING.",
+      "commit": "3b5a6a9",
+      "tests": "19 passing (npm.cmd test)"
     }
   ],
   "budget": {
