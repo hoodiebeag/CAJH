@@ -97,3 +97,11 @@ B1 may change only ranking-variable plumbing and direct tests. It must not alter
 or any frozen momentum specification. A missing stored symbol or a desire to make a split
 work is an `ARCHITECT_PENDING` design blocker, not authorization to replace a holdout after
 inspection. Reject the item if its diff changes any of those inputs.
+
+### B2 forward-metric gate
+
+For every rank mode, verify that raw and risk-adjusted forward outcomes use the identical
+post-`close[t+1]` holding window and report the same observation denominator. A zero,
+non-finite, or incomplete forward-volatility window must be counted and visibly excluded;
+it may not become zero, Infinity, or a silently reduced headline sample. Use a fixture with
+one invalid forward-volatility asset-date and hand-computed valid raw/vol-adjusted returns.
