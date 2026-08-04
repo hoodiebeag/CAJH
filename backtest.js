@@ -108,7 +108,10 @@ export function backtestMultiTF({ series } = {}, {
   // wider stop means a proportionally smaller position, not more risk.
   stopMode = "structural",
   atrStopK = 3,
-  atrPeriod = 14
+  atrPeriod = 14,
+  // Research-only entry veto. It receives only the completed entry bar's close time.
+  // Live scanning never supplies this callback.
+  entryGate = null
 } = {}) {
   // `series` = timeframes ascending, e.g. [{label:"1h",mins:60,candles},{label:"4h",...},{label:"1d",...}].
   // The entry TF (entryTf label, default the lowest) trades; everything ABOVE it is the
@@ -359,6 +362,7 @@ export function backtestMultiTF({ series } = {}, {
         else if (!aligned)                                 reason = gateReason;
         else if (maxStopPct && risk / entry > maxStopPct)  reason = "stopTooFar";
         else if (minStopPct && risk / entry < minStopPct)  reason = "stopTooTight";
+        else if (entryGate && !entryGate(tClose))           reason = "externalGate";
         reasons[reason] = (reasons[reason] || 0) + 1;
         if (reason === "taken") {
           antTradedIdx = antCand.index;   // one trade per structural level (mirrors live cooldown)

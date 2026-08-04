@@ -150,6 +150,13 @@ const commands = {
     const file = saveExperiment("funding-cash-study", report.input, report.result);
     print(JSON.stringify({ ...report.result, saved: file }, null, 2));
   },
+  h11: async () => {
+    const { runFundingGateH11 } = await import("./funding-gate-h11.mjs");
+    const { saveExperiment } = await import("./researchlab.mjs");
+    const report = await runFundingGateH11();
+    const file = saveExperiment("funding-gate-h11", report.input, report.result);
+    print(JSON.stringify({ ...report.result, saved: file }, null, 2));
+  },
 };
 
 if (!commands[cmd]) {
