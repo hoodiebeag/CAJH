@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "bot.js, bot-lifecycle.test.mjs",
     "objective": "Handle Discord lifecycle failures: attach sanitized client error/shardError listeners, handle client.login rejection, and add a bounded ready timeout. Do not start monitor or scheduled scans unless Discord reaches ready state.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-013 verified: npm.cmd test ran 64 tests and all passed. API-resilience tests cover retry classification, bounded retry success/exhaustion, explicit unknown state, malformed balance rejection, metadata failure before AddOrder, and holdings valuation unknown propagation.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:30:35.267Z"
+    "notes": "R-014 implemented. npm.cmd test ran 68 tests and all passed; bot.js and bot-lifecycle.test.mjs syntax checks passed. Added sanitized error formatting, Discord error/shardError listeners, bounded ready timeout, login rejection fatal routing, and CAJH_BOT_NO_LOGIN test guard. Monitor/schedules still start only inside the existing clientReady handler.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:32:01.357Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -235,7 +235,7 @@
       },
       {
         "id": "R-014",
-        "state": "executing",
+        "state": "verifying",
         "severity": "high",
         "file": "bot.js, bot-lifecycle.test.mjs",
         "owner": "executor",
@@ -1481,6 +1481,14 @@
       "detail": "R-013 API resilience verified with npm.cmd test 64/64 and unknown-state checks. Pulled R-014 into EXECUTOR_PENDING.",
       "commit": "7698d79",
       "tests": "64 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:32:01.357Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-014: added Discord lifecycle guards, sanitized client/shard error handling, login rejection fatal routing, and bounded ready timeout without starting monitor/schedules before clientReady.",
+      "commit": "6c19469",
+      "tests": "68 passing (npm.cmd test); node --check bot.js bot-lifecycle.test.mjs"
     }
   ],
   "budget": {
