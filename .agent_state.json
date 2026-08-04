@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "trader.js, scanner.js, monitor.js, order-validation.test.mjs, monitor.test.mjs",
     "objective": "Correct the R-005 verification gap: introduce timestamped quote/balance snapshots with an explicit maximum age; revalidate fresh finite quote, available balance, and capital immediately before AddOrder; validate every hydrated trade before inserting it into monitor state. Add transport-boundary tests that prove AddOrder is never called for stale quote, invalid/insufficient balance, unknown metadata, or invalid hydration.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-007 verified: npm.cmd test ran 47 tests and all passed. Content check confirms README, strategy.js comments, Discord help/status, and AI context now classify live-vs-research config and state no live alignment/trend gate.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:21:40.424Z"
+    "notes": "R-005B implemented. npm.cmd test ran 54 tests and all passed; target JS syntax checks passed. Added timestamped price/balance snapshots, MAX_ORDER_SNAPSHOT_AGE_MS, immediate validateOrderTransportBoundary checks before AddOrder, scanner snapshot handoff, fail-closed metadata behavior, and hydrateTrades validation before insertion. Tests mock the Kraken boundary and prove AddOrder is not called for stale quote, insufficient/invalid balance, or unknown metadata; valid lot rounding still reaches AddOrder as 0.1235; invalid persisted trade hydrates unsafe with no open trade.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:26:06.793Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -129,7 +129,7 @@
       },
       {
         "id": "R-005",
-        "state": "done",
+        "state": "verifying",
         "severity": "high",
         "file": "trader.js, scanner.js, monitor.js, order-validation.test.mjs",
         "owner": "executor",
@@ -162,7 +162,7 @@
       },
       {
         "id": "R-005B",
-        "state": "executing",
+        "state": "verifying",
         "severity": "critical",
         "file": "trader.js, scanner.js, monitor.js, order-validation.test.mjs, monitor.test.mjs",
         "owner": "executor",
@@ -226,7 +226,7 @@
         "owner": "executor",
         "allow_live_edit": true,
         "depends_on": [
-          "R-005",
+          "R-005B",
           "R-008"
         ],
         "task": "Define bounded Kraken retry/timeout/staleness behavior for prices, balances, metadata, order confirmation, and reconciliation. Classify retryable versus terminal errors and propagate an explicit unknown state rather than a fallback fill or stale quote.",
@@ -242,7 +242,8 @@
         "allow_live_edit": false,
         "depends_on": [
           "R-006",
-          "R-007"
+          "R-007",
+          "DQ3"
         ],
         "task": "Implement the pre-registered daily cross-sectional momentum panel: stable-13 universe, weekly non-overlapping dates, L=30 trailing and H=7 strictly-future returns, minimum eight assets, and a tidy {date,asset,trailR,fwdR} output. Keep all Q1-only data separate.",
         "done_when": "A hand-checked date proves no look-ahead, missing history drops the asset/date correctly, and synthetic-panel tests pass.",
@@ -401,7 +402,8 @@
         "allow_live_edit": false,
         "depends_on": [
           "R-006",
-          "R-007"
+          "R-007",
+          "DQ3"
         ],
         "task": "Create a research-only entry-time feature matrix from profileEntries, fixed tpR=4 label, whole-symbol train/holdout split, train-only z-score scaler, and class-balance/column reporting.",
         "done_when": "Tests prove no feature/scaler sees holdout data and label/base-rate accounting is exact.",
@@ -1194,6 +1196,22 @@
       "detail": "R-007 config inventory verified with npm.cmd test 47/47 and content check. Pulled R-005B into EXECUTOR_PENDING.",
       "commit": "d0f1258",
       "tests": "47 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:26:03.897Z",
+      "agent": "executor",
+      "action": "handoff",
+      "detail": "Added timestamped quote/balance transport validation, pre-AddOrder balance checks, and fail-closed validation of every hydrated trade.",
+      "commit": "e501349",
+      "tests": "npm.cmd test: 55 passed, 0 failed"
+    },
+    {
+      "ts": "2026-08-04T11:26:06.793Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-005B: added fresh quote/balance transport boundary before AddOrder, scanner snapshot handoff, Kraken API test seam, and hydrated-trade validation; tests prove invalid/stale/unknown inputs do not reach AddOrder.",
+      "commit": "e501349",
+      "tests": "54 passing (npm.cmd test); node --check target JS files"
     }
   ],
   "budget": {
