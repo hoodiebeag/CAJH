@@ -245,7 +245,9 @@ export function runSealedMomentumPanelStudy(series, {
   }
 
   for (const row of exploratory) row.q = null;
-  bhFdr(exploratory.filter((row) => row.p !== null));
+  const fdrRows = exploratory.map((row) => ({ row, p: row.p ?? 1 }));
+  bhFdr(fdrRows);
+  for (const entry of fdrRows) entry.row.q = entry.q;
   return {
     primaryUniverse: [...primaryUniverse],
     symbolHoldoutUniverse: [...holdoutUniverse],
