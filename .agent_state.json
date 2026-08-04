@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "VERIFIER_PENDING",
-                    "target_file":  "ROADMAP.md",
-                    "objective":  "Fill the low-volatility verdict template with both outcomes, size/liquidity control, and a PASS/KILLED/JUST-HOLD-MAJORS conclusion tied to holdout net evidence.",
+                    "status":  "EXECUTOR_PENDING",
+                    "target_file":  "classifier.mjs, classifier.test.mjs",
+                    "objective":  "Create a research-only entry-time feature matrix from profileEntries, fixed tpR=4 label, whole-symbol train/holdout split, train-only z-score scaler, and class-balance/column reporting.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "B4 implemented in commit 811a528. npm.cmd test passed 109/109; ROADMAP records the actual 0-date local holdout data-gate result.",
-                    "updated_by":  "executor",
-                    "updated_at":  "2026-08-04T12:21:05.5652130Z"
+                    "notes":  "B4 verified with npm.cmd test 109/109. Pulled P1 into EXECUTOR_PENDING.",
+                    "updated_by":  "verifier",
+                    "updated_at":  "2026-08-04T12:21:32.0596199Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -509,7 +509,7 @@
                                           },
                                           {
                                               "id":  "B4",
-                                              "state":  "verifying",
+                                              "state":  "done",
                                               "severity":  "medium",
                                               "file":  "ROADMAP.md",
                                               "owner":  "executor",
@@ -523,7 +523,7 @@
                                           },
                                           {
                                               "id":  "P1",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "medium",
                                               "file":  "classifier.mjs, classifier.test.mjs",
                                               "owner":  "executor",
@@ -1800,6 +1800,14 @@
                        "action":  "implement",
                        "detail":  "B4: recorded the low-vol/low-beta verdict in ROADMAP.md with both requested outcomes, size/liquidity-control status, and a KILLED conclusion tied to 0 eligible holdout dates/rows in the local harness.",
                        "commit":  "811a528",
+                       "tests":  "npm.cmd test: 109 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:21:32.0596199Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "B4 low-vol/low-beta ROADMAP verdict verified. npm.cmd test passed 109/109; writeup states both requested outcomes, size/liquidity-control availability, and KILLED conclusion tied to 0 eligible holdout dates/rows.",
+                       "commit":  "c807d74",
                        "tests":  "npm.cmd test: 109 passing"
                    }
                ],
