@@ -2,15 +2,15 @@
     "version":  2,
     "control":  {
                     "status":  "EXECUTOR_PENDING",
-                    "target_file":  "classifier.mjs",
-                    "objective":  "Add standardized coefficient readout, threshold precision/recall, class imbalance and survivorship caveats, then calculate any economic lift only net of cost.",
+                    "target_file":  "ROADMAP.md",
+                    "objective":  "Fill the classifier verdict template. PASS requires sealed holdout AUC above the refit permutation null at p\u003c0.05 and net-of-cost economic lift; otherwise mark entry quality KILLED.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "P3 verified with npm.cmd test 121/121. Pulled P4 into EXECUTOR_PENDING.",
+                    "notes":  "P4 verified with npm.cmd test 124/124. Pulled P5 into EXECUTOR_PENDING.",
                     "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T13:07:43.0893403Z"
+                    "updated_at":  "2026-08-04T13:10:33.3741232Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -567,7 +567,7 @@
                                           },
                                           {
                                               "id":  "P4",
-                                              "state":  "in_progress",
+                                              "state":  "done",
                                               "severity":  "medium",
                                               "file":  "classifier.mjs",
                                               "owner":  "executor",
@@ -581,7 +581,7 @@
                                           },
                                           {
                                               "id":  "P5",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "medium",
                                               "file":  "ROADMAP.md",
                                               "owner":  "executor",
@@ -1941,6 +1941,22 @@
                        "detail":  "P3 sealed classifier holdout scoring verified. npm.cmd test passed 121/121; focused tests exercise full-pipeline refit per permutation, exact p=(exceedances+1)/(validNull+1), train-only scaler/lambda isolation, and unavailable tiny/single-class holdouts. Routed P4.",
                        "commit":  "e1f10b0",
                        "tests":  "npm.cmd test: 121 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:09:32.6703375Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "P4 added standardized coefficients, fixed-threshold precision/recall, net-cost economic lift, and required caveats.",
+                       "commit":  "82f51ae",
+                       "tests":  "node --check classifier.mjs classifier.test.mjs; npm.cmd test: 124 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:10:33.3741232Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "P4 classifier reporting verified. npm.cmd test passed 124/124; focused tests exercise standardized coefficient ordering, fixed-threshold precision/recall, explicit net-of-round-trip-cost lift, and imbalance/survivorship caveats. Routed P5.",
+                       "commit":  "82f51ae",
+                       "tests":  "npm.cmd test: 124 passing"
                    }
                ],
     "budget":  {
