@@ -530,3 +530,24 @@ it was available the whole time.
 (z = −1.90, p = 0.010, "clears cost") has died when given more independent data. The
 pattern is consistent enough to treat as a prior: a signal that needs careful statistics to
 look real is not real. The ones that matter announce themselves.
+
+### Signal 3 classifier P5: KILLED — no sealed production evidence
+
+The research-only classifier plumbing is complete: entry-time features are built from
+`profileEntries` with fixed `tpR=4` labels; scaling and lambda selection are train-only;
+whole-symbol and recent-time holdouts use refit permutation nulls; coefficients,
+fixed-threshold precision/recall, and net-of-cost lift are reported. The hand-built
+fixtures pass these mechanics, but fixture output is not market evidence.
+
+No production classifier run with an eligible whole-symbol holdout, recent-time holdout,
+at least 100 valid refit permutations, and explicit net returns was available in this
+workspace. Therefore there is no defensible production train AUC, holdout AUC, gap,
+permutation p-value, or economic lift to publish. The implementation returns
+`unavailable` for tiny or single-class holdouts and never substitutes a favorable value.
+
+**VERDICT: KILLED** — data-gated. No classifier edge is promoted without sealed holdout
+AUC above its full refit permutation null (`p<0.05`) and positive economic lift after
+costs. This is not evidence that a classifier is impossible; it is evidence that none
+has been demonstrated here. Results remain conditional on the fixed exit label and the
+survivors-only universe, with within-symbol correlation and class imbalance reported as
+limitations.
