@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "monitor.js, scanner.js, bot.js, monitor-health.test.mjs",
     "objective": "Complete monitor operational safety: perform and record startup reconciliation before entry eligibility, expose heartbeat/staleness/last-error status, alert on degradation, and document that exits remain software-polled. Do not add exchange-native orders in this task.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 4,
-    "notes": "Verifier passed R-010: npm.cmd test ran 35 tests and all passed. Deferred-promise fixtures prove overlapping scan and monitor single-flight work are skipped while active and normal execution resumes afterward. Next eligible item pulled.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:08:42.404Z"
+    "notes": "R-004 implementation is committed and pushed. npm.cmd test passed 37 tests. Review monitor-health.test.mjs: valid startup remains blocked until reconciliation, health exposes stale heartbeat/lastError/tickSkipped, and exitProtection is explicitly software-polled.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:09:46.599Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -115,7 +115,7 @@
       },
       {
         "id": "R-004",
-        "state": "executing",
+        "state": "verifying",
         "severity": "high",
         "file": "monitor.js, scanner.js, bot.js, monitor-health.test.mjs",
         "owner": "executor",
@@ -651,7 +651,7 @@
         "Health status is visible and a stale monitor prevents entry.",
         "Startup reconciles tracked positions with Kraken before entry eligibility."
       ],
-      "state": "queued"
+      "state": "verifying"
     },
     {
       "id": "R-005",
@@ -1092,6 +1092,14 @@
       "detail": "R-010 scheduler single-flight verified. npm.cmd test passed 35/35; overlap fixtures exercise scan skip and monitor tick skip/recovery. Pulled next eligible item into EXECUTOR_PENDING.",
       "commit": "c57975c",
       "tests": "35 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:09:46.599Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-004: exposed monitor operational health details including software-polled exit protection and added tests for reconciliation-gated readiness plus stale/error/skip visibility.",
+      "commit": "1127170",
+      "tests": "37 passing (npm.cmd test)"
     }
   ],
   "budget": {
