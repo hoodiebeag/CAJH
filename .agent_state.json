@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "EXECUTOR_PENDING",
+                    "status":  "VERIFIER_PENDING",
                     "target_file":  "classifier.mjs, classifier.test.mjs",
                     "objective":  "Create a research-only entry-time feature matrix from profileEntries, fixed tpR=4 label, whole-symbol train/holdout split, train-only z-score scaler, and class-balance/column reporting.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "B4 verified with npm.cmd test 109/109. Pulled P1 into EXECUTOR_PENDING.",
-                    "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T12:21:32.0596199Z"
+                    "notes":  "P1 implemented in commit e055dcc. npm.cmd test passed 113/113, including classifier column/label, whole-symbol split, train-only scaler, and class-balance report tests.",
+                    "updated_by":  "executor",
+                    "updated_at":  "2026-08-04T12:26:13.3484010Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -523,7 +523,7 @@
                                           },
                                           {
                                               "id":  "P1",
-                                              "state":  "in_progress",
+                                              "state":  "verifying",
                                               "severity":  "medium",
                                               "file":  "classifier.mjs, classifier.test.mjs",
                                               "owner":  "executor",
@@ -1809,6 +1809,14 @@
                        "detail":  "B4 low-vol/low-beta ROADMAP verdict verified. npm.cmd test passed 109/109; writeup states both requested outcomes, size/liquidity-control availability, and KILLED conclusion tied to 0 eligible holdout dates/rows.",
                        "commit":  "c807d74",
                        "tests":  "npm.cmd test: 109 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:26:13.3484010Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "P1: added research-only classifier feature matrix from profileEntries-compatible records, fixed win/loss label, whole-symbol train/holdout split, train-only z-score scaler, and class-balance/column reporting.",
+                       "commit":  "e055dcc",
+                       "tests":  "node --check classifier.mjs classifier.test.mjs; npm.cmd test: 113 passing"
                    }
                ],
     "budget":  {
