@@ -17,6 +17,7 @@ const kraken = new Kraken(
 const defaultKrakenApi = (method, params) => kraken.api(method, params);
 let krakenApi = defaultKrakenApi;
 let orderConfirmDelayMs = 700;
+const DEFAULT_KRAKEN_ATTEMPTS = 2;
 
 export function setKrakenApiForTests(fn = null) {
   krakenApi = fn || defaultKrakenApi;
@@ -25,6 +26,35 @@ export function setKrakenApiForTests(fn = null) {
 
 export function setOrderConfirmDelayForTests(ms = 700) {
   orderConfirmDelayMs = ms;
+}
+
+export function classifyKrakenError(err) {
+  const text = `${err?.code ?? ""} ${err?.message ?? err ?? ""}`.toLowerCase();
+  if (/canceled|expired|rejected|invalid|permission|denied|nonce|signature/.test(text)) return "terminal";
+  if (/timeout|timedout|econnreset|econnaborted|temporar|rate|busy|unavailable|socket|network|fetch/.test(text)) return "retryable";
+  return "unknown";
+}
+
+async function callKraken(method, params, { attempts = DEFAULT_KRAKEN_ATTEMPTS } = {}) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await krakenApi(method, params);
+    } catch (err) {
+      lastErr = err;
+      if (classifyKrakenError(err) === "terminal") {
+        const terminal = new Error(`Kraken ${method} terminal error: ${err?.message ?? err}`);
+        terminal.cause = err;
+        terminal.krakenState = "terminal";
+        throw terminal;
+      }
+      if (attempt === attempts) break;
+    }
+  }
+  const wrapped = new Error(`Kraken ${method} state unknown after ${attempts} attempt(s): ${lastErr?.message ?? lastErr}`);
+  wrapped.cause = lastErr;
+  wrapped.krakenState = "unknown";
+  throw wrapped;
 }
 
 if (!process.env.KRAKEN_API_KEY || !process.env.KRAKEN_API_SECRET) {
@@ -105,13 +135,8 @@ let pairInfoCache = null;
 
 async function loadPairInfo() {
   if (pairInfoCache) return pairInfoCache;
-  try {
-    const res = await krakenApi("AssetPairs");
-    pairInfoCache = res.result ?? {};
-  } catch (err) {
-      logger.error("[TRADER] Failed to load AssetPairs:", err.message);
-    pairInfoCache = {};
-  }
+  const res = await callKraken("AssetPairs");
+  pairInfoCache = res.result ?? {};
   return pairInfoCache;
 }
 
@@ -150,7 +175,7 @@ export async function getAccountBalance() {
 }
 
 export async function getAccountBalanceSnapshot() {
-  const res     = await krakenApi("Balance");
+  const res     = await callKraken("Balance");
   const balance = parseFloat(res.result?.ZUSD ?? res.result?.USD ?? 0);
   if (!Number.isFinite(balance) || balance < 0) throw new Error("Available balance must be finite and non-negative.");
   logger.info(`[TRADER] Available balance: $${balance.toFixed(2)}`);
@@ -174,7 +199,7 @@ const STABLES = ["USD", "USDT", "USDC", "DAI", "PYUSD"];
  * market value only — true entry-based P&L is tracked separately for cajh's own trades.
  */
 export async function getHoldings() {
-  const res = await krakenApi("Balance");
+  const res = await callKraken("Balance");
   const bal = res.result || {};
   const holdings = [];
   let totalUsd = 0;
@@ -193,10 +218,13 @@ export async function getHoldings() {
     let price = 0;
     try {
       const pairCode = asset === "BTC" ? "XBT" : asset;
-      const t = await krakenApi("Ticker", { pair: `${pairCode}USD` });
+      const t = await callKraken("Ticker", { pair: `${pairCode}USD` });
       const k = Object.keys(t.result)[0];
       price = parseFloat(t.result[k].c[0]);
-    } catch { price = 0; }
+      if (!positiveFinite(price)) throw new Error(`Ticker returned invalid price for ${asset}`);
+    } catch (err) {
+      throw new Error(`holding price for ${asset} is unknown: ${err.message}`);
+    }
 
     const value = qty * price;
     holdings.push({ asset, qty, price, value });
@@ -216,7 +244,7 @@ export async function getCurrentPrice(symbol) {
 
 export async function getCurrentPriceSnapshot(symbol) {
   const pair = symbolToPair(symbol);
-  const res  = await krakenApi("Ticker", { pair });
+  const res  = await callKraken("Ticker", { pair });
   const data = Object.values(res.result)[0];
   const price = parseFloat(data?.c?.[0] ?? 0);
   if (!positiveFinite(price)) throw new Error("Price must be finite and positive.");
@@ -238,7 +266,7 @@ async function confirmBuyFill(txid, quotedPrice) {
     await new Promise(r => setTimeout(r, orderConfirmDelayMs));
     let order = null;
     try {
-      const res = await krakenApi("QueryOrders", { txid });
+      const res = await callKraken("QueryOrders", { txid });
       order = res.result?.[txid] ?? null;
     } catch (err) {
       logger.error(`[TRADER] QueryOrders failed for ${txid}:`, err.message);
@@ -285,7 +313,7 @@ async function confirmSellFill(txid, requestedVolume, quotedPrice) {
   for (let attempt = 0; attempt < 10; attempt++) {
     await new Promise(r => setTimeout(r, orderConfirmDelayMs));
     try {
-      const res = await krakenApi("QueryOrders", { txid });
+      const res = await callKraken("QueryOrders", { txid });
       const order = res.result?.[txid];
       if (order?.status === "canceled" || order?.status === "expired" || order?.status === "rejected") {
         throw new Error(`sell order ${txid} was ${order.status}; no confirmed close`);
@@ -310,7 +338,7 @@ export async function placeBuy({ symbol, capital, price, priceAsOf, balance, bal
 
   logger.info(`[TRADER] BUY ${volume} ${symbol} @ ~$${price} ($${capital.toFixed(2)})`);
 
-  const res = await krakenApi("AddOrder", {
+  const res = await callKraken("AddOrder", {
     pair,
     type:      "buy",
     ordertype: "market",
@@ -345,7 +373,7 @@ export async function placeSell({ symbol, volume, price, priceAsOf = Date.now() 
 
   logger.info(`[TRADER] SELL ${volStr} ${symbol}`);
 
-  const res = await krakenApi("AddOrder", {
+  const res = await callKraken("AddOrder", {
     pair,
     type:      "sell",
     ordertype: "market",
