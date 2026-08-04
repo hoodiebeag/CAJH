@@ -17,17 +17,55 @@ import {
 } from "./commands.js";
 import * as logger from './logger.js';
 
+export function sanitizeErrorMessage(err) {
+  let text = err?.stack || err?.message || String(err ?? "unknown error");
+  for (const secret of [
+    process.env.DISCORD_BOT_TOKEN,
+    process.env.KRAKEN_API_KEY,
+    process.env.KRAKEN_API_SECRET
+  ]) {
+    if (secret) text = text.split(secret).join("[redacted]");
+  }
+  text = text.replace(/[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{20,}/g, "[redacted-discord-token]");
+  text = text.replace(/sk-[A-Za-z0-9_-]{20,}/g, "[redacted-secret]");
+  return text;
+}
+
 export function handleFatalProcessError(kind, err, exit = process.exit) {
   const reason = `${kind}: ${err?.message ?? err ?? "unknown fatal error"}`;
   const report = prepareFatalShutdown(reason);
   logger.error(`[BOT] ${kind}; entries halted and state persistence attempted. ` +
-    `Software-polled exits cannot be guaranteed until restart/reconcile.`, err);
+    `Software-polled exits cannot be guaranteed until restart/reconcile.`, sanitizeErrorMessage(err));
   exit(1);
   return report;
 }
 
 process.on("unhandledRejection", (err) => handleFatalProcessError("unhandledRejection", err));
 process.on("uncaughtException",  (err) => handleFatalProcessError("uncaughtException", err));
+
+export function attachDiscordLifecycleGuards(discordClient, {
+  readyTimeoutMs = 60_000,
+  onFatal = handleFatalProcessError,
+  setTimer = setTimeout,
+  clearTimer = clearTimeout
+} = {}) {
+  let ready = false;
+  const readyTimer = setTimer(() => {
+    if (!ready) onFatal("discordReadyTimeout", new Error(`Discord did not become ready within ${readyTimeoutMs}ms`));
+  }, readyTimeoutMs);
+
+  discordClient.once("clientReady", () => {
+    ready = true;
+    clearTimer(readyTimer);
+  });
+  discordClient.on("error", (err) => logger.error("[BOT] Discord client error:", sanitizeErrorMessage(err)));
+  discordClient.on("shardError", (err) => logger.error("[BOT] Discord shard error:", sanitizeErrorMessage(err)));
+  return { readyTimer };
+}
+
+export function loginDiscord(discordClient, token = process.env.DISCORD_BOT_TOKEN, onFatal = handleFatalProcessError) {
+  return discordClient.login(token).catch((err) => onFatal("discordLoginRejected", err));
+}
 
 // ─── Discord client ────────────────────────────────────────────────────────────
 
@@ -249,4 +287,7 @@ client.on("messageCreate", async (message) => {
 
 // ─── Connect ───────────────────────────────────────────────────────────────────
 
-client.login(process.env.DISCORD_BOT_TOKEN);
+if (process.env.CAJH_BOT_NO_LOGIN !== "true") {
+  attachDiscordLifecycleGuards(client);
+  loginDiscord(client);
+}
