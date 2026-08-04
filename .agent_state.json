@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "EXECUTOR_PENDING",
+                    "status":  "VERIFIER_PENDING",
                     "target_file":  "momentum.mjs",
                     "objective":  "Run low-volatility and low-beta through the sealed-holdout/cost harness and add a pre-specified size/liquidity control to distinguish a real anomaly from merely holding majors.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "B2 verified with npm.cmd test 108/108. Pulled B3 into EXECUTOR_PENDING.",
-                    "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T12:17:13.9651239Z"
+                    "notes":  "B3 implemented in commit 2aca5a5. npm.cmd test passed 108/108; target was momentum.mjs only, so no tests were edited.",
+                    "updated_by":  "executor",
+                    "updated_at":  "2026-08-04T12:18:44.4280264Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -493,7 +493,7 @@
                                           },
                                           {
                                               "id":  "B3",
-                                              "state":  "in_progress",
+                                              "state":  "verifying",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs",
                                               "owner":  "executor",
@@ -1777,6 +1777,14 @@
                        "detail":  "B2 forward risk-adjusted reporting verified. npm.cmd test passed 108/108; tests exercise side-by-side raw/risk-adjusted outputs for rank modes and zero-volatility guard behavior.",
                        "commit":  "e95fd37",
                        "tests":  "npm.cmd test: 108 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:18:44.4280264Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "B3: added size/liquidity-controlled sealed low-volatility and low-beta momentum study plumbing, including controlled universe reporting, by-rank raw/risk-adjusted/cost views, and shared exploratory FDR family support.",
+                       "commit":  "2aca5a5",
+                       "tests":  "node --check momentum.mjs; npm.cmd test: 108 passing"
                    }
                ],
     "budget":  {
