@@ -23,7 +23,8 @@ import {
 } from "./strategy.js";
 import { placeBuy, getCurrentPrice, fetchOHLC, getAccountBalance } from "./trader.js";
 import {
-  registerTrade, postTradeOpened, isTradingEnabled, getTrade, getOpenTrades, closeTradeAtMarket
+  registerTrade, postTradeOpened, isTradingEnabled, getTrade, getOpenTrades, closeTradeAtMarket,
+  requireMonitorHealthForEntry
 } from "./monitor.js";
 import { saveChart, symbolToKrakenId } from "./storage.js";
 import * as logger from './logger.js';
@@ -152,6 +153,8 @@ async function proposeBuy(symbol, buy, channel) {
 
 async function proposeBuyLocked(symbol, buy, channel) {
   if (!isTradingEnabled()) return { traded: false, reason: "trading is halted (!resume to enable)" };
+  const monitorGate = requireMonitorHealthForEntry();
+  if (!monitorGate.ok) return { traded: false, reason: `entry blocked: ${monitorGate.reason}` };
   if (getTrade(symbol))    return { traded: false, reason: "already in a position" };
 
   const tfMinutes = SCAN_INTERVALS.find(i => i.label === buy.tf)?.minutes ?? 60;

@@ -4,7 +4,7 @@
  */
 
 import { getCurrentPrice, placeSell, getAccountBalance, fetchOHLC, symbolToPair, getHoldings } from "./trader.js";
-import { saveTrades, loadTrades, saveStats, loadStats } from "./storage.js";
+import { saveTrades, loadTradesResult, saveStats, loadStats, getStorageHealth } from "./storage.js";
 import { detectSwings, SWING_WINDOW, EXIT_ON_SWING_HIGH, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT, FEE_RATE } from "./strategy.js";
 import * as logger from './logger.js';
 
@@ -20,6 +20,55 @@ let drawdownHalted    = false; // true once today's drawdown limit trips; suppre
 let manualHalt        = false; // set by !stop / START_HALTED; survives the daily reset — only !resume clears it
 
 const DAILY_DRAWDOWN_LIMIT = 0.10; // 10%
+const MONITOR_STALE_MS = 2 * 60 * 1000;
+
+const monitorHealth = {
+  hydrated: false,
+  reconciled: false,
+  persistenceOk: false,
+  tickOk: false,
+  lastTickAt: 0,
+  lastError: "monitor has not started"
+};
+
+function setMonitorHealth(patch) {
+  Object.assign(monitorHealth, patch);
+}
+
+function persistenceHealthy() {
+  const health = getStorageHealth();
+  return health.positions?.ok !== false && health.stats?.ok !== false && health.config?.ok !== false;
+}
+
+export function getMonitorHealth(now = Date.now()) {
+  const stale = !monitorHealth.lastTickAt || now - monitorHealth.lastTickAt > MONITOR_STALE_MS;
+  const ok = monitorHealth.hydrated && monitorHealth.reconciled && monitorHealth.persistenceOk && monitorHealth.tickOk && !stale;
+  return { ...monitorHealth, stale, ok };
+}
+
+export function requireMonitorHealthForEntry(now = Date.now()) {
+  const health = getMonitorHealth(now);
+  if (health.ok) return { ok: true, health };
+  const reasons = [];
+  if (!health.hydrated) reasons.push("startup hydration is not healthy");
+  if (!health.reconciled) reasons.push("position reconciliation is not healthy");
+  if (!health.persistenceOk) reasons.push("persistent state is not healthy");
+  if (!health.tickOk) reasons.push("monitor tick is not healthy");
+  if (health.stale) reasons.push("monitor heartbeat is stale");
+  return { ok: false, reason: reasons.join("; "), health };
+}
+
+export function resetMonitorHealthForTests(patch = {}) {
+  setMonitorHealth({
+    hydrated: false,
+    reconciled: false,
+    persistenceOk: false,
+    tickOk: false,
+    lastTickAt: 0,
+    lastError: "monitor has not started",
+    ...patch
+  });
+}
 
 // ─── Formatting ────────────────────────────────────────────────────────────────
 
@@ -100,16 +149,35 @@ async function currentEquity() {
 // ─── Trade registration ────────────────────────────────────────────────────────
 
 function persist() {
-  saveTrades(Array.from(openTrades.values()));
+  const ok = saveTrades(Array.from(openTrades.values()));
+  setMonitorHealth({
+    persistenceOk: ok && persistenceHealthy(),
+    lastError: ok ? monitorHealth.lastError : "position persistence failed"
+  });
+  if (!ok) disableTrading();
+  return ok;
 }
 
 /** Reload open positions from disk on startup so a restart keeps managing exits. */
 export function hydrateTrades() {
-  const saved = loadTrades();
+  const result = loadTradesResult();
+  if (!result.ok) {
+    setMonitorHealth({
+      hydrated: false,
+      persistenceOk: false,
+      lastError: `unsafe position state (${result.source})`
+    });
+    disableTrading();
+    logger.error(`[MONITOR] Unsafe position state (${result.source}); entries halted until storage is repaired.`);
+    return false;
+  }
+  const saved = result.value;
   for (const t of saved) {
     if (t?.symbol) openTrades.set(t.symbol.toUpperCase(), t);
   }
+  setMonitorHealth({ hydrated: true, persistenceOk: persistenceHealthy(), lastError: null });
   if (saved.length) logger.info(`[MONITOR] Recovered ${saved.length} open position(s) from disk.`);
+  return true;
 }
 
 export function registerTrade(trade) {
@@ -153,7 +221,12 @@ export function reconcile(holdings, trades, { stables = RECON_STABLES, dustUsd =
 export async function reconcileHoldings(channel, { autoRemoveGhosts = false } = {}) {
   let holdings;
   try { ({ holdings } = await getHoldings()); }
-  catch (err) { logger.error("[RECONCILE] getHoldings failed:", err.message); return null; }
+  catch (err) {
+    setMonitorHealth({ reconciled: false, lastError: `reconciliation failed: ${err.message}` });
+    logger.error("[RECONCILE] getHoldings failed:", err.message);
+    if (channel) await channel.send(`⚠️ **Reconciliation failed:** ${err.message}. New entries are halted until monitor health recovers; existing exits remain best-effort.`);
+    return null;
+  }
   const result = reconcile(holdings, getOpenTrades());
   const { orphans } = result;
   let { ghosts } = result;
@@ -174,6 +247,7 @@ export async function reconcileHoldings(channel, { autoRemoveGhosts = false } = 
     ghosts = ghosts.filter(t => !removable.includes(t));
   }
   if (!orphans.length && !ghosts.length) {
+    setMonitorHealth({ reconciled: true, persistenceOk: persistenceHealthy(), lastError: null });
     logger.info("[RECONCILE] Holdings match tracked trades.");
     if (channel) await channel.send("🔎 **Reconciliation:** Kraken holdings match cajh's tracked trades. Nothing orphaned.");
     return result;
@@ -192,6 +266,11 @@ export async function reconcileHoldings(channel, { autoRemoveGhosts = false } = 
     }
     await channel.send(msg);
   }
+  setMonitorHealth({
+    reconciled: ghosts.length === 0,
+    persistenceOk: persistenceHealthy(),
+    lastError: ghosts.length ? "tracked positions remain missing on Kraken" : null
+  });
   return result;
 }
 
@@ -359,9 +438,12 @@ export function startMonitor(client, getChannelId, intervalMs = 30000) {
 
   // Monitor open positions.
   setInterval(async () => {
-    if (openTrades.size === 0) return;
-
     try {
+      if (openTrades.size === 0) {
+        setMonitorHealth({ lastTickAt: Date.now(), persistenceOk: persistenceHealthy(), tickOk: true, lastError: null });
+        return;
+      }
+
       // Exits must run even if the channel is unset or briefly unavailable,
       // so messages are best-effort only.
       const channel = await resolveChannel();
@@ -456,8 +538,11 @@ export function startMonitor(client, getChannelId, intervalMs = 30000) {
         }
       }
 
+      setMonitorHealth({ lastTickAt: Date.now(), persistenceOk: persistenceHealthy(), tickOk: true, lastError: null });
+
     } catch (err) {
-          logger.error("[MONITOR] Error:", err.message);
+      setMonitorHealth({ lastTickAt: Date.now(), persistenceOk: persistenceHealthy(), tickOk: false, lastError: `monitor tick failed: ${err.message}` });
+      logger.error("[MONITOR] Error:", err.message);
     }
   }, intervalMs);
 }
