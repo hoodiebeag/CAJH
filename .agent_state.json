@@ -693,6 +693,66 @@
                                               "owner":  "executor",
                                               "task":  "Second test pass: cover the exit engine, which carries the most subtle arithmetic in the repo. (a) partial scale-out - a partial leg must contribute exactly frac x the full-position net R; (b) trailing stop - exits trailR below the running peak, not at the peak; (c) cost model - entry fee on entry notional and exit fee on exit notional, asserted against a hand-computed value.",
                                               "done_when":  "npm test green with 3 new tests, hand-computed assertions."
+                                          },
+                                          {
+                                              "id":  "TF1",
+                                              "state":  "pending",
+                                              "severity":  "medium",
+                                              "file":  "ma-crossover-study.mjs, ma-crossover-study.test.mjs",
+                                              "owner":  "executor",
+                                              "allow_live_edit":  false,
+                                              "depends_on":  [
+                                                                 "DQ3"
+                                                             ],
+                                              "task":  "Research exactly one pre-registered long/cash daily MA crossover: MA(50) crossing above MA(200) enters at the next daily close; crossing below exits at the next daily close. Use the fixed stable-13 universe, preserve the existing sealed whole-symbol and recent-time holdouts, charge 0.9% round-trip cost for each completed position, and compare only against buy-and-hold. Do not short, sweep parameters, or connect this study to live code.",
+                                              "done_when":  "Synthetic fixtures prove t+1 execution and no same-bar fill; output reports input fingerprint, asset/date and bar counts, crossovers, position-days, gross/net return, buy-and-hold return, both holdout results, and a PASS/KILLED/CONTEXT-ONLY verdict; npm.cmd test is green.",
+                                              "fail_closed":  "Fewer than one completed holdout crossover, any changed pre-registration, or net holdout performance not exceeding buy-and-hold is KILLED or CONTEXT-ONLY, never a promoted edge.",
+                                              "expected_failure_modes":  "Trend exposure masquerades as alpha; sparse crossover observations; transaction costs erase gross outperformance."
+                                          },
+                                          {
+                                              "id":  "MR1",
+                                              "state":  "pending",
+                                              "severity":  "medium",
+                                              "file":  "rsi-reversion-study.mjs, rsi-reversion-study.test.mjs",
+                                              "owner":  "executor",
+                                              "allow_live_edit":  false,
+                                              "depends_on":  [
+                                                                 "DQ3"
+                                                             ],
+                                              "task":  "Research exactly one pre-registered daily RSI mean-reversion rule: RSI(14) crossing up through 30 enters at the next daily close; exit at the first subsequent close at or above MA(20), or after seven daily bars, whichever occurs first. Use stable-13 plus sealed whole-symbol and recent-time holdouts, charge 0.9% round-trip cost per completed position, and do not sweep thresholds, windows, or holding periods. Research only; do not alter live paths.",
+                                              "done_when":  "Synthetic fixtures prove entry and exit cannot use the trigger bar or future data; output includes fingerprint, row/trade counts, holdout dates, gross/net returns, cost/turnover, p or permutation evidence when sample size permits, and PASS/KILLED/CONTEXT-ONLY reason; npm.cmd test is green.",
+                                              "fail_closed":  "Any threshold/window/exit tuning on holdout, too few completed holdout trades for the declared inference, or non-positive net holdout result is KILLED or CONTEXT-ONLY.",
+                                              "expected_failure_modes":  "Oversold assets keep falling; a handful of rebound trades dominates; costs and turnover erase apparent gross mean reversion."
+                                          },
+                                          {
+                                              "id":  "BB1",
+                                              "state":  "pending",
+                                              "severity":  "medium",
+                                              "file":  "bollinger-reversion-study.mjs, bollinger-reversion-study.test.mjs",
+                                              "owner":  "executor",
+                                              "allow_live_edit":  false,
+                                              "depends_on":  [
+                                                                 "MR1"
+                                                             ],
+                                              "task":  "Research the separate pre-registered daily Bollinger mean-reversion hypothesis: after a close below the lower Bollinger(20, 2) band, a close back above that band enters at the next daily close; exit at the first subsequent close at or above MA(20), or after seven daily bars, whichever occurs first. Use the same stable-13 and sealed holdouts/cost rule as MR1, but never select RSI versus Bollinger using holdout performance. Research only; do not alter live paths.",
+                                              "done_when":  "Synthetic fixtures prove no look-ahead and correct lower-band re-entry semantics; output includes fingerprint, row/trade counts, holdout dates, gross/net returns, cost/turnover, p or permutation evidence when sample size permits, and PASS/KILLED/CONTEXT-ONLY reason; npm.cmd test is green.",
+                                              "fail_closed":  "No holdout-driven choice between BB1 and MR1, no parameter changes after results, and no positive claim with an insufficient or non-positive net holdout.",
+                                              "expected_failure_modes":  "Band breaks persist in trends; apparent edge is selected after seeing RSI results; turnover and tail losses dominate net results."
+                                          },
+                                          {
+                                              "id":  "GRID1",
+                                              "state":  "pending",
+                                              "severity":  "medium",
+                                              "file":  "grid-viability-study.mjs, grid-viability-study.test.mjs",
+                                              "owner":  "executor",
+                                              "allow_live_edit":  false,
+                                              "depends_on":  [
+                                                                 "DQ3"
+                                                             ],
+                                              "task":  "Build one research-only conservative 4h long-only grid viability study: activate only when MA(20)/MA(50) differ by at most 1% and ATR(14) is 1%-5% of price; use one-ATR grid spacing, at most three inventory units, 0.16% maker fee plus 0.10% adverse-selection allowance per fill. An OHLC bar whose sequence cannot establish fill order, including one spanning both opposing grid levels, must be marked ambiguous and treated adversely or excluded from any profitability claim. Never place orders or add a live grid implementation.",
+                                              "done_when":  "Fixtures prove inventory cap, fee math, and adverse handling of ambiguous multi-level bars; output reports fingerprint, activated/ambiguous bars, fills, maximum inventory, gross/net PnL, both sealed holdouts, and PASS/KILLED/CONTEXT-ONLY verdict; npm.cmd test is green.",
+                                              "fail_closed":  "Any assumed intrabar fill priority, unresolved ambiguity, inventory-cap breach, insufficient holdout activity, or non-positive net holdout result makes the result KILLED or CONTEXT-ONLY.",
+                                              "expected_failure_modes":  "OHLC data cannot establish maker-fill order; range filter leaks into trends; inventory accumulates into breakouts; fees/adverse selection consume grid capture."
                                           }
                                       ],
                        "queue_rule":  "Work ONE item per run, in order, smallest complete unit. Mark state done before moving on. If an item cannot be finished in one run, split it and add the remainder as a new item rather than leaving it half-built.",
@@ -1841,6 +1901,14 @@
                        "detail":  "P2 rejected: npm.cmd test passed 116/116, but tests do not assert planted-signal/null AUC and the implementation can score non-converged logistic fits, violating fail-closed criteria.",
                        "commit":  "0ad6a6c",
                        "tests":  "npm.cmd test: 116 passing; semantic gate failed"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:35:00Z",
+                       "agent":  "architect",
+                       "action":  "queue-stock",
+                       "detail":  "Queued TF1 daily MA crossover, MR1 RSI reversion, BB1 Bollinger reversion, and GRID1 conservative grid-viability studies. Each is research-only, costed, holdout-bound, and fail-closed; BB1 is intentionally separate from RSI to prevent holdout strategy selection.",
+                       "commit":  null,
+                       "tests":  "State JSON parsed; no strategy code changed"
                    }
                ],
     "budget":  {
