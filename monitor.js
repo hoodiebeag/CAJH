@@ -33,6 +33,26 @@ const monitorHealth = {
   lastError: "monitor has not started"
 };
 
+export function createSingleFlight(label) {
+  let active = false;
+  let skipped = 0;
+  return {
+    async run(task) {
+      if (active) {
+        skipped++;
+        logger.warn(`[${label}] skipped overlapping run`);
+        return undefined;
+      }
+      active = true;
+      try { return await task(); }
+      finally { active = false; }
+    },
+    telemetry() { return { active, skipped }; }
+  };
+}
+
+const tickFlight = createSingleFlight("MONITOR");
+
 function setMonitorHealth(patch) {
   Object.assign(monitorHealth, patch);
 }
@@ -45,7 +65,7 @@ function persistenceHealthy() {
 export function getMonitorHealth(now = Date.now()) {
   const stale = !monitorHealth.lastTickAt || now - monitorHealth.lastTickAt > MONITOR_STALE_MS;
   const ok = monitorHealth.hydrated && monitorHealth.reconciled && monitorHealth.persistenceOk && monitorHealth.tickOk && !stale;
-  return { ...monitorHealth, stale, ok };
+  return { ...monitorHealth, stale, tickSkipped: tickFlight.telemetry().skipped, ok };
 }
 
 export function requireMonitorHealthForEntry(now = Date.now()) {
@@ -511,8 +531,9 @@ export function startMonitor(client, getChannelId, intervalMs = 30000) {
   }, 60_000);
 
   // Monitor open positions.
-  setInterval(async () => {
-    try {
+  setInterval(() => {
+    void tickFlight.run(async () => {
+      try {
       if (openTrades.size === 0) {
         setMonitorHealth({ lastTickAt: Date.now(), persistenceOk: persistenceHealthy(), tickOk: true, lastError: null });
         return;
@@ -614,9 +635,10 @@ export function startMonitor(client, getChannelId, intervalMs = 30000) {
 
       setMonitorHealth({ lastTickAt: Date.now(), persistenceOk: persistenceHealthy(), tickOk: true, lastError: null });
 
-    } catch (err) {
-      setMonitorHealth({ lastTickAt: Date.now(), persistenceOk: persistenceHealthy(), tickOk: false, lastError: `monitor tick failed: ${err.message}` });
-      logger.error("[MONITOR] Error:", err.message);
-    }
+      } catch (err) {
+        setMonitorHealth({ lastTickAt: Date.now(), persistenceOk: persistenceHealthy(), tickOk: false, lastError: `monitor tick failed: ${err.message}` });
+        logger.error("[MONITOR] Error:", err.message);
+      }
+    });
   }, intervalMs);
 }

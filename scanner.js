@@ -24,12 +24,13 @@ import {
 import { placeBuy, getCurrentPrice, fetchOHLC, getAccountBalance } from "./trader.js";
 import {
   registerTrade, postTradeOpened, isTradingEnabled, getTrade, getOpenTrades, closeTradeAtMarket,
-  requireMonitorHealthForEntry
+  requireMonitorHealthForEntry, createSingleFlight
 } from "./monitor.js";
 import { saveChart, symbolToKrakenId, loadLevelCooldownsResult, saveLevelCooldowns } from "./storage.js";
 import * as logger from './logger.js';
 
 const BEAG = () => process.env.BEAG_USER_ID || "795521432783552552";
+const scanFlight = createSingleFlight("SCAN");
 
 export const SCAN_INTERVALS = [
   { label: "1h", minutes: 60   },
@@ -41,7 +42,6 @@ export const SCAN_INTERVALS = [
 const MAX_OPEN_POSITIONS  = 6;   // at the cap, the most profitable open position is rotated out for a new signal
 const MIN_POSITION_USD    = 10;  // skip if the computed size would be below Kraken's min order size
 // Swing window N, TP_R, RISK_PCT / MAX_POSITION_PCT and the stop bands live in strategy.js.
-
 // Candle fetching lives in trader.js (shared with the monitor); re-export the name
 // the rest of the app already uses.
 export const fetchCandles = fetchOHLC;
@@ -286,7 +286,7 @@ async function proposeBuyLocked(symbol, buy, channel) {
 
 /** Full watchlist scan — used by !scan and the scheduled scans. Stays quiet:
  *  posts charts only for assets that actually open a trade. */
-export async function runScanner(channel, state, verbose = false) {
+async function runScannerUnsafe(channel, state, verbose = false) {
   const watchlist = state.watchlist || [];
   if (watchlist.length === 0) {
     await channel.send("⚠️ Your watchlist is empty! Add assets with `!watch BTC ETH SOL`.");
@@ -341,6 +341,14 @@ export async function runScanner(channel, state, verbose = false) {
       `opened ${opened} trade${opened === 1 ? "" : "s"} · ${now} EST`
     );
   }
+}
+
+export async function runScanner(channel, state, verbose = false) {
+  return scanFlight.run(() => runScannerUnsafe(channel, state, verbose));
+}
+
+export function getScanTelemetry() {
+  return scanFlight.telemetry();
 }
 
 /** Single-symbol check — used by !trade BTC. Always shows charts (you asked to see it). */
