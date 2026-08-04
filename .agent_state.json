@@ -6,11 +6,11 @@
                     "objective":  "Expose read-only positions, recent decision logs, effective config, halt/health state, and latest ROADMAP verdict in buildLiveContext with redaction and bounded size.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
-                    "iteration":  0,
+                    "iteration":  1,
                     "max_iterations":  6,
-                    "notes":  "C1 verified with npm.cmd test 127/127. Pulled C2 into EXECUTOR_PENDING.",
+                    "notes":  "Bug Report — C2 live context gate failed despite npm.cmd test passing 129/129.\n\nActual test run: npm.cmd test passed 129 tests, including the two C2 tests from a477c7d.\n\nWhy this is not a PASS:\n1. C2 done_when requires fixtures answer skipped-asset questions from recorded data, not invented rationale. buildLiveContext loads asset_decision records, but its recent-decision formatter does not handle event.type === \"asset_decision\". Those records fall through to `${event.at}: ${event.type}`; C1 records use `ts`, not `at`, so a skipped BTC decision becomes \"undefined: asset_decision\" instead of \"skipped BTC 1h; no signal\".\n2. The C2 tests only assert headings, bounded length, and no source text. They do not inject or create an asset_decision fixture and therefore do not prove the context can answer why an asset was skipped.\n3. Redaction is incomplete for dynamic runtime fields: halt reason / recent decision reason can be rendered directly. Add a small redaction helper and test with token/API-looking text in a recorded decision or halt reason.\n\nRequired fix: format asset_decision records using ts/at, symbol, timeframe, taken/skipped, and reason; add deterministic tests proving a recorded skipped asset appears with its reason and that absent decisions are not invented. Add a redaction fixture for dynamic context fields. Keep scope to context.js and context.test.mjs.",
                     "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T13:28:03.2171764Z"
+                    "updated_at":  "2026-08-04T13:30:44.9525944Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -1989,6 +1989,22 @@
                        "detail":  "C1 decision logging verified. npm.cmd test passed 127/127; focused tests prove bounded structured decisions, injected sink failure is non-blocking, and scanner decision helper writes persistent asset_decision records without trade side effects. Routed C2.",
                        "commit":  "b92235d + f8c850d",
                        "tests":  "npm.cmd test: 127 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:29:44.0206611Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "C2 added bounded redacted live context for positions, decisions, config, health, halt, and roadmap verdict.",
+                       "commit":  "a477c7d",
+                       "tests":  "node --check context.js context.test.mjs; npm.cmd test: 129 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:30:44.9525944Z",
+                       "agent":  "verifier",
+                       "action":  "failback",
+                       "detail":  "C2 rejected: npm.cmd test passed 129/129, but buildLiveContext does not format asset_decision records and tests do not prove skipped-asset answers come from recorded decision data.",
+                       "commit":  "a477c7d",
+                       "tests":  "npm.cmd test: 129 passing; semantic gate failed"
                    }
                ],
     "budget":  {
