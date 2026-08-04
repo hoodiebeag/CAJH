@@ -7,6 +7,7 @@ import {
   dateVectorPermutationP,
   economicMomentumViews,
   effectiveN,
+  forwardViewsByRank,
   economicViews,
   perDateIC,
   ranks,
@@ -279,6 +280,54 @@ test("B1 rank=negBeta uses negative rolling BTC beta as the identical trailR ran
   const ethRow = rows.find((r) => r.asset === "ETH");
   assert.equal(ethRow.date, "2025-04-04");
   assert.ok(Math.abs(ethRow.trailR - -2) < 1e-12);
+});
+
+test("B2 reports forward raw and risk-adjusted returns side by side when requested", () => {
+  const asset = [100, 105, 110, 121, 145.2, 159.72].map((close, i) => candle(i, close));
+  const { rows } = buildMomentumPanel(new Map([["BTC", asset]]), {
+    universe: ["BTC"],
+    lookback: 2,
+    horizon: 3,
+    entryDelay: 1,
+    step: 1,
+    minAssets: 1,
+    includeForwardRiskAdjusted: true
+  });
+
+  const row = rows[0];
+  const raw = 159.72 / 121 - 1;
+  const vol = Math.sqrt(((0.2 - 0.15) ** 2 + (0.1 - 0.15) ** 2) / 2);
+  assert.equal(row.fwdR, raw);
+  assert.equal(row.fwdRawR, raw);
+  assert.ok(Math.abs(row.fwdRiskAdjR - raw / vol) < 1e-12);
+});
+
+test("B2 forwardViewsByRank scores raw and risk-adjusted forward returns and guards zero volatility", () => {
+  const assets = ["BTC", "ETH", "SOL"];
+  const series = new Map(assets.map((asset, assetIndex) => [
+    asset,
+    [100, 101, 102, 104, 108, 116, 117, 118, 120, 124, 132, 133].map((close, i) => candle(i, close + assetIndex))
+  ]));
+
+  const views = forwardViewsByRank(series, {
+    rankModes: ["return", "negVol"],
+    scoreOptions: { minAssets: 3, permutations: 5, bootstrapIterations: 5 },
+    panelOptions: { universe: assets, lookback: 2, horizon: 3, entryDelay: 1, step: 3, minAssets: 3, volWindow: 2 }
+  });
+
+  assert.deepEqual(Object.keys(views), ["return", "negVol"]);
+  assert.equal(views.return.raw.nRows > 0, true);
+  assert.equal(views.return.riskAdjusted.nRows > 0, true);
+  assert.equal(views.negVol.raw.nRows > 0, true);
+
+  const flat = new Map([["BTC", [100, 101, 102, 103, 104, 105].map((close, i) => candle(i, close))]]);
+  const guarded = forwardViewsByRank(flat, {
+    rankModes: ["return"],
+    scoreOptions: { minAssets: 1, permutations: 5, bootstrapIterations: 5 },
+    panelOptions: { universe: ["BTC"], lookback: 2, horizon: 2, entryDelay: 1, step: 1, minAssets: 1 }
+  });
+  assert.equal(guarded.return.raw.nRows > 0, true);
+  assert.equal(guarded.return.riskAdjusted.nRows, 0);
 });
 
 test("rank correlation identifies a planted monotonic cross-section", () => {

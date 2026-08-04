@@ -295,6 +295,7 @@ export function buildMomentumPanel(series, {
   residualWindow = 90,
   volWindow = lookback,
   tagRegime = false,
+  includeForwardRiskAdjusted = false,
   q1Start = Q1_ONLY_START,
   q1End = Q1_ONLY_END
 } = {}) {
@@ -359,7 +360,19 @@ export function buildMomentumPanel(series, {
       } else if (rank !== "return") {
         throw new Error(`unknown momentum rank variable: ${rank}`);
       }
-      bucket.push({ date, asset, trailR, fwdR: forward / entry - 1 });
+      const fwdR = forward / entry - 1;
+      const row = { date, asset, trailR, fwdR };
+      if (includeForwardRiskAdjusted) {
+        const assetRows = series.get(asset);
+        const entryIndex = assetIndex + entryDelay;
+        const exitIndex = assetIndex + horizon;
+        const forwardReturns = [];
+        for (let j = entryIndex + 1; j <= exitIndex; j++) forwardReturns.push(assetRows[j].close / assetRows[j - 1].close - 1);
+        const fwdVol = stdev(forwardReturns);
+        row.fwdRawR = fwdR;
+        row.fwdRiskAdjR = Number.isFinite(fwdVol) && fwdVol > 0 ? fwdR / fwdVol : null;
+      }
+      bucket.push(row);
     }
 
     if (bucket.length < minAssets) continue;
@@ -369,6 +382,26 @@ export function buildMomentumPanel(series, {
   }
 
   return { rows, q1Only };
+}
+
+export function forwardViewsByRank(series, {
+  rankModes = ["return", "negVol", "negBeta"],
+  scoreOptions = {},
+  panelOptions = {}
+} = {}) {
+  return Object.fromEntries(rankModes.map((rankMode) => {
+    const { rows, q1Only } = buildMomentumPanel(series, {
+      ...panelOptions,
+      rank: rankMode,
+      includeForwardRiskAdjusted: true
+    });
+    const riskRows = rows.filter((r) => Number.isFinite(r.fwdRiskAdjR)).map((r) => ({ ...r, fwdR: r.fwdRiskAdjR }));
+    return [rankMode, {
+      raw: scoreMomentumPanelRows(rows, scoreOptions),
+      riskAdjusted: scoreMomentumPanelRows(riskRows, scoreOptions),
+      q1OnlyRows: q1Only.length
+    }];
+  }));
 }
 
 function selectedTurnover(selected, previous) {
