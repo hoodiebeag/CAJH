@@ -2,15 +2,15 @@
   "version": 2,
   "control": {
     "status": "EXECUTOR_PENDING",
-    "target_file": "bot.js, bot-scheduler.test.mjs",
-    "objective": "Contain scheduled scan and config-persistence failures inside runScheduledScan. Record a failed scheduled-run health result; never update lastScanTime after failure or create an unhandled cron rejection.",
+    "target_file": "storage.js, monitor.js, bot.js, storage-preflight.test.mjs, README.md",
+    "objective": "Require an explicit, writable durable DATA_DIR and healthy persistence/recovery preflight before LIVE_TRADING can ever be resumed. Keep analysis/backtests usable without this preflight and document the deployment contract.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-014 verified: npm.cmd test ran 68 tests and all passed. Tests cover sanitized errors, bounded Discord ready timeout, clientReady clearing, and login rejection fatal routing. Monitor and cron setup remain inside clientReady only.",
+    "notes": "R-015 verified: npm.cmd test ran 73 tests and all passed. Scheduler tests cover scanner failure rollback, config persistence failure rollback, successful timestamp persistence, and missing-channel containment without cron rejection.",
     "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:32:35.274Z"
+    "updated_at": "2026-08-04T11:35:58.187Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -235,7 +235,7 @@
       },
       {
         "id": "R-014",
-        "state": "done",
+        "state": "verifying",
         "severity": "high",
         "file": "bot.js, bot-lifecycle.test.mjs",
         "owner": "executor",
@@ -249,7 +249,7 @@
       },
       {
         "id": "R-015",
-        "state": "executing",
+        "state": "done",
         "severity": "medium",
         "file": "bot.js, bot-scheduler.test.mjs",
         "owner": "executor",
@@ -264,7 +264,7 @@
       },
       {
         "id": "R-016",
-        "state": "pending",
+        "state": "executing",
         "severity": "high",
         "file": "storage.js, monitor.js, bot.js, storage-preflight.test.mjs, README.md",
         "owner": "executor",
@@ -1497,6 +1497,22 @@
       "detail": "R-014 Discord lifecycle verified with npm.cmd test 68/68 and startup placement check. Pulled R-015 into EXECUTOR_PENDING.",
       "commit": "5ea27df",
       "tests": "68 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:35:18.762Z",
+      "agent": "executor",
+      "action": "handoff",
+      "detail": "Contained scheduled scan and config persistence failures, rolled back lastScanTime on failure, and added scheduler health telemetry/tests.",
+      "commit": "c32b55c",
+      "tests": "npm.cmd test: 71 passed, 0 failed"
+    },
+    {
+      "ts": "2026-08-04T11:35:58.187Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "R-015 scheduled scan containment verified with npm.cmd test 73/73. Pulled R-016 into EXECUTOR_PENDING.",
+      "commit": "2547aa8",
+      "tests": "73 passing (npm.cmd test)"
     }
   ],
   "budget": {
