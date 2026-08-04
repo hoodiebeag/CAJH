@@ -428,11 +428,26 @@ export async function handleGeneral(message, userMessage, state) {
   }
 
   const res = await anthropic.messages.create({
-    model: MODEL, max_tokens: 1024, system,
+    model: MODEL, max_tokens: 2048, system,
     messages: [{ role: "user", content: userMessage }]
   });
 
-  const text = res.content[0]?.text ?? "…";
+  let text = res.content[0]?.text ?? "…";
+  // A detailed research protocol can exceed one response. Continue explicitly
+  // rather than silently posting a sentence truncated at the provider token cap.
+  if (res.stop_reason === "max_tokens") {
+    const continuation = await anthropic.messages.create({
+      model: MODEL, max_tokens: 1024, system,
+      messages: [
+        { role: "user", content: userMessage },
+        { role: "assistant", content: text },
+        { role: "user", content: "Continue exactly where you stopped. Finish the incomplete thought concisely; do not repeat earlier material." }
+      ]
+    });
+    text += continuation.content[0]?.text
+      ? `\n\n${continuation.content[0].text}`
+      : "\n\n[Response reached its length limit before it could be completed.]";
+  }
   for (let i = 0; i < text.length; i += 1900) {
     await message.reply(text.slice(i, i + 1900));
   }
