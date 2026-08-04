@@ -2,15 +2,15 @@
     "version":  2,
     "control":  {
                     "status":  "EXECUTOR_PENDING",
-                    "target_file":  "ROADMAP.md",
-                    "objective":  "Fill the classifier verdict template. PASS requires sealed holdout AUC above the refit permutation null at p\u003c0.05 and net-of-cost economic lift; otherwise mark entry quality KILLED.",
-                    "allow_live_edit":  false,
+                    "target_file":  "scanner.js, logger.js, decision-log.test.mjs",
+                    "objective":  "Add an append-only, bounded decision log for each evaluated asset with timestamp, timeframe, taken/skipped reason, entry/stop/TP/risk/regime. Logging must be non-blocking and incapable of changing trade control flow.",
+                    "allow_live_edit":  true,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "P4 verified with npm.cmd test 124/124. Pulled P5 into EXECUTOR_PENDING.",
+                    "notes":  "P5 verified with npm.cmd test 124/124. Pulled C1 into EXECUTOR_PENDING.",
                     "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T13:10:33.3741232Z"
+                    "updated_at":  "2026-08-04T13:22:17.6842442Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -581,7 +581,7 @@
                                           },
                                           {
                                               "id":  "P5",
-                                              "state":  "in_progress",
+                                              "state":  "done",
                                               "severity":  "medium",
                                               "file":  "ROADMAP.md",
                                               "owner":  "executor",
@@ -595,7 +595,7 @@
                                           },
                                           {
                                               "id":  "C1",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "low",
                                               "file":  "scanner.js, logger.js, decision-log.test.mjs",
                                               "owner":  "executor",
@@ -1956,6 +1956,22 @@
                        "action":  "validate-and-route",
                        "detail":  "P4 classifier reporting verified. npm.cmd test passed 124/124; focused tests exercise standardized coefficient ordering, fixed-threshold precision/recall, explicit net-of-round-trip-cost lift, and imbalance/survivorship caveats. Routed P5.",
                        "commit":  "82f51ae",
+                       "tests":  "npm.cmd test: 124 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:20:24.4086372Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "P5 recorded classifier data-gated KILLED verdict with explicit no-promotion criteria and caveats.",
+                       "commit":  "aea1293",
+                       "tests":  "npm.cmd test: 124 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:22:17.6842442Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "P5 classifier verdict verified. npm.cmd test passed 124/124; ROADMAP marks the classifier KILLED/data-gated and does not promote synthetic fixture evidence or live implementation without sealed p\u003c0.05 plus net-of-cost lift.",
+                       "commit":  "aea1293",
                        "tests":  "npm.cmd test: 124 passing"
                    }
                ],
