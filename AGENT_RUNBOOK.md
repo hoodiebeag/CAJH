@@ -157,7 +157,9 @@ declared λ grid, and λ selected solely from inner train folds. The handoff evi
 report train rows, fold count, selected λ, convergence/iteration status, class weights, and
 Mann-Whitney AUC on planted-signal and null fixtures. A non-convergent or non-finite fit is
 invalid; it cannot receive an AUC or flow into a holdout task. Trees, boosting, neural models,
-and holdout-informed tuning are out of scope.
+and holdout-informed tuning are out of scope. If features are standardized, each inner fold
+must fit its scaler on that fold's training rows and apply it to that fold's validation rows;
+pre-scaling the entire outer-train set leaks validation distribution into λ selection.
 
 ### P3 holdout/permutation gate
 
