@@ -6,6 +6,11 @@ import { loadWatchlist, symbolToKrakenId } from "./researchlib.mjs";
 import { dataManifest, loadDailyCandles, saveExperiment } from "./researchlab.mjs";
 
 const DAY = 86400;
+export const STABLE_13 = Object.freeze([
+  "BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "AVAX", "LINK", "DOT", "LTC", "BCH", "ATOM", "XLM"
+]);
+export const Q1_ONLY_START = "2026-01-01";
+export const Q1_ONLY_END = "2026-04-01";
 const logReturn = (a, b) => Math.log(b / a);
 const mean = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
 const stdev = (xs) => xs.length > 1 ? Math.sqrt(mean(xs.map((x) => (x - mean(xs)) ** 2))) : 0;
@@ -60,6 +65,49 @@ export function bhFdr(rows) {
     prior = Math.min(prior, ordered[i].p * ordered.length / (i + 1)); ordered[i].q = Math.min(1, prior);
   }
   return rows;
+}
+
+const dateOf = (time) => new Date(time * 1000).toISOString().slice(0, 10);
+const inDateWindow = (date, start, end) => date >= start && date < end;
+const closeByDate = (candles) => new Map(candles.map((c) => [dateOf(c.time), c.close]));
+
+export function buildMomentumPanel(series, {
+  universe = STABLE_13,
+  lookback = 30,
+  horizon = 7,
+  step = 7,
+  minAssets = 8,
+  q1Start = Q1_ONLY_START,
+  q1End = Q1_ONLY_END
+} = {}) {
+  const names = [...universe];
+  if (names.length < minAssets) return { rows: [], q1Only: [] };
+  const maps = new Map(names.map((asset) => [asset, closeByDate(series.get(asset) || [])]));
+  const calendarSource = names.map((asset) => series.get(asset) || []).reduce((best, xs) => xs.length > best.length ? xs : best, []);
+  const rows = [];
+  const q1Only = [];
+
+  for (let i = lookback; i + horizon < calendarSource.length; i += step) {
+    const date = dateOf(calendarSource[i].time);
+    const trailingDate = dateOf(calendarSource[i - lookback].time);
+    const forwardDate = dateOf(calendarSource[i + horizon].time);
+    const bucket = [];
+
+    for (const asset of names) {
+      const closes = maps.get(asset);
+      const trailing = closes.get(trailingDate);
+      const current = closes.get(date);
+      const forward = closes.get(forwardDate);
+      if (![trailing, current, forward].every((x) => Number.isFinite(x) && x > 0)) continue;
+      bucket.push({ date, asset, trailR: current / trailing - 1, fwdR: forward / current - 1 });
+    }
+
+    if (bucket.length < minAssets) continue;
+    if (inDateWindow(date, q1Start, q1End)) q1Only.push(...bucket);
+    else rows.push(...bucket);
+  }
+
+  return { rows, q1Only };
 }
 
 function dailySeries(watchlist) {
