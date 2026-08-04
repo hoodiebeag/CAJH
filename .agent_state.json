@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "storage.js, monitor.js, bot.js, storage-preflight.test.mjs, README.md",
-    "objective": "Require an explicit, writable durable DATA_DIR and healthy persistence/recovery preflight before LIVE_TRADING can ever be resumed. Keep analysis/backtests usable without this preflight and document the deployment contract.",
-    "allow_live_edit": true,
+    "status": "EXECUTOR_PENDING",
+    "target_file": "swarm-runner.py, swarm-runner.test.py",
+    "objective": "Replace swarm-runner's blanket git add -A checkpoint with strict task-scoped staging: only declared queue files and .agent_state.json may be committed. Unexpected modified/staged paths must block the checkpoint without discarding anything.",
+    "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-016 executor handoff: added explicit writable DATA_DIR storage preflight to boot and resume paths; analysis/research storage remains usable when DATA_DIR is unset; added storage-preflight coverage. npm.cmd test passed 79/79.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-04T11:41:15.808Z"
+    "notes": "R-016 verified: npm.cmd test ran 79 tests and all passed. storage-preflight.test.mjs directly exercises absent DATA_DIR, writable explicit DATA_DIR, resume refusal without durable storage, and healthy resume with monitor preflight. Pulled next eligible item into EXECUTOR_PENDING.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-04T11:41:54.301Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -264,7 +264,7 @@
       },
       {
         "id": "R-016",
-        "state": "verifying",
+        "state": "done",
         "severity": "high",
         "file": "storage.js, monitor.js, bot.js, storage-preflight.test.mjs, README.md",
         "owner": "executor",
@@ -293,7 +293,7 @@
       },
       {
         "id": "R-018",
-        "state": "pending",
+        "state": "executing",
         "severity": "high",
         "file": "swarm-runner.py, swarm-runner.test.py",
         "owner": "executor",
@@ -1521,6 +1521,14 @@
       "detail": "R-016: required explicit writable DATA_DIR plus healthy persistence preflight before boot/resume can enable live trading; default research/backtest storage remains usable without DATA_DIR; documented durable deployment contract.",
       "commit": "4f56e40",
       "tests": "79 passing (npm.cmd test); node --check storage.js monitor.js bot.js storage-preflight.test.mjs"
+    },
+    {
+      "ts": "2026-08-04T11:41:54.301Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "R-016 durable storage preflight verified with npm.cmd test 79/79; storage-preflight tests exercise the new live-readiness gate. Pulled R-018 into EXECUTOR_PENDING.",
+      "commit": "82d754d",
+      "tests": "79 passing (npm.cmd test)"
     }
   ],
   "budget": {
