@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "swarm-runner.py, swarm-runner.test.py",
     "objective": "Replace swarm-runner's blanket git add -A checkpoint with strict task-scoped staging: only declared queue files and .agent_state.json may be committed. Unexpected modified/staged paths must block the checkpoint without discarding anything.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-016 verified: npm.cmd test ran 79 tests and all passed. storage-preflight.test.mjs directly exercises absent DATA_DIR, writable explicit DATA_DIR, resume refusal without durable storage, and healthy resume with monitor preflight. Pulled next eligible item into EXECUTOR_PENDING.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:41:54.301Z"
+    "notes": "R-018 executor handoff: replaced blanket git add -A checkpoint with strict target-file + .agent_state.json staging; unexpected dirty/staged paths block without discard. python swarm-runner.test.py passed 3/3; npm.cmd test passed 79/79.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:43:42.205Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -293,7 +293,7 @@
       },
       {
         "id": "R-018",
-        "state": "executing",
+        "state": "verifying",
         "severity": "high",
         "file": "swarm-runner.py, swarm-runner.test.py",
         "owner": "executor",
@@ -1529,6 +1529,14 @@
       "detail": "R-016 durable storage preflight verified with npm.cmd test 79/79; storage-preflight tests exercise the new live-readiness gate. Pulled R-018 into EXECUTOR_PENDING.",
       "commit": "82d754d",
       "tests": "79 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:43:42.205Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-018: replaced swarm-runner blanket git add -A with task-scoped staging and fail-closed blocking for unexpected modified or staged paths.",
+      "commit": "0166fe0",
+      "tests": "python swarm-runner.test.py: 3 passing; npm.cmd test: 79 passing"
     }
   ],
   "budget": {
