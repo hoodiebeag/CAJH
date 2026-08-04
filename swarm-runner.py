@@ -30,13 +30,16 @@ Fixes vs the original draft:
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import time
+import uuid
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(HERE, ".agent_state.json")
+LEASE_FILE = os.path.join(HERE, ".swarm-runner.lock")
 
 # How the headless agent is invoked; override with SWARM_AGENT_CMD if your CLI differs.
 # The original used `claude -y`; verify your CLI's non-interactive flag before trusting
@@ -47,6 +50,92 @@ TERMINAL = {"DONE", "COMPLETE", "BLOCKED"}
 MAX_STALL = 2          # same status this many times running with no progress -> abort
 AGENT_TIMEOUT = 900    # seconds per agent invocation
 LOG_CAP = 4000         # chars of test output retained in notes
+STALE_LEASE_SECONDS = int(os.environ.get("SWARM_STALE_LEASE_SECONDS", str(AGENT_TIMEOUT * 2)))
+
+
+def pid_is_running(pid):
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return True
+    if pid <= 0:
+        return True
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+    except Exception:
+        return True
+
+
+def lease_is_recoverable(lease, now, stale_seconds):
+    if not isinstance(lease, dict):
+        return False
+    created_at = lease.get("created_at")
+    if not isinstance(created_at, (int, float)):
+        return False
+    if now - created_at < stale_seconds:
+        return False
+    return not pid_is_running(lease.get("pid"))
+
+
+def acquire_runner_lease(repo=None, stale_seconds=STALE_LEASE_SECONDS):
+    repo = repo or HERE
+    lease_path = os.path.join(repo, ".swarm-runner.lock")
+    token = uuid.uuid4().hex
+    lease = {
+        "token": token,
+        "pid": os.getpid(),
+        "host": socket.gethostname(),
+        "created_at": time.time(),
+        "started_at": datetime.now(timezone.utc).isoformat(),
+    }
+    payload = json.dumps(lease, sort_keys=True)
+    for _ in range(2):
+        try:
+            fd = os.open(lease_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(payload)
+            return lease
+        except FileExistsError:
+            try:
+                with open(lease_path, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+            except Exception:
+                return None
+            if not lease_is_recoverable(existing, time.time(), stale_seconds):
+                return None
+            try:
+                os.unlink(lease_path)
+            except FileNotFoundError:
+                continue
+            except Exception:
+                return None
+    return None
+
+
+def release_runner_lease(lease, repo=None):
+    repo = repo or HERE
+    if not isinstance(lease, dict):
+        return False
+    lease_path = os.path.join(repo, ".swarm-runner.lock")
+    try:
+        with open(lease_path, "r", encoding="utf-8") as f:
+            current = json.load(f)
+    except FileNotFoundError:
+        return True
+    except Exception:
+        return False
+    if current.get("token") != lease.get("token"):
+        return False
+    try:
+        os.unlink(lease_path)
+        return True
+    except FileNotFoundError:
+        return True
+    except Exception:
+        return False
 
 
 def task_paths(control):
@@ -165,6 +254,19 @@ def main():
               f"Set SWARM_AGENT_CMD, e.g. SWARM_AGENT_CMD='claude -p'.")
         sys.exit(1)
 
+    lease = acquire_runner_lease()
+    if lease is None:
+        print("[SWARM] Another runner lease is active or ambiguous. Exiting without dispatch.")
+        return
+
+    try:
+        run_loop()
+    finally:
+        if not release_runner_lease(lease):
+            print("[SWARM] Runner lease was not released; inspect .swarm-runner.lock before relaunch.")
+
+
+def run_loop():
     state = read_state()
     if state is None:
         print("[SWARM] No usable .agent_state.json. Seed it (see AGENT_PROTOCOL.md) first.")

@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -79,6 +80,70 @@ class ScopedCheckpointTests(unittest.TestCase):
 
         staged = git(self.repo, "diff", "--cached", "--name-only").stdout.splitlines()
         self.assertEqual(staged, ["other.js"])
+
+
+class RunnerLeaseTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_second_runner_cannot_acquire_an_active_lease(self):
+        first = swarm_runner.acquire_runner_lease(str(self.repo), stale_seconds=60)
+        self.assertIsNotNone(first)
+
+        second = swarm_runner.acquire_runner_lease(str(self.repo), stale_seconds=60)
+
+        self.assertIsNone(second)
+        self.assertTrue((self.repo / ".swarm-runner.lock").exists())
+        self.assertTrue(swarm_runner.release_runner_lease(first, str(self.repo)))
+        self.assertFalse((self.repo / ".swarm-runner.lock").exists())
+
+    def test_only_safe_stale_dead_pid_lease_recovers(self):
+        stale = {
+            "token": "old",
+            "pid": 99999999,
+            "host": "test",
+            "created_at": time.time() - 120,
+        }
+        (self.repo / ".swarm-runner.lock").write_text(json.dumps(stale), encoding="utf-8")
+
+        lease = swarm_runner.acquire_runner_lease(str(self.repo), stale_seconds=60)
+
+        self.assertIsNotNone(lease)
+        self.assertNotEqual(lease["token"], "old")
+        self.assertTrue(swarm_runner.release_runner_lease(lease, str(self.repo)))
+
+    def test_ambiguous_lease_blocks_without_mutation(self):
+        path = self.repo / ".swarm-runner.lock"
+        path.write_text("not-json", encoding="utf-8")
+
+        self.assertIsNone(swarm_runner.acquire_runner_lease(str(self.repo), stale_seconds=0))
+        self.assertEqual(path.read_text(encoding="utf-8"), "not-json")
+
+    def test_main_releases_lease_when_loop_raises(self):
+        old_here = swarm_runner.HERE
+        old_state = swarm_runner.STATE_FILE
+        old_lease = swarm_runner.LEASE_FILE
+        old_loop = swarm_runner.run_loop
+        old_which = swarm_runner.shutil.which
+        swarm_runner.HERE = str(self.repo)
+        swarm_runner.STATE_FILE = str(self.repo / ".agent_state.json")
+        swarm_runner.LEASE_FILE = str(self.repo / ".swarm-runner.lock")
+        swarm_runner.shutil.which = lambda _cmd: "agent"
+        swarm_runner.run_loop = lambda: (_ for _ in ()).throw(RuntimeError("boom"))
+        try:
+            with self.assertRaises(RuntimeError):
+                swarm_runner.main()
+            self.assertFalse((self.repo / ".swarm-runner.lock").exists())
+        finally:
+            swarm_runner.HERE = old_here
+            swarm_runner.STATE_FILE = old_state
+            swarm_runner.LEASE_FILE = old_lease
+            swarm_runner.run_loop = old_loop
+            swarm_runner.shutil.which = old_which
 
 
 if __name__ == "__main__":
