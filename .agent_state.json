@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "VERIFIER_PENDING",
+                    "status":  "EXECUTOR_PENDING",
                     "target_file":  "momentum.mjs, momentum.test.mjs",
-                    "objective":  "Parameterize the M1-M6 ranking variable so raw momentum, negative trailing volatility, and negative BTC beta run through the identical pipeline. Momentum output must remain bit-for-bit unchanged under rank=return.",
+                    "objective":  "Report forward raw return and forward risk-adjusted return/vol side by side for every rank mode, guarding zero/invalid forward volatility.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "B1 implemented in commit cde9b34. npm.cmd test passed 106/106, including rank=return identity and negative-volatility/beta rank tests.",
-                    "updated_by":  "executor",
-                    "updated_at":  "2026-08-04T12:14:19.3372256Z"
+                    "notes":  "B1 verified with npm.cmd test 106/106. Pulled B2 into EXECUTOR_PENDING.",
+                    "updated_by":  "verifier",
+                    "updated_at":  "2026-08-04T12:14:45.4316291Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -465,7 +465,7 @@
                                           },
                                           {
                                               "id":  "B1",
-                                              "state":  "verifying",
+                                              "state":  "done",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -479,7 +479,7 @@
                                           },
                                           {
                                               "id":  "B2",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -1753,6 +1753,14 @@
                        "detail":  "B1: parameterized the momentum panel ranking variable across raw return, negative trailing volatility, and negative BTC beta while preserving rank=return output identity.",
                        "commit":  "cde9b34",
                        "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 106 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:14:45.4316291Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "B1 rank-variable parameterization verified. npm.cmd test passed 106/106; tests prove rank=return output identity and negative volatility/beta values through the same trailR ranking slot.",
+                       "commit":  "d85c9b8",
+                       "tests":  "npm.cmd test: 106 passing"
                    }
                ],
     "budget":  {
