@@ -50,7 +50,7 @@ rather than clobbering entries another agent added while you worked.
 
 ## Hard rules (all agents)
 
-1. **Read `.agent_state.json` first. If it is empty, malformed, or missing `status`,
+1. **Read `.agent_state.json` first, then `AGENT_RUNBOOK.md`. If the state is empty, malformed, or missing `status`,
    `target_file`, or `objective` — set `status: "BLOCKED"`, write why into `notes`, and
    stop.** Never infer a target or invent an objective. In a repo that places real
    orders, a guessed target is the most expensive possible failure.
@@ -66,7 +66,8 @@ rather than clobbering entries another agent added while you worked.
    `backtest.js` are live-trading logic. Do not edit unless the state file names one as
    `target_file` AND `allow_live_edit` is `true`. Research scripts and data plumbing are
    fair game.
-7. **`npm test` must pass before advancing `status`.** If it fails, put the failure log
+7. **`npm.cmd test` must pass before advancing `status`.** Use this Windows-safe form because
+   PowerShell can reject `npm test` by blocking `npm.ps1`; this is not a test failure. If it fails, put the failure log
    in `notes`, set `status: "EXECUTOR_PENDING"`, and let the Executor fix it.
 8. **Respect `max_iterations`.** If `iteration >= max_iterations`, set `BLOCKED` and
    stop. A loop that cannot converge must halt, not spin — spinning burns the usage
