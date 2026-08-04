@@ -62,3 +62,12 @@ test("stats and config retain a readable prior version after an interrupted prim
   assert.equal(result.health.stats.source, "backup");
   assert.equal(result.health.config.source, "backup");
 });
+
+test("decision journal survives a fresh deployment process", () => {
+  const dir = tempDir();
+  const first = runStorage(dir, "console.log('__RESULT__' + JSON.stringify(storage.appendDecisionEvent({ type: 'entry', trade: { symbol: 'BTC', entry: 100 } })))");
+  const second = runStorage(dir, "console.log('__RESULT__' + JSON.stringify(storage.loadDecisionJournal()))");
+  assert.equal(first.type, "entry");
+  assert.equal(second.length, 1);
+  assert.equal(second[0].trade.symbol, "BTC");
+});

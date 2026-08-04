@@ -130,6 +130,7 @@ export function backtestMultiTF({ series } = {}, {
   const H = entryCandles.map(c => parseFloat(c.high));
   const L = entryCandles.map(c => parseFloat(c.low));
   const C = entryCandles.map(c => parseFloat(c.close));
+  const V = entryCandles.map(c => parseFloat(c.volume) || 0);
   const T = entryCandles.map(c => parseInt(c.time));
 
   const pivE = detectSwings(entryCandles, n);
@@ -184,7 +185,7 @@ export function backtestMultiTF({ series } = {}, {
 
   // ── ma_dip mode ── buy when price closes a set % below its own moving average
   // (oversold vs. its mean), tight stop under the dip, ambitious R-multiple target.
-  const maAt = (k, period) => {
+  const maAt = (k, period = 20) => {
     if (k < period - 1) return null;
     let s = 0; for (let j = k - period + 1; j <= k; j++) s += C[j];
     return s / period;
@@ -228,6 +229,56 @@ export function backtestMultiTF({ series } = {}, {
     if (prior.length < 2) return null;
     if (!(prior[prior.length - 1].price > prior[prior.length - 2].price)) return null; // not a higher low
     return base;
+  };
+
+  // Trend-continuation candidates are intentionally research-only. Unlike the dip modes,
+  // they require price to make a new N-bar high or resume above a rising moving average.
+  // Their stops use ATR known before the entry candle, avoiding a volatility look-ahead.
+  const breakoutEntry = (k) => {
+    const lookback = 20;
+    if (k < lookback) return null;
+    let priorHigh = -Infinity;
+    for (let j = k - lookback; j < k; j++) priorHigh = Math.max(priorHigh, H[j]);
+    if (C[k] <= priorHigh) return null;
+    const a = atr(H, L, C, k - 1, atrPeriod); if (!a) return null;
+    const entry = C[k], stop = entry - 2 * a;
+    return stop < entry ? { entry, stop, tp: entry + tpR * (entry - stop) } : null;
+  };
+  const trendPullbackEntry = (k) => {
+    const fast = maAt(k, 20), slow = maAt(k, 50), previousFast = maAt(k - 1, 20);
+    if (fast == null || slow == null || previousFast == null) return null;
+    if (!(fast > slow && C[k - 1] <= previousFast && C[k] > fast)) return null;
+    let low = L[k]; for (let j = Math.max(0, k - 5); j < k; j++) low = Math.min(low, L[j]);
+    const entry = C[k], stop = low - .001 * entry;
+    return stop < entry ? { entry, stop, tp: entry + tpR * (entry - stop) } : null;
+  };
+  // Range-reversal hypothesis: price sweeps the prior 12-bar low, then closes back above
+  // that liquidity level. The trade is a reclaim, not an attempt to catch the falling bar.
+  const sweepReclaimEntry = (k) => {
+    const lookback = 12;
+    if (k < lookback) return null;
+    let priorLow = Infinity;
+    for (let j = k - lookback; j < k; j++) priorLow = Math.min(priorLow, L[j]);
+    if (!(L[k] < priorLow && C[k] > priorLow && C[k] > O[k])) return null;
+    const a = atr(H, L, C, k - 1, atrPeriod); if (!a) return null;
+    const entry = C[k], stop = L[k] - .25 * a;
+    return stop < entry ? { entry, stop, tp: entry + tpR * (entry - stop) } : null;
+  };
+  // Selective range version: repeated support, a genuine sweep/reclaim, volume expansion,
+  // and a flat 20/50 MA relationship. This is deliberately a separate hypothesis from
+  // the broad sweep rule above.
+  const rangeSweepReclaimEntry = (k) => {
+    const lookback = 24;
+    if (k < 50) return null;
+    let support = Infinity, volumeSum = 0, touches = 0;
+    for (let j = k - lookback; j < k; j++) support = Math.min(support, L[j]);
+    for (let j = k - 20; j < k; j++) { volumeSum += V[j]; if (L[j] <= support * 1.005) touches++; }
+    const fast = maAt(k, 20), slow = maAt(k, 50);
+    if (touches < 2 || !fast || !slow || Math.abs(fast / slow - 1) > .02) return null;
+    if (!(L[k] < support && C[k] > support && C[k] > O[k] && V[k] >= volumeSum / 20 * 1.2)) return null;
+    const a = atr(H, L, C, k - 1, atrPeriod); if (!a) return null;
+    const entry = C[k], stop = L[k] - .25 * a;
+    return stop < entry ? { entry, stop, tp: entry + tpR * (entry - stop) } : null;
   };
 
   const trades = [];
@@ -324,10 +375,14 @@ export function backtestMultiTF({ series } = {}, {
       // Long dip-buy modes — no trend/alignment gate (the whole point), tight structural
       // stop + ambitious target. Only the stop-size sanity caps apply.
       let cand = null;
-      if (entryMode === "support") cand = supportEntry(k);
-      else if (entryMode === "ma_dip") cand = maDipEntry(k);
-      else if (entryMode === "rsi")    cand = rsiEntry(k);
-      else if (entryMode === "rev")    cand = revEntry(k);
+       if (entryMode === "support") cand = supportEntry(k);
+       else if (entryMode === "ma_dip") cand = maDipEntry(k);
+       else if (entryMode === "rsi")    cand = rsiEntry(k);
+       else if (entryMode === "rev")    cand = revEntry(k);
+       else if (entryMode === "breakout") cand = breakoutEntry(k);
+       else if (entryMode === "trend_pullback") cand = trendPullbackEntry(k);
+       else if (entryMode === "sweep_reclaim") cand = sweepReclaimEntry(k);
+       else if (entryMode === "range_sweep_reclaim") cand = rangeSweepReclaimEntry(k);
       if (cand) {
         const risk = cand.entry - cand.stop;
         let reason = "taken";

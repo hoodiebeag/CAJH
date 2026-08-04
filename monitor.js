@@ -292,7 +292,7 @@ export function registerTrade(trade) {
   tradesToday++;
   persist();
   persistStats();
-  appendDecisionEvent({ type: "entry", trade: { symbol: trade.symbol, entry: trade.entry, stopLoss: trade.stopLoss, takeProfit: trade.takeProfit, volume: trade.volume, capital: trade.capital, risk: trade.risk, signal: trade.signal, tf: trade.tf, openedAt: trade.openedAt } });
+  appendDecisionEvent({ type: "entry", trade: { symbol: trade.symbol, entry: trade.entry, stopLoss: trade.stopLoss, takeProfit: trade.takeProfit, volume: trade.volume, capital: trade.capital, risk: trade.risk, signal: trade.signal, tf: trade.tf, openedAt: trade.openedAt, decisionContext: trade.decisionContext ?? null } });
   logger.info(`[MONITOR] Tracking ${trade.symbol} — entry: ${usd(trade.entry)}`);
 }
 
@@ -469,7 +469,7 @@ export async function postTradeClosed(channel, trade, exitPrice, reason) {
 
   dailyPnl += pnl;
   persistStats();
-  appendDecisionEvent({ type: "exit", trade: { symbol: trade.symbol, entry: trade.entry, volume: trade.volume, capital: trade.capital, signal: trade.signal, tf: trade.tf, openedAt: trade.openedAt }, exit: { price: exitPrice, reason, gross, fees, pnl, pnlPct, rMultiple: trade.risk > 0 ? (exitPrice - trade.entry) / trade.risk : null } });
+  appendDecisionEvent({ type: "exit", trade: { symbol: trade.symbol, entry: trade.entry, volume: trade.volume, capital: trade.capital, signal: trade.signal, tf: trade.tf, openedAt: trade.openedAt, decisionContext: trade.decisionContext ?? null }, exit: { price: exitPrice, reason, gross, fees, pnl, pnlPct, rMultiple: trade.risk > 0 ? (exitPrice - trade.entry) / trade.risk : null } });
 
   if (!channel) return;
   const beag = process.env.BEAG_USER_ID || "795521432783552552";

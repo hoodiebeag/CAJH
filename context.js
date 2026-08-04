@@ -9,6 +9,7 @@
 import fs   from "fs";
 import path from "path";
 import { getOpenTrades, isTradingEnabled } from "./monitor.js";
+import { loadDecisionJournal } from "./storage.js";
 
 const SOURCE_FILES = [
   "bot.js", "strategy.js", "scanner.js", "backtest.js", "trader.js",
@@ -32,6 +33,19 @@ export function buildLiveContext(state) {
       ).join("\n")
     : "none";
   const watch = (state.watchlist || []).map(a => a.symbol).join(", ") || "empty";
+  const journal = loadDecisionJournal({ limit: 100 });
+  const exits = journal.filter((event) => event.type === "exit" && Number.isFinite(event.exit?.pnl));
+  const setups = journal.filter((event) => event.type === "setup_decision");
+  const passed = setups.filter((event) => !event.result?.traded).length;
+  const totalPnl = exits.reduce((sum, event) => sum + event.exit.pnl, 0);
+  const wins = exits.filter((event) => event.exit.pnl > 0).length;
+  const recent = journal.slice(-8).map((event) => {
+    if (event.type === "entry") return `${event.at}: entered ${event.trade?.symbol} at $${event.trade?.entry} (${event.trade?.signal ?? "unspecified signal"})`;
+    if (event.type === "exit") return `${event.at}: exited ${event.trade?.symbol} at $${event.exit?.price}; P&L $${Number(event.exit?.pnl ?? 0).toFixed(2)} (${event.exit?.reason})`;
+    if (event.type === "setup_decision") return `${event.at}: ${event.result?.traded ? "took" : "passed"} ${event.symbol} ${event.setup?.tf ?? "?"} setup; ${event.result?.reason ?? "entered"}`;
+    if (event.type === "reconciliation") return `${event.at}: reconciliation; orphans ${event.orphans?.join(",") || "none"}, ghosts ${event.ghosts?.join(",") || "none"}`;
+    return `${event.at}: ${event.type}`;
+  }).join("\n") || "no persisted decisions yet";
 
   return [
     `cajh live state:`,
@@ -41,7 +55,9 @@ export function buildLiveContext(state) {
     `- live entry gates: anticipation swing-low trigger, per-timeframe stop band, min stop floor, monitor health, durable halt; no alignment/trend gate`,
     `- sizing/exits: risk-based at 0.5% cash risk, 20% notional cap, six-position cap with winner rotation, software-polled stop/TP`,
     `- open positions:\n${positions}`,
-    `- last scan: ${state.lastScanTime ?? "none yet"}`
+    `- last scan: ${state.lastScanTime ?? "none yet"}`,
+    `- durable decision history: ${journal.length} recent records loaded; ${setups.length} evaluated setups (${passed} passed), ${exits.length} realized exits, ${wins} wins, realized P&L $${totalPnl.toFixed(2)}`,
+    `- most recent decisions (persisted across deployments when DATA_DIR is a mounted volume):\n${recent}`
   ].join("\n");
 }
 

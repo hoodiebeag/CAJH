@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseConfirmedSell } from "./trader.js";
+import { isIgnoredReconciliationBalance, parseConfirmedSell } from "./trader.js";
 import { applyConfirmedSellToTrade } from "./monitor.js";
+
+test("Kraken staked balance extensions are excluded from reconciliation", () => {
+  assert.equal(isIgnoredReconciliationBalance("XTZ.S"), true);
+  assert.equal(isIgnoredReconciliationBalance("ETH.S"), true);
+  assert.equal(isIgnoredReconciliationBalance("INJ.B"), true);
+  assert.equal(isIgnoredReconciliationBalance("XBT.M"), false);
+  assert.equal(isIgnoredReconciliationBalance("ETH"), false);
+});
 
 test("confirmed full sell removes the tracked position decision", () => {
   const trade = { symbol: "BTC", volume: 1.5 };

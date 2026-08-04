@@ -104,7 +104,7 @@ export async function handleSell(message, symbol, percentArg) {
 // ─── !reconcile  (Kraken holdings vs cajh's tracked trades) ─────────────────────
 export async function handleReconcile(message) {
   await message.reply("🔎 Reconciling Kraken holdings against cajh's tracked trades...");
-  const res = await reconcileHoldings(message.channel);
+  const res = await reconcileHoldings(message.channel, { announceClean: true });
   if (res == null) await message.reply("⚠️ Couldn't reach Kraken to reconcile — try again shortly.");
 }
 
@@ -382,7 +382,7 @@ export async function handleGeneral(message, userMessage, state) {
     `Your trading is mechanical: you anticipate swing-low confirmations on the 1h, 4h,\n` +
     `and 1d — buying when price crosses above a candidate low's trigger — size by risk\n` +
     `(0.5% of cash per trade), use no live alignment/trend gate, and exit on software-polled stop-loss / take-profit. Answer questions about yourself,\n` +
-    `your live state, and your own code accurately and concisely. If you don't know, say so.\n\n` +
+    `your live state, durable trade/decision history, and your own code accurately and concisely. Use the persisted decision history below when asked what went right or wrong; do not invent missing evidence. If you don't know, say so.\n\n` +
     buildLiveContext(state);
 
   if (looksLikeCodeQuestion(userMessage) && isOwner(message.author.id)) {

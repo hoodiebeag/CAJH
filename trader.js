@@ -192,6 +192,13 @@ function displayAsset(a) {
 
 const STABLES = ["USD", "USDT", "USDC", "DAI", "PYUSD"];
 
+// Kraken's non-spot balance variants, including staked XTZ.S and the observed
+// bonded/staking INJ.B balance, cannot be reconciled as spot inventory. They
+// are outside cajh's execution universe and must not trigger ticker failures.
+export function isIgnoredReconciliationBalance(assetCode) {
+  return typeof assetCode === "string" && /\.(?:S|B)$/i.test(assetCode);
+}
+
 /**
  * Returns every non-dust asset held on the Kraken account, priced in USD:
  *   { holdings: [{ asset, qty, price, value }], totalUsd }
@@ -207,6 +214,10 @@ export async function getHoldings() {
   for (const [code, qtyStr] of Object.entries(bal)) {
     const qty = parseFloat(qtyStr);
     if (!qty || qty < 1e-8) continue;
+    if (isIgnoredReconciliationBalance(code)) {
+      logger.info(`[TRADER] Ignoring staked Kraken balance ${code} during reconciliation.`);
+      continue;
+    }
     const asset = displayAsset(code);
 
     if (STABLES.includes(asset)) {

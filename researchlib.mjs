@@ -11,7 +11,10 @@ import { loadConfig, symbolToKrakenId } from "./storage.js";
 /** WATCHLIST env (comma-separated symbols) if set, else the persisted config's watchlist. */
 export function loadWatchlist() {
   const env = (process.env.WATCHLIST || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
-  return env.length ? env : (loadConfig().watchlist || []).map(a => a.symbol);
+  if (env.length) return env;
+  // Older persisted configs stored bare symbols while current configs store { symbol, id }.
+  // Research should accept both rather than silently producing an all-undefined universe.
+  return (loadConfig().watchlist || []).map((a) => typeof a === "string" ? a.toUpperCase() : a?.symbol).filter(Boolean);
 }
 
 export { symbolToKrakenId };

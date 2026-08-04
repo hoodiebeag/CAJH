@@ -26,7 +26,7 @@ import {
   registerTrade, postTradeOpened, isTradingEnabled, getTrade, getOpenTrades, closeTradeAtMarket,
   requireMonitorHealthForEntry, createSingleFlight
 } from "./monitor.js";
-import { saveChart, symbolToKrakenId, loadLevelCooldownsResult, saveLevelCooldowns } from "./storage.js";
+import { saveChart, symbolToKrakenId, loadLevelCooldownsResult, saveLevelCooldowns, appendDecisionEvent } from "./storage.js";
 import * as logger from './logger.js';
 
 const BEAG = () => process.env.BEAG_USER_ID || "795521432783552552";
@@ -181,10 +181,23 @@ export function resetLevelCooldownsForTests() {
 }
 
 async function proposeBuy(symbol, buy, channel) {
-  if (pendingBuys.has(symbol)) return { traded: false, reason: "a buy for this symbol is already in flight" };
+  if (pendingBuys.has(symbol)) {
+    const result = { traded: false, reason: "a buy for this symbol is already in flight" };
+    appendDecisionEvent({ type: "setup_decision", symbol, setup: { tf: buy.tf, mode: buy.mode, pivotPrice: buy.pivotPrice, triggerPrice: buy.triggerPrice ?? buy.trigger ?? null, previousSwingLow: buy.prevSwingLow ?? null }, result });
+    return result;
+  }
   pendingBuys.add(symbol);
-  try { return await proposeBuyLocked(symbol, buy, channel); }
-  finally { pendingBuys.delete(symbol); }
+  let result;
+  try {
+    result = await proposeBuyLocked(symbol, buy, channel);
+    return result;
+  } catch (err) {
+    result = { traded: false, reason: `proposal error: ${err.message}` };
+    throw err;
+  } finally {
+    pendingBuys.delete(symbol);
+    appendDecisionEvent({ type: "setup_decision", symbol, setup: { tf: buy.tf, mode: buy.mode, pivotPrice: buy.pivotPrice, triggerPrice: buy.triggerPrice ?? buy.trigger ?? null, previousSwingLow: buy.prevSwingLow ?? null }, result: result ?? { traded: false, reason: "proposal interrupted" } });
+  }
 }
 
 async function proposeBuyLocked(symbol, buy, channel) {
@@ -284,6 +297,16 @@ async function proposeBuyLocked(symbol, buy, channel) {
     trade.tfMinutes   = tfMinutes;
     trade.openedAt    = Date.now();      // ms — used to detect a *fresh* swing high
 
+    trade.decisionContext = {
+      triggerPrice: buy.triggerPrice ?? buy.trigger ?? null,
+      pivotPrice: buy.pivotPrice ?? null,
+      previousSwingLow: buy.prevSwingLow ?? null,
+      quoteAtDecision: entry,
+      stopFraction: stopFrac,
+      riskPercentOfCash: RISK_PCT,
+      maxPositionPercent: MAX_POSITION_PCT,
+      mode: buy.mode ?? "confirmed"
+    };
     registerTrade(trade);            // persists to disk
     await postTradeOpened(channel, trade);
     await channel.send(`<@${BEAG()}> 🚨 New trade opened on **${symbol}** — \`!sell ${symbol}\` to close it (or \`!sell ${symbol} 50\` for half).`);
