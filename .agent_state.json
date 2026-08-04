@@ -2,15 +2,15 @@
     "version":  2,
     "control":  {
                     "status":  "EXECUTOR_PENDING",
-                    "target_file":  "context.js, context.test.mjs",
-                    "objective":  "Add a dynamic mission/limitations digest from live config and ROADMAP. It must state this is supplied system context, not persistent self-awareness, and that the current strategy is not validated for autonomous live trading.",
+                    "target_file":  "ma-crossover-study.mjs, ma-crossover-study.test.mjs",
+                    "objective":  "Research exactly one pre-registered long/cash daily MA crossover: MA(50) crossing above MA(200) enters at the next daily close; crossing below exits at the next daily close. Use the fixed stable-13 universe, preserve the existing sealed whole-symbol and recent-time holdouts, charge 0.9% round-trip cost for each completed position, and compare only against buy-and-hold. Do not short, sweep parameters, or connect this study to live code.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "C2 verified with npm.cmd test 131/131. Pulled C3 into EXECUTOR_PENDING.",
+                    "notes":  "C3 verified with npm.cmd test 132/132. Pulled TF1 into EXECUTOR_PENDING.",
                     "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T13:33:26.1548966Z"
+                    "updated_at":  "2026-08-04T13:35:31.5490967Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -624,7 +624,7 @@
                                           },
                                           {
                                               "id":  "C3",
-                                              "state":  "in_progress",
+                                              "state":  "done",
                                               "severity":  "low",
                                               "file":  "context.js, context.test.mjs",
                                               "owner":  "executor",
@@ -696,7 +696,7 @@
                                           },
                                           {
                                               "id":  "TF1",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "medium",
                                               "file":  "ma-crossover-study.mjs, ma-crossover-study.test.mjs",
                                               "owner":  "executor",
@@ -2021,6 +2021,22 @@
                        "detail":  "C2 live context verified after failback. npm.cmd test passed 131/131; focused tests prove asset_decision skipped-asset formatting from recorded data, absent decisions are not invented, dynamic token-shaped text is redacted, and source code is not exposed. Routed C3.",
                        "commit":  "b82ba05",
                        "tests":  "npm.cmd test: 131 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:34:51.7744249Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "C3 added dynamic mission and limitations digest with explicit non-self-awareness and live-trading caveats.",
+                       "commit":  "83518e0",
+                       "tests":  "node --check context.js context.test.mjs; npm.cmd test: 132 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:35:31.5490967Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "C3 mission/limitations digest verified. npm.cmd test passed 132/132; focused test proves digest is dynamic from config/verdict/trading state and states supplied system context, not persistent self-awareness, and no autonomous live-trading validation.",
+                       "commit":  "83518e0",
+                       "tests":  "npm.cmd test: 132 passing"
                    }
                ],
     "budget":  {
