@@ -1,6 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildMomentumPanel, ranks, spearman, permutationP, bootstrapCI } from "./momentum.mjs";
+import {
+  blockBootstrapCI,
+  buildMomentumPanel,
+  dateVectorPermutationP,
+  effectiveN,
+  perDateIC,
+  ranks,
+  scoreMomentumPanelRows,
+  spearman,
+  permutationP,
+  bootstrapCI
+} from "./momentum.mjs";
 
 const day = 86400;
 const candle = (offset, close) => ({ time: Date.UTC(2025, 0, 1) / 1000 + offset * day, open: close, high: close, low: close, close, volume: 1 });
@@ -46,6 +57,43 @@ test("buildMomentumPanel separates Q1-only rows from reusable research rows", ()
   assert.equal(rows.length, 0);
   assert.equal(q1Only.length, 16);
   assert.deepEqual([...new Set(q1Only.map((r) => r.date))], ["2026-01-31", "2026-02-07"]);
+});
+
+test("perDateIC computes one Spearman IC per rebalance date", () => {
+  const rows = [
+    { date: "2025-01-01", asset: "A", trailR: 1, fwdR: 10 },
+    { date: "2025-01-01", asset: "B", trailR: 2, fwdR: 20 },
+    { date: "2025-01-01", asset: "C", trailR: 3, fwdR: 30 },
+    { date: "2025-01-02", asset: "A", trailR: 1, fwdR: 30 },
+    { date: "2025-01-02", asset: "B", trailR: 2, fwdR: 20 },
+    { date: "2025-01-02", asset: "C", trailR: 3, fwdR: 10 }
+  ];
+
+  assert.deepEqual(perDateIC(rows, { minAssets: 3 }).map(({ date, nAssets, ic }) => ({ date, nAssets, ic })), [
+    { date: "2025-01-01", nAssets: 3, ic: 1 },
+    { date: "2025-01-02", nAssets: 3, ic: -1 }
+  ]);
+});
+
+test("scoreMomentumPanelRows reports mean IC, effective N, block CI, and deterministic date-vector null", () => {
+  const rows = [];
+  for (const [date, forward] of [
+    ["2025-01-01", [1, 2, 3, 4]],
+    ["2025-01-08", [4, 3, 2, 1]],
+    ["2025-01-15", [1, 3, 2, 4]]
+  ]) {
+    for (let i = 0; i < 4; i++) rows.push({ date, asset: `A${i}`, trailR: i + 1, fwdR: forward[i] });
+  }
+
+  const score = scoreMomentumPanelRows(rows, { minAssets: 4, permutations: 20, bootstrapIterations: 20, blockSize: 2, seed: 7 });
+
+  assert.equal(score.nDates, 3);
+  assert.equal(score.nRows, 12);
+  assert.equal(score.meanIC, (1 - 1 + 0.8) / 3);
+  assert.equal(score.effectiveN, effectiveN([1, -1, 0.8]));
+  assert.deepEqual(score.ci95, blockBootstrapCI([1, -1, 0.8], { iterations: 20, blockSize: 2, seed: 8 }));
+  assert.equal(score.p, dateVectorPermutationP(perDateIC(rows, { minAssets: 4 }), { iterations: 20, seed: 7 }));
+  assert.deepEqual(score.perDate.map((p) => p.ic), [1, -1, 0.8]);
 });
 
 test("rank correlation identifies a planted monotonic cross-section", () => {

@@ -58,6 +58,22 @@ export function bootstrapCI(values, iterations = 1000, seed = 20260302) {
   samples.sort((a, b) => a - b);
   return [samples[Math.floor(iterations * .025)], samples[Math.floor(iterations * .975)]];
 }
+export function blockBootstrapCI(values, { iterations = 1000, blockSize = 4, seed = 20260303 } = {}) {
+  if (!values.length) return [null, null];
+  const random = seeded(seed);
+  const width = Math.max(1, Math.min(blockSize, values.length));
+  const samples = [];
+  for (let n = 0; n < iterations; n++) {
+    const sample = [];
+    while (sample.length < values.length) {
+      const start = Math.floor(random() * (values.length - width + 1));
+      sample.push(...values.slice(start, start + width));
+    }
+    samples.push(mean(sample.slice(0, values.length)));
+  }
+  samples.sort((a, b) => a - b);
+  return [samples[Math.floor(iterations * .025)], samples[Math.floor(iterations * .975)]];
+}
 export function bhFdr(rows) {
   const ordered = [...rows].sort((a, b) => a.p - b.p);
   let prior = 1;
@@ -70,6 +86,74 @@ export function bhFdr(rows) {
 const dateOf = (time) => new Date(time * 1000).toISOString().slice(0, 10);
 const inDateWindow = (date, start, end) => date >= start && date < end;
 const closeByDate = (candles) => new Map(candles.map((c) => [dateOf(c.time), c.close]));
+const byDateRows = (rows) => {
+  const grouped = new Map();
+  for (const row of rows) {
+    if (!grouped.has(row.date)) grouped.set(row.date, []);
+    grouped.get(row.date).push(row);
+  }
+  return [...grouped].sort(([a], [b]) => a.localeCompare(b)).map(([date, dateRows]) => ({ date, rows: dateRows }));
+};
+
+export function perDateIC(rows, { minAssets = 8 } = {}) {
+  return byDateRows(rows).flatMap(({ date, rows: dateRows }) => {
+    if (dateRows.length < minAssets) return [];
+    const trail = dateRows.map((r) => r.trailR);
+    const forward = dateRows.map((r) => r.fwdR);
+    const ic = spearman(trail, forward);
+    return ic === null ? [] : [{ date, nAssets: dateRows.length, ic, trail, forward }];
+  });
+}
+
+function autocorr1(values) {
+  if (values.length < 3) return 0;
+  const a = values.slice(0, -1);
+  const b = values.slice(1);
+  return pearson(a, b) || 0;
+}
+
+export function effectiveN(values) {
+  if (!values.length) return 0;
+  const rho = Math.max(-0.99, Math.min(0.99, autocorr1(values)));
+  return Math.max(1, Math.min(values.length, values.length * (1 - rho) / (1 + rho)));
+}
+
+export function dateVectorPermutationP(datePanels, { iterations = 1000, seed = 20260304 } = {}) {
+  if (!datePanels.length) return null;
+  const observed = mean(datePanels.map((p) => p.ic));
+  const random = seeded(seed);
+  let extreme = 0;
+  for (let n = 0; n < iterations; n++) {
+    const order = shuffled(datePanels.length, random);
+    const statistic = mean(datePanels.map((panel, i) => {
+      const forward = datePanels[order[i]].forward;
+      const width = Math.min(panel.trail.length, forward.length);
+      return spearman(panel.trail.slice(0, width), forward.slice(0, width));
+    }).filter((x) => x !== null));
+    if (Math.abs(statistic) >= Math.abs(observed)) extreme++;
+  }
+  return (extreme + 1) / (iterations + 1);
+}
+
+export function scoreMomentumPanelRows(rows, {
+  minAssets = 8,
+  permutations = 1000,
+  bootstrapIterations = 1000,
+  blockSize = 4,
+  seed = 20260304
+} = {}) {
+  const datePanels = perDateIC(rows, { minAssets });
+  const values = datePanels.map((p) => p.ic);
+  return {
+    nDates: datePanels.length,
+    nRows: rows.length,
+    effectiveN: effectiveN(values),
+    meanIC: values.length ? mean(values) : null,
+    ci95: blockBootstrapCI(values, { iterations: bootstrapIterations, blockSize, seed: seed + 1 }),
+    p: dateVectorPermutationP(datePanels, { iterations: permutations, seed }),
+    perDate: datePanels.map(({ date, nAssets, ic }) => ({ date, nAssets, ic }))
+  };
+}
 
 export function buildMomentumPanel(series, {
   universe = STABLE_13,
