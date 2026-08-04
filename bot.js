@@ -93,8 +93,8 @@ const state = {
 
 const scheduledScanHealth = { ok: true, lastRunAt: null, lastSuccessAt: null, lastFailureAt: null, lastError: null };
 
-export function getScheduledScanHealth() {
-  return { ...scheduledScanHealth };
+export function getScheduledScanHealth(health = scheduledScanHealth) {
+  return { ...health };
 }
 
 export async function runScheduledScan(label, {
@@ -102,10 +102,15 @@ export async function runScheduledScan(label, {
   runtimeConfig = config,
   discordClient = client,
   scanner = runScanner,
-  persist = saveConfig
+  persist = saveConfig,
+  health = scheduledScanHealth
 } = {}) {
   const previousLastScanTime = runtimeState.lastScanTime;
-  scheduledScanHealth.lastRunAt = Date.now();
+  health.lastRunAt = Date.now();
+  if (!health.ok) {
+    logger.warn(`[SCAN] ${label} skipped; scheduled scan health is unhealthy:`, health.lastError);
+    return false;
+  }
   try {
     if (!runtimeState.scanChannelId) throw new Error("no scan channel set");
     const channel = await discordClient.channels.fetch(runtimeState.scanChannelId);
@@ -114,17 +119,17 @@ export async function runScheduledScan(label, {
     await scanner(channel, runtimeState);
     runtimeConfig.lastScanTime = runtimeState.lastScanTime;
     if (persist(runtimeConfig) !== true) throw new Error("scheduled scan config persistence failed");
-    scheduledScanHealth.ok = true;
-    scheduledScanHealth.lastSuccessAt = scheduledScanHealth.lastRunAt;
-    scheduledScanHealth.lastError = null;
+    health.ok = true;
+    health.lastSuccessAt = health.lastRunAt;
+    health.lastError = null;
     return true;
   } catch (err) {
     runtimeState.lastScanTime = previousLastScanTime;
     runtimeConfig.lastScanTime = previousLastScanTime;
-    scheduledScanHealth.ok = false;
-    scheduledScanHealth.lastFailureAt = scheduledScanHealth.lastRunAt;
-    scheduledScanHealth.lastError = sanitizeErrorMessage(err);
-    logger.error(`[SCAN] ${label} failed; lastScanTime unchanged:`, scheduledScanHealth.lastError);
+    health.ok = false;
+    health.lastFailureAt = health.lastRunAt;
+    health.lastError = sanitizeErrorMessage(err);
+    logger.error(`[SCAN] ${label} failed; lastScanTime unchanged:`, health.lastError);
     return false;
   }
 }
