@@ -5,7 +5,9 @@ import {
   bhFdr,
   buildMomentumPanel,
   dateVectorPermutationP,
+  economicMomentumViews,
   effectiveN,
+  economicViews,
   perDateIC,
   ranks,
   runSealedMomentumPanelStudy,
@@ -198,6 +200,42 @@ test("runSealedMomentumPanelStudy keeps train, recent, symbol, Q1, and explorato
   assert.equal(study.exploratory.find((row) => row.horizon === 2 && row.regime === "all").nDates < study.exploratory.find((row) => row.horizon === 1 && row.regime === "all").nDates, true);
 });
 
+test("buildMomentumPanel can model entry at close t+1 for forward returns", () => {
+  const asset = [100, 110, 121, 133.1, 146.41].map((close, i) => candle(i, close));
+  const { rows } = buildMomentumPanel(new Map([["BTC", asset]]), {
+    universe: ["BTC"],
+    lookback: 2,
+    horizon: 2,
+    entryDelay: 1,
+    minAssets: 1
+  });
+
+  assert.equal(rows[0].date, "2025-01-03");
+  assert.equal(rows[0].trailR, 121 / 100 - 1);
+  assert.equal(rows[0].fwdR, 146.41 / 133.1 - 1);
+});
+
+test("economicMomentumViews reports tercile/top-N gross, turnover, and explicit net costs", () => {
+  const rows = [
+    { date: "2025-01-01", asset: "A", trailR: 3, fwdR: 0.06 },
+    { date: "2025-01-01", asset: "B", trailR: 2, fwdR: 0.03 },
+    { date: "2025-01-01", asset: "C", trailR: 1, fwdR: -0.01 },
+    { date: "2025-01-02", asset: "B", trailR: 3, fwdR: 0.04 },
+    { date: "2025-01-02", asset: "A", trailR: 2, fwdR: 0.02 },
+    { date: "2025-01-02", asset: "C", trailR: 1, fwdR: 0.00 }
+  ];
+
+  const views = economicMomentumViews(rows, { minAssets: 3, roundTripCost: 0.01, topNs: [1, 2] });
+
+  assert.equal(views.observations, 2);
+  assert.equal(views.tercile.grossSpread, ((0.06 - -0.01) + (0.04 - 0)) / 2);
+  assert.equal(views.tercile.netSpread, (((0.06 - -0.01) - 0.02) + ((0.04 - 0) - 0.01)) / 2);
+  assert.deepEqual(views.topN["1"], { avgTurnover: 1, grossReturn: 0.05, netReturn: 0.04 });
+  assert.equal(views.topN["2"].avgTurnover, 0.5);
+  assert.equal(views.topN["2"].grossReturn, ((0.06 + 0.03) / 2 + (0.04 + 0.02) / 2) / 2);
+  assert.equal(views.topN["2"].netReturn, (((0.06 + 0.03) / 2 - 0.01) + ((0.04 + 0.02) / 2)) / 2);
+});
+
 test("rank correlation identifies a planted monotonic cross-section", () => {
   assert.deepEqual(ranks([3, 1, 1, 2]), [4, 1.5, 1.5, 3]);
   assert.equal(spearman([1, 2, 3, 4], [10, 20, 30, 40]), 1);
@@ -228,4 +266,17 @@ test("M5 freezes symbol and recent-date holdouts before any score selection", ()
 test("M5 FDR q-values are assigned from one shared grid/regime family", () => {
   const rows = [{ p: 0.001 }, { p: 0.02 }, { p: 0.9 }];
   assert.deepEqual(bhFdr(rows).map((row) => row.q), [0.003, 0.03, 0.9]);
+});
+
+test("M6 economic views enter on the next close and charge turnover costs", () => {
+  const panels = [
+    { assets: ["A", "B", "C", "D", "E"], signal: [5, 4, 3, 2, 1], executionForward: [0.10, 0.02, 0.00, 0.00, 0.00] },
+    { assets: ["B", "A", "C", "D", "E"], signal: [5, 4, 3, 2, 1], executionForward: [0.04, 0.08, 0.00, 0.00, 0.00] }
+  ];
+  const views = economicViews(panels, { roundTripCost: 0.01, topNs: [3, 5] });
+  assert.equal(views.tercile.observations, 2);
+  assert.equal(views.tercile.avgTurnover, 0.5);
+  assert.equal(views.top3.grossSpread > 0, true);
+  assert.equal(views.top3.netSpread, views.top3.grossSpread - 0.01 * views.top3.avgTurnover);
+  assert.equal(views.top5.grossSpread, 0);
 });

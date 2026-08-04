@@ -285,6 +285,7 @@ export function buildMomentumPanel(series, {
   universe = STABLE_13,
   lookback = 30,
   horizon = 7,
+  entryDelay = 0,
   step = 7,
   minAssets = 8,
   transform = "raw",
@@ -305,18 +306,20 @@ export function buildMomentumPanel(series, {
   const rows = [];
   const q1Only = [];
 
-  for (let i = lookback; i + horizon < calendarSource.length; i += step) {
+  for (let i = lookback; i + entryDelay + horizon < calendarSource.length; i += step) {
     const date = dateOf(calendarSource[i].time);
     const trailingDate = dateOf(calendarSource[i - lookback].time);
-    const forwardDate = dateOf(calendarSource[i + horizon].time);
+    const entryDate = dateOf(calendarSource[i + entryDelay].time);
+    const forwardDate = dateOf(calendarSource[i + entryDelay + horizon].time);
     const bucket = [];
 
     for (const asset of names) {
       const closes = maps.get(asset);
       const trailing = closes.get(trailingDate);
       const current = closes.get(date);
+      const entry = closes.get(entryDate);
       const forward = closes.get(forwardDate);
-      if (![trailing, current, forward].every((x) => Number.isFinite(x) && x > 0)) continue;
+      if (![trailing, current, entry, forward].every((x) => Number.isFinite(x) && x > 0)) continue;
       const assetIndex = indexed.get(asset).get(date)?.i;
       const factorAtDate = factorIndex.get(date);
       const factorAtTrailing = factorIndex.get(trailingDate);
@@ -337,7 +340,7 @@ export function buildMomentumPanel(series, {
       } else if (transform !== "raw") {
         throw new Error(`unknown momentum transform: ${transform}`);
       }
-      bucket.push({ date, asset, trailR, fwdR: forward / current - 1 });
+      bucket.push({ date, asset, trailR, fwdR: forward / entry - 1 });
     }
 
     if (bucket.length < minAssets) continue;
@@ -347,6 +350,65 @@ export function buildMomentumPanel(series, {
   }
 
   return { rows, q1Only };
+}
+
+function selectedTurnover(selected, previous) {
+  if (!selected.length) return 0;
+  if (!previous) return 1;
+  return 1 - selected.filter((asset) => previous.has(asset)).length / selected.length;
+}
+
+function averageSelection(rows, count) {
+  return mean(rows.slice(0, Math.min(count, rows.length)).map((r) => r.fwdR));
+}
+
+export function economicMomentumViews(rows, { minAssets = 8, roundTripCost = 0.009, topNs = [3, 5] } = {}) {
+  const dates = byDateRows(rows).filter((p) => p.rows.length >= minAssets);
+  let priorTop = null;
+  let priorBottom = null;
+  const tercile = [];
+  const topViews = new Map(topNs.map((n) => [n, { gross: [], net: [], turnover: 0, prior: null }]));
+
+  for (const panel of dates) {
+    const ranked = [...panel.rows].sort((a, b) => b.trailR - a.trailR);
+    const tercileN = Math.max(1, Math.floor(ranked.length / 3));
+    const top = ranked.slice(0, tercileN);
+    const bottom = ranked.slice(-tercileN);
+    const topAssets = top.map((r) => r.asset);
+    const bottomAssets = bottom.map((r) => r.asset);
+    const topTurnover = selectedTurnover(topAssets, priorTop);
+    const bottomTurnover = selectedTurnover(bottomAssets, priorBottom);
+    const grossSpread = mean(top.map((r) => r.fwdR)) - mean(bottom.map((r) => r.fwdR));
+    tercile.push({ date: panel.date, turnover: (topTurnover + bottomTurnover) / 2, grossSpread, netSpread: grossSpread - roundTripCost * (topTurnover + bottomTurnover) });
+    priorTop = new Set(topAssets);
+    priorBottom = new Set(bottomAssets);
+
+    for (const [n, view] of topViews) {
+      const selected = ranked.slice(0, Math.min(n, ranked.length));
+      const assets = selected.map((r) => r.asset);
+      const turnover = selectedTurnover(assets, view.prior);
+      const gross = averageSelection(ranked, n);
+      view.gross.push(gross);
+      view.net.push(gross - roundTripCost * turnover);
+      view.turnover += turnover;
+      view.prior = new Set(assets);
+    }
+  }
+
+  return {
+    observations: dates.length,
+    roundTripCost,
+    tercile: {
+      avgTurnover: mean(tercile.map((r) => r.turnover)),
+      grossSpread: mean(tercile.map((r) => r.grossSpread)),
+      netSpread: mean(tercile.map((r) => r.netSpread))
+    },
+    topN: Object.fromEntries([...topViews].map(([n, view]) => [n, {
+      avgTurnover: dates.length ? view.turnover / dates.length : 0,
+      grossReturn: mean(view.gross),
+      netReturn: mean(view.net)
+    }]))
+  };
 }
 
 function dailySeries(watchlist) {
@@ -391,7 +453,17 @@ export function momentumPanels(series, { lookback = 30, horizon = 7, transform =
       const values = signalAndForward(series.get(name), btc, mapped.i, lookback, horizon, transform);
       if (values && values.every(Number.isFinite)) { signal.push(values[0]); forward.push(values[1]); assets.push(name); }
     }
-    if (assets.length >= 8) { const ic = spearman(signal, forward); if (ic !== null) panels.push({ time: btc[i].time, assets, signal, forward, ic, regime: regime(btc, i) }); }
+    if (assets.length >= 8) {
+      const executionForward = assets.map((asset) => {
+        const mapped = lookup.get(asset).get(btc[i].time);
+        const assetRows = series.get(asset);
+        const entry = assetRows[mapped.i + 1]?.close;
+        const exit = assetRows[mapped.i + horizon + 1]?.close;
+        return Number.isFinite(entry) && entry > 0 && Number.isFinite(exit) && exit > 0 ? exit / entry - 1 : null;
+      });
+      const ic = spearman(signal, forward);
+      if (ic !== null && executionForward.every(Number.isFinite)) panels.push({ time: btc[i].time, assets, signal, forward, executionForward, ic, regime: regime(btc, i) });
+    }
   }
   return panels;
 }
@@ -400,17 +472,43 @@ function score(panels, permutations = 1000) {
   const values = panels.map((p) => p.ic);
   return { n: panels.length, meanIC: mean(values), ci95: bootstrapCI(values), p: permutationP(panels, permutations), regimes: Object.fromEntries(["bull", "bear", "flat", "unknown"].map((r) => { const v = panels.filter((p) => p.regime === r).map((p) => p.ic); return [r, { n: v.length, meanIC: mean(v) }]; })) };
 }
-function harvest(panels, cost = .009) {
-  let turnover = 0, gross = [], net = [], previous = new Set();
-  for (const panel of panels) {
-    const topN = Math.max(1, Math.floor(panel.assets.length / 3));
-    const top = panel.assets.map((asset, i) => ({ asset, i })).sort((a, b) => panel.signal[b.i] - panel.signal[a.i]).slice(0, topN);
-    const selected = new Set(top.map((x) => x.asset));
-    const changed = 1 - [...selected].filter((x) => previous.has(x)).length / topN;
-    turnover += changed; const topReturn = mean(top.map((x) => panel.forward[x.i]));
-    gross.push(topReturn); net.push(topReturn - cost * changed); previous = selected;
+export function economicViews(panels, { roundTripCost = .009, topNs = [3, 5] } = {}) {
+  const views = new Map([[
+    "tercile", Math.max(1, Math.ceil((panels[0]?.assets.length || 0) / 3))
+  ], ...topNs.map((n) => [`top${n}`, n])]);
+  const output = {};
+  for (const [name, requestedN] of views) {
+    let previous = new Set();
+    const gross = [], net = [], turnovers = [];
+    for (const panel of panels) {
+      const selected = panel.assets
+        .map((asset, i) => ({ asset, i }))
+        .sort((a, b) => panel.signal[b.i] - panel.signal[a.i])
+        .slice(0, Math.min(requestedN, panel.assets.length));
+      const current = new Set(selected.map((row) => row.asset));
+      const turnover = previous.size ? 1 - [...current].filter((asset) => previous.has(asset)).length / current.size : 1;
+      const returns = panel.executionForward || panel.forward;
+      const baseline = mean(returns);
+      const spread = mean(selected.map((row) => returns[row.i])) - baseline;
+      gross.push(spread);
+      net.push(spread - roundTripCost * turnover);
+      turnovers.push(turnover);
+      previous = current;
+    }
+    output[name] = {
+      observations: panels.length,
+      avgTurnover: turnovers.length ? mean(turnovers) : 0,
+      grossSpread: gross.length ? mean(gross) : null,
+      netSpread: net.length ? mean(net) : null,
+      roundTripCost
+    };
   }
-  return { observations: panels.length, avgTurnover: panels.length ? turnover / panels.length : 0, grossTopTercile: mean(gross), netTopTercile: mean(net), roundTripCost: cost };
+  return output;
+}
+
+function harvest(panels, cost = .009) {
+  const views = economicViews(panels, { roundTripCost: cost });
+  return { ...views.tercile, grossTopTercile: views.tercile.grossSpread, netTopTercile: views.tercile.netSpread, views };
 }
 
 export function runMomentumStudy({ watchlist = loadWatchlist(), permutations = 1000 } = {}) {
