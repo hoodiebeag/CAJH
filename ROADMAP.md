@@ -463,6 +463,33 @@ time-plus-symbol confirmation because the whole-symbol arm is unavailable.
 **Survivorship caveat:** the universe is survivors-only; this weakens any positive result,
 while the present null/sign reversal is conservative evidence against a robust edge.
 
+### Low-vol / low-beta B4: KILLED — no eligible holdout evidence in this workspace
+
+**Configured specification:** same sealed harness as Momentum M7, with ranking variable
+swapped from return momentum to low-risk ranks: **−trailing volatility** and
+**−trailing BTC beta**. Outcomes are reported separately as forward raw return and
+forward risk-adjusted return/vol. Economic view enters at close `t+1`, charges explicit
+round-trip cost, and stays research-only.
+
+**Harness availability check:** local `loadWatchlist()` returned `[]`, so the stable-13
+daily panel had **0 eligible dates** and **0 holdout rows** for both low-volatility and
+low-beta. The size/liquidity control therefore cannot rescue the result: there is no
+controlled sample to score, and no net holdout evidence to promote.
+
+| ranking var | outcome | window | mean IC | p | net spread |
+|---|---|---|---|---|---|
+| −trailing vol | fwd return | holdout | — (0 dates) | — | — |
+| −trailing vol | fwd Sharpe | holdout | — (0 dates) | — | — |
+| −trailing beta | fwd Sharpe | holdout | — (0 dates) | — | — |
+
+**Size/liquidity control:** does the signal collapse to "hold the majors"? `—` —
+evidence: not testable locally; the controlled universe produced 0 eligible holdout
+dates, so the majors-vs-anomaly distinction is unavailable rather than favorable.
+
+**VERDICT: KILLED** — deciding number: **0 eligible holdout dates / 0 holdout rows**.
+No signal gets promoted without sealed net evidence. This is a data-gate kill, not a
+claim that low-volatility is economically false in crypto.
+
 ### Trade intensity: closed. 79× more data killed it.
 
 The Executor caught a factual error in the Architect's assignment that turned out to
