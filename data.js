@@ -28,6 +28,76 @@ const COLUMNS   = "time,open,high,low,close,volume,buyVol,sellVol,trades,maxTrad
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const finite = (value) => Number.isFinite(value);
+
+function parseFinite(raw, field) {
+  if (raw === undefined || raw === "") throw new Error(`invalid candle ${field}: missing`);
+  const value = Number(raw);
+  if (!finite(value)) throw new Error(`invalid candle ${field}: non-finite`);
+  return value;
+}
+
+function parseInteger(raw, field) {
+  const value = parseFinite(raw, field);
+  if (!Number.isInteger(value)) throw new Error(`invalid candle ${field}: not an integer`);
+  return value;
+}
+
+function validateBar(bar) {
+  for (const field of ["time", "open", "high", "low", "close", "volume", "buyVol", "sellVol", "trades", "maxTrade"]) {
+    if (!finite(bar[field])) throw new Error(`invalid candle ${field}: non-finite`);
+  }
+  if (!Number.isInteger(bar.time) || bar.time < 0 || bar.time % MINUTE !== 0) throw new Error(`invalid candle time: ${bar.time}`);
+  if (bar.open <= 0 || bar.high <= 0 || bar.low <= 0 || bar.close <= 0) throw new Error(`invalid candle price at ${bar.time}`);
+  if (bar.high < Math.max(bar.open, bar.close, bar.low)) throw new Error(`invalid candle OHLC high at ${bar.time}`);
+  if (bar.low > Math.min(bar.open, bar.close, bar.high)) throw new Error(`invalid candle OHLC low at ${bar.time}`);
+  if (bar.volume < 0 || bar.buyVol < 0 || bar.sellVol < 0 || bar.maxTrade < 0) throw new Error(`invalid candle volume at ${bar.time}`);
+  if (!Number.isInteger(bar.trades) || bar.trades < 0) throw new Error(`invalid candle trades at ${bar.time}`);
+  return bar;
+}
+
+function parseStoredRow(line) {
+  const parts = line.split(",");
+  if (parts.length !== 10) throw new Error(`malformed stored candle row: ${line}`);
+  return validateBar({
+    time: parseInteger(parts[0], "time"),
+    open: parseFinite(parts[1], "open"),
+    high: parseFinite(parts[2], "high"),
+    low: parseFinite(parts[3], "low"),
+    close: parseFinite(parts[4], "close"),
+    volume: parseFinite(parts[5], "volume"),
+    buyVol: parseFinite(parts[6], "buyVol"),
+    sellVol: parseFinite(parts[7], "sellVol"),
+    trades: parseInteger(parts[8], "trades"),
+    maxTrade: parseFinite(parts[9], "maxTrade"),
+  });
+}
+
+function parseArchiveRow(line) {
+  const parts = line.split(",");
+  if (parts.length !== 7) throw new Error(`malformed archive candle row: ${line}`);
+  return validateBar({
+    time: parseInteger(parts[0], "time"),
+    open: parseFinite(parts[1], "open"),
+    high: parseFinite(parts[2], "high"),
+    low: parseFinite(parts[3], "low"),
+    close: parseFinite(parts[4], "close"),
+    volume: parseFinite(parts[5], "volume"),
+    buyVol: 0,
+    sellVol: 0,
+    trades: parseInteger(parts[6], "trades"),
+    maxTrade: 0,
+  });
+}
+
+function assertStrictlyIncreasing(rows, source) {
+  let prev = null;
+  for (const row of rows) {
+    if (prev !== null && row.time <= prev) throw new Error(`${source} candle rows must be strictly increasing and unique`);
+    prev = row.time;
+  }
+}
+
 // ── Aggregation (pure — unit-tested) ─────────────────────────────────────────────
 /**
  * Fold raw Kraken trades into 1-minute bars, merging into an existing Map so successive
@@ -72,7 +142,7 @@ const barToRow = (b) =>
 /** Rewrite the pair's CSV from a bar Map (sorted, deduped by minute — idempotent). */
 export function writeBars(pair, bars) {
   fs.mkdirSync(STORE_DIR, { recursive: true });
-  const rows = [...bars.values()].sort((a, b) => a.time - b.time).map(barToRow);
+  const rows = [...bars.values()].map(validateBar).sort((a, b) => a.time - b.time).map(barToRow);
   fs.writeFileSync(pairFile(pair), COLUMNS + "\n" + (rows.length ? rows.join("\n") + "\n" : ""));
 }
 
@@ -80,10 +150,13 @@ export function writeBars(pair, bars) {
 export function loadBars(pair) {
   const file = pairFile(pair);
   if (!fs.existsSync(file)) return [];
-  return fs.readFileSync(file, "utf8").trim().split("\n").slice(1).filter(Boolean).map((line) => {
-    const [time, open, high, low, close, volume, buyVol, sellVol, trades, maxTrade] = line.split(",").map(Number);
-    return { time, open, high, low, close, volume, buyVol, sellVol, trades, maxTrade };
-  });
+  const text = fs.readFileSync(file, "utf8").trim();
+  if (!text) return [];
+  const [header, ...lines] = text.split("\n");
+  if (header !== COLUMNS) throw new Error(`malformed candle header for ${pair}`);
+  const rows = lines.filter(Boolean).map(parseStoredRow);
+  assertStrictlyIncreasing(rows, "stored");
+  return rows;
 }
 
 /** Load stored bars keyed by minute, for resuming/merging a backfill. */
@@ -130,16 +203,15 @@ export function ingestKrakenOHLCVT(pair, srcPath, sinceSec = 0) {
     throw new Error(`file not found: ${srcPath} — expected Kraken's OHLCVT 1-minute CSV (e.g. ${pair}_1.csv)`);
   }
   const bars = loadBarMap(pair);
+  const source = [];
   for (const line of fs.readFileSync(srcPath, "utf8").split("\n")) {
     if (!line.trim()) continue;
-    const [t, o, h, l, c, v, trades] = line.split(",");
-    const time = parseInt(t);
-    if (!Number.isFinite(time) || time < sinceSec) continue;   // skip header/garbage/too-old rows
-    bars.set(time, {
-      time, open: parseFloat(o), high: parseFloat(h), low: parseFloat(l), close: parseFloat(c),
-      volume: parseFloat(v) || 0, buyVol: 0, sellVol: 0, trades: parseInt(trades) || 0, maxTrade: 0,
-    });
+    const bar = parseArchiveRow(line);
+    if (bar.time < sinceSec) continue;
+    source.push(bar);
   }
+  assertStrictlyIncreasing(source, "archive");
+  for (const bar of source) bars.set(bar.time, bar);
   writeBars(pair, bars);
   return bars.size;
 }
