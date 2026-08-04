@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "data.js, data.test.mjs",
-    "objective": "Strictly validate candle-store ingestion and loading: reject malformed/non-finite/negative/OHLC-invalid/off-minute/duplicate/non-monotonic rows instead of coercing missing trade or volume fields to zero. Preserve deterministic valid archive merge.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "data.js, researchlab.mjs, research-data.test.mjs",
+    "objective": "Make resampling/cache behavior quality-aware: sort inputs, exclude incomplete current buckets, expose gaps under an explicit policy, and rebuild corrupt research caches rather than trusting them.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "DQ1 executor handoff: added strict candle row validation for stored and archive rows; malformed/non-finite/negative/OHLC-invalid/off-minute/duplicate/non-monotonic rows now reject; valid archive merge remains deterministic. npm.cmd test passed 83/83; node --check data.js data.test.mjs passed.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-04T11:49:10.988Z"
+    "notes": "DQ1 verified: npm.cmd test ran 83 tests and all passed. data.test.mjs directly covers deterministic valid archive merge, missing volume/trades coercion prevention, malformed/non-finite/negative/OHLC/off-minute rejection, and duplicate/non-monotonic stored/archive rows. Pulled next eligible item into EXECUTOR_PENDING.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-04T11:49:45.064Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -305,7 +305,7 @@
       },
       {
         "id": "DQ1",
-        "state": "verifying",
+        "state": "done",
         "severity": "medium",
         "file": "data.js, data.test.mjs",
         "owner": "executor",
@@ -319,7 +319,7 @@
       },
       {
         "id": "DQ2",
-        "state": "pending",
+        "state": "executing",
         "severity": "medium",
         "file": "data.js, researchlab.mjs, research-data.test.mjs",
         "owner": "executor",
@@ -1568,6 +1568,14 @@
       "action": "implement",
       "detail": "DQ1: strict candle-store validation rejects malformed/non-finite/negative/OHLC-invalid/off-minute/duplicate/non-monotonic archive and stored rows while preserving deterministic valid archive merge.",
       "commit": "2f7a807",
+      "tests": "83 passing (npm.cmd test); node --check data.js data.test.mjs"
+    },
+    {
+      "ts": "2026-08-04T11:49:45.064Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "DQ1 candle-store validation verified with npm.cmd test 83/83 and focused malformed-row fixtures. Pulled DQ2 into EXECUTOR_PENDING.",
+      "commit": "2851f7e",
       "tests": "83 passing (npm.cmd test); node --check data.js data.test.mjs"
     }
   ],
