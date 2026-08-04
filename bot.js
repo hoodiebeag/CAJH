@@ -91,26 +91,42 @@ const state = {
 
 // ─── Scheduled scans ───────────────────────────────────────────────────────────
 
-async function runScheduledScan(label) {
-  if (!state.scanChannelId) {
-    logger.warn(`[SCAN] ${label}: no scan channel set — run !setchannel once.`);
-    return;
-  }
+const scheduledScanHealth = { ok: true, lastRunAt: null, lastSuccessAt: null, lastFailureAt: null, lastError: null };
 
-  let channel;
+export function getScheduledScanHealth() {
+  return { ...scheduledScanHealth };
+}
+
+export async function runScheduledScan(label, {
+  runtimeState = state,
+  runtimeConfig = config,
+  discordClient = client,
+  scanner = runScanner,
+  persist = saveConfig
+} = {}) {
+  const previousLastScanTime = runtimeState.lastScanTime;
+  scheduledScanHealth.lastRunAt = Date.now();
   try {
-    channel = await client.channels.fetch(state.scanChannelId);
+    if (!runtimeState.scanChannelId) throw new Error("no scan channel set");
+    const channel = await discordClient.channels.fetch(runtimeState.scanChannelId);
+    if (!channel) throw new Error(`scan channel ${runtimeState.scanChannelId} was not found`);
+    logger.info(`[SCAN] ${label} scan running`);
+    await scanner(channel, runtimeState);
+    runtimeConfig.lastScanTime = runtimeState.lastScanTime;
+    if (persist(runtimeConfig) !== true) throw new Error("scheduled scan config persistence failed");
+    scheduledScanHealth.ok = true;
+    scheduledScanHealth.lastSuccessAt = scheduledScanHealth.lastRunAt;
+    scheduledScanHealth.lastError = null;
+    return true;
   } catch (err) {
-    logger.error(`[SCAN] ${label}: could not fetch channel ${state.scanChannelId}:`, err.message);
-    return;
+    runtimeState.lastScanTime = previousLastScanTime;
+    runtimeConfig.lastScanTime = previousLastScanTime;
+    scheduledScanHealth.ok = false;
+    scheduledScanHealth.lastFailureAt = scheduledScanHealth.lastRunAt;
+    scheduledScanHealth.lastError = sanitizeErrorMessage(err);
+    logger.error(`[SCAN] ${label} failed; lastScanTime unchanged:`, scheduledScanHealth.lastError);
+    return false;
   }
-  if (!channel) return;
-
-  logger.info(`[SCAN] ${label} scan running`);
-  await runScanner(channel, state);
-
-  config.lastScanTime = state.lastScanTime;
-  saveConfig(config);
 }
 
 // ─── Startup ───────────────────────────────────────────────────────────────────
