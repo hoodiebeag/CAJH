@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "data.js, data.test.mjs",
     "objective": "Strictly validate candle-store ingestion and loading: reject malformed/non-finite/negative/OHLC-invalid/off-minute/duplicate/non-monotonic rows instead of coercing missing trade or volume fields to zero. Preserve deterministic valid archive merge.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-017 verified: python swarm-runner.test.py ran 7 tests covering second-runner block, stale dead-pid recovery, ambiguous lock blocking, finally release, and scoped git checkpoint behavior; npm.cmd test passed 79/79. Pulled next eligible item into EXECUTOR_PENDING.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:46:18.383Z"
+    "notes": "DQ1 executor handoff: added strict candle row validation for stored and archive rows; malformed/non-finite/negative/OHLC-invalid/off-minute/duplicate/non-monotonic rows now reject; valid archive merge remains deterministic. npm.cmd test passed 83/83; node --check data.js data.test.mjs passed.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:49:10.988Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -305,7 +305,7 @@
       },
       {
         "id": "DQ1",
-        "state": "executing",
+        "state": "verifying",
         "severity": "medium",
         "file": "data.js, data.test.mjs",
         "owner": "executor",
@@ -1561,6 +1561,14 @@
       "detail": "R-017 exclusive runner lease verified with Python lease fixtures and npm.cmd test 79/79. Pulled DQ1 into EXECUTOR_PENDING.",
       "commit": "4b3f022",
       "tests": "python swarm-runner.test.py: 7 passing; npm.cmd test: 79 passing"
+    },
+    {
+      "ts": "2026-08-04T11:49:10.988Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "DQ1: strict candle-store validation rejects malformed/non-finite/negative/OHLC-invalid/off-minute/duplicate/non-monotonic archive and stored rows while preserving deterministic valid archive merge.",
+      "commit": "2f7a807",
+      "tests": "83 passing (npm.cmd test); node --check data.js data.test.mjs"
     }
   ],
   "budget": {
