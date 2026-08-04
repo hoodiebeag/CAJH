@@ -108,3 +108,12 @@ one invalid forward-volatility asset-date and hand-computed valid raw/vol-adjust
 For `entryDelay = 1` and horizon `H`, assert exactly `H` daily returns from the entry close
 through the same exit close used by raw forward return; an `assetIndex + H` endpoint omits
 the final day and is incorrect.
+
+### B4 verdict gate
+
+Require a saved, reproducible real-data harness output with the exact size/liquidity-control
+inputs, universe before/after control, costs, and data provenance for every reported B4
+number. The unavailable stable-13 whole-symbol arm forbids `PASS` or a holdout-confirmed
+claim. Until B2 uses the exact raw-return holding window for forward volatility, do not use
+its risk-adjusted metric as verdict evidence. A low-risk result that disappears after the
+pre-specified major-asset control is `JUST-HOLD-MAJORS`, not an edge.
