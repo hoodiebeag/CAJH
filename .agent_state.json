@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "EXECUTOR_PENDING",
+                    "status":  "VERIFIER_PENDING",
                     "target_file":  "momentum.mjs, momentum.test.mjs",
                     "objective":  "Add per-date Spearman IC, mean IC, date-vector permutation null, block-bootstrap CI, effective-N reporting, and deterministic seeded test hooks. Reuse researchlib helpers where sound.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "M1 verified with npm.cmd test 92/92. Pulled M2 into EXECUTOR_PENDING.",
-                    "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T12:01:18.3652291Z"
+                    "notes":  "M2 implemented in commit f2f59dc. npm.cmd test passed 94/94, including per-date IC and deterministic score tests.",
+                    "updated_by":  "executor",
+                    "updated_at":  "2026-08-04T12:02:46.3107208Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -379,7 +379,7 @@
                                           },
                                           {
                                               "id":  "M2",
-                                              "state":  "in_progress",
+                                              "state":  "verifying",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -1649,6 +1649,14 @@
                        "detail":  "M1 momentum panel verified. npm.cmd test passed 92/92; tests exercise weekly non-overlapping L=30/H=7 rows, strict future fwdR, min-eight gating, and Q1-only separation. No performance claim or tiny-sample R/t result was introduced.",
                        "commit":  "bf05f7c",
                        "tests":  "npm.cmd test: 92 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:02:46.3107208Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "M2: added per-date Spearman IC scoring, date-vector permutation null, block-bootstrap confidence interval, effective-N reporting, and deterministic seeded test hooks for momentum panel rows.",
+                       "commit":  "f2f59dc",
+                       "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 94 passing"
                    }
                ],
     "budget":  {
