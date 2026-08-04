@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "EXECUTOR_PENDING",
+                    "status":  "VERIFIER_PENDING",
                     "target_file":  "momentum.mjs, momentum.test.mjs",
                     "objective":  "Tag every rebalance date bull/bear/flat from BTC versus its 200-day MA and report IC/count per regime without changing the primary full-sample statistic.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "M3 verified with npm.cmd test 96/96. Pulled M4 into EXECUTOR_PENDING.",
-                    "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T12:05:48.3339929Z"
+                    "notes":  "M4 implemented in commit 56af5f2. npm.cmd test passed 97/97, including regime tagging/summarization test.",
+                    "updated_by":  "executor",
+                    "updated_at":  "2026-08-04T12:07:02.4573193Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -407,7 +407,7 @@
                                           },
                                           {
                                               "id":  "M4",
-                                              "state":  "in_progress",
+                                              "state":  "verifying",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -1681,6 +1681,14 @@
                        "detail":  "M3 transform implementation verified. npm.cmd test passed 96/96; focused tests exercise BTC-residual and trailing-volatility-normalized transforms with hand-computed values and no future data leakage.",
                        "commit":  "89655e3",
                        "tests":  "npm.cmd test: 96 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:07:02.4573193Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "M4: added BTC 200-day MA regime tagging for rebalance dates and regime IC/count summaries without changing the primary full-sample IC statistic.",
+                       "commit":  "56af5f2",
+                       "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 97 passing"
                    }
                ],
     "budget":  {
