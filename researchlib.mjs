@@ -1,6 +1,6 @@
 /**
  * researchlib.mjs — shared helpers for the one-off research scripts
- * (baseline/isbeta/overlay/trail/simple/regime/flowsignal).
+ * (baseline/isbeta/overlay/trail/simple/regime and others).
  *
  * Pure extraction, no behavior change: every script had its own copy of these three
  * things. Consolidated here so there's one place to fix a bug in the stats math instead
