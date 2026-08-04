@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "bot.js, monitor.js, shutdown.test.mjs",
     "objective": "Add graceful shutdown semantics: immediately halt entries, persist safe state, report inability to guarantee software exits, and exit non-zero on fatal integrity loss so a supervisor restarts into reconciliation. Preserve stopped/default-off behavior.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-005B verified: npm.cmd test ran 56 tests and all passed. Transport-boundary tests prove AddOrder is not called for stale quote, insufficient/invalid balance, or unknown metadata; valid lot rounding still reaches AddOrder as expected; invalid hydration is rejected before monitor insertion.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:26:40.005Z"
+    "notes": "R-012 implemented. npm.cmd test ran 57 tests and all passed; bot.js, monitor.js, shutdown.test.mjs syntax checks passed. Fatal process errors now call handleFatalProcessError, which prepares fatal shutdown, logs software-polled exit uncertainty, and exits non-zero. prepareFatalShutdown halts entries durably, persists trade/halt state, returns an explicit software-polled warning, and restart restores halted state before reconciliation. saveTradeState now returns persistence success.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:27:59.873Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -205,7 +205,7 @@
       },
       {
         "id": "R-012",
-        "state": "executing",
+        "state": "verifying",
         "severity": "high",
         "file": "bot.js, monitor.js, shutdown.test.mjs",
         "owner": "executor",
@@ -1008,6 +1008,109 @@
         "Timeout/exhaustion never produces a trade or an inferred fill."
       ],
       "state": "queued"
+    },
+    {
+      "id": "R-014",
+      "category": "reliability",
+      "severity": "high",
+      "evidence": "Discord login/lifecycle failure handling is absent.",
+      "risk": "Scans can start without a healthy Discord lifecycle.",
+      "affected_paths": [
+        "bot.js"
+      ],
+      "proposed_resolution": "Handle login/lifecycle failure before scan startup.",
+      "requires_design": false,
+      "requires_live_edit": true,
+      "dependencies": [
+        "R-012"
+      ],
+      "acceptance_criteria": [
+        "Failed Discord readiness starts no scan or entry."
+      ],
+      "state": "queued"
+    },
+    {
+      "id": "R-016",
+      "category": "safety",
+      "severity": "high",
+      "evidence": "DATA_DIR silently falls back to cwd despite durable position-state requirements.",
+      "risk": "Ephemeral storage can lose exit-management state.",
+      "affected_paths": [
+        "storage.js",
+        "monitor.js",
+        "bot.js"
+      ],
+      "proposed_resolution": "Gate live readiness on durable storage preflight.",
+      "requires_design": true,
+      "requires_live_edit": true,
+      "dependencies": [
+        "R-005B",
+        "R-009"
+      ],
+      "acceptance_criteria": [
+        "Unsafe storage cannot enable orders."
+      ],
+      "state": "queued"
+    },
+    {
+      "id": "R-017",
+      "category": "reliability",
+      "severity": "high",
+      "evidence": "swarm-runner has no execution lease and stages all files.",
+      "risk": "Concurrent runners can duplicate work or commit another agent's changes.",
+      "affected_paths": [
+        "swarm-runner.py"
+      ],
+      "proposed_resolution": "Add scoped staging and exclusive lease.",
+      "requires_design": true,
+      "requires_live_edit": false,
+      "dependencies": [],
+      "acceptance_criteria": [
+        "A second runner dispatches nothing; unrelated paths never commit."
+      ],
+      "state": "queued"
+    },
+    {
+      "id": "DQ1",
+      "category": "research",
+      "severity": "medium",
+      "evidence": "Candle ingestion/cache resampling lack strict validation, corruption recovery, and provenance.",
+      "risk": "Research can silently use fabricated, incomplete, or irreproducible inputs.",
+      "affected_paths": [
+        "data.js",
+        "researchlab.mjs"
+      ],
+      "proposed_resolution": "Validate candles, rebuild corrupt caches, and fingerprint content/spec/code.",
+      "requires_design": true,
+      "requires_live_edit": false,
+      "dependencies": [
+        "R-016"
+      ],
+      "acceptance_criteria": [
+        "Invalid data is excluded and every result records deterministic provenance."
+      ],
+      "state": "queued"
+    },
+    {
+      "id": "S1",
+      "category": "security",
+      "severity": "high",
+      "evidence": "npm audit --omit=dev reports high production vulnerabilities.",
+      "risk": "Known vulnerable dependency chain remains deployed.",
+      "affected_paths": [
+        "package.json",
+        "package-lock.json"
+      ],
+      "proposed_resolution": "Apply tested compatible dependency updates.",
+      "requires_design": false,
+      "requires_live_edit": false,
+      "dependencies": [
+        "R-016"
+      ],
+      "acceptance_criteria": [
+        "No unaccepted high production audit finding remains."
+      ],
+      "state": "queued"
     }
   ],
   "ledger": [
@@ -1346,6 +1449,14 @@
       "detail": "R-005B fresh transport boundary verified with npm.cmd test 56/56 and AddOrder-unreachability checks. Pulled R-012 into EXECUTOR_PENDING.",
       "commit": "d8c27d5",
       "tests": "56 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:27:59.873Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-012: added fatal shutdown safety primitive and bot fatal handlers; shutdown halts entries, persists state, reports software-exit uncertainty, and exits non-zero for supervisor restart/reconciliation.",
+      "commit": "e047d41",
+      "tests": "57 passing (npm.cmd test); node --check bot.js monitor.js shutdown.test.mjs"
     }
   ],
   "budget": {
