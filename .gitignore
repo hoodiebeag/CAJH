@@ -11,3 +11,8 @@ archive_full/
 flow_*.log
 research-cache/
 research-runs/
+__pycache__/
+*.bak
+*.log
+level_cooldowns.json
+candles-upload.tar.gz*
