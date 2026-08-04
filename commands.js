@@ -163,7 +163,7 @@ export async function handleHelp(message, state) {
   const status = isTradingEnabled() ? "🟢 Active" : "🔴 Halted";
   await message.reply(
     `**cajh — Swing-Fractal Trading Bot**\n` +
-    `Long-only spot. Anticipates swing-low confirmations on the 1h/4h/1d — buying the moment price crosses a candidate low's trigger — sizes by risk (0.5% per trade), rotates the most profitable position out at the cap, and self-manages exits by stop / take-profit.\n\n` +
+    `Long-only spot. Anticipates swing-low confirmations on the 1h/4h/1d — buying the moment price crosses a candidate low's trigger — sizes by risk (0.5% per trade), uses no live alignment/trend gate, rotates the most profitable position out at the cap, and self-manages exits by stop / take-profit.\n\n` +
 
     `**Positions:**\n` +
     `> \`!sell BTC\` — Close cajh's position in an asset\n` +
@@ -277,7 +277,7 @@ export async function handleStatus(message, state) {
     `**Open positions:** ${positions}\n` +
     `**Watchlist:** ${state.watchlist.map(a => a.symbol).join(", ")}\n` +
     `**Timeframes:** ${SCAN_INTERVALS.map(i => i.label).join(" · ")}\n` +
-    `**Strategy:** Swing fractals, N=${SWING_WINDOW} (long-only)`
+    `**Strategy:** 1h/4h/1d anticipation swing fractals, N=${SWING_WINDOW}, risk-sized, no live alignment/trend gate`
   );
 }
 
@@ -381,7 +381,7 @@ export async function handleGeneral(message, userMessage, state) {
     `You are cajh, a long-only spot crypto trading bot on Kraken in a Discord server.\n` +
     `Your trading is mechanical: you anticipate swing-low confirmations on the 1h, 4h,\n` +
     `and 1d — buying when price crosses above a candidate low's trigger — size by risk\n` +
-    `(0.5% of cash per trade), and exit on stop-loss / take-profit. Answer questions about yourself,\n` +
+    `(0.5% of cash per trade), use no live alignment/trend gate, and exit on software-polled stop-loss / take-profit. Answer questions about yourself,\n` +
     `your live state, and your own code accurately and concisely. If you don't know, say so.\n\n` +
     buildLiveContext(state);
 

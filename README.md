@@ -47,12 +47,22 @@ timely without lowering the bar (same strong pivots, not more of them). `N` is
 - **Breakeven-plus** — once price reaches `entry + 2 × risk` (`BE_TRIGGER_R`), the stop
   is lifted above entry (≥ the fee buffer) so the trade can no longer close net-red.
 
-### Optional filters (in `strategy.js`)
+### Configuration inventory
 
-`REQUIRE_HIGHER_LOW`, `MAX_STOP_PCT`, `MIN_STOP_PCT` (stops tighter than ~1.5% are
-swamped by round-trip fees), `REQUIRE_TF_ALIGNMENT`, `TREND_GATE` (4h above its MA),
-`EXIT_ON_SWING_HIGH` (off by default), plus `RECENT_BARS`. Set any to `false`/`null`
-to relax. Use `!backtest` to compare.
+- **Active live + research:** `SWING_WINDOW`, `RECENT_BARS`, `PENDING_MAX_AGE`,
+  `RISK_PCT`, `MAX_POSITION_PCT`, `MAX_STOP_PCT_BY_TF`, `MIN_STOP_PCT`, `TP_R`,
+  `LOCK_BREAKEVEN`, `BE_TRIGGER_R`, `BE_LOCK_R`, `FEE_BUFFER_PCT`, and `FEE_RATE`.
+- **Active research only:** `MAX_STOP_PCT`, `REQUIRE_TF_ALIGNMENT`, `CHOP_FILTER`,
+  `TREND_GATE`, `TREND_GATE_MODE`, `TREND_MA`, plus backtest-only exit options like
+  ATR stops, partial exits, trailing stops, and max hold. These are swept by research
+  commands but are **not live entry gates** unless scanner imports them.
+- **Live environment controls:** `LIVE_TRADING=true` is required before `!resume` can
+  enable orders. `DATA_DIR` should point at durable storage only on deployment; locally
+  leave it unset unless you intentionally want a separate state/data directory.
+
+Current live scanner truth: anticipation entries on 1h/4h/1d, no alignment gate, no
+trend gate, per-timeframe stop caps, risk-based sizing, six-position cap with winner
+rotation, software-polled exits.
 
 ## Autonomous trading
 

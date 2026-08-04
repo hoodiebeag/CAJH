@@ -38,6 +38,8 @@ export function buildLiveContext(state) {
     `- trading: ${trading}`,
     `- watchlist: ${watch}`,
     `- timeframes scanned: 1h, 4h, 1d`,
+    `- live entry gates: anticipation swing-low trigger, per-timeframe stop band, min stop floor, monitor health, durable halt; no alignment/trend gate`,
+    `- sizing/exits: risk-based at 0.5% cash risk, 20% notional cap, six-position cap with winner rotation, software-polled stop/TP`,
     `- open positions:\n${positions}`,
     `- last scan: ${state.lastScanTime ?? "none yet"}`
   ].join("\n");

@@ -37,14 +37,19 @@ export const MAX_POSITION_PCT  = 0.20;  // hard cap: no single position above 20
 // (MIN_STOP_PCT stays global: below ~1.5% the ~0.9% round-trip cost swamps the R.)
 export const MAX_STOP_PCT_BY_TF = { "1h": 0.04, "4h": 0.06, "1d": 0.10 };
 
-// Optional confidence filters. Set to false / null to disable.
-export const REQUIRE_HIGHER_LOW   = false; // off: the strategy takes every swing-low signal the charts print (higher-low is a backtest filter, not a live gate)
-export const MAX_STOP_PCT         = 0.03;  // skip buys whose stop is further than 3% below entry; null to disable
+// Configuration inventory:
+// ACTIVE LIVE + RESEARCH: REQUIRE_HIGHER_LOW, MIN_STOP_PCT, MAX_STOP_PCT_BY_TF,
+// TP_R, breakeven settings, fee/slippage assumptions, RECENT_BARS/PENDING_MAX_AGE.
+// ACTIVE RESEARCH ONLY: MAX_STOP_PCT, REQUIRE_TF_ALIGNMENT, CHOP_FILTER,
+// TREND_GATE, TREND_GATE_MODE, TREND_MA. Live scanner intentionally does not import
+// those gates; commands.js can still sweep them for research.
+export const REQUIRE_HIGHER_LOW   = false; // off: the live strategy takes every swing-low signal the charts print
+export const MAX_STOP_PCT         = 0.03;  // research-only legacy scalar cap; live uses MAX_STOP_PCT_BY_TF
 export const MIN_STOP_PCT         = 0.015; // skip buys whose stop is CLOSER than 1.5% — R that small is swamped by ~0.8% round-trip fees
-export const REQUIRE_TF_ALIGNMENT = true;  // require the higher-timeframe trend (1h AND 4h) to be bullish
+export const REQUIRE_TF_ALIGNMENT = true;  // research-only default for BOS comparisons; live anticipation uses alignMode none
 export const EXIT_ON_SWING_HIGH   = false; // take profit when a fresh swing high confirms on the entry timeframe (off = let winners run to TP)
-export const CHOP_FILTER          = false; // when true, only trade when the 4h is genuinely TRENDING (higher highs AND higher lows), not just bouncing inside a range
-export const TREND_GATE           = true;  // when true, only trade a symbol whose OWN 4h is trending up (per-pair, not blanket)
+export const CHOP_FILTER          = false; // research-only structure filter
+export const TREND_GATE           = true;  // research-only MA/structure gate; live scanner does not import it
 export const TREND_GATE_MODE      = "ma";  // "ma" = 4h close above its TREND_MA average; "structure" = 4h making higher highs AND higher lows (rejects bounces in chop/downtrends)
 export const TREND_MA             = 20;    // moving-average period for the "ma" gate mode
 
