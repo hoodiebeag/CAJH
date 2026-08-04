@@ -31,6 +31,16 @@
     "next_queue": "Q1 -> Q5 in order, one item per run, Executor does the work and the Verifier does a fast bounded check.",
     "work_queue": [
       {
+        "id": "PWR1",
+        "state": "pending",
+        "file": "research/universe expansion (data only)",
+        "owner": "executor",
+        "depends_on": [],
+        "task": "POWER FIX - ROOT CAUSE NOW DIAGNOSED PRECISELY (architect, read-only audit of momentum.mjs + candles/). The whole-symbol holdout arm is built as available-minus-STABLE_13 = 16 pairs, of which exactly 8 have deep history (APT,FIL,INJ,NEAR,POL,SUI,TIA,UNI) and 8 are shallow (2025+). perDateIC enforces minAssets=8, so a date is eligible only if >=8 holdout assets are present. The 8 deep pairs have STAGGERED starts and only ALL coexist from 2023-12-21 (POL is binding; SUI 2023-05-03, TIA 2023-10-31). CONSEQUENCE: the arm sits exactly AT the threshold - one absent pair drops a date entirely - and it reported 0 eligible dates because the study ran when those pairs still began 2025-02, BEFORE history was expanded to 2023-01-01. TASKS: (a) re-run the whole-symbol arm on the CURRENT store and report eligible date count (expect roughly 110 weekly dates from ~2024-01 given L=30 warmup); (b) if still 0, print the per-date present-asset counts and say exactly which constraint binds; (c) expand the deep-history universe from C:/Users/tmroa/OneDrive/Desktop/Kraken_OHLCVT.zip so the arm is not one pair away from empty. FRAMING (important, do not skip): the whole-symbol arm NEVER RAN (0 dates = no test performed), so running it now is a FIRST confirmatory test on the primary axis, NOT a re-test after peeking at a null. State that explicitly in any writeup, and do not re-verdict momentum in this task - report the eligible-date count and IC only.",
+        "done_when": "Eligible whole-symbol date count reported on the current store (with per-date asset counts if still 0); deep-history holdout universe no longer sits exactly at minAssets; npm test green; momentum NOT re-verdicted in this task.",
+        "priority": "P4-BLOCKER"
+      },
+      {
         "id": "Q1",
         "state": "done",
         "file": "backtest.test.mjs",
@@ -797,13 +807,40 @@
         "expected_failure_modes": "A generic schema obscures a missing holdout; p/q values are treated as mandatory despite insufficient samples; a validator silently coerces malformed evidence into a PASS."
       },
       {
-        "id": "PWR1",
+        "id": "PWR2",
         "state": "pending",
-        "file": "research/universe expansion (data only)",
+        "file": "momentum.mjs",
         "owner": "executor",
-        "depends_on": [],
-        "task": "POWER FIX - ROOT CAUSE NOW DIAGNOSED PRECISELY (architect, read-only audit of momentum.mjs + candles/). The whole-symbol holdout arm is built as available-minus-STABLE_13 = 16 pairs, of which exactly 8 have deep history (APT,FIL,INJ,NEAR,POL,SUI,TIA,UNI) and 8 are shallow (2025+). perDateIC enforces minAssets=8, so a date is eligible only if >=8 holdout assets are present. The 8 deep pairs have STAGGERED starts and only ALL coexist from 2023-12-21 (POL is binding; SUI 2023-05-03, TIA 2023-10-31). CONSEQUENCE: the arm sits exactly AT the threshold - one absent pair drops a date entirely - and it reported 0 eligible dates because the study ran when those pairs still began 2025-02, BEFORE history was expanded to 2023-01-01. TASKS: (a) re-run the whole-symbol arm on the CURRENT store and report eligible date count (expect roughly 110 weekly dates from ~2024-01 given L=30 warmup); (b) if still 0, print the per-date present-asset counts and say exactly which constraint binds; (c) expand the deep-history universe from C:/Users/tmroa/OneDrive/Desktop/Kraken_OHLCVT.zip so the arm is not one pair away from empty. FRAMING (important, do not skip): the whole-symbol arm NEVER RAN (0 dates = no test performed), so running it now is a FIRST confirmatory test on the primary axis, NOT a re-test after peeking at a null. State that explicitly in any writeup, and do not re-verdict momentum in this task - report the eligible-date count and IC only.",
-        "done_when": "Eligible whole-symbol date count reported on the current store (with per-date asset counts if still 0); deep-history holdout universe no longer sits exactly at minAssets; npm test green; momentum NOT re-verdicted in this task."
+        "depends_on": [
+          "PWR1"
+        ],
+        "priority": "P4",
+        "task": "FIRST EXECUTION of the sealed whole-symbol arm for momentum (M5 whole-symbol arm). This is NOT a re-test after seeing a null: that arm returned 0 eligible rows, meaning no test was ever performed on it. Run it on the current expanded store, report eligible date/row counts alongside the statistic, and update the ROADMAP verdict via VERDICT_TEMPLATE.md. If the arm is still empty, print per-date present-asset counts and say exactly which constraint binds - do not silently emit another data-gate kill.",
+        "done_when": "Eligible row count and the statistic reported for the whole-symbol arm (or a precise structural reason it remains empty); ROADMAP verdict updated with the deciding numbers and the survivorship caveat; npm test green."
+      },
+      {
+        "id": "PWR3",
+        "state": "pending",
+        "file": "momentum.mjs",
+        "owner": "executor",
+        "depends_on": [
+          "PWR1"
+        ],
+        "priority": "P4",
+        "task": "FIRST EXECUTION of the sealed whole-symbol arm for low-vol / B3 (same harness, rank=-vol/-beta). This is NOT a re-test after seeing a null: that arm returned 0 eligible rows, meaning no test was ever performed on it. Run it on the current expanded store, report eligible date/row counts alongside the statistic, and update the ROADMAP verdict via VERDICT_TEMPLATE.md. If the arm is still empty, print per-date present-asset counts and say exactly which constraint binds - do not silently emit another data-gate kill.",
+        "done_when": "Eligible row count and the statistic reported for the whole-symbol arm (or a precise structural reason it remains empty); ROADMAP verdict updated with the deciding numbers and the survivorship caveat; npm test green."
+      },
+      {
+        "id": "PWR4",
+        "state": "pending",
+        "file": "classifier.mjs",
+        "owner": "executor",
+        "depends_on": [
+          "PWR1"
+        ],
+        "priority": "P4",
+        "task": "FIRST EXECUTION of the sealed whole-symbol arm for classifier P3 (whole-symbol holdout AUC + refit permutation null). This is NOT a re-test after seeing a null: that arm returned 0 eligible rows, meaning no test was ever performed on it. Run it on the current expanded store, report eligible date/row counts alongside the statistic, and update the ROADMAP verdict via VERDICT_TEMPLATE.md. If the arm is still empty, print per-date present-asset counts and say exactly which constraint binds - do not silently emit another data-gate kill.",
+        "done_when": "Eligible row count and the statistic reported for the whole-symbol arm (or a precise structural reason it remains empty); ROADMAP verdict updated with the deciding numbers and the survivorship caveat; npm test green."
       }
     ],
     "queue_rule": "Work ONE item per run, in order, smallest complete unit. Mark state done before moving on. If an item cannot be finished in one run, split it and add the remainder as a new item rather than leaving it half-built.",
@@ -821,7 +858,8 @@
     "pipeline": "Architect -> Executor -> Verifier -> (next item) -> Executor. Every finished Executor item is automatically the Verifier next job, so the Executor keeps the Verifier busy just by finishing work. The Verifier pulls the next pending item in the SAME run it verifies, so the Executor is never idle either.",
     "verdict_integrity": "CRITICAL: the momentum + low-vol KILLED verdicts are STALE, not clean nulls. Their whole-symbol arm (the PRIMARY axis, detectable IC ~0.044 per MOMENTUM_SPEC 5.6) reported 0 eligible dates because it ran when the holdout pairs began 2025-02. History has since been expanded to 2023-01-01, and the 8 deep holdout pairs all coexist from 2023-12-21, so that arm should now yield ~110 weekly dates. The primary axis therefore NEVER RAN - momentum was killed on the recent-months axis the spec itself calls underpowered (~0.112). Running the primary arm now is a FIRST confirmatory test, not a re-test after peeking. Do not cite these verdicts as evidence of no edge, and keep harvest (FOLLOWON Part A) gated on a genuine PASS.",
     "bom_defect": ".agent_state.json is being written with a UTF-8 BOM. Node require() tolerates it but JSON.parse(readFileSync(...)) throws \"Unexpected token\". Any agent reading the state MUST strip /^﻿/ first, and writers should emit BOM-less UTF-8. This is what A1 (state preflight) exists to catch; it is live now.",
-    "red_baseline_rule": "AMENDED (see AGENT_PROTOCOL.md). A red npm test does NOT unconditionally block. Scope it: if every failing test is in control.target_file, the assigned Executor PROCEEDS (finishing them is the task); any other agent still waits. If a failure lies OUTSIDE target_file, that is a real regression -> BLOCKED. Never advance to VERIFIER_PENDING or mark done while anything is red. Current state 2026-08-04: 137 pass / 5 fail, all 5 are MR1 in rsi-reversion-study.test.mjs which IS control.target_file, so the Executor is clear to continue."
+    "red_baseline_rule": "AMENDED (see AGENT_PROTOCOL.md). A red npm test does NOT unconditionally block. Scope it: if every failing test is in control.target_file, the assigned Executor PROCEEDS (finishing them is the task); any other agent still waits. If a failure lies OUTSIDE target_file, that is a real regression -> BLOCKED. Never advance to VERIFIER_PENDING or mark done while anything is red. Current state 2026-08-04: 137 pass / 5 fail, all 5 are MR1 in rsi-reversion-study.test.mjs which IS control.target_file, so the Executor is clear to continue.",
+    "systemic_finding": "ALL THREE research verdicts (momentum, low-vol, classifier) are DATA-GATE KILLS sharing one root cause: the sealed whole-symbol holdout arm produced 0 eligible dates/rows, so the PRIMARY axis was never actually tested on any of them. The agents were correctly honest about this (each verdict says data-gated, not economically false). The blocker is now removed: holdout pairs have since been backfilled to 2023-01-01 and the 8 deep holdout pairs all coexist from 2023-12-21, so the arm should yield ~110 weekly dates. PWR1 unblocks; PWR2/3/4 are the FIRST executions of that arm for the three studies. Framing rule: an arm that returned 0 rows performed no test, so running it now is first-execution, not re-testing after peeking."
   },
   "remediation_register": [
     {
