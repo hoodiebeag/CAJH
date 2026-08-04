@@ -9,6 +9,8 @@ const DAY = 86400;
 export const STABLE_13 = Object.freeze([
   "BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "AVAX", "LINK", "DOT", "LTC", "BCH", "ATOM", "XLM"
 ]);
+export const PRIMARY_SYMBOL_HOLDOUT = Object.freeze(["ATOM", "BCH", "XLM"]);
+export const RECENT_HOLDOUT_DAYS = 180;
 export const Q1_ONLY_START = "2026-01-01";
 export const Q1_ONLY_END = "2026-04-01";
 const logReturn = (a, b) => Math.log(b / a);
@@ -81,6 +83,29 @@ export function bhFdr(rows) {
     prior = Math.min(prior, ordered[i].p * ordered.length / (i + 1)); ordered[i].q = Math.min(1, prior);
   }
   return rows;
+}
+
+export function splitMomentumPanels(panels, { recentDays = RECENT_HOLDOUT_DAYS } = {}) {
+  const latest = panels.reduce((max, panel) => Math.max(max, panel.time), -Infinity);
+  const cutoff = Number.isFinite(latest) ? latest - recentDays * DAY : Infinity;
+  return {
+    cutoff,
+    train: panels.filter((panel) => panel.time < cutoff),
+    recentHoldout: panels.filter((panel) => panel.time >= cutoff)
+  };
+}
+
+export function splitPrimarySymbols(series, {
+  universe = STABLE_13,
+  holdout = PRIMARY_SYMBOL_HOLDOUT
+} = {}) {
+  const available = new Set([...series.keys()]);
+  const primary = [...universe].filter((symbol) => available.has(symbol));
+  const held = [...holdout].filter((symbol) => primary.includes(symbol));
+  const train = primary.filter((symbol) => !held.includes(symbol));
+  if (held.length !== holdout.length) throw new Error("Primary symbol holdout is not fully available.");
+  if (train.filter((symbol) => symbol !== "BTC").length < 8) throw new Error("Primary training universe has fewer than eight assets.");
+  return { primary, train, holdout: held };
 }
 
 const dateOf = (time) => new Date(time * 1000).toISOString().slice(0, 10);
@@ -159,6 +184,79 @@ export function scoreMomentumPanelRows(rows, {
       return [regimeName, { n: regimeValues.length, meanIC: regimeValues.length ? mean(regimeValues) : null }];
     })),
     perDate: datePanels.map(({ date, nAssets, ic }) => ({ date, nAssets, ic }))
+  };
+}
+
+function splitRecentRows(rows, holdoutDates = 4) {
+  const dates = [...new Set(rows.map((r) => r.date))].sort();
+  const held = new Set(dates.slice(Math.max(0, dates.length - holdoutDates)));
+  return {
+    train: rows.filter((r) => !held.has(r.date)),
+    recentHoldout: rows.filter((r) => held.has(r.date)),
+    recentHoldoutDates: [...held]
+  };
+}
+
+function scoreRegimeSlices(rows, scoreOptions) {
+  const out = { all: scoreMomentumPanelRows(rows, scoreOptions) };
+  for (const regimeName of ["bull", "bear", "flat"]) {
+    out[regimeName] = scoreMomentumPanelRows(rows.filter((r) => r.regime === regimeName), scoreOptions);
+  }
+  return out;
+}
+
+export function runSealedMomentumPanelStudy(series, {
+  primaryUniverse = STABLE_13,
+  symbolHoldoutUniverse = null,
+  lookbacks = [14, 30, 60, 90],
+  horizons = [7, 14, 30],
+  transforms = ["raw", "btcResidual90", "volNormalized"],
+  minAssets = 8,
+  recentHoldoutDates = 4,
+  permutations = 1000,
+  bootstrapIterations = 1000,
+  seed = 20260305
+} = {}) {
+  const scoreOptions = { minAssets, permutations, bootstrapIterations, seed };
+  const primary = buildMomentumPanel(series, { universe: primaryUniverse, minAssets, tagRegime: true });
+  const split = splitRecentRows(primary.rows, recentHoldoutDates);
+  const available = [...series.keys()];
+  const holdoutUniverse = symbolHoldoutUniverse || available.filter((asset) => !primaryUniverse.includes(asset));
+  const symbolHoldoutRows = holdoutUniverse.length >= minAssets
+    ? buildMomentumPanel(series, { universe: holdoutUniverse, minAssets, tagRegime: true }).rows
+    : [];
+  const exploratory = [];
+
+  for (const lookback of lookbacks) for (const horizon of horizons) for (const transform of transforms) {
+    const rows = buildMomentumPanel(series, {
+      universe: primaryUniverse,
+      lookback,
+      horizon,
+      step: horizon,
+      minAssets,
+      transform,
+      tagRegime: true
+    }).rows;
+    const trainRows = splitRecentRows(rows, recentHoldoutDates).train;
+    const slices = scoreRegimeSlices(trainRows, scoreOptions);
+    for (const [regimeName, scoreRow] of Object.entries(slices)) {
+      exploratory.push({ lookback, horizon, transform, regime: regimeName, ...scoreRow });
+    }
+  }
+
+  for (const row of exploratory) row.q = null;
+  bhFdr(exploratory.filter((row) => row.p !== null));
+  return {
+    primaryUniverse: [...primaryUniverse],
+    symbolHoldoutUniverse: [...holdoutUniverse],
+    primary: {
+      train: scoreMomentumPanelRows(split.train, scoreOptions),
+      recentHoldout: scoreMomentumPanelRows(split.recentHoldout, scoreOptions),
+      symbolHoldout: scoreMomentumPanelRows(symbolHoldoutRows, scoreOptions),
+      q1Only: scoreMomentumPanelRows(primary.q1Only, scoreOptions)
+    },
+    holdoutDates: split.recentHoldoutDates,
+    exploratory
   };
 }
 
@@ -316,22 +414,32 @@ function harvest(panels, cost = .009) {
 export function runMomentumStudy({ watchlist = loadWatchlist(), permutations = 1000 } = {}) {
   watchlist = watchlist.map((asset) => typeof asset === "string" ? { symbol: asset, id: symbolToKrakenId(asset) } : asset);
   const series = dailySeries(watchlist); const symbols = [...series.keys()].sort();
-  // Whole-symbol holdout needs at least the same eight assets required for an IC. Select
-  // the first eight full-span symbols alphabetically, before any result is inspected.
-  const eligible = symbols.filter((s) => s !== "BTC" && (series.get(s)?.length || 0) >= 1100);
-  const heldSymbols = eligible.slice(0, 8); const trainSymbols = symbols.filter((s) => !heldSymbols.includes(s));
+  const split = splitPrimarySymbols(series);
+  const trainSymbols = split.train;
+  const heldSymbols = split.holdout;
   const primary = momentumPanels(series, { transform: "residual", symbols: trainSymbols });
-  const cutoff = primary.length ? primary[Math.max(0, primary.length - 52)].time : Infinity;
-  const train = primary.filter((p) => p.time < cutoff); const timeHoldout = primary.filter((p) => p.time >= cutoff);
+  const timeSplit = splitMomentumPanels(primary);
+  const train = timeSplit.train;
+  const timeHoldout = timeSplit.recentHoldout;
   const symbolHoldout = momentumPanels(series, { transform: "residual", symbols: heldSymbols });
   const grid = [];
+  const family = [];
   for (const lookback of [14, 30, 60, 90]) for (const horizon of [7, 14, 30]) for (const transform of ["raw", "residual", "vol"]) {
-    const panels = momentumPanels(series, { lookback, horizon, transform, symbols: trainSymbols }).filter((p) => p.time < cutoff);
-    const result = score(panels, permutations); grid.push({ lookback, horizon, transform, ...result });
+    const panels = momentumPanels(series, { lookback, horizon, transform, symbols: trainSymbols }).filter((p) => p.time < timeSplit.cutoff);
+    const result = score(panels, permutations);
+    const row = { lookback, horizon, transform, ...result };
+    grid.push(row);
+    family.push({ key: `grid:${lookback}:${horizon}:${transform}`, p: result.p ?? 1 });
+    for (const regimeName of ["bull", "bear", "flat"]) {
+      const regimePanels = panels.filter((panel) => panel.regime === regimeName);
+      family.push({ key: `regime:${lookback}:${horizon}:${transform}:${regimeName}`, p: score(regimePanels, permutations).p ?? 1 });
+    }
   }
-  bhFdr(grid);
-  const input = { specification: "MOMENTUM_SPEC/v1", symbols, heldSymbols, timeHoldoutFrom: Number.isFinite(cutoff) ? new Date(cutoff * 1000).toISOString().slice(0, 10) : null, permutations };
-  const result = { manifest: dataManifest(watchlist), primary: { train: score(train, permutations), timeHoldout: score(timeHoldout, permutations), symbolHoldout: score(symbolHoldout, permutations), harvest: harvest(train) }, exploratory: grid };
+  bhFdr(family);
+  const qByKey = new Map(family.map((row) => [row.key, row.q]));
+  for (const row of grid) row.q = qByKey.get(`grid:${row.lookback}:${row.horizon}:${row.transform}`);
+  const input = { specification: "MOMENTUM_SPEC/v1", symbols, primarySymbols: split.primary, trainSymbols, heldSymbols, recentHoldoutDays: RECENT_HOLDOUT_DAYS, timeHoldoutFrom: Number.isFinite(timeSplit.cutoff) ? new Date(timeSplit.cutoff * 1000).toISOString().slice(0, 10) : null, permutations };
+  const result = { manifest: dataManifest(watchlist), primary: { train: score(train, permutations), timeHoldout: score(timeHoldout, permutations), symbolHoldout: score(symbolHoldout, permutations), harvest: harvest(train) }, exploratory: grid, exploratoryFdrFamily: family };
   return { input, result };
 }
 

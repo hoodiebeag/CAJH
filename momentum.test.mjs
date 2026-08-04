@@ -2,17 +2,23 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   blockBootstrapCI,
+  bhFdr,
   buildMomentumPanel,
   dateVectorPermutationP,
   effectiveN,
   perDateIC,
   ranks,
+  runSealedMomentumPanelStudy,
   scoreMomentumPanelRows,
   spearman,
   tagMomentumRegimes,
+  splitMomentumPanels,
+  splitPrimarySymbols,
   permutationP,
   bootstrapCI
 } from "./momentum.mjs";
+
+const STABLE_13_FIXTURE = ["BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "AVAX", "LINK", "DOT", "LTC", "BCH", "ATOM", "XLM"];
 
 const day = 86400;
 const candle = (offset, close) => ({ time: Date.UTC(2025, 0, 1) / 1000 + offset * day, open: close, high: close, low: close, close, volume: 1 });
@@ -159,6 +165,39 @@ test("tagMomentumRegimes labels BTC-vs-200MA state without changing full-sample 
   assert.deepEqual(tagged.regimes.flat, { n: 0, meanIC: null });
 });
 
+test("runSealedMomentumPanelStudy keeps train, recent, symbol, Q1, and exploratory grid separate", () => {
+  const primaryUniverse = ["BTC", "ETH", "SOL"];
+  const symbolHoldoutUniverse = ["XRP", "ADA", "DOGE"];
+  const all = [...primaryUniverse, ...symbolHoldoutUniverse];
+  const series = new Map(all.map((asset, assetIndex) => [
+    asset,
+    Array.from({ length: 80 }, (_, i) => candle(i, 100 + assetIndex * 20 + i * (assetIndex + 1)))
+  ]));
+
+  const study = runSealedMomentumPanelStudy(series, {
+    primaryUniverse,
+    symbolHoldoutUniverse,
+    lookbacks: [2],
+    horizons: [1, 2],
+    transforms: ["raw"],
+    minAssets: 3,
+    recentHoldoutDates: 2,
+    permutations: 10,
+    bootstrapIterations: 10,
+    seed: 11
+  });
+
+  assert.deepEqual(study.primaryUniverse, primaryUniverse);
+  assert.deepEqual(study.symbolHoldoutUniverse, symbolHoldoutUniverse);
+  assert.equal(study.primary.recentHoldout.nDates, 2);
+  assert.equal(study.primary.symbolHoldout.nDates > study.primary.recentHoldout.nDates, true);
+  assert.equal(study.primary.q1Only.nDates, 0);
+  assert.equal(study.primary.train.nDates > study.primary.recentHoldout.nDates, true);
+  assert.equal(study.exploratory.length, 8);
+  assert.equal(study.exploratory.every((row) => Object.hasOwn(row, "q")), true);
+  assert.equal(study.exploratory.find((row) => row.horizon === 2 && row.regime === "all").nDates < study.exploratory.find((row) => row.horizon === 1 && row.regime === "all").nDates, true);
+});
+
 test("rank correlation identifies a planted monotonic cross-section", () => {
   assert.deepEqual(ranks([3, 1, 1, 2]), [4, 1.5, 1.5, 3]);
   assert.equal(spearman([1, 2, 3, 4], [10, 20, 30, 40]), 1);
@@ -172,4 +211,21 @@ test("permutation and bootstrap preserve an obvious positive IC", () => {
   assert.ok(permutationP(panels, 200) < .05);
   const [lo, hi] = bootstrapCI(panels.map((p) => p.ic), 200);
   assert.equal(lo, 1); assert.equal(hi, 1);
+});
+
+test("M5 freezes symbol and recent-date holdouts before any score selection", () => {
+  const series = new Map(STABLE_13_FIXTURE.map((symbol) => [symbol, []]));
+  const symbols = splitPrimarySymbols(series);
+  assert.deepEqual(symbols.holdout, ["ATOM", "BCH", "XLM"]);
+  assert.equal(symbols.train.includes("ATOM"), false);
+
+  const panels = [0, 100, 200, 300].map((time) => ({ time }));
+  const split = splitMomentumPanels(panels, { recentDays: 150 / 86400 });
+  assert.deepEqual(split.train.map((panel) => panel.time), [0, 100]);
+  assert.deepEqual(split.recentHoldout.map((panel) => panel.time), [200, 300]);
+});
+
+test("M5 FDR q-values are assigned from one shared grid/regime family", () => {
+  const rows = [{ p: 0.001 }, { p: 0.02 }, { p: 0.9 }];
+  assert.deepEqual(bhFdr(rows).map((row) => row.q), [0.003, 0.03, 0.9]);
 });
