@@ -104,8 +104,8 @@ test("P2 fits deterministic finite logistic probabilities on a planted signal", 
     { y: 1, x: [2] }
   ];
 
-  const first = fitLogisticRegression(rows, { lambda: 0.01, iterations: 400, learningRate: 0.2 });
-  const second = fitLogisticRegression(rows, { lambda: 0.01, iterations: 400, learningRate: 0.2 });
+  const first = fitLogisticRegression(rows, { lambda: 0.1, iterations: 800, learningRate: 0.2 });
+  const second = fitLogisticRegression(rows, { lambda: 0.1, iterations: 800, learningRate: 0.2 });
 
   assert.deepEqual(second.weights, first.weights);
   assert.equal(second.bias, first.bias);
@@ -113,6 +113,18 @@ test("P2 fits deterministic finite logistic probabilities on a planted signal", 
   assert.ok(Number.isFinite(predictLogistic(first, [1])));
   assert.ok(predictLogistic(first, [-1]) < predictLogistic(first, [1]));
   assert.ok(first.weights[0] > 0);
+  assert.ok(mannWhitneyAuc(rows.map((row) => predictLogistic(first, row)), rows.map((row) => row.y)) > 0.5);
+});
+
+test("P2 planted signal beats chance while a deterministic null remains near chance", () => {
+  const planted = Array.from({ length: 20 }, (_, i) => ({ y: i < 10 ? 0 : 1, x: [i < 10 ? -1 : 1] }));
+  const nullRows = Array.from({ length: 20 }, (_, i) => ({ y: i % 2, x: [(i * 7) % 5 - 2] }));
+  const plantedModel = fitLogisticRegression(planted, { lambda: 0.1, iterations: 800 });
+  const nullModel = fitLogisticRegression(nullRows, { lambda: 0.1, iterations: 800 });
+  const plantedAuc = mannWhitneyAuc(planted.map((row) => predictLogistic(plantedModel, row)), planted.map((row) => row.y));
+  const nullAuc = mannWhitneyAuc(nullRows.map((row) => predictLogistic(nullModel, row)), nullRows.map((row) => row.y));
+  assert.ok(plantedAuc > 0.99);
+  assert.ok(Math.abs(nullAuc - 0.5) < 0.1);
 });
 
 test("P2 chooses lambda only from deterministic inner train folds", () => {
@@ -133,9 +145,9 @@ test("P2 chooses lambda only from deterministic inner train folds", () => {
   assert.ok(folds.every((fold) => fold.train.length + fold.validation.length === train.length));
 
   const selected = chooseLambdaByCv(train, {
-    lambdas: [0, 0.1],
+    lambdas: [0.1, 1],
     folds: 3,
-    iterations: 300,
+    iterations: 800,
     learningRate: 0.15
   });
 
@@ -146,4 +158,14 @@ test("P2 chooses lambda only from deterministic inner train folds", () => {
   assert.equal(selected.classWeights[0], 1);
   assert.equal(selected.classWeights[1], 1);
   assert.ok(selected.candidates.every((candidate) => candidate.folds.every((fold) => fold.trainRows === 4 && fold.validationRows === 2)));
+});
+
+test("P2 refuses to score a non-converged CV fit", () => {
+  const rows = [
+    { y: 0, x: [-2] }, { y: 0, x: [-1] }, { y: 1, x: [1] }, { y: 1, x: [2] }
+  ];
+  assert.throws(
+    () => chooseLambdaByCv(rows, { lambdas: [0.1], folds: 2, iterations: 1, learningRate: 0.1 }),
+    /did not converge/
+  );
 });

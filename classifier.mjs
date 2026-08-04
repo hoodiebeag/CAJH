@@ -211,7 +211,14 @@ export function fitLogisticRegression(rows, {
   return { weights, bias, lambda, iterations: iteration, converged, classWeights: { ...classWeights } };
 }
 
+function assertScorableModel(model) {
+  if (model.converged === false) {
+    throw new Error("non-converged logistic model is invalid for scoring");
+  }
+}
+
 export function predictLogistic(model, rowOrVector) {
+  assertScorableModel(model);
   const x = Array.isArray(rowOrVector) ? rowOrVector : rowOrVector.x;
   const probability = sigmoid(dot(model.weights, x) + model.bias);
   if (!Number.isFinite(probability)) throw new Error("logistic prediction is non-finite");
@@ -219,6 +226,7 @@ export function predictLogistic(model, rowOrVector) {
 }
 
 export function logisticLogLoss(rows, model) {
+  assertScorableModel(model);
   validateRows(rows);
   let weightedLoss = 0;
   let weightTotal = 0;
@@ -286,6 +294,7 @@ export function chooseLambdaByCv(rows, {
   const candidates = lambdas.map((lambda) => {
     const foldScores = innerFolds.map((fold) => {
       const model = fitLogisticRegression(fold.train, { lambda, iterations, learningRate });
+      if (!model.converged) throw new Error(`logistic regression did not converge for lambda ${lambda}`);
       const scores = fold.validation.map((row) => predictLogistic(model, row));
       const auc = mannWhitneyAuc(scores, fold.validation.map((row) => row.y));
       const loss = logisticLogLoss(fold.validation, model);
@@ -312,6 +321,7 @@ export function chooseLambdaByCv(rows, {
 
   const selected = candidates[0];
   const model = fitLogisticRegression(rows, { lambda: selected.lambda, iterations, learningRate });
+  if (!model.converged) throw new Error(`logistic regression did not converge for selected lambda ${selected.lambda}`);
   return {
     lambda: selected.lambda,
     candidates,
