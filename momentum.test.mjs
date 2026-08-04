@@ -96,6 +96,47 @@ test("scoreMomentumPanelRows reports mean IC, effective N, block CI, and determi
   assert.deepEqual(score.perDate.map((p) => p.ic), [1, -1, 0.8]);
 });
 
+test("buildMomentumPanel btcResidual90 uses only trailing factor data through the decision date", () => {
+  const btc = Array.from({ length: 110 }, (_, i) => {
+    const close = 100 + i + (i % 5);
+    return candle(i, close);
+  });
+  const eth = btc.map((c) => ({ ...c, close: (c.close ** 2) / 100 }));
+  const series = new Map([["BTC", btc], ["ETH", eth]]);
+
+  const { rows } = buildMomentumPanel(series, {
+    universe: ["BTC", "ETH"],
+    lookback: 30,
+    horizon: 7,
+    step: 7,
+    minAssets: 2,
+    transform: "btcResidual90"
+  });
+
+  const ethRow = rows.find((r) => r.asset === "ETH");
+  const btcTrail = btc[93].close / btc[63].close - 1;
+  const ethTrail = eth[93].close / eth[63].close - 1;
+  assert.equal(ethRow.date, "2025-04-04");
+  assert.ok(Math.abs(ethRow.trailR - (ethTrail - 2 * btcTrail)) < 1e-12);
+});
+
+test("buildMomentumPanel volNormalized divides by trailing volatility known at the decision date", () => {
+  const asset = [100, 110, 121, 145.2, 174.24].map((close, i) => candle(i, close));
+  const { rows } = buildMomentumPanel(new Map([["BTC", asset]]), {
+    universe: ["BTC"],
+    lookback: 2,
+    horizon: 1,
+    step: 1,
+    minAssets: 1,
+    transform: "volNormalized",
+    volWindow: 2
+  });
+
+  assert.equal(rows[0].date, "2025-01-04");
+  assert.ok(Math.abs(rows[0].trailR - ((145.2 / 110 - 1) / 0.05)) < 1e-12);
+  assert.equal(rows[0].fwdR, 174.24 / 145.2 - 1);
+});
+
 test("rank correlation identifies a planted monotonic cross-section", () => {
   assert.deepEqual(ranks([3, 1, 1, 2]), [4, 1.5, 1.5, 3]);
   assert.equal(spearman([1, 2, 3, 4], [10, 20, 30, 40]), 1);

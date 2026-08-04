@@ -86,6 +86,7 @@ export function bhFdr(rows) {
 const dateOf = (time) => new Date(time * 1000).toISOString().slice(0, 10);
 const inDateWindow = (date, start, end) => date >= start && date < end;
 const closeByDate = (candles) => new Map(candles.map((c) => [dateOf(c.time), c.close]));
+const rowByDate = (candles) => new Map(candles.map((c, i) => [dateOf(c.time), { ...c, i }]));
 const byDateRows = (rows) => {
   const grouped = new Map();
   for (const row of rows) {
@@ -161,12 +162,19 @@ export function buildMomentumPanel(series, {
   horizon = 7,
   step = 7,
   minAssets = 8,
+  transform = "raw",
+  factorAsset = "BTC",
+  residualWindow = 90,
+  volWindow = lookback,
   q1Start = Q1_ONLY_START,
   q1End = Q1_ONLY_END
 } = {}) {
   const names = [...universe];
   if (names.length < minAssets) return { rows: [], q1Only: [] };
   const maps = new Map(names.map((asset) => [asset, closeByDate(series.get(asset) || [])]));
+  const indexed = new Map(names.map((asset) => [asset, rowByDate(series.get(asset) || [])]));
+  const factorRows = series.get(factorAsset) || [];
+  const factorIndex = rowByDate(factorRows);
   const calendarSource = names.map((asset) => series.get(asset) || []).reduce((best, xs) => xs.length > best.length ? xs : best, []);
   const rows = [];
   const q1Only = [];
@@ -183,7 +191,27 @@ export function buildMomentumPanel(series, {
       const current = closes.get(date);
       const forward = closes.get(forwardDate);
       if (![trailing, current, forward].every((x) => Number.isFinite(x) && x > 0)) continue;
-      bucket.push({ date, asset, trailR: current / trailing - 1, fwdR: forward / current - 1 });
+      const assetIndex = indexed.get(asset).get(date)?.i;
+      const factorAtDate = factorIndex.get(date);
+      const factorAtTrailing = factorIndex.get(trailingDate);
+      let trailR = current / trailing - 1;
+      if (transform === "btcResidual90") {
+        if (assetIndex < residualWindow || !factorAtDate || factorAtDate.i < residualWindow || !factorAtTrailing) continue;
+        const beta = betaAt(series.get(asset), factorRows, assetIndex, residualWindow);
+        if (beta === null) continue;
+        trailR -= beta * (factorAtDate.close / factorAtTrailing.close - 1);
+      } else if (transform === "volNormalized") {
+        if (assetIndex < volWindow) continue;
+        const assetRows = series.get(asset);
+        const returns = [];
+        for (let j = assetIndex - volWindow + 1; j <= assetIndex; j++) returns.push(assetRows[j].close / assetRows[j - 1].close - 1);
+        const vol = stdev(returns);
+        if (!vol) continue;
+        trailR /= vol;
+      } else if (transform !== "raw") {
+        throw new Error(`unknown momentum transform: ${transform}`);
+      }
+      bucket.push({ date, asset, trailR, fwdR: forward / current - 1 });
     }
 
     if (bucket.length < minAssets) continue;
