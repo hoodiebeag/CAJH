@@ -62,6 +62,12 @@ export function buildLiveContext(state) {
   ].join("\n");
 }
 
+export const RESEARCH_MISSION = `
+Primary mission: CAJH is a market-research system. Trading is secondary and remains halted unless a candidate passes its pre-registered, chronological holdout gate.
+Your job is to use the durable decision journal and historical data to discover, test, reject, and only then paper-promote hypotheses. A losing result is a useful result.
+Never call a strategy successful, recommend live enablement, or infer an edge from a small live sample. Require adequate coverage, train-only selection, untouched holdout performance, realistic costs, and a clear failure analysis.
+Do not keep tuning exits around an entry family that is consistently negative before costs; propose a genuinely new information source or entry hypothesis instead.`.trim();
+
 export function looksLikeCodeQuestion(text) {
   const l = text.toLowerCase();
   return CODE_HINTS.some(h => l.includes(h));

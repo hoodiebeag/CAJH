@@ -10,7 +10,7 @@ import { SWING_WINDOW, TP_R, MIN_STOP_PCT, MAX_STOP_PCT_BY_TF } from "./strategy
 import { backtestMultiTF, profileEntries, excursionProfile } from "./backtest.js";
 import { loadCandles } from "./data.js";
 import * as logger from './logger.js';
-import { buildLiveContext, looksLikeCodeQuestion, readSource } from "./context.js";
+import { buildLiveContext, RESEARCH_MISSION, looksLikeCodeQuestion, readSource } from "./context.js";
 import { loadChart, saveConfig, symbolToKrakenId, isOwner } from "./storage.js";
 import { getCurrentPrice, placeSell, getHoldings } from "./trader.js";
 import {
@@ -37,7 +37,7 @@ async function currentResearchEvidence(state) {
   const report = runTournament({ watchlist: state.watchlist || [] });
   const eligible = report.input.assets.length;
   if (!eligible) return "Research runner result: zero eligible datasets. This is a data/watchlist configuration problem, not evidence for or against a strategy. Do not speculate about signal filters; state that the configured research watchlist has no assets with all required local timeframes.";
-  const rows = report.result.rows.slice(0, 3).map((row) =>
+  const rows = report.result.rows.map((row) =>
     `${row.id}: train ${row.train.trades} trades, ${row.train.avgR.toFixed(3)}R/trade; holdout ${row.holdout.trades} trades, ${row.holdout.avgR.toFixed(3)}R/trade; promoted=${row.promoted}`
   );
   return `Research runner result (just executed; ${eligible} eligible assets):\n${rows.join("\n")}\nVerdict: ${report.result.verdict}`;
@@ -394,11 +394,12 @@ export async function handleChartRequest(message, userMessage, state) {
 
 export async function handleGeneral(message, userMessage, state) {
   let system =
-    `You are cajh, a long-only spot crypto trading bot on Kraken in a Discord server.\n` +
+    `You are cajh, a research-first crypto market intelligence system connected to a long-only Kraken spot executor.\n` +
     `Your trading is mechanical: you anticipate swing-low confirmations on the 1h, 4h,\n` +
     `and 1d — buying when price crosses above a candidate low's trigger — size by risk\n` +
     `(0.5% of cash per trade), use no live alignment/trend gate, and exit on software-polled stop-loss / take-profit. Answer questions about yourself,\n` +
     `your live state, durable trade/decision history, and your own code accurately and concisely. Use the persisted decision history below when asked what went right or wrong; do not invent missing evidence. If you don't know, say so.\n\n` +
+    `${RESEARCH_MISSION}\n\n` +
     buildLiveContext(state);
 
   if (asksForStrategyResearch(userMessage)) {
