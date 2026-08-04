@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "rsi-reversion-study.mjs, rsi-reversion-study.test.mjs",
     "objective": "Research exactly one pre-registered daily RSI mean-reversion rule: RSI(14) crossing up through 30 enters at the next daily close; exit at the first subsequent close at or above MA(20), or after seven daily bars, whichever occurs first. Use stable-13 plus sealed whole-symbol and recent-time holdouts, charge 0.9% round-trip cost per completed position, and do not sweep thresholds, windows, or holding periods. Research only; do not alter live paths.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "Routed MR1: Synthetic fixtures prove entry and exit cannot use the trigger bar or future data; output includes fingerprint, row/trade counts, holdout dates, gross/net returns, cost/turnover, p or permutation evidence when sample size permits, and PASS/KILLED/CONTEXT-ONLY reason; npm.cmd test is green. Fail closed: Any threshold/window/exit tuning on holdout, too few completed holdout trades for the declared inference, or non-positive net holdout result is KILLED or CONTEXT-ONLY.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T13:40:52.9643412Z"
+    "notes": "",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T20:21:42.253Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -1292,14 +1292,6 @@
   ],
   "ledger": [
     {
-      "ts": "2026-08-04T00:10:00Z",
-      "agent": "architect",
-      "action": "queue-replenish",
-      "detail": "Extended the safety queue with confirmed-sell handling (R-008), durable halt/explicit resume control (R-009), and single-flight scheduling (R-010), all ahead of research.",
-      "commit": "",
-      "tests": "baseline previously green: 13 passing (npm.cmd test)"
-    },
-    {
       "ts": "2026-08-04T10:44:56.759Z",
       "agent": "executor",
       "action": "implement",
@@ -2090,6 +2082,14 @@
       "detail": "TF1 verified. npm.cmd test passed 136/136; tests exercise next-close execution/no same-bar fill, 0.9% costed net returns, buy-and-hold comparator, symbol/recent holdout preservation, and KILLED/CONTEXT-ONLY fail-closed verdicts. Later assertion-only commit 293eb6c was included in the tested tip.",
       "commit": "293eb6c",
       "tests": "npm.cmd test: 136 passing"
+    },
+    {
+      "ts": "2026-08-04T20:21:42.254Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "MR1: RSI(14)x30/MA(20)/7-day reversion study (rsi-reversion-study.mjs + .test.mjs), matching TF1 conventions (stable-13, sealed symbol+recent holdouts, 0.9% cost, fail-closed verdicts). Hand-verified every fixture number (Wilder RSI seed/smoothing, MA(20) sums) rather than asserting the module against itself. Found and fixed a real bug already present in the committed file (934a5a5, incidental to an unrelated momentum commit): the main loop bound i+1<rows.length (copied from TF1s entry-scan bound) meant a position could never exit on the last available bar - silently undercounting completed trades at a data boundary, the same class of issue as the architects concurrent 0-eligible-date root-cause. Rewrote the concurrency test to use the actual verified RSI trajectory instead of an untested second-decline assumption. npm.cmd test: 142/142 passing (6 new).",
+      "commit": "fddda9e",
+      "tests": "npm.cmd test: 142 passing"
     }
   ],
   "budget": {
