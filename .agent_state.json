@@ -1178,6 +1178,14 @@
       "detail": "R-007: documented validated configuration inventory and corrected README, Discord help/status, AI context, and strategy comments to distinguish live scanner settings from research-only gates.",
       "commit": "5ca2120",
       "tests": "47 passing (npm.cmd test); node --check target JS files"
+    },
+    {
+      "ts": "2026-08-04T11:22:00Z",
+      "agent": "architect",
+      "action": "reopen-and-automate",
+      "detail": "Independent verifier review reopened R-005 as R-005B for missing freshness, hydration, and AddOrder-unreachability proof. Updated swarm runner so an independent Verifier agent, rather than a test-only DONE branch, validates and routes the next eligible Executor task without human intervention.",
+      "commit": "",
+      "tests": "python -m py_compile swarm-runner.py"
     }
   ],
   "budget": {

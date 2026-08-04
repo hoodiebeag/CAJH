@@ -94,8 +94,8 @@ def run_agent(role, instructions):
     print(f"\n[SWARM] Activating {role} ...")
     prompt = (
         f"{instructions}\n\n"
-        "Read AGENT_PROTOCOL.md and .agent_state.json first. Act ONLY if control.status "
-        "names your phase. Edit ONLY control.target_file. Never checkout/reset/stash files "
+        "Read AGENT_PROTOCOL.md, AGENT_RUNBOOK.md, and .agent_state.json first. Act ONLY if control.status "
+        "names your phase. Edit only the current queue item's declared file set. Never checkout/reset/stash files "
         "you do not own. Do not kill node processes or touch candles/ — order-flow data "
         "collection is running there. Commit and push your work, then append ONE ledger "
         "entry and write the state file last."
@@ -190,38 +190,26 @@ def main():
 
         elif status == "EXECUTOR_PENDING":
             if run_agent("Agent 2 (Executor)",
-                f"You are the Executor. Fill the '// TODO(Executor)' stubs in "
-                f"'{ctl.get('target_file')}' with complete working code. Architect notes: "
-                f"{str(ctl.get('notes') or '')[:2000]}. Do not change exports, signatures or file "
-                "structure; if the design is wrong set control.status to BLOCKED with your "
-                "reasoning rather than silently redesigning. Set control.status to "
-                "VERIFIER_PENDING and clear control.notes when done.") is None:
+                f"You are the Executor. Implement the current bounded queue item in "
+                f"'{ctl.get('target_file')}'. Objective: {ctl.get('objective')}. Notes: "
+                f"{str(ctl.get('notes') or '')[:2000]}. Add the required focused tests and preserve "
+                "all live-trading safety invariants. If the design is wrong set control.status to BLOCKED "
+                "with reasoning rather than silently redesigning. On success, commit, set the queue item "
+                "to verifying, set control.status to VERIFIER_PENDING, clear control.notes, and append a "
+                "ledger entry.") is None:
                 continue
             git_checkpoint("executor phase")
 
         elif status == "VERIFIER_PENDING":
-            print("\n[SWARM] Verifier gate: running tests ...")
-            cmd = str(ctl.get("test_command", "npm test")).split()
-            try:
-                t = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True, timeout=600)
-                passed = t.returncode == 0
-                log = (t.stdout or "") + (t.stderr or "")
-            except subprocess.TimeoutExpired:
-                passed, log = False, "Test command timed out."
-
-            if passed:
-                ctl["status"] = "DONE"
-                ctl["notes"] = "Verifier: test suite green."
-                log_ledger(state, "verifier", "pass", "tests green", tests="pass")
-                print("   [verifier] PASS")
-            else:
-                ctl["status"] = "EXECUTOR_PENDING"
-                ctl["iteration"] = ctl.get("iteration", 0) + 1
-                ctl["notes"] = "Test failures:\n" + log[-LOG_CAP:]
-                log_ledger(state, "verifier", "fail", f"iteration {ctl['iteration']}", tests="fail")
-                print(f"   [verifier] FAIL -> back to Executor (iteration {ctl['iteration']})")
-            ctl["updated_by"] = "verifier"
-            write_state(state)
+            if run_agent("Agent 3 (Verifier)",
+                f"You are the independent Verifier for '{ctl.get('target_file')}'. Inspect the exact diff, "
+                f"run {ctl.get('test_command', 'npm.cmd test')}, and verify every queue acceptance criterion "
+                "and fail-closed requirement. Do not accept green tests alone. On pass: mark the active queue "
+                "item done, update its remediation-register item to done when applicable, route the first pending "
+                "item whose dependencies are all done into control with EXECUTOR_PENDING, and append a ledger entry. "
+                "On failure: keep the item executing, set EXECUTOR_PENDING with a minimal reproduction, increment "
+                "iteration, and append a ledger entry.") is None:
+                continue
             git_checkpoint("verifier gate")
 
         else:
