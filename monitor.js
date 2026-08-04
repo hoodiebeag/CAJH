@@ -18,6 +18,8 @@ let dailyPnl          = 0;
 let tradesToday       = 0;
 let drawdownHalted    = false; // true once today's drawdown limit trips; suppresses repeat halt alerts (cleared on daily rollover)
 let manualHalt        = false; // set by !stop / START_HALTED; survives the daily reset — only !resume clears it
+let haltReason         = null;
+let haltedAt           = null;
 
 const DAILY_DRAWDOWN_LIMIT = 0.10; // 10%
 const MONITOR_STALE_MS = 2 * 60 * 1000;
@@ -79,14 +81,46 @@ const pct  = (n) => `${(n * 100).toFixed(1)}%`;
 
 export function isTradingEnabled()  { return tradingEnabled; }
 export function enableTrading()     { tradingEnabled = true;  logger.info("[RISK] Trading enabled.");  }
-export function disableTrading()    { tradingEnabled = false; logger.warn("[RISK] Trading disabled."); }
+export function disableTrading(reason = null) {
+  tradingEnabled = false;
+  if (reason) {
+    haltReason = reason;
+    haltedAt = haltedAt ?? Date.now();
+  }
+  logger.warn("[RISK] Trading disabled.");
+}
 
 // Manual halt (!stop / START_HALTED) is DURABLE: unlike the daily drawdown halt, the midnight
 // reset never clears it — only an explicit !resume does. Stops the bot silently re-enabling
 // trading overnight after you halted it.
-export function haltManual()        { manualHalt = true;  disableTrading(); }
-export function resumeManual()      { manualHalt = false; enableTrading(); }
+export function haltManual(reason = "manual") {
+  manualHalt = true;
+  haltReason = reason;
+  haltedAt = Date.now();
+  disableTrading(reason);
+  persistStats();
+}
+export function resumeManual() {
+  if (!canResume({ liveOptIn: process.env.LIVE_TRADING === "true", monitorHealthy: getMonitorHealth().ok })) {
+    haltManual(process.env.LIVE_TRADING === "true" ? "monitor health required" : "LIVE_TRADING opt-in required");
+    return false;
+  }
+  manualHalt = false;
+  drawdownHalted = false;
+  haltReason = null;
+  haltedAt = null;
+  if (!persistStats()) {
+    manualHalt = true;
+    haltReason = "halt state persistence failed";
+    disableTrading(haltReason);
+    return false;
+  }
+  enableTrading();
+  return true;
+}
 export function isManualHalt()      { return manualHalt; }
+export function canResume({ liveOptIn, monitorHealthy }) { return liveOptIn === true && monitorHealthy === true; }
+export function getHaltState() { return { active: manualHalt || drawdownHalted, reason: haltReason, haltedAt }; }
 
 // Current calendar date in ET (YYYY-MM-DD), so daily stats roll over on the ET day.
 function todayET() {
@@ -94,7 +128,23 @@ function todayET() {
 }
 
 function persistStats() {
-  saveStats({ date: todayET(), dailyStartBalance, dailyPnl, tradesToday });
+  return saveStats({ date: todayET(), dailyStartBalance, dailyPnl, tradesToday,
+    haltActive: manualHalt || drawdownHalted, haltReason, haltedAt });
+}
+
+export function restoreHaltState() {
+  const saved = loadStats();
+  if (!saved) {
+    haltManual("missing halt state");
+    return false;
+  }
+  if (saved.haltActive === true) {
+    manualHalt = true;
+    haltReason = saved.haltReason ?? "persisted halt";
+    haltedAt = saved.haltedAt ?? null;
+    disableTrading();
+  }
+  return true;
 }
 
 export function setDailyStartBalance(balance) {
@@ -128,6 +178,7 @@ export function resetDailyStats(balance) {
   dailyPnl          = 0;
   tradesToday       = 0;
   drawdownHalted    = false;
+  if (!manualHalt) { haltReason = null; haltedAt = null; }
   if (!manualHalt) enableTrading();   // clears a drawdown (auto) halt, but never a manual !stop
   persistStats();
   logger.info(`[RISK] Daily stats reset. Start balance: ${usd(balance)}`);
@@ -425,6 +476,7 @@ export async function closeTradeAtMarket(channel, symbol, price, reason = "manua
 
 export function startMonitor(client, getChannelId, intervalMs = 30000) {
   logger.info("[MONITOR] Position monitor started");
+  restoreHaltState();
   hydrateTrades();
 
   // The channel is resolved fresh each time (the id can be set/changed later via
