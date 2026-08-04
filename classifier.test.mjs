@@ -3,9 +3,15 @@ import assert from "node:assert/strict";
 import {
   CLASSIFIER_COLUMNS,
   applyZScoreScaler,
+  balancedClassWeights,
   buildFeatureMatrix,
+  chooseLambdaByCv,
   featureVector,
+  fitLogisticRegression,
   fitZScoreScaler,
+  makeInnerFolds,
+  mannWhitneyAuc,
+  predictLogistic,
   scaleTrainHoldout,
   splitTrainHoldout
 } from "./classifier.mjs";
@@ -67,4 +73,77 @@ test("P1 encodes entry-time categorical fields without lookahead values", () => 
   const scaler = fitZScoreScaler([{ x: vector }, { x: vector }]);
   const transformed = applyZScoreScaler([{ x: vector }], scaler);
   assert.ok(transformed[0].x.every((value) => Number.isFinite(value)));
+});
+
+test("P2 computes Mann-Whitney AUC with average ranks for tied scores", () => {
+  const auc = mannWhitneyAuc([0.1, 0.4, 0.4, 0.9], [0, 1, 0, 1]);
+
+  // Ranks are [1, 2.5, 2.5, 4]. Positive rank sum = 6.5.
+  // AUC = (6.5 - 2*3/2) / (2*2) = 0.875.
+  assert.equal(auc, 0.875);
+  assert.equal(mannWhitneyAuc([0.2, 0.3], [1, 1]), null);
+});
+
+test("P2 uses explicit balanced class weights for imbalanced rows", () => {
+  const weights = balancedClassWeights([
+    { y: 1, x: [1] },
+    { y: 0, x: [0] },
+    { y: 0, x: [0] },
+    { y: 0, x: [0] }
+  ]);
+
+  assert.equal(weights[1], 2);
+  assert.equal(weights[0], 2 / 3);
+});
+
+test("P2 fits deterministic finite logistic probabilities on a planted signal", () => {
+  const rows = [
+    { y: 0, x: [-2] },
+    { y: 0, x: [-1] },
+    { y: 1, x: [1] },
+    { y: 1, x: [2] }
+  ];
+
+  const first = fitLogisticRegression(rows, { lambda: 0.01, iterations: 400, learningRate: 0.2 });
+  const second = fitLogisticRegression(rows, { lambda: 0.01, iterations: 400, learningRate: 0.2 });
+
+  assert.deepEqual(second.weights, first.weights);
+  assert.equal(second.bias, first.bias);
+  assert.ok(Number.isFinite(predictLogistic(first, [-1])));
+  assert.ok(Number.isFinite(predictLogistic(first, [1])));
+  assert.ok(predictLogistic(first, [-1]) < predictLogistic(first, [1]));
+  assert.ok(first.weights[0] > 0);
+});
+
+test("P2 chooses lambda only from deterministic inner train folds", () => {
+  const train = [
+    { symbol: "BTC", y: 0, x: [-2] },
+    { symbol: "BTC", y: 0, x: [-1] },
+    { symbol: "ETH", y: 0, x: [-0.5] },
+    { symbol: "ETH", y: 1, x: [0.5] },
+    { symbol: "SOL", y: 1, x: [1] },
+    { symbol: "SOL", y: 1, x: [2] }
+  ];
+
+  const folds = makeInnerFolds(train, { folds: 3 });
+  assert.deepEqual(
+    folds.flatMap((fold) => fold.validationIndices).sort((a, b) => a - b),
+    [0, 1, 2, 3, 4, 5]
+  );
+  assert.ok(folds.every((fold) => fold.train.length + fold.validation.length === train.length));
+
+  const selected = chooseLambdaByCv(train, {
+    lambdas: [0, 0.1],
+    folds: 3,
+    iterations: 300,
+    learningRate: 0.15
+  });
+
+  assert.ok([0, 0.1].includes(selected.lambda));
+  assert.equal(selected.rows, train.length);
+  assert.equal(selected.folds, 3);
+  assert.equal(selected.candidates.length, 2);
+  assert.equal(selected.classWeights[0], 1);
+  assert.equal(selected.classWeights[1], 1);
+  assert.ok(selected.candidates.every((candidate) => candidate.folds.every((fold) => fold.trainRows === 4 && fold.validationRows === 2)));
 });
