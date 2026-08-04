@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "trader.js, scanner.js, monitor.js, order-validation.test.mjs",
     "objective": "Create one shared validation boundary for order request and tracked-position fields: supported pair, finite positive entry/capital/volume/risk/target, and long stop strictly below entry. Validate balance and quote freshness at decision time; reject unknown pair metadata instead of defaulting silently.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 4,
-    "notes": "Verifier passed R-004: npm.cmd test ran 37 tests and all passed. Tests cover reconciliation-gated startup readiness, stale heartbeat, lastError, skipped tick telemetry, and explicit software-polled exit protection. Next eligible item pulled.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:10:10.810Z"
+    "notes": "R-005 implemented. npm.cmd test ran 39 tests and all passed. New order-validation tests exercise supported-symbol request validation, finite positive buy/sell fields, tracked-position finite entry/stop/target/risk/volume fields, and long stop/target geometry. Runtime paths now validate computed balance/capital/price before cooldown/order placement and fail closed on missing Kraken pair metadata.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:13:16.238Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -129,7 +129,7 @@
       },
       {
         "id": "R-005",
-        "state": "executing",
+        "state": "verifying",
         "severity": "high",
         "file": "trader.js, scanner.js, monitor.js, order-validation.test.mjs",
         "owner": "executor",
@@ -1108,6 +1108,14 @@
       "detail": "R-004 monitor operational health verified. npm.cmd test passed 37/37; health fields and reconciliation-gated readiness are covered. Pulled next eligible item into EXECUTOR_PENDING.",
       "commit": "1127170",
       "tests": "37 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:13:16.238Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-005: added shared order/tracked-trade validation, scanner pre-order balance/capital/quote checks, registerTrade validation, and fail-closed Kraken pair metadata handling before order normalization.",
+      "commit": "6f63219",
+      "tests": "39 passing (npm.cmd test)"
     }
   ],
   "budget": {
