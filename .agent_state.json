@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "EXECUTOR_PENDING",
+                    "status":  "VERIFIER_PENDING",
                     "target_file":  "momentum.mjs, momentum.test.mjs",
                     "objective":  "Parameterize the M1-M6 ranking variable so raw momentum, negative trailing volatility, and negative BTC beta run through the identical pipeline. Momentum output must remain bit-for-bit unchanged under rank=return.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "M6 verified with npm.cmd test 103/103. Pulled B1 into EXECUTOR_PENDING.",
-                    "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T12:12:47.0542311Z"
+                    "notes":  "B1 implemented in commit cde9b34. npm.cmd test passed 106/106, including rank=return identity and negative-volatility/beta rank tests.",
+                    "updated_by":  "executor",
+                    "updated_at":  "2026-08-04T12:14:19.3372256Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -465,7 +465,7 @@
                                           },
                                           {
                                               "id":  "B1",
-                                              "state":  "in_progress",
+                                              "state":  "verifying",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -1745,6 +1745,14 @@
                        "detail":  "M6 economic views verified. npm.cmd test passed 103/103; tests exercise close t+1 forward-return math plus turnover, gross spread/returns, and explicit net round-trip cost calculations. No execution strategy was added.",
                        "commit":  "85746a5",
                        "tests":  "npm.cmd test: 103 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:14:19.3372256Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "B1: parameterized the momentum panel ranking variable across raw return, negative trailing volatility, and negative BTC beta while preserving rank=return output identity.",
+                       "commit":  "cde9b34",
+                       "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 106 passing"
                    }
                ],
     "budget":  {
