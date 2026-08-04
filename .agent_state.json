@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "bot.js, monitor.js, shutdown.test.mjs",
-    "objective": "Add graceful shutdown semantics: immediately halt entries, persist safe state, report inability to guarantee software exits, and exit non-zero on fatal integrity loss so a supervisor restarts into reconciliation. Preserve stopped/default-off behavior.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "trader.js, monitor.js, api-resilience.test.mjs",
+    "objective": "Define bounded Kraken retry/timeout/staleness behavior for prices, balances, metadata, order confirmation, and reconciliation. Classify retryable versus terminal errors and propagate an explicit unknown state rather than a fallback fill or stale quote.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-012 implemented. npm.cmd test ran 57 tests and all passed; bot.js, monitor.js, shutdown.test.mjs syntax checks passed. Fatal process errors now call handleFatalProcessError, which prepares fatal shutdown, logs software-polled exit uncertainty, and exits non-zero. prepareFatalShutdown halts entries durably, persists trade/halt state, returns an explicit software-polled warning, and restart restores halted state before reconciliation. saveTradeState now returns persistence success.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-04T11:27:59.873Z"
+    "notes": "R-012 verified: npm.cmd test ran 57 tests and all passed. Fatal process handlers prepare shutdown, report software-polled exit uncertainty, and exit non-zero; restart restores halted state before reconciliation can allow entries.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-04T11:28:27.934Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -205,7 +205,7 @@
       },
       {
         "id": "R-012",
-        "state": "verifying",
+        "state": "done",
         "severity": "high",
         "file": "bot.js, monitor.js, shutdown.test.mjs",
         "owner": "executor",
@@ -220,7 +220,7 @@
       },
       {
         "id": "R-013",
-        "state": "pending",
+        "state": "executing",
         "severity": "high",
         "file": "trader.js, monitor.js, api-resilience.test.mjs",
         "owner": "executor",
@@ -1457,6 +1457,14 @@
       "detail": "R-012: added fatal shutdown safety primitive and bot fatal handlers; shutdown halts entries, persists state, reports software-exit uncertainty, and exits non-zero for supervisor restart/reconciliation.",
       "commit": "e047d41",
       "tests": "57 passing (npm.cmd test); node --check bot.js monitor.js shutdown.test.mjs"
+    },
+    {
+      "ts": "2026-08-04T11:28:27.934Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "R-012 graceful shutdown verified with npm.cmd test 57/57 and fatal-handler content check. Pulled R-013 into EXECUTOR_PENDING.",
+      "commit": "6523b95",
+      "tests": "57 passing (npm.cmd test)"
     }
   ],
   "budget": {
