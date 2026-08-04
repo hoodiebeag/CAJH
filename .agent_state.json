@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "money-path.test.mjs, PARITY_MATRIX.md",
-    "objective": "Build deterministic tests and a parity matrix for every money path: eligibility, manual/cron race, position cap rotation, actual fills, partial exits, stop/TP/breakeven, drawdown, restart recovery, reconciliation, persistence failure, stale price, and exchange errors. Use hand-computed fixtures, not snapshots.",
-    "allow_live_edit": false,
+    "status": "EXECUTOR_PENDING",
+    "target_file": "strategy.js, scanner.js, backtest.js, commands.js, README.md, context.js",
+    "objective": "Establish a validated configuration inventory. Classify every setting as active-live, active-research, deprecated, or experimental-disconnected; eliminate misleading duplicates only when proof and tests show they are unused. Update README, Discord help, and AI context to executable truth.",
+    "allow_live_edit": true,
     "test_command": "npm.cmd test",
-    "iteration": 1,
+    "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-006 revised after verifier fail-back. npm.cmd test ran 47 tests and all passed. money-path.test.mjs now covers monitor eligibility, resume opt-in, single-flight overlap, structural-level cooldown expiry, reconciliation classification, confirmed full/partial/ambiguous exits, and exact 10% daily drawdown halt. PARITY_MATRIX.md classifies all listed money paths as COVERED, PARTIAL, or BLOCKED/FOLLOW-ON rather than leaving unowned GAP rows.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-04T11:18:08.974Z"
+    "notes": "R-006 verified: npm.cmd test ran 47 tests and all passed. money-path.test.mjs exercises eligibility, resume opt-in, single-flight overlap, structural cooldown expiry, reconciliation, confirmed full/partial/ambiguous exits, and exact 10% daily drawdown halt. PARITY_MATRIX.md classifies remaining untestable API/timing seams as BLOCKED/FOLLOW-ON rather than safe.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-04T11:18:39.922Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -143,7 +143,7 @@
       },
       {
         "id": "R-006",
-        "state": "verifying",
+        "state": "done",
         "severity": "high",
         "file": "money-path.test.mjs, PARITY_MATRIX.md",
         "owner": "executor",
@@ -162,7 +162,7 @@
       },
       {
         "id": "R-007",
-        "state": "pending",
+        "state": "executing",
         "severity": "medium",
         "file": "strategy.js, scanner.js, backtest.js, commands.js, README.md, context.js",
         "owner": "executor",
@@ -1147,6 +1147,14 @@
       "action": "implement",
       "detail": "R-006: expanded deterministic money-path tests for overlap suppression, structural cooldown expiry, and exact drawdown halt; rewrote parity matrix to classify every money path and explicitly route untestable API/timing seams as blocked follow-ons.",
       "commit": "2022259",
+      "tests": "47 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:18:39.922Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "R-006 money-path parity verified with npm.cmd test 47/47; tests exercise the deterministic money-path seams and matrix explicitly routes remaining API/timing blockers. Pulled R-007 into EXECUTOR_PENDING.",
+      "commit": "a0ff994",
       "tests": "47 passing (npm.cmd test)"
     }
   ],
