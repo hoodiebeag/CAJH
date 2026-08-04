@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "EXECUTOR_PENDING",
+                    "status":  "VERIFIER_PENDING",
                     "target_file":  "ROADMAP.md",
                     "objective":  "Fill the low-volatility verdict template with both outcomes, size/liquidity control, and a PASS/KILLED/JUST-HOLD-MAJORS conclusion tied to holdout net evidence.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "B3 verified with npm.cmd test 108/108. Pulled B4 into EXECUTOR_PENDING.",
-                    "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T12:19:12.1008067Z"
+                    "notes":  "B4 implemented in commit 811a528. npm.cmd test passed 109/109; ROADMAP records the actual 0-date local holdout data-gate result.",
+                    "updated_by":  "executor",
+                    "updated_at":  "2026-08-04T12:21:05.5652130Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -509,7 +509,7 @@
                                           },
                                           {
                                               "id":  "B4",
-                                              "state":  "in_progress",
+                                              "state":  "verifying",
                                               "severity":  "medium",
                                               "file":  "ROADMAP.md",
                                               "owner":  "executor",
@@ -1793,6 +1793,14 @@
                        "detail":  "B3 controlled low-risk study verified. npm.cmd test passed 108/108; target-only change composes low-volatility/low-beta rank modes with sealed holdout/cost harness and pre-specified size/liquidity control reporting.",
                        "commit":  "076ed10",
                        "tests":  "npm.cmd test: 108 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:21:05.5652130Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "B4: recorded the low-vol/low-beta verdict in ROADMAP.md with both requested outcomes, size/liquidity-control status, and a KILLED conclusion tied to 0 eligible holdout dates/rows in the local harness.",
+                       "commit":  "811a528",
+                       "tests":  "npm.cmd test: 109 passing"
                    }
                ],
     "budget":  {
