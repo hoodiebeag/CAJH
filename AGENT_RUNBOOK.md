@@ -36,6 +36,17 @@ their fixed train/holdout split and cost rule; no task may say merely “improve
 Set `allow_live_edit: true` only when the declared change genuinely needs a frozen/live path;
 otherwise keep it false and do not expand the scope during implementation.
 
+### Research-output contract
+
+An Architect queue chain investigates one research question only. Do not combine a new signal,
+new execution rule, and new parameter sweep in one claim. Each Executor handoff for research
+must print or save a compact evidence block that a Verifier can inspect without re-running a
+large study: universe and row/date counts; exact train, recent-time, and whole-symbol holdout
+dates/symbols; raw and net-of-cost outcome; permutation `p` and family-adjusted `q` where
+applicable; and the exact pre-registered reason for `PASS`, `KILLED`, or
+`JUST-HOLD-MAJORS`. An absent, undersized, or unavailable holdout is an explicit limitation,
+never a substitute null or a silent exclusion.
+
 ## Verifier handoff
 
 For the active item, independently check:
