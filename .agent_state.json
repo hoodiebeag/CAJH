@@ -2,15 +2,15 @@
     "version":  2,
     "control":  {
                     "status":  "EXECUTOR_PENDING",
-                    "target_file":  "scanner.js, logger.js, decision-log.test.mjs",
-                    "objective":  "Add an append-only, bounded decision log for each evaluated asset with timestamp, timeframe, taken/skipped reason, entry/stop/TP/risk/regime. Logging must be non-blocking and incapable of changing trade control flow.",
-                    "allow_live_edit":  true,
+                    "target_file":  "context.js, context.test.mjs",
+                    "objective":  "Expose read-only positions, recent decision logs, effective config, halt/health state, and latest ROADMAP verdict in buildLiveContext with redaction and bounded size.",
+                    "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "P5 verified with npm.cmd test 124/124. Pulled C1 into EXECUTOR_PENDING.",
+                    "notes":  "C1 verified with npm.cmd test 127/127. Pulled C2 into EXECUTOR_PENDING.",
                     "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T13:22:17.6842442Z"
+                    "updated_at":  "2026-08-04T13:28:03.2171764Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -595,7 +595,7 @@
                                           },
                                           {
                                               "id":  "C1",
-                                              "state":  "in_progress",
+                                              "state":  "done",
                                               "severity":  "low",
                                               "file":  "scanner.js, logger.js, decision-log.test.mjs",
                                               "owner":  "executor",
@@ -610,7 +610,7 @@
                                           },
                                           {
                                               "id":  "C2",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "low",
                                               "file":  "context.js, context.test.mjs",
                                               "owner":  "executor",
@@ -1973,6 +1973,22 @@
                        "detail":  "P5 classifier verdict verified. npm.cmd test passed 124/124; ROADMAP marks the classifier KILLED/data-gated and does not promote synthetic fixture evidence or live implementation without sealed p\u003c0.05 plus net-of-cost lift.",
                        "commit":  "aea1293",
                        "tests":  "npm.cmd test: 124 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:26:51.4010187Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "C1 added bounded non-blocking decision logging and scanner decision integration.",
+                       "commit":  "b92235d",
+                       "tests":  "node --check scanner.js logger.js decision-log.test.mjs; npm.cmd test: 127 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:28:03.2171764Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "C1 decision logging verified. npm.cmd test passed 127/127; focused tests prove bounded structured decisions, injected sink failure is non-blocking, and scanner decision helper writes persistent asset_decision records without trade side effects. Routed C2.",
+                       "commit":  "b92235d + f8c850d",
+                       "tests":  "npm.cmd test: 127 passing"
                    }
                ],
     "budget":  {
