@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "swarm-runner.py, swarm-runner.test.py",
     "objective": "Add a workspace-local exclusive runner lease with owner metadata and conservative stale recovery. Acquire before reading or dispatching; release in finally. A held or ambiguous lease must dispatch no agent and mutate no shared state.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-018 verified: python swarm-runner.test.py ran 3 git-fixture tests proving owned files commit, unexpected modified files block, and unexpected staged files remain staged/uncommitted; npm.cmd test passed 79/79. Pulled next eligible item into EXECUTOR_PENDING.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:44:11.004Z"
+    "notes": "R-017 executor handoff: added workspace-local exclusive runner lease with owner metadata, conservative stale recovery, held/ambiguous lock blocking, and finally release. python swarm-runner.test.py passed 7/7; npm.cmd test passed 79/79.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:45:49.405Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -279,7 +279,7 @@
       },
       {
         "id": "R-017",
-        "state": "executing",
+        "state": "verifying",
         "severity": "high",
         "file": "swarm-runner.py, swarm-runner.test.py",
         "owner": "executor",
@@ -1545,6 +1545,14 @@
       "detail": "R-018 scoped runner checkpoint verified with Python git fixtures and npm.cmd test 79/79. Pulled R-017 into EXECUTOR_PENDING.",
       "commit": "b925507",
       "tests": "python swarm-runner.test.py: 3 passing; npm.cmd test: 79 passing"
+    },
+    {
+      "ts": "2026-08-04T11:45:49.405Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-017: added exclusive .swarm-runner.lock acquisition before state reads/dispatch, token-checked release in finally, active/ambiguous lock blocking, and stale dead-pid recovery.",
+      "commit": "e6263a4",
+      "tests": "python swarm-runner.test.py: 7 passing; npm.cmd test: 79 passing"
     }
   ],
   "budget": {
