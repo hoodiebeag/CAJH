@@ -158,3 +158,13 @@ report train rows, fold count, selected λ, convergence/iteration status, class 
 Mann-Whitney AUC on planted-signal and null fixtures. A non-convergent or non-finite fit is
 invalid; it cannot receive an AUC or flow into a holdout task. Trees, boosting, neural models,
 and holdout-informed tuning are out of scope.
+
+### P3 holdout/permutation gate
+
+Require a primary whole-symbol holdout and separately labeled recent-time secondary holdout;
+neither split may influence feature selection, scaling, λ selection, threshold selection, or
+model fitting. For every permutation, shuffle only labels as specified and refit the scaler,
+inner λ selection, and model before scoring the unchanged holdout. Report real train/holdout
+rows, positives, AUCs, gap, permutation count/seed, valid-null count, and `p = (exceedances +
+1) / (validNull + 1)`. A tiny or single-class holdout, failed refit, or fewer than 100 valid
+permutations is an unavailable result, never an AUC claim.
