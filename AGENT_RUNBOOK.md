@@ -140,3 +140,12 @@ number. The unavailable stable-13 whole-symbol arm forbids `PASS` or a holdout-c
 claim. Until B2 uses the exact raw-return holding window for forward volatility, do not use
 its risk-adjusted metric as verdict evidence. A low-risk result that disappears after the
 pre-specified major-asset control is `JUST-HOLD-MAJORS`, not an edge.
+
+### P1 classifier-matrix gate
+
+Before P1 passes, require a saved matrix manifest containing fixed `tpR=4`, exact train and
+whole-symbol holdout symbols, rows/positives/base-rate/excluded-row counts for each split,
+and the exact feature-column list. A fixture must change a holdout feature by an extreme
+amount without changing the fitted train scaler; missing or non-finite values must increment
+the visible exclusion count. No feature or label observed after the candidate entry time may
+enter the matrix.
