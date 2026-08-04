@@ -24,6 +24,18 @@ and `AGENT_PROTOCOL.md` remain authoritative when anything differs.
 - If an invariant or dependency cannot be met, set `BLOCKED` with the concrete reason. Do not
   silently broaden scope or bypass a safety gate.
 
+## Architect queue contract
+
+Each queue item must be a single bounded change with an explicit `file`, `allow_live_edit`,
+`task`, `done_when`, `fail_closed`, and `test_command`. Prefer one implementation file plus
+one focused test file; split a larger change into dependency-ordered items before routing.
+Every `done_when` names the exact assertion or deterministic fixture, and every task names
+the expected false-positive/failure mode (for example: a tiny surviving sample, holdout
+leakage, stale input, or a gross return that vanishes after costs). Research tasks must state
+their fixed train/holdout split and cost rule; no task may say merely “improve strategy.”
+Set `allow_live_edit: true` only when the declared change genuinely needs a frozen/live path;
+otherwise keep it false and do not expand the scope during implementation.
+
 ## Verifier handoff
 
 For the active item, independently check:
