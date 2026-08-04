@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "scanner.js, monitor.js, monitor.test.mjs",
     "objective": "Add a monitor-health contract: entries are refused unless startup hydration, reconciliation, persistence, and the current monitor tick are healthy. A monitor/persistence failure halts entries but keeps exit monitoring best-effort and emits an alert.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 4,
-    "notes": "Verifier passed R-001: npm.cmd test ran 16 tests and all passed, including focused storage tests for interrupted position write recovery, invalid position unsafe-state reporting, and stats/config backup recovery. Next eligible item pulled: R-002 monitor-health entry gate.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T10:46:08.709Z"
+    "notes": "R-002 implementation is committed and pushed. npm.cmd test passes 19 tests, including monitor-health contract tests. Review failed-tick heartbeat behavior, unresolved reconciliation ghosts, persistence failure handling, and entry gate wiring.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T10:50:07.819Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -114,8 +114,387 @@
         "fail_closed": "Overload or a hung API call must reduce activity, never multiply orders or exits."
       },
       {
-        "id": "Q2",
+        "id": "R-004",
         "state": "pending",
+        "severity": "high",
+        "file": "monitor.js, scanner.js, bot.js, monitor-health.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "depends_on": [
+          "R-002"
+        ],
+        "task": "Complete monitor operational safety: perform and record startup reconciliation before entry eligibility, expose heartbeat/staleness/last-error status, alert on degradation, and document that exits remain software-polled. Do not add exchange-native orders in this task.",
+        "done_when": "Tests prove failed or stale reconciliation prevents entries, health becomes visible to status/context, and restart with valid state returns to healthy only after reconciliation.",
+        "fail_closed": "No new position while exit-management health is unknown."
+      },
+      {
+        "id": "R-005",
+        "state": "pending",
+        "severity": "high",
+        "file": "trader.js, scanner.js, monitor.js, order-validation.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "depends_on": [
+          "R-002"
+        ],
+        "task": "Create one shared validation boundary for order request and tracked-position fields: supported pair, finite positive entry/capital/volume/risk/target, and long stop strictly below entry. Validate balance and quote freshness at decision time; reject unknown pair metadata instead of defaulting silently.",
+        "done_when": "Hand-computed fixtures show every invalid/non-finite/stale case rejects before AddOrder and valid values preserve existing rounding/precision behavior.",
+        "fail_closed": "Unknown metadata, price, balance, or arithmetic never reaches Kraken."
+      },
+      {
+        "id": "R-006",
+        "state": "pending",
+        "severity": "high",
+        "file": "money-path.test.mjs, PARITY_MATRIX.md",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "R-003",
+          "R-004",
+          "R-005",
+          "R-008",
+          "R-009",
+          "R-010"
+        ],
+        "task": "Build deterministic tests and a parity matrix for every money path: eligibility, manual/cron race, position cap rotation, actual fills, partial exits, stop/TP/breakeven, drawdown, restart recovery, reconciliation, persistence failure, stale price, and exchange errors. Use hand-computed fixtures, not snapshots.",
+        "done_when": "Matrix identifies each live/backtest difference as intentional or a bug; every P0/P1 failure path has a focused test and npm.cmd test is green.",
+        "fail_closed": "Any uncovered or unclassified money-path difference is recorded as a blocker, not assumed safe."
+      },
+      {
+        "id": "R-007",
+        "state": "pending",
+        "severity": "medium",
+        "file": "strategy.js, scanner.js, backtest.js, commands.js, README.md, context.js",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "depends_on": [
+          "R-006"
+        ],
+        "task": "Establish a validated configuration inventory. Classify every setting as active-live, active-research, deprecated, or experimental-disconnected; eliminate misleading duplicates only when proof and tests show they are unused. Update README, Discord help, and AI context to executable truth.",
+        "done_when": "Each exported setting has one classification, active scanner/backtest behavior is documented, and timeframes/filters/stops/halts/rotation claims match code.",
+        "fail_closed": "No configuration claim remains ambiguous about live behavior."
+      },
+      {
+        "id": "R-011",
+        "state": "pending",
+        "severity": "high",
+        "file": "bot.js, trader.js, README.md, security.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "depends_on": [
+          "R-005",
+          "R-009"
+        ],
+        "task": "Audit credential and owner-control boundaries: reject missing production owner configuration, ensure logs/errors never expose secrets, validate Discord owner-only command routing, and document least-privilege Kraken permissions. Do not print environment values.",
+        "done_when": "Tests prove an unconfigured/mismatched owner cannot trade, log sanitization covers request errors, and README specifies required least-privilege setup.",
+        "fail_closed": "Missing owner or credential configuration prevents live activation."
+      },
+      {
+        "id": "R-012",
+        "state": "pending",
+        "severity": "high",
+        "file": "bot.js, monitor.js, shutdown.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "depends_on": [
+          "R-004",
+          "R-009"
+        ],
+        "task": "Add graceful shutdown semantics: immediately halt entries, persist safe state, report inability to guarantee software exits, and exit non-zero on fatal integrity loss so a supervisor restarts into reconciliation. Preserve stopped/default-off behavior.",
+        "done_when": "Signal/fatal-path tests show entries halt before shutdown, state is persisted or explicitly unsafe, and restart requires reconciliation before any entry.",
+        "fail_closed": "A fatal state never continues as a healthy trading process."
+      },
+      {
+        "id": "R-013",
+        "state": "pending",
+        "severity": "high",
+        "file": "trader.js, monitor.js, api-resilience.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "depends_on": [
+          "R-005",
+          "R-008"
+        ],
+        "task": "Define bounded Kraken retry/timeout/staleness behavior for prices, balances, metadata, order confirmation, and reconciliation. Classify retryable versus terminal errors and propagate an explicit unknown state rather than a fallback fill or stale quote.",
+        "done_when": "Fake-clock/API fixtures prove retry bounds, no stale price is traded, and an exhausted request prevents entry or position removal.",
+        "fail_closed": "Timeouts are unknown facts, never successful quotes or fills."
+      },
+      {
+        "id": "M1",
+        "state": "pending",
+        "severity": "medium",
+        "file": "momentum.mjs, momentum.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "R-006",
+          "R-007"
+        ],
+        "task": "Implement the pre-registered daily cross-sectional momentum panel: stable-13 universe, weekly non-overlapping dates, L=30 trailing and H=7 strictly-future returns, minimum eight assets, and a tidy {date,asset,trailR,fwdR} output. Keep all Q1-only data separate.",
+        "done_when": "A hand-checked date proves no look-ahead, missing history drops the asset/date correctly, and synthetic-panel tests pass.",
+        "fail_closed": "Insufficient history or cross-section is excluded, never zero-filled."
+      },
+      {
+        "id": "M2",
+        "state": "pending",
+        "severity": "medium",
+        "file": "momentum.mjs, momentum.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "M1"
+        ],
+        "task": "Add per-date Spearman IC, mean IC, date-vector permutation null, block-bootstrap CI, effective-N reporting, and deterministic seeded test hooks. Reuse researchlib helpers where sound.",
+        "done_when": "Planted monotonic panel is significant, shuffled panel is null-like, and all statistics operate on rebalance dates rather than trades.",
+        "fail_closed": "No overlapping observations or hidden random seed enters a headline result."
+      },
+      {
+        "id": "M3",
+        "state": "pending",
+        "severity": "medium",
+        "file": "momentum.mjs, momentum.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "M1"
+        ],
+        "task": "Implement raw, 90-day rolling BTC-residual, and trailing-volatility-normalized rank transforms using only data at or before each decision date.",
+        "done_when": "Synthetic tests show no future beta/vol leakage and residuals are approximately orthogonal to BTC on training data.",
+        "fail_closed": "Unavailable transform inputs exclude that asset-date."
+      },
+      {
+        "id": "M4",
+        "state": "pending",
+        "severity": "medium",
+        "file": "momentum.mjs, momentum.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "M1"
+        ],
+        "task": "Tag every rebalance date bull/bear/flat from BTC versus its 200-day MA and report IC/count per regime without changing the primary full-sample statistic.",
+        "done_when": "Regime counts sum to the eligible-date total and boundary fixtures are deterministic.",
+        "fail_closed": "Dates without a valid MA are excluded."
+      },
+      {
+        "id": "M5",
+        "state": "pending",
+        "severity": "medium",
+        "file": "momentum.mjs, momentum.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "M2",
+          "M3",
+          "M4"
+        ],
+        "task": "Build sealed whole-symbol primary holdout plus recent-month secondary holdout. Freeze stable-13 primary; run LxH exploratory grid only on train, non-overlapping at each H, with one BH-FDR family across grid/transforms/regimes.",
+        "done_when": "Holdout assets/dates cannot affect selection, stable-13 and recent-20 results remain separate, and reruns reproduce the FDR surface.",
+        "fail_closed": "Holdout data is never used to choose a parameter or headline cell."
+      },
+      {
+        "id": "M6",
+        "state": "pending",
+        "severity": "medium",
+        "file": "momentum.mjs, momentum.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "M5"
+        ],
+        "task": "Add tercile and top-3/top-5 economic views: enter at close t+1, compute turnover, gross spread, and net spread after explicit round-trip costs. Do not add an execution strategy.",
+        "done_when": "Tests prove entry is after ranking close and cost/turnover figures are reported for every economic result.",
+        "fail_closed": "Positive IC without net-of-cost economics is not an execution conclusion."
+      },
+      {
+        "id": "M7",
+        "state": "pending",
+        "severity": "medium",
+        "file": "ROADMAP.md",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "M6"
+        ],
+        "task": "Fill the Momentum verdict template exactly from harness output: pre-registration, stable-13 train/holdout, raw-vs-residual interpretation, regimes, FDR grid, net economics, and survivorship caveat. Declare only PASS, KILLED, or CONTEXT-ONLY.",
+        "done_when": "Every reported number reproduces from saved output and the verdict quotes its deciding holdout/cost statistic.",
+        "fail_closed": "No positive training or gross-only result is called an edge."
+      },
+      {
+        "id": "B1",
+        "state": "pending",
+        "severity": "medium",
+        "file": "momentum.mjs, momentum.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "M2"
+        ],
+        "task": "Parameterize the M1-M6 ranking variable so raw momentum, negative trailing volatility, and negative BTC beta run through the identical pipeline. Momentum output must remain bit-for-bit unchanged under rank=return.",
+        "done_when": "Regression test preserves momentum output and low-vol/beta execution runs without live-path changes.",
+        "fail_closed": "New rank modes cannot alter the pre-registered momentum result."
+      },
+      {
+        "id": "B2",
+        "state": "pending",
+        "severity": "medium",
+        "file": "momentum.mjs, momentum.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "B1"
+        ],
+        "task": "Report forward raw return and forward risk-adjusted return/vol side by side for every rank mode, guarding zero/invalid forward volatility.",
+        "done_when": "Synthetic fixtures verify both outcomes and invalid forward-vol samples are excluded visibly.",
+        "fail_closed": "Risk-adjusted metrics never divide by zero or silently substitute values."
+      },
+      {
+        "id": "B3",
+        "state": "pending",
+        "severity": "medium",
+        "file": "momentum.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "B2",
+          "M5",
+          "M6"
+        ],
+        "task": "Run low-volatility and low-beta through the sealed-holdout/cost harness and add a pre-specified size/liquidity control to distinguish a real anomaly from merely holding majors.",
+        "done_when": "Stable-13 holdout, cost, turnover, and size-control results are all reported with no selection on holdout.",
+        "fail_closed": "A major-asset proxy is labelled JUST-HOLD-MAJORS, not an edge."
+      },
+      {
+        "id": "B4",
+        "state": "pending",
+        "severity": "medium",
+        "file": "ROADMAP.md",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "B3"
+        ],
+        "task": "Fill the low-volatility verdict template with both outcomes, size/liquidity control, and a PASS/KILLED/JUST-HOLD-MAJORS conclusion tied to holdout net evidence.",
+        "done_when": "ROADMAP figures reproduce from B3 output and contain the mandatory caveat.",
+        "fail_closed": "Risk-adjusted improvement alone does not imply a tradeable long-only edge."
+      },
+      {
+        "id": "P1",
+        "state": "pending",
+        "severity": "medium",
+        "file": "classifier.mjs, classifier.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "R-006",
+          "R-007"
+        ],
+        "task": "Create a research-only entry-time feature matrix from profileEntries, fixed tpR=4 label, whole-symbol train/holdout split, train-only z-score scaler, and class-balance/column reporting.",
+        "done_when": "Tests prove no feature/scaler sees holdout data and label/base-rate accounting is exact.",
+        "fail_closed": "Missing/non-finite features exclude rows with a reported count."
+      },
+      {
+        "id": "P2",
+        "state": "pending",
+        "severity": "medium",
+        "file": "classifier.mjs, classifier.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "P1"
+        ],
+        "task": "Implement deterministic, L2-regularized, class-weighted logistic regression and Mann-Whitney AUC in plain JS; choose lambda by inner train-only folds. Do not add trees, boosting, or neural models.",
+        "done_when": "Planted synthetic signal produces AUC>0.5, noise is near 0.5, and lambda selection never uses holdout.",
+        "fail_closed": "Any non-convergent fit is reported invalid rather than scored."
+      },
+      {
+        "id": "P3",
+        "state": "pending",
+        "severity": "medium",
+        "file": "classifier.mjs, classifier.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "P2"
+        ],
+        "task": "Score sealed whole-symbol primary and recent-time secondary holdouts. Build K>=100 permutation nulls that refit scaler, lambda selection, and model each shuffle; report train/holdout gap.",
+        "done_when": "Output contains holdout AUC, permutation p, K, and gap; a test confirms the full pipeline is refit per shuffle.",
+        "fail_closed": "AUC without the complete permutation procedure is exploratory only."
+      },
+      {
+        "id": "P4",
+        "state": "pending",
+        "severity": "medium",
+        "file": "classifier.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "P3"
+        ],
+        "task": "Add standardized coefficient readout, threshold precision/recall, class imbalance and survivorship caveats, then calculate any economic lift only net of cost.",
+        "done_when": "Output distinguishes discrimination from tradeability and explains feature direction without changing live strategy.",
+        "fail_closed": "A positive coefficient or AUC alone is never an execution recommendation."
+      },
+      {
+        "id": "P5",
+        "state": "pending",
+        "severity": "medium",
+        "file": "ROADMAP.md",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "P4"
+        ],
+        "task": "Fill the classifier verdict template. PASS requires sealed holdout AUC above the refit permutation null at p<0.05 and net-of-cost economic lift; otherwise mark entry quality KILLED.",
+        "done_when": "Verdict numbers exactly match P3/P4 saved output with mandatory caveats.",
+        "fail_closed": "No live implementation is queued from a classifier result without the separate human-gated promotion path."
+      },
+      {
+        "id": "C1",
+        "state": "pending",
+        "severity": "low",
+        "file": "scanner.js, logger.js, decision-log.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "depends_on": [
+          "R-006",
+          "R-007"
+        ],
+        "task": "Add an append-only, bounded decision log for each evaluated asset with timestamp, timeframe, taken/skipped reason, entry/stop/TP/risk/regime. Logging must be non-blocking and incapable of changing trade control flow.",
+        "done_when": "Tests prove one structured record per decision and injected logging failure does not change the decision or submit behavior.",
+        "fail_closed": "Decision logging cannot weaken existing safety gates."
+      },
+      {
+        "id": "C2",
+        "state": "pending",
+        "severity": "low",
+        "file": "context.js, context.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "C1"
+        ],
+        "task": "Expose read-only positions, recent decision logs, effective config, halt/health state, and latest ROADMAP verdict in buildLiveContext with redaction and bounded size.",
+        "done_when": "Fixtures answer position and skipped-asset questions from recorded data, not invented rationale.",
+        "fail_closed": "Context exposes no secret, source, or absent decision as a fact."
+      },
+      {
+        "id": "C3",
+        "state": "pending",
+        "severity": "low",
+        "file": "context.js, context.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "C2"
+        ],
+        "task": "Add a dynamic mission/limitations digest from live config and ROADMAP. It must state this is supplied system context, not persistent self-awareness, and that the current strategy is not validated for autonomous live trading.",
+        "done_when": "Fixture answers remain accurate when halt/config/ROADMAP inputs change.",
+        "fail_closed": "The AI never claims profitability, live authority, or persistent awareness it does not have."
+      },
+      {
+        "id": "Q2",
+        "state": "deferred",
         "file": "funding.mjs",
         "owner": "executor",
         "task": "COLLECTOR ONLY, no analysis. Kraken Futures historical funding rates (public, no auth): https://futures.kraken.com/derivatives/api/v4/historicalfundingrates?symbol=PF_XBTUSD for PF_XBTUSD, PF_ETHUSD, PF_SOLUSD. Store funding/<symbol>.csv with header; idempotent merge on re-run. Print rows + date span per symbol.",
@@ -123,7 +502,7 @@
       },
       {
         "id": "Q3",
-        "state": "pending",
+        "state": "deferred",
         "file": "fundingsignal.mjs",
         "owner": "executor",
         "depends_on": "Q2",
@@ -132,7 +511,7 @@
       },
       {
         "id": "Q4",
-        "state": "pending",
+        "state": "deferred",
         "file": "research.mjs",
         "owner": "executor",
         "task": "CONSOLIDATION 1/2: research.mjs with subcommands wrapping baseline.mjs, isbeta.mjs, regime.mjs via researchlib.mjs. Verify each subcommand reproduces original output, THEN delete those three originals.",
@@ -140,7 +519,7 @@
       },
       {
         "id": "Q5",
-        "state": "pending",
+        "state": "deferred",
         "file": "research.mjs",
         "owner": "executor",
         "depends_on": "Q4",
@@ -149,7 +528,7 @@
       },
       {
         "id": "Q6",
-        "state": "pending",
+        "state": "deferred",
         "file": "walkforward.mjs",
         "owner": "executor",
         "task": "Build the walk-forward harness the ROADMAP has wanted since day one and never got. Rolling windows: train on N months, test on the next M, step forward, repeat - so every result is scored only on data the fit never saw. Must handle the SEALED-SYMBOL case too (hold out entire pairs, not just later dates), because time-only splits let a strategy overfit the cross-section. Reuse researchlib.mjs and backtestMultiTF; do not touch frozen paths.",
@@ -157,7 +536,7 @@
       },
       {
         "id": "Q7",
-        "state": "pending",
+        "state": "deferred",
         "file": "ROADMAP.md",
         "owner": "executor",
         "task": "DOCUMENTATION PASS, no code. ROADMAP.md has grown to a long append-only log. Add a SUMMARY section at the very top: what has been settled (with the killing numbers), what is still open, and what should never be re-tested. A future cold agent should be able to read only that section and avoid repeating any dead end. Do not delete history below it.",
@@ -165,7 +544,7 @@
       },
       {
         "id": "Q8",
-        "state": "pending",
+        "state": "deferred",
         "file": "backtest.test.mjs",
         "owner": "executor",
         "task": "Second test pass: cover the exit engine, which carries the most subtle arithmetic in the repo. (a) partial scale-out - a partial leg must contribute exactly frac x the full-position net R; (b) trailing stop - exits trailR below the running peak, not at the peak; (c) cost model - entry fee on entry notional and exit fee on exit notional, asserted against a hand-computed value.",
@@ -228,7 +607,7 @@
         "Unhealthy startup, stale heartbeat, failed persistence, and fatal error each block new orders.",
         "Existing exit loop remains best-effort and alerts rather than silently claiming health."
       ],
-      "state": "queued"
+      "state": "verifying"
     },
     {
       "id": "R-003",
@@ -417,6 +796,76 @@
         "Concurrent invocation tests prove only one active scan/tick per loop and no duplicate order path."
       ],
       "state": "queued"
+    },
+    {
+      "id": "R-011",
+      "category": "security",
+      "severity": "high",
+      "evidence": "storage.js has a hard-coded fallback Discord owner ID and bot/trader startup permits incomplete operational configuration with warnings.",
+      "risk": "Misconfigured deployment can expose owner controls or start a process whose safety assumptions are not explicit.",
+      "affected_paths": [
+        "storage.js",
+        "bot.js",
+        "trader.js",
+        "README.md"
+      ],
+      "proposed_resolution": "Require explicit production owner/live configuration, redact errors, test authorization, and document least-privilege credentials.",
+      "requires_design": true,
+      "requires_live_edit": true,
+      "dependencies": [
+        "R-005",
+        "R-009"
+      ],
+      "acceptance_criteria": [
+        "Unconfigured owner cannot authorize trading.",
+        "No log path emits credentials or token material."
+      ],
+      "state": "queued"
+    },
+    {
+      "id": "R-012",
+      "category": "reliability",
+      "severity": "high",
+      "evidence": "bot.js only logs uncaughtException/unhandledRejection and has no shutdown protocol; software exits rely on the running monitor.",
+      "risk": "A corrupted process can continue or terminate without a clear halt/recovery signal.",
+      "affected_paths": [
+        "bot.js",
+        "monitor.js"
+      ],
+      "proposed_resolution": "Halt entries, persist/reveal unsafe state, and terminate/restart through a reconciled boot path on fatal conditions.",
+      "requires_design": true,
+      "requires_live_edit": true,
+      "dependencies": [
+        "R-004",
+        "R-009"
+      ],
+      "acceptance_criteria": [
+        "Fatal/shutdown tests prove no new entry and explicit recovery requirements."
+      ],
+      "state": "queued"
+    },
+    {
+      "id": "R-013",
+      "category": "reliability",
+      "severity": "high",
+      "evidence": "Kraken calls have inconsistent retry behavior; price and sell-fill fallbacks can treat unavailable remote state as usable local data.",
+      "risk": "Network failures can produce stale pricing, ambiguous orders, and incorrect tracked positions.",
+      "affected_paths": [
+        "trader.js",
+        "monitor.js",
+        "scanner.js"
+      ],
+      "proposed_resolution": "Introduce bounded request policies and explicit unknown states at every order-critical API boundary.",
+      "requires_design": true,
+      "requires_live_edit": true,
+      "dependencies": [
+        "R-005",
+        "R-008"
+      ],
+      "acceptance_criteria": [
+        "Timeout/exhaustion never produces a trade or an inferred fill."
+      ],
+      "state": "queued"
     }
   ],
   "ledger": [
@@ -523,6 +972,22 @@
       "detail": "R-001 storage persistence verified. npm.cmd test passed 16/16; storage.test.mjs exercises interrupted write recovery, invalid position unsafe state, and stats/config backup recovery. Pulled R-002 into EXECUTOR_PENDING.",
       "commit": "6ea54db",
       "tests": "16 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T10:50:07.819Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-002: gated scanner entries on monitor hydration, reconciliation, persistence, successful tick, and fresh heartbeat; added fail-closed health reporting and focused tests. Failed ticks do not refresh readiness.",
+      "commit": "3b5a6a9",
+      "tests": "19 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T10:51:00Z",
+      "agent": "architect",
+      "action": "queue-complete",
+      "detail": "Queued the complete known remediation and canonical research program: P0/P1 safety, money-path tests, config parity, momentum M1-M7, low-vol B1-B4, classifier P1-P5, and self-knowledge C1-C3. Legacy Q2-Q8 remain deferred pending dedicated pre-registration or reconciliation.",
+      "commit": "",
+      "tests": "baseline from executor: 19 passing (npm.cmd test)"
     }
   ],
   "budget": {
