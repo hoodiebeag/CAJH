@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "EXECUTOR_PENDING",
+                    "status":  "VERIFIER_PENDING",
                     "target_file":  "momentum.mjs, momentum.test.mjs",
                     "objective":  "Report forward raw return and forward risk-adjusted return/vol side by side for every rank mode, guarding zero/invalid forward volatility.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "B1 verified with npm.cmd test 106/106. Pulled B2 into EXECUTOR_PENDING.",
-                    "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T12:14:45.4316291Z"
+                    "notes":  "B2 implemented in commit fb9dfa2. npm.cmd test passed 108/108, including raw/risk-adjusted forward return and zero-volatility guard tests.",
+                    "updated_by":  "executor",
+                    "updated_at":  "2026-08-04T12:16:43.3609607Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -479,7 +479,7 @@
                                           },
                                           {
                                               "id":  "B2",
-                                              "state":  "in_progress",
+                                              "state":  "verifying",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -1761,6 +1761,14 @@
                        "detail":  "B1 rank-variable parameterization verified. npm.cmd test passed 106/106; tests prove rank=return output identity and negative volatility/beta values through the same trailR ranking slot.",
                        "commit":  "d85c9b8",
                        "tests":  "npm.cmd test: 106 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:16:43.3609607Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "B2: added opt-in forward raw and forward risk-adjusted return reporting for each rank mode, with zero/invalid forward volatility guarded out of risk-adjusted scoring.",
+                       "commit":  "fb9dfa2",
+                       "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 108 passing"
                    }
                ],
     "budget":  {
