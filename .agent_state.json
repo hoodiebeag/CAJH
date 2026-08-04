@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "VERIFIER_PENDING",
+                    "status":  "EXECUTOR_PENDING",
                     "target_file":  "momentum.mjs, momentum.test.mjs",
-                    "objective":  "Implement the pre-registered daily cross-sectional momentum panel: stable-13 universe, weekly non-overlapping dates, L=30 trailing and H=7 strictly-future returns, minimum eight assets, and a tidy {date,asset,trailR,fwdR} output. Keep all Q1-only data separate.",
+                    "objective":  "Add per-date Spearman IC, mean IC, date-vector permutation null, block-bootstrap CI, effective-N reporting, and deterministic seeded test hooks. Reuse researchlib helpers where sound.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "M1 implemented in commit 3a5746a. npm.cmd test passed 92/92, including momentum panel tests for weekly L=30/H=7 rows, strict future fwdR, min-eight asset gating, and Q1-only separation.",
-                    "updated_by":  "executor",
-                    "updated_at":  "2026-08-04T12:00:36.7569992Z"
+                    "notes":  "M1 verified with npm.cmd test 92/92. Pulled M2 into EXECUTOR_PENDING.",
+                    "updated_by":  "verifier",
+                    "updated_at":  "2026-08-04T12:01:18.3652291Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -363,7 +363,7 @@
                                           },
                                           {
                                               "id":  "M1",
-                                              "state":  "verifying",
+                                              "state":  "done",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -379,7 +379,7 @@
                                           },
                                           {
                                               "id":  "M2",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -1641,6 +1641,14 @@
                        "detail":  "M1: added pre-registered stable-13 daily momentum panel with weekly non-overlapping L=30/H=7 rows, min-eight asset gating, tidy rows, and separate Q1-only output.",
                        "commit":  "3a5746a",
                        "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 92 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:01:18.3652291Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "M1 momentum panel verified. npm.cmd test passed 92/92; tests exercise weekly non-overlapping L=30/H=7 rows, strict future fwdR, min-eight gating, and Q1-only separation. No performance claim or tiny-sample R/t result was introduced.",
+                       "commit":  "bf05f7c",
+                       "tests":  "npm.cmd test: 92 passing"
                    }
                ],
     "budget":  {
