@@ -34,6 +34,26 @@ function latestRoadmapVerdict(maxBytes = 120000) {
   } catch { return "not available"; }
 }
 
+export function redactContextText(value) {
+  return String(value ?? "")
+    .replace(/(KRAKEN_API_(?:KEY|SECRET)|DISCORD_TOKEN|ANTHROPIC_API_KEY)\s*[:=]\s*[^\s,;]+/gi, "$1=[REDACTED]")
+    .replace(/\b(?:sk-ant-|sk-)[A-Za-z0-9_-]{8,}/g, "[REDACTED]")
+    .replace(/\bBearer\s+[A-Za-z0-9._-]+/gi, "Bearer [REDACTED]");
+}
+
+export function formatDecisionForContext(event) {
+  const stamp = event?.at ?? event?.ts ?? "unknown time";
+  if (event?.type === "asset_decision") {
+    const action = event.taken === true ? "took" : "skipped";
+    return redactContextText(`${stamp}: ${action} ${event.symbol ?? "unknown asset"} ${event.timeframe ?? "unknown timeframe"}; ${event.reason ?? "reason unavailable"}`);
+  }
+  if (event?.type === "entry") return redactContextText(`${stamp}: entered ${event.trade?.symbol ?? "unknown asset"} at $${event.trade?.entry ?? "?"} (${event.trade?.signal ?? "unspecified signal"})`);
+  if (event?.type === "exit") return redactContextText(`${stamp}: exited ${event.trade?.symbol ?? "unknown asset"} at $${event.exit?.price ?? "?"}; P&L $${Number(event.exit?.pnl ?? 0).toFixed(2)} (${event.exit?.reason ?? "reason unavailable"})`);
+  if (event?.type === "setup_decision") return redactContextText(`${stamp}: ${event.result?.traded ? "took" : "passed"} ${event.symbol ?? "unknown asset"} ${event.setup?.tf ?? "unknown timeframe"} setup; ${event.result?.reason ?? "reason unavailable"}`);
+  if (event?.type === "reconciliation") return redactContextText(`${stamp}: reconciliation; orphans ${event.orphans?.join(",") || "none"}, ghosts ${event.ghosts?.join(",") || "none"}`);
+  return redactContextText(`${stamp}: ${event?.type ?? "unknown decision"}`);
+}
+
 export function buildLiveContext(state, { maxChars = 12000 } = {}) {
   const trading = isTradingEnabled() ? "active" : "halted";
   const open    = getOpenTrades();
@@ -54,13 +74,7 @@ export function buildLiveContext(state, { maxChars = 12000 } = {}) {
   const passed = setups.filter((event) => !event.result?.traded).length;
   const totalPnl = exits.reduce((sum, event) => sum + event.exit.pnl, 0);
   const wins = exits.filter((event) => event.exit.pnl > 0).length;
-  const recent = journal.slice(-8).map((event) => {
-    if (event.type === "entry") return `${event.at}: entered ${event.trade?.symbol} at $${event.trade?.entry} (${event.trade?.signal ?? "unspecified signal"})`;
-    if (event.type === "exit") return `${event.at}: exited ${event.trade?.symbol} at $${event.exit?.price}; P&L $${Number(event.exit?.pnl ?? 0).toFixed(2)} (${event.exit?.reason})`;
-    if (event.type === "setup_decision") return `${event.at}: ${event.result?.traded ? "took" : "passed"} ${event.symbol} ${event.setup?.tf ?? "?"} setup; ${event.result?.reason ?? "entered"}`;
-    if (event.type === "reconciliation") return `${event.at}: reconciliation; orphans ${event.orphans?.join(",") || "none"}, ghosts ${event.ghosts?.join(",") || "none"}`;
-    return `${event.at}: ${event.type}`;
-  }).join("\n") || "no persisted decisions yet";
+  const recent = journal.slice(-8).map(formatDecisionForContext).join("\n") || "no persisted decisions yet";
 
   const safeConfig = {
     scanChannelConfigured: Boolean(config.scanChannelId),
@@ -76,7 +90,7 @@ export function buildLiveContext(state, { maxChars = 12000 } = {}) {
     `- sizing/exits: risk-based at 0.5% cash risk, 20% notional cap, six-position cap with winner rotation, software-polled stop/TP`,
     `- open positions:\n${positions}`,
     `- effective safe config: ${JSON.stringify(safeConfig)}`,
-    `- halt state: ${JSON.stringify({ active: halt.active, reason: halt.reason, haltedAt: halt.haltedAt })}`,
+    `- halt state: ${redactContextText(JSON.stringify({ active: halt.active, reason: halt.reason, haltedAt: halt.haltedAt }))}`,
     `- monitor health: ${JSON.stringify({ ok: monitorHealth.ok, hydrated: monitorHealth.hydrated, reconciled: monitorHealth.reconciled, persistenceOk: monitorHealth.persistenceOk, tickOk: monitorHealth.tickOk, stale: monitorHealth.stale, exitProtection: monitorHealth.exitProtection })}`,
     `- storage health: ${JSON.stringify(Object.fromEntries(Object.entries(storageHealth).map(([key, value]) => [key, { ok: value.ok, source: value.source }])))}`,
     `- latest roadmap verdict: ${latestRoadmapVerdict()}`,

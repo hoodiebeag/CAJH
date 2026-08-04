@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildLiveContext } from "./context.js";
+import { buildLiveContext, formatDecisionForContext } from "./context.js";
 
 test("C2 exposes bounded read-only operational context without secrets", () => {
   const context = buildLiveContext({
@@ -23,4 +23,19 @@ test("C2 does not invent an absent decision or expose source code in live contex
   assert.match(context, /no persisted decisions yet|durable decision history:/);
   assert.doesNotMatch(context, /===== .*\.js =====|function buildLiveContext/);
   assert.ok(context.includes("[context truncated]") || context.length <= 1000);
+});
+
+test("C2 answers skipped-asset questions from recorded asset decisions", () => {
+  assert.equal(
+    formatDecisionForContext({ type: "asset_decision", ts: "2026-08-04T01:00:00Z", symbol: "BTC", timeframe: "1h", taken: false, reason: "no signal" }),
+    "2026-08-04T01:00:00Z: skipped BTC 1h; no signal"
+  );
+  assert.equal(formatDecisionForContext({ type: "asset_decision", ts: "2026-08-04T01:00:00Z", symbol: "ETH", taken: false }), "2026-08-04T01:00:00Z: skipped ETH unknown timeframe; reason unavailable");
+});
+
+test("C2 redacts dynamic token-shaped text in decisions and halt reasons", () => {
+  const decision = formatDecisionForContext({ type: "asset_decision", ts: "now", symbol: "BTC", taken: false, reason: "KRAKEN_API_SECRET=supersecret sk-ant-abcdefghijklmnop" });
+  assert.doesNotMatch(decision, /supersecret|sk-ant-abcdefghijklmnop/);
+  const context = buildLiveContext({ watchlist: [] }, { maxChars: 20000 });
+  assert.doesNotMatch(context, /KRAKEN_API_SECRET=supersecret|sk-ant-abcdefghijklmnop/);
 });
