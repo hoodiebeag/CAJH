@@ -2,15 +2,15 @@
     "version":  2,
     "control":  {
                     "status":  "EXECUTOR_PENDING",
-                    "target_file":  "classifier.mjs, classifier.test.mjs",
-                    "objective":  "Score sealed whole-symbol primary and recent-time secondary holdouts. Build K\u003e=100 permutation nulls that refit scaler, lambda selection, and model each shuffle; report train/holdout gap.",
+                    "target_file":  "classifier.mjs",
+                    "objective":  "Add standardized coefficient readout, threshold precision/recall, class imbalance and survivorship caveats, then calculate any economic lift only net of cost.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "P2 verified with npm.cmd test 118/118. Pulled P3 into EXECUTOR_PENDING.",
+                    "notes":  "P3 verified with npm.cmd test 121/121. Pulled P4 into EXECUTOR_PENDING.",
                     "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T13:01:39.9745987Z"
+                    "updated_at":  "2026-08-04T13:07:43.0893403Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -553,7 +553,7 @@
                                           },
                                           {
                                               "id":  "P3",
-                                              "state":  "in_progress",
+                                              "state":  "done",
                                               "severity":  "medium",
                                               "file":  "classifier.mjs, classifier.test.mjs",
                                               "owner":  "executor",
@@ -567,7 +567,7 @@
                                           },
                                           {
                                               "id":  "P4",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "medium",
                                               "file":  "classifier.mjs",
                                               "owner":  "executor",
@@ -1925,6 +1925,22 @@
                        "detail":  "P2 logistic classifier verified. npm.cmd test passed 118/118; tests exercise planted-signal AUC, deterministic null AUC near chance, train-only lambda folds, class weights, and fail-closed non-convergence handling. Routed P3.",
                        "commit":  "27f7d96",
                        "tests":  "npm.cmd test: 118 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:05:08.9117316Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "P3 added sealed whole-symbol/recent holdout scoring with train-only pipeline and refit permutation null.",
+                       "commit":  "e1f10b0",
+                       "tests":  "node --check classifier.mjs classifier.test.mjs; npm.cmd test: 121 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:07:43.0893403Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "P3 sealed classifier holdout scoring verified. npm.cmd test passed 121/121; focused tests exercise full-pipeline refit per permutation, exact p=(exceedances+1)/(validNull+1), train-only scaler/lambda isolation, and unavailable tiny/single-class holdouts. Routed P4.",
+                       "commit":  "e1f10b0",
+                       "tests":  "npm.cmd test: 121 passing"
                    }
                ],
     "budget":  {
