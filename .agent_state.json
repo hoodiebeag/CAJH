@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "trader.js, scanner.js, monitor.js, order-validation.test.mjs, monitor.test.mjs",
-    "objective": "Correct the R-005 verification gap: introduce timestamped quote/balance snapshots with an explicit maximum age; revalidate fresh finite quote, available balance, and capital immediately before AddOrder; validate every hydrated trade before inserting it into monitor state. Add transport-boundary tests that prove AddOrder is never called for stale quote, invalid/insufficient balance, unknown metadata, or invalid hydration.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "bot.js, monitor.js, shutdown.test.mjs",
+    "objective": "Add graceful shutdown semantics: immediately halt entries, persist safe state, report inability to guarantee software exits, and exit non-zero on fatal integrity loss so a supervisor restarts into reconciliation. Preserve stopped/default-off behavior.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-005B implemented. npm.cmd test ran 54 tests and all passed; target JS syntax checks passed. Added timestamped price/balance snapshots, MAX_ORDER_SNAPSHOT_AGE_MS, immediate validateOrderTransportBoundary checks before AddOrder, scanner snapshot handoff, fail-closed metadata behavior, and hydrateTrades validation before insertion. Tests mock the Kraken boundary and prove AddOrder is not called for stale quote, insufficient/invalid balance, or unknown metadata; valid lot rounding still reaches AddOrder as 0.1235; invalid persisted trade hydrates unsafe with no open trade.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-04T11:26:06.793Z"
+    "notes": "R-005B verified: npm.cmd test ran 56 tests and all passed. Transport-boundary tests prove AddOrder is not called for stale quote, insufficient/invalid balance, or unknown metadata; valid lot rounding still reaches AddOrder as expected; invalid hydration is rejected before monitor insertion.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-04T11:26:40.005Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -162,7 +162,7 @@
       },
       {
         "id": "R-005B",
-        "state": "verifying",
+        "state": "done",
         "severity": "critical",
         "file": "trader.js, scanner.js, monitor.js, order-validation.test.mjs, monitor.test.mjs",
         "owner": "executor",
@@ -205,7 +205,7 @@
       },
       {
         "id": "R-012",
-        "state": "pending",
+        "state": "executing",
         "severity": "high",
         "file": "bot.js, monitor.js, shutdown.test.mjs",
         "owner": "executor",
@@ -232,6 +232,132 @@
         "task": "Define bounded Kraken retry/timeout/staleness behavior for prices, balances, metadata, order confirmation, and reconciliation. Classify retryable versus terminal errors and propagate an explicit unknown state rather than a fallback fill or stale quote.",
         "done_when": "Fake-clock/API fixtures prove retry bounds, no stale price is traded, and an exhausted request prevents entry or position removal.",
         "fail_closed": "Timeouts are unknown facts, never successful quotes or fills."
+      },
+      {
+        "id": "R-014",
+        "state": "pending",
+        "severity": "high",
+        "file": "bot.js, bot-lifecycle.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "depends_on": [
+          "R-012"
+        ],
+        "task": "Handle Discord lifecycle failures: attach sanitized client error/shardError listeners, handle client.login rejection, and add a bounded ready timeout. Do not start monitor or scheduled scans unless Discord reaches ready state.",
+        "done_when": "Stubbed login rejection and ready timeout prove no scan/entry starts and no token material appears in logs; healthy ready behavior remains unchanged.",
+        "fail_closed": "Discord readiness failure leaves entries halted."
+      },
+      {
+        "id": "R-015",
+        "state": "pending",
+        "severity": "medium",
+        "file": "bot.js, bot-scheduler.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "depends_on": [
+          "R-014",
+          "R-005B"
+        ],
+        "task": "Contain scheduled scan and config-persistence failures inside runScheduledScan. Record a failed scheduled-run health result; never update lastScanTime after failure or create an unhandled cron rejection.",
+        "done_when": "Rejected scanner and config-save fixtures preserve lastScanTime, report the failure, and make no order attempt.",
+        "fail_closed": "A failed schedule run cannot masquerade as a successful fresh scan."
+      },
+      {
+        "id": "R-016",
+        "state": "pending",
+        "severity": "high",
+        "file": "storage.js, monitor.js, bot.js, storage-preflight.test.mjs, README.md",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "depends_on": [
+          "R-005B",
+          "R-009"
+        ],
+        "task": "Require an explicit, writable durable DATA_DIR and healthy persistence/recovery preflight before LIVE_TRADING can ever be resumed. Keep analysis/backtests usable without this preflight and document the deployment contract.",
+        "done_when": "Fixtures cover absent, unwritable, unsafe, and healthy storage; only the healthy case can satisfy live readiness, while current default-off behavior is unchanged.",
+        "fail_closed": "Ephemeral or unverified storage cannot enable real orders."
+      },
+      {
+        "id": "R-017",
+        "state": "pending",
+        "severity": "high",
+        "file": "swarm-runner.py, swarm-runner.test.py",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "R-018"
+        ],
+        "task": "Add a workspace-local exclusive runner lease with owner metadata and conservative stale recovery. Acquire before reading or dispatching; release in finally. A held or ambiguous lease must dispatch no agent and mutate no shared state.",
+        "done_when": "Fixture process/temporary-lock tests prove the second runner exits without dispatch, only safe stale leases recover, and exceptions release the lease.",
+        "fail_closed": "Two runner launches cannot execute or route the same task."
+      },
+      {
+        "id": "R-018",
+        "state": "pending",
+        "severity": "high",
+        "file": "swarm-runner.py, swarm-runner.test.py",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [],
+        "task": "Replace swarm-runner's blanket git add -A checkpoint with strict task-scoped staging: only declared queue files and .agent_state.json may be committed. Unexpected modified/staged paths must block the checkpoint without discarding anything.",
+        "done_when": "Git-fixture tests prove unrelated user/agent files never stage or commit, owned files do, and unexpected paths produce a clear blocked state.",
+        "fail_closed": "The runner never commits concurrent work it does not own."
+      },
+      {
+        "id": "DQ1",
+        "state": "pending",
+        "severity": "medium",
+        "file": "data.js, data.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "R-016"
+        ],
+        "task": "Strictly validate candle-store ingestion and loading: reject malformed/non-finite/negative/OHLC-invalid/off-minute/duplicate/non-monotonic rows instead of coercing missing trade or volume fields to zero. Preserve deterministic valid archive merge.",
+        "done_when": "Fixtures cover malformed, NaN, negative, high<low, duplicate, and irregular timestamps; valid archive data still round-trips deterministically.",
+        "fail_closed": "Bad market data is visible and excluded, never silently fabricated."
+      },
+      {
+        "id": "DQ2",
+        "state": "pending",
+        "severity": "medium",
+        "file": "data.js, researchlab.mjs, research-data.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "DQ1"
+        ],
+        "task": "Make resampling/cache behavior quality-aware: sort inputs, exclude incomplete current buckets, expose gaps under an explicit policy, and rebuild corrupt research caches rather than trusting them.",
+        "done_when": "Out-of-order inputs resample identically, incomplete final buckets are excluded, gaps are flagged, corrupt cache rebuilds, and cached output matches clean output.",
+        "fail_closed": "Incomplete or corrupt research data cannot silently enter a result."
+      },
+      {
+        "id": "DQ3",
+        "state": "pending",
+        "severity": "medium",
+        "file": "researchlab.mjs, research-provenance.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "DQ2"
+        ],
+        "task": "Add immutable SHA-256 research-input provenance for candle content, universe, parameters/spec, and code revision. Invalidate caches by content rather than only mtime/size and attach fingerprints to saved run manifests.",
+        "done_when": "Same-size content changes invalidate cache, unchanged reruns retain fingerprints, and changed inputs/config/code produce a different manifest fingerprint.",
+        "fail_closed": "A research claim without reproducible input provenance is not confirmatory evidence."
+      },
+      {
+        "id": "S1",
+        "state": "pending",
+        "severity": "high",
+        "file": "package.json, package-lock.json, DEPENDENCY_AUDIT.md",
+        "owner": "executor",
+        "allow_live_edit": false,
+        "depends_on": [
+          "R-016"
+        ],
+        "task": "Resolve production dependency vulnerabilities reported by npm audit (axios/form-data/undici/discord.js transitive chain) with the smallest compatible updates. Record remaining advisories only when no safe fixed version exists and prove bot import/tests still pass.",
+        "done_when": "npm.cmd audit --omit=dev reports no high vulnerabilities or documents an unavoidable exception with owner acceptance; npm.cmd test and startup import checks pass.",
+        "fail_closed": "Do not use force overrides or major upgrades without compatibility tests."
       },
       {
         "id": "M1",
@@ -1212,6 +1338,14 @@
       "detail": "R-005B: added fresh quote/balance transport boundary before AddOrder, scanner snapshot handoff, Kraken API test seam, and hydrated-trade validation; tests prove invalid/stale/unknown inputs do not reach AddOrder.",
       "commit": "e501349",
       "tests": "54 passing (npm.cmd test); node --check target JS files"
+    },
+    {
+      "ts": "2026-08-04T11:26:40.005Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "R-005B fresh transport boundary verified with npm.cmd test 56/56 and AddOrder-unreachability checks. Pulled R-012 into EXECUTOR_PENDING.",
+      "commit": "d8c27d5",
+      "tests": "56 passing (npm.cmd test)"
     }
   ],
   "budget": {
