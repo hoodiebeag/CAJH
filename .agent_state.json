@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "trader.js, monitor.js, api-resilience.test.mjs",
     "objective": "Define bounded Kraken retry/timeout/staleness behavior for prices, balances, metadata, order confirmation, and reconciliation. Classify retryable versus terminal errors and propagate an explicit unknown state rather than a fallback fill or stale quote.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-012 verified: npm.cmd test ran 57 tests and all passed. Fatal process handlers prepare shutdown, report software-polled exit uncertainty, and exit non-zero; restart restores halted state before reconciliation can allow entries.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:28:27.934Z"
+    "notes": "R-013 implemented. npm.cmd test ran 64 tests and all passed; target JS syntax checks passed. Added classifyKrakenError and bounded callKraken wrapper for Kraken API calls. Prices, balances, metadata, AddOrder, QueryOrders, and holdings valuation now retry bounded retryable failures, fail immediately on terminal errors, and throw explicit krakenState=unknown after exhaustion instead of returning fallback quotes/metadata. Tests cover retry success, terminal no-retry, exhausted unknown, malformed balance, metadata failure before AddOrder, and holdings valuation unknown propagation to reconciliation callers.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:30:07.489Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -220,7 +220,7 @@
       },
       {
         "id": "R-013",
-        "state": "executing",
+        "state": "verifying",
         "severity": "high",
         "file": "trader.js, monitor.js, api-resilience.test.mjs",
         "owner": "executor",
@@ -1465,6 +1465,14 @@
       "detail": "R-012 graceful shutdown verified with npm.cmd test 57/57 and fatal-handler content check. Pulled R-013 into EXECUTOR_PENDING.",
       "commit": "6523b95",
       "tests": "57 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:30:07.489Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-013: bounded Kraken API retry/unknown-state behavior for order-critical prices, balances, metadata, order confirmation, and holdings valuation; added API resilience tests.",
+      "commit": "3c2502a",
+      "tests": "64 passing (npm.cmd test); node --check trader.js monitor.js api-resilience.test.mjs"
     }
   ],
   "budget": {
