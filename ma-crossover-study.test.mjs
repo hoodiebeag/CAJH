@@ -39,8 +39,8 @@ test("TF1 score reports crossovers, position days, net cost, and buy-and-hold co
   assert.equal(score.bars, 501);
   assert.equal(score.crossovers, 1);
   assert.equal(score.positionDays, 246);
-  assert.equal(score.netReturn, -0.759);
-  assert.equal(score.buyHoldReturn, -0.44999999999999996);
+  assert.ok(Math.abs(score.netReturn - -0.759) < 1e-12);
+  assert.ok(Math.abs(score.buyHoldReturn - -0.45) < 1e-12);
 });
 
 test("TF1 study preserves symbol and recent holdouts and kills net underperformance", () => {
@@ -60,8 +60,8 @@ test("TF1 study preserves symbol and recent holdouts and kills net underperforma
   assert.deepEqual(study.input.trainSymbols, ["BTC", "ETH"]);
   assert.deepEqual(study.input.symbolHoldout, ["ATOM"]);
   assert.equal(study.result.symbolHoldout.crossovers, 1);
-  assert.equal(study.result.holdout.netReturn, -0.759);
-  assert.equal(study.result.holdout.buyHoldReturn, -0.08333333333333326);
+  assert.ok(Math.abs(study.result.holdout.netReturn - -0.759) < 1e-12);
+  assert.ok(Math.abs(study.result.holdout.buyHoldReturn - (-0.08333333333333326)) < 1e-12);
   assert.equal(study.result.verdict, "KILLED");
 });
 
