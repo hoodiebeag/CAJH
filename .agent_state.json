@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "VERIFIER_PENDING",
+                    "status":  "EXECUTOR_PENDING",
                     "target_file":  "momentum.mjs, momentum.test.mjs",
-                    "objective":  "Add per-date Spearman IC, mean IC, date-vector permutation null, block-bootstrap CI, effective-N reporting, and deterministic seeded test hooks. Reuse researchlib helpers where sound.",
+                    "objective":  "Implement raw, 90-day rolling BTC-residual, and trailing-volatility-normalized rank transforms using only data at or before each decision date.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "M2 implemented in commit f2f59dc. npm.cmd test passed 94/94, including per-date IC and deterministic score tests.",
-                    "updated_by":  "executor",
-                    "updated_at":  "2026-08-04T12:02:46.3107208Z"
+                    "notes":  "M2 verified with npm.cmd test 94/94. Pulled M3 into EXECUTOR_PENDING.",
+                    "updated_by":  "verifier",
+                    "updated_at":  "2026-08-04T12:03:13.5240444Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -379,7 +379,7 @@
                                           },
                                           {
                                               "id":  "M2",
-                                              "state":  "verifying",
+                                              "state":  "done",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -393,7 +393,7 @@
                                           },
                                           {
                                               "id":  "M3",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -1657,6 +1657,14 @@
                        "detail":  "M2: added per-date Spearman IC scoring, date-vector permutation null, block-bootstrap confidence interval, effective-N reporting, and deterministic seeded test hooks for momentum panel rows.",
                        "commit":  "f2f59dc",
                        "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 94 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:03:13.5240444Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "M2 momentum scoring verified. npm.cmd test passed 94/94; focused tests exercise per-date Spearman IC, mean IC, deterministic date-vector null, block-bootstrap CI, and effective-N reporting.",
+                       "commit":  "53a0f9a",
+                       "tests":  "npm.cmd test: 94 passing"
                    }
                ],
     "budget":  {
