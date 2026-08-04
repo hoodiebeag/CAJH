@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "EXECUTOR_PENDING",
+                    "status":  "VERIFIER_PENDING",
                     "target_file":  "momentum.mjs, momentum.test.mjs",
                     "objective":  "Add tercile and top-3/top-5 economic views: enter at close t+1, compute turnover, gross spread, and net spread after explicit round-trip costs. Do not add an execution strategy.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "M5 verified with npm.cmd test 100/100. Pulled M6 into EXECUTOR_PENDING.",
-                    "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T12:10:10.7330127Z"
+                    "notes":  "M6 implemented in commit e6aa86c. npm.cmd test passed 103/103, including t+1 entry and economic turnover/cost tests.",
+                    "updated_by":  "executor",
+                    "updated_at":  "2026-08-04T12:12:18.5283460Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -437,7 +437,7 @@
                                           },
                                           {
                                               "id":  "M6",
-                                              "state":  "in_progress",
+                                              "state":  "verifying",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -1713,6 +1713,22 @@
                        "detail":  "M5 sealed momentum study verified. npm.cmd test passed 100/100; tests exercise sealed recent and symbol holdouts, Q1 separation, non-overlapping horizon grid behavior, and one shared BH-FDR q field across grid/regime rows.",
                        "commit":  "4a83cb3",
                        "tests":  "npm.cmd test: 100 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:11:31.451Z",
+                       "agent":  "executor",
+                       "action":  "handoff",
+                       "detail":  "Added next-close economic views for tercile/top-3/top-5 selections with turnover and round-trip cost accounting; no execution strategy added.",
+                       "commit":  "5e5575f",
+                       "tests":  "npm.cmd test: 101 passed, 0 failed"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:12:18.5283460Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "M6: added t+1 entry-delay panel math and research-only tercile/top-N economic views with turnover, gross returns/spreads, and explicit round-trip net costs.",
+                       "commit":  "e6aa86c",
+                       "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 103 passing"
                    }
                ],
     "budget":  {
