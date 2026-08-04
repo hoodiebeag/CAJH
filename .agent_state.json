@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "PAUSED_BUDGET",
-    "target_file": "backtest.test.mjs",
-    "objective": "Add THREE tests to this one file in a single run (they share the same file, so splitting them across runs would pay 3x orient cost and risk 3 conflicts): (a) stopMode \"atr\" - risk = atrStopK * ATR(14) taken to the PREVIOUS bar, and a missing ATR yields no trade rather than NaN risk; (b) the one-trade-per-level guard in anticipate mode - price crossing the same candidate trigger twice must open exactly ONE trade; (c) alignment/trendGate in anticipate mode - alignMode \"all\" with a bearish higher TF blocks an entry that alignMode \"none\" allows. These gates were silently ignored until 9041ea6 and have NEVER been tested.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "storage.js",
+    "objective": "R-001/P0: replace direct writes for positions, stats, and runtime config with a versioned atomic persistence primitive that recovers a valid prior file after an interrupted write; malformed or invalid position state must be surfaced as unsafe, never silently treated as no open positions. Add focused storage tests.",
     "allow_live_edit": true,
-    "test_command": "npm test",
+    "test_command": "npm.cmd test",
     "iteration": 0,
-    "max_iterations": 6,
-    "notes": "PAUSED by human. On reset follow resume_on_reset top to bottom - it is self-contained. Next task is Q2 (funding.mjs), fully specified, Executor can start immediately.",
-    "updated_by": "verifier",
-    "updated_at": "2026-07-30T20:28:00Z"
+    "max_iterations": 4,
+    "notes": "Canonical governance: ARCHITECT_DIRECTIVE.md. Baseline is green: npm.cmd test (13 tests) on 2026-08-04. Scope is storage.js plus storage.test.mjs only. Preserve the public load/save API unless a compatibility-safe status result is necessary. Use temp-write + fsync/close + rename and retain one last-known-good recovery copy. Validate schema and finite values for persisted positions. On persistence/load uncertainty, expose an explicit unsafe result for the future monitor/entry-health task; do not treat it as an empty portfolio. Live trading remains disabled. Do not touch data.js CSV research store, bot/scanner/monitor, or run/kill backfills. Commit before handoff; re-read and atomically update this state last.",
+    "updated_by": "architect",
+    "updated_at": "2026-08-04T00:00:00Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -21,7 +21,8 @@
       "bot.js",
       "strategy.js",
       "backtest.js",
-      "commands.js"
+      "commands.js",
+      "storage.js"
     ],
     "test_command": "npm test (7 tests currently passing; backtest.test.mjs is frozen but can EXTEND with new tests)",
     "known_findings": "See ROADMAP.md. Settled with real numbers, do NOT re-test: the swing entry is statistically indistinguishable from random (8,203 trades); gross-of-cost expectancy ~0 so cheaper fills cannot rescue it; exit-model and stop-placement sweeps both negative; the simple daily strategy is beta not alpha; trade intensity as a filter does not improve net R/t. Order-flow research closed.",
@@ -36,6 +37,41 @@
         "owner": "executor",
         "task": "Add THREE tests to this one file in a single run (they share the same file, so splitting them across runs would pay 3x orient cost and risk 3 conflicts): (a) stopMode \"atr\" - risk = atrStopK * ATR(14) taken to the PREVIOUS bar, and a missing ATR yields no trade rather than NaN risk; (b) the one-trade-per-level guard in anticipate mode - price crossing the same candidate trigger twice must open exactly ONE trade; (c) alignment/trendGate in anticipate mode - alignMode \"all\" with a bearish higher TF blocks an entry that alignMode \"none\" allows. These gates were silently ignored until 9041ea6 and have NEVER been tested.",
         "done_when": "npm test green with 3 new tests, hand-computed assertions, no other file touched."
+      },
+      {
+        "id": "R-001",
+        "state": "executing",
+        "severity": "critical",
+        "file": "storage.js, storage.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "task": "Atomic, versioned persistence for positions/stats/runtime config. Write temp in the same directory, fsync/close, replace atomically, preserve a last-known-good copy, and validate loaded records. Never convert malformed/invalid positions into an empty portfolio.",
+        "done_when": "Focused tests prove: an interrupted write leaves the prior valid file readable; recovery uses the valid backup; invalid/non-finite position data reports unsafe rather than []; config/stats retain supported values; npm.cmd test is green.",
+        "fail_closed": "A persistence or validation failure must be observable by the next monitor-health gate and cannot be interpreted as no open positions."
+      },
+      {
+        "id": "R-002",
+        "state": "pending",
+        "severity": "critical",
+        "file": "scanner.js, monitor.js, monitor.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "depends_on": ["R-001"],
+        "task": "Add a monitor-health contract: entries are refused unless startup hydration, reconciliation, persistence, and the current monitor tick are healthy. A monitor/persistence failure halts entries but keeps exit monitoring best-effort and emits an alert.",
+        "done_when": "Hand-built tests cover unhealthy startup, stale monitor heartbeat, and failed persistence; each blocks a new entry without placing an order; a healthy monitor permits only the existing path.",
+        "fail_closed": "Unknown exit-management state means no new positions."
+      },
+      {
+        "id": "R-003",
+        "state": "pending",
+        "severity": "critical",
+        "file": "scanner.js, storage.js, scanner.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "depends_on": ["R-001"],
+        "task": "Persist one-trade-per-structural-level cooldowns with expiry and validate them during restart hydration, so a restart cannot immediately re-enter a stopped-out level.",
+        "done_when": "A restart fixture retains an unexpired level lock, prunes an expired lock, and blocks duplicate entry without blocking unrelated levels.",
+        "fail_closed": "Unreadable cooldown state blocks entries until reconciliation rather than allowing duplicate re-entry."
       },
       {
         "id": "Q2",
@@ -110,6 +146,106 @@
     "architect_duty": "Keep this queue at 3+ pending items at all times so the Executor never blocks. Stocking ahead is the Architect job; approving individual pulls is not. If the queue drops below 3 pending, that is the signal to restock.",
     "pipeline": "Architect -> Executor -> Verifier -> (next item) -> Executor. Every finished Executor item is automatically the Verifier next job, so the Executor keeps the Verifier busy just by finishing work. The Verifier pulls the next pending item in the SAME run it verifies, so the Executor is never idle either."
   },
+  "remediation_register": [
+    {
+      "id": "R-001",
+      "category": "safety",
+      "severity": "critical",
+      "evidence": "storage.js writes positions.json, stats.json, and config.json directly with writeFileSync; loadTrades catches malformed JSON and returns [] (storage.js:93-110).",
+      "risk": "A crash or partial write can erase tracked positions in memory after restart, leaving exchange holdings unmanaged and allowing duplicate or ghost state.",
+      "affected_paths": ["storage.js", "monitor.js"],
+      "proposed_resolution": "Use versioned atomic writes with same-directory temp files, a valid recovery copy, schema/finite-value validation, and an explicit unsafe load result.",
+      "requires_design": true,
+      "requires_live_edit": true,
+      "dependencies": [],
+      "acceptance_criteria": ["Interrupted-write and corrupt-file fixtures preserve or recover the last valid position state.", "Invalid position state is observable as unsafe and never represented as an empty portfolio."],
+      "state": "executing"
+    },
+    {
+      "id": "R-002",
+      "category": "safety",
+      "severity": "critical",
+      "evidence": "bot.js:22-23 logs unhandled/fatal errors and continues; scanner.js:153 allows entries based only on tradingEnabled; no monitor-health contract exists.",
+      "risk": "The process can continue placing entries after corrupted state, a failed persistence operation, or an inactive exit monitor.",
+      "affected_paths": ["bot.js", "scanner.js", "monitor.js"],
+      "proposed_resolution": "Introduce a fail-closed monitor health state and fatal-error entry halt, then gate entries on successful hydration, reconciliation, persistence, and heartbeat.",
+      "requires_design": true,
+      "requires_live_edit": true,
+      "dependencies": ["R-001"],
+      "acceptance_criteria": ["Unhealthy startup, stale heartbeat, failed persistence, and fatal error each block new orders.", "Existing exit loop remains best-effort and alerts rather than silently claiming health."],
+      "state": "queued"
+    },
+    {
+      "id": "R-003",
+      "category": "safety",
+      "severity": "critical",
+      "evidence": "scanner.js:123-144 retains structural-level cooldowns only in a process-local Map.",
+      "risk": "A restart removes duplicate-entry protection and can re-enter the same stopped-out level immediately.",
+      "affected_paths": ["scanner.js", "storage.js"],
+      "proposed_resolution": "Persist expiring cooldown records and hydrate/prune them on restart; fail closed when their state cannot be read.",
+      "requires_design": true,
+      "requires_live_edit": true,
+      "dependencies": ["R-001"],
+      "acceptance_criteria": ["Restart preserves unexpired cooldowns, prunes expired cooldowns, and cannot block unrelated levels."],
+      "state": "queued"
+    },
+    {
+      "id": "R-004",
+      "category": "safety",
+      "severity": "high",
+      "evidence": "monitor.js uses software-only stop/target polling, and startMonitor's health/initial reconciliation outcome is not surfaced to scanner entry control.",
+      "risk": "An outage, stalled event loop, or failed balance/price request can leave a position without effective exit protection while new entries continue.",
+      "affected_paths": ["monitor.js", "scanner.js", "bot.js"],
+      "proposed_resolution": "After R-002, add observable heartbeat/staleness alerts and startup reconciliation before opening new positions; defer exchange-native orders to a separately approved design.",
+      "requires_design": true,
+      "requires_live_edit": true,
+      "dependencies": ["R-002"],
+      "acceptance_criteria": ["Health status is visible and a stale monitor prevents entry.", "Startup reconciles tracked positions with Kraken before entry eligibility."],
+      "state": "queued"
+    },
+    {
+      "id": "R-005",
+      "category": "correctness",
+      "severity": "high",
+      "evidence": "scanner.js:185-240 calculates and submits an order with limited finite-value validation; trader.js:216-244 accepts price/capital without explicit finite/positive preconditions.",
+      "risk": "Unexpected API or arithmetic values can reach AddOrder or register an invalid stop/target state.",
+      "affected_paths": ["scanner.js", "trader.js", "monitor.js"],
+      "proposed_resolution": "Add a shared fail-closed validation boundary for finite positive price, capital, volume, risk, stop, and target before submission or registration, covered by hand-computed tests.",
+      "requires_design": true,
+      "requires_live_edit": true,
+      "dependencies": ["R-002"],
+      "acceptance_criteria": ["No non-finite, non-positive, unsupported, or stop-at/above-entry long reaches AddOrder or tracked state."],
+      "state": "discovered"
+    },
+    {
+      "id": "R-006",
+      "category": "testing",
+      "severity": "high",
+      "evidence": "npm.cmd test is green with 13 tests, concentrated in backtest.test.mjs and momentum.test.mjs; money-moving scanner/trader/monitor/storage failure paths lack direct coverage.",
+      "risk": "Existing green tests do not demonstrate live entry, recovery, reconciliation, drawdown, precision, or error-path safety.",
+      "affected_paths": ["scanner.js", "trader.js", "monitor.js", "storage.js", "bot.js"],
+      "proposed_resolution": "Add focused deterministic unit tests alongside each P0/P1 repair, then build a parity and money-path test matrix rather than broad snapshots.",
+      "requires_design": false,
+      "requires_live_edit": true,
+      "dependencies": ["R-001", "R-002", "R-003", "R-005"],
+      "acceptance_criteria": ["Each P0/P1 item adds an independently falsifiable test for its failure path."],
+      "state": "queued"
+    },
+    {
+      "id": "R-007",
+      "category": "configuration",
+      "severity": "medium",
+      "evidence": "strategy.js exports global and per-timeframe stop/gate settings while scanner.js applies only selected constants; comments and active values require a live/backtest/docs parity audit.",
+      "risk": "Operators and research can believe an inactive setting changes trading behavior or compare a non-equivalent backtest.",
+      "affected_paths": ["strategy.js", "scanner.js", "backtest.js", "commands.js", "README.md", "context.js"],
+      "proposed_resolution": "Classify each setting as active-live, active-research, deprecated, or experimental-disconnected and document intentional live/backtest differences.",
+      "requires_design": true,
+      "requires_live_edit": true,
+      "dependencies": ["R-001", "R-002", "R-003", "R-005"],
+      "acceptance_criteria": ["Every exported setting has one classification and executable behavior matches README/Discord/context claims."],
+      "state": "discovered"
+    }
+  ],
   "ledger": [
     {
       "ts": "2026-07-30T18:35:00Z",
@@ -182,6 +318,14 @@
       "detail": "Wrote resume_on_reset: preflight (expect 11 tests green), budget reset values, first task (Q2), re-enable step, and the invariants. Executor and Verifier can both start without human input.",
       "commit": "",
       "tests": "11 passing"
+    },
+    {
+      "ts": "2026-08-04T00:00:00Z",
+      "agent": "architect",
+      "action": "audit-and-route",
+      "detail": "Completed the initial read-only safety audit, recorded R-001 through R-007, moved P0 remediation ahead of research, and handed R-001 atomic persistence plus focused tests to the Executor. Baseline uses npm.cmd test because PowerShell blocks npm.ps1.",
+      "commit": "",
+      "tests": "13 passing (npm.cmd test)"
     }
   ],
   "budget": {
