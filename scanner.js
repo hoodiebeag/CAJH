@@ -119,6 +119,24 @@ function summarize(symbol, biases, buy) {
 
 // Symbols with a buy attempt in flight — guards a cron scan and a manual !scan/!trade
 // racing each other into a double entry before getTrade() sees the first one.
+export function logAssetDecision({ symbol, buy = null, result = null, reason = null, biases = {} }) {
+  const entry = result?.entry ?? null;
+  const stop = result?.stop ?? buy?.pivotPrice ?? null;
+  const risk = entry != null && stop != null ? entry - stop : null;
+  return logger.recordDecision({
+    symbol,
+    timeframe: buy?.tf ?? null,
+    mode: buy?.mode ?? null,
+    taken: result?.traded === true,
+    reason: reason ?? result?.reason ?? (result?.traded ? "trade opened" : "no signal"),
+    entry,
+    stop,
+    takeProfit: result?.takeProfit ?? null,
+    risk,
+    regime: biases
+  }, { sink: appendDecisionEvent });
+}
+
 const pendingBuys = new Set();
 
 // Structural levels already traded, key → timestamp. Without this, a stop-out leaves
@@ -183,7 +201,6 @@ export function resetLevelCooldownsForTests() {
 async function proposeBuy(symbol, buy, channel) {
   if (pendingBuys.has(symbol)) {
     const result = { traded: false, reason: "a buy for this symbol is already in flight" };
-    appendDecisionEvent({ type: "setup_decision", symbol, setup: { tf: buy.tf, mode: buy.mode, pivotPrice: buy.pivotPrice, triggerPrice: buy.triggerPrice ?? buy.trigger ?? null, previousSwingLow: buy.prevSwingLow ?? null }, result });
     return result;
   }
   pendingBuys.add(symbol);
@@ -196,7 +213,6 @@ async function proposeBuy(symbol, buy, channel) {
     throw err;
   } finally {
     pendingBuys.delete(symbol);
-    appendDecisionEvent({ type: "setup_decision", symbol, setup: { tf: buy.tf, mode: buy.mode, pivotPrice: buy.pivotPrice, triggerPrice: buy.triggerPrice ?? buy.trigger ?? null, previousSwingLow: buy.prevSwingLow ?? null }, result: result ?? { traded: false, reason: "proposal interrupted" } });
   }
 }
 
@@ -339,13 +355,22 @@ async function runScannerUnsafe(channel, state, verbose = false) {
   let checked = 0, opened = 0;
   for (const asset of watchlist) {
     try {
-      const { buy, candlesByTf } = await evaluateAsset(asset);
-      if (Object.keys(candlesByTf).length === 0) { logger.warn(`[SCAN] no data for ${asset.symbol}`); continue; }
+      const { biases, buy, candlesByTf } = await evaluateAsset(asset);
+      if (Object.keys(candlesByTf).length === 0) {
+        logger.warn(`[SCAN] no data for ${asset.symbol}`);
+        logAssetDecision({ symbol: asset.symbol, reason: "no market data", biases });
+        continue;
+      }
       checked++;
+      if (!buy) {
+        logAssetDecision({ symbol: asset.symbol, reason: "no signal", biases });
+        continue;
+      }
 
       if (!buy) continue;   // no fresh setup on any timeframe → stay silent
 
       const res = await proposeBuy(asset.symbol, buy, channel);
+      logAssetDecision({ symbol: asset.symbol, buy, result: res, biases });
       if (res.traded) {
         opened++;
         const buffers = buildCharts(asset.symbol, candlesByTf);
@@ -366,6 +391,7 @@ async function runScannerUnsafe(channel, state, verbose = false) {
       await new Promise(r => setTimeout(r, 3000));
     } catch (error) {
           logger.error(`Error scanning ${asset.symbol}:`, error.message);
+      logAssetDecision({ symbol: asset.symbol, reason: `scan error: ${error.message}` });
     }
   }
 
@@ -397,6 +423,9 @@ export async function scanSymbol(symbol, channel, state) {
 
   try {
     const { biases, buy, candlesByTf } = await evaluateAsset(asset);
+    if (Object.keys(candlesByTf).length === 0) {
+      logAssetDecision({ symbol: upper, reason: "no market data", biases });
+    }
     if (Object.keys(candlesByTf).length === 0) { await channel.send(`⚠️ No data for **${upper}**.`); return; }
 
     const buffers = buildCharts(upper, candlesByTf);
@@ -414,12 +443,15 @@ export async function scanSymbol(symbol, channel, state) {
 
     if (buy) {
       const res = await proposeBuy(upper, buy, channel);
+      logAssetDecision({ symbol: upper, buy, result: res, biases });
       if (!res.traded) await channel.send(`ℹ️ **${upper}** setup not taken — ${res.reason}.`);
     } else {
+      logAssetDecision({ symbol: upper, reason: "no signal", biases });
       await channel.send(`No setup on **${upper}** right now (needs a candidate swing low on the 1h/4h/1d with price crossing its trigger, or a freshly confirmed one).`);
     }
   } catch (err) {
       logger.error(`[STRATEGY] scanSymbol error for ${upper}:`, err.message);
+    logAssetDecision({ symbol: upper, reason: `scan error: ${err.message}` });
     await channel.send(`⚠️ Something went wrong: ${err.message}`);
   }
 }
