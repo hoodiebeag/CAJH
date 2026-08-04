@@ -149,3 +149,12 @@ and the exact feature-column list. A fixture must change a holdout feature by an
 amount without changing the fitted train scaler; missing or non-finite values must increment
 the visible exclusion count. No feature or label observed after the candidate entry time may
 enter the matrix.
+
+### P2 logistic-model gate
+
+Approve only deterministic L2 logistic regression with explicit class weights, fixed seed,
+declared λ grid, and λ selected solely from inner train folds. The handoff evidence block must
+report train rows, fold count, selected λ, convergence/iteration status, class weights, and
+Mann-Whitney AUC on planted-signal and null fixtures. A non-convergent or non-finite fit is
+invalid; it cannot receive an AUC or flow into a holdout task. Trees, boosting, neural models,
+and holdout-informed tuning are out of scope.
