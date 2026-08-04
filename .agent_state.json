@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "VERIFIER_PENDING",
+                    "status":  "EXECUTOR_PENDING",
                     "target_file":  "momentum.mjs, momentum.test.mjs",
-                    "objective":  "Build sealed whole-symbol primary holdout plus recent-month secondary holdout. Freeze stable-13 primary; run LxH exploratory grid only on train, non-overlapping at each H, with one BH-FDR family across grid/transforms/regimes.",
+                    "objective":  "Add tercile and top-3/top-5 economic views: enter at close t+1, compute turnover, gross spread, and net spread after explicit round-trip costs. Do not add an execution strategy.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "M5 implemented in commit 5cf1220. npm.cmd test passed 100/100, including sealed holdout/FDR tests.",
-                    "updated_by":  "executor",
-                    "updated_at":  "2026-08-04T12:09:42.2328674Z"
+                    "notes":  "M5 verified with npm.cmd test 100/100. Pulled M6 into EXECUTOR_PENDING.",
+                    "updated_by":  "verifier",
+                    "updated_at":  "2026-08-04T12:10:10.7330127Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -421,7 +421,7 @@
                                           },
                                           {
                                               "id":  "M5",
-                                              "state":  "verifying",
+                                              "state":  "done",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -437,7 +437,7 @@
                                           },
                                           {
                                               "id":  "M6",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -1705,6 +1705,14 @@
                        "detail":  "M5: added sealed stable-universe momentum study with train/recent/symbol/Q1 splits, non-overlapping LxH exploratory grid, and one BH-FDR family across grid/transforms/regimes.",
                        "commit":  "5cf1220",
                        "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 100 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:10:10.7330127Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "M5 sealed momentum study verified. npm.cmd test passed 100/100; tests exercise sealed recent and symbol holdouts, Q1 separation, non-overlapping horizon grid behavior, and one shared BH-FDR q field across grid/regime rows.",
+                       "commit":  "4a83cb3",
+                       "tests":  "npm.cmd test: 100 passing"
                    }
                ],
     "budget":  {
