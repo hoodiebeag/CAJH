@@ -2,15 +2,15 @@
   "version": 2,
   "control": {
     "status": "EXECUTOR_PENDING",
-    "target_file": "trader.js, monitor.js, trader.test.mjs",
-    "objective": "Require an explicit Kraken terminal execution confirmation before a sell removes or reduces a tracked position. An unknown, canceled, expired, rejected, or partial sell must leave tracked state intact (or reduce it only by confirmed executed volume) and raise a reconciliation alert.",
+    "target_file": "monitor.js, scanner.js, bot.js, monitor.test.mjs",
+    "objective": "Make manual and safety halts durable across restart, and require explicit opt-in before any resume can enable orders. Persist the halt reason; boot and resume must remain fail-closed when halt state cannot be read.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 4,
-    "notes": "Verifier passed R-003: npm.cmd test ran 22 tests and all passed. scanner.test.mjs exercises restart survival for an unexpired cooldown, pruning of an expired cooldown, and fail-closed behavior for unreadable cooldown state. git pull --rebase was blocked by pre-existing unrelated unstaged files; do not discard them.",
+    "notes": "Verifier passed R-008: npm.cmd test ran 26 tests and all passed. Confirmed sell execution is terminal-only, partial sells retain exact remainder, unknown/canceled/expired/rejected/zero-fill sells retain tracked state, and manual command path uses confirmed executed volume. Next eligible item pulled.",
     "updated_by": "verifier",
-    "updated_at": "2026-08-04T10:52:59.864Z"
+    "updated_at": "2026-08-04T10:59:31.818Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -79,7 +79,7 @@
       },
       {
         "id": "R-008",
-        "state": "executing",
+        "state": "done",
         "severity": "critical",
         "file": "trader.js, monitor.js, trader.test.mjs",
         "owner": "executor",
@@ -90,7 +90,7 @@
       },
       {
         "id": "R-009",
-        "state": "pending",
+        "state": "executing",
         "severity": "critical",
         "file": "monitor.js, scanner.js, bot.js, monitor.test.mjs",
         "owner": "executor",
@@ -749,7 +749,7 @@
         "Unknown sell state never removes a tracked position.",
         "Confirmed partial sell preserves the exact remaining volume."
       ],
-      "state": "queued"
+      "state": "done"
     },
     {
       "id": "R-009",
@@ -1012,6 +1012,38 @@
       "detail": "R-003 cooldown persistence verified. npm.cmd test passed 22/22; tests exercise restart persistence, expiry pruning, and unreadable-state fail-closed behavior. Pulled next eligible item into EXECUTOR_PENDING.",
       "commit": "58458ba",
       "tests": "22 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T10:55:38.539Z",
+      "agent": "executor",
+      "action": "blocked",
+      "detail": "Authorized trader.js/monitor.js scope now requires terminal sell confirmation and preserves confirmed partial volume. BLOCKED because commands.js remains an affected path: handleSell removes the full tracked trade when a manual sell request partially fills. Fixing that requires commands.js authorization/new target entry; do not claim R-008 complete while this fail-open path remains.",
+      "commit": "c0b6e6a",
+      "tests": "26 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T10:57:00.731Z",
+      "agent": "architect",
+      "action": "resume",
+      "detail": "Human authorized commands.js edit to resolve R-008 manual partial-sell tracking gap.",
+      "commit": "",
+      "tests": ""
+    },
+    {
+      "ts": "2026-08-04T10:59:07.188Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-008: sells now require terminal Kraken confirmation; monitor and manual commands retain tracked state or reduce it only by confirmed executed volume, with reconciliation alerts on persistence failure.",
+      "commit": "c0b6e6a, af25bd6, 5d11666",
+      "tests": "26 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T10:59:31.818Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "R-008 confirmed sell handling verified. npm.cmd test passed 26/26; tests cover terminal full sell, terminal partial sell, and unknown/non-terminal/zero-fill retention. Manual sell path uses confirmed executed volume.",
+      "commit": "5d11666",
+      "tests": "26 passing (npm.cmd test)"
     }
   ],
   "budget": {
