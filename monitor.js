@@ -65,7 +65,7 @@ function persistenceHealthy() {
 export function getMonitorHealth(now = Date.now()) {
   const stale = !monitorHealth.lastTickAt || now - monitorHealth.lastTickAt > MONITOR_STALE_MS;
   const ok = monitorHealth.hydrated && monitorHealth.reconciled && monitorHealth.persistenceOk && monitorHealth.tickOk && !stale;
-  return { ...monitorHealth, stale, tickSkipped: tickFlight.telemetry().skipped, ok };
+  return { ...monitorHealth, stale, tickSkipped: tickFlight.telemetry().skipped, exitProtection: "software-polled", ok };
 }
 
 export function requireMonitorHealthForEntry(now = Date.now()) {
@@ -289,7 +289,7 @@ export function reconcile(holdings, trades, { stables = RECON_STABLES, dustUsd =
 // only exists in positions.json — the "PUMP listed on Discord but not on Kraken" bug)
 // are dropped from tracking automatically; removing a record sells nothing. Trades
 // opened in the last 10 minutes are exempt in case balances lag a fresh fill.
-export async function reconcileHoldings(channel, { autoRemoveGhosts = false } = {}) {
+export async function reconcileHoldings(channel, { autoRemoveGhosts = false, announceClean = false } = {}) {
   let holdings;
   try { ({ holdings } = await getHoldings()); }
   catch (err) {
@@ -320,6 +320,7 @@ export async function reconcileHoldings(channel, { autoRemoveGhosts = false } = 
   if (!orphans.length && !ghosts.length) {
     setMonitorHealth({ reconciled: true, persistenceOk: persistenceHealthy(), lastError: null });
     logger.info("[RECONCILE] Holdings match tracked trades.");
+    if (channel && !announceClean) return result;
     if (channel) await channel.send("🔎 **Reconciliation:** Kraken holdings match cajh's tracked trades. Nothing orphaned.");
     return result;
   }
