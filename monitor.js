@@ -3,7 +3,7 @@
  * Tracks open trades, enforces daily drawdown limits, and posts P&L updates.
  */
 
-import { getCurrentPrice, placeSell, getAccountBalance, fetchOHLC, symbolToPair, getHoldings } from "./trader.js";
+import { getCurrentPrice, placeSell, getAccountBalance, fetchOHLC, symbolToPair, getHoldings, validateTrackedTrade } from "./trader.js";
 import { saveTrades, loadTradesResult, saveStats, loadStats, getStorageHealth } from "./storage.js";
 import { detectSwings, SWING_WINDOW, EXIT_ON_SWING_HIGH, LOCK_BREAKEVEN, BE_TRIGGER_R, BE_LOCK_R, FEE_BUFFER_PCT, FEE_RATE } from "./strategy.js";
 import * as logger from './logger.js';
@@ -252,6 +252,7 @@ export function hydrateTrades() {
 }
 
 export function registerTrade(trade) {
+  validateTrackedTrade(trade);
   openTrades.set(trade.symbol.toUpperCase(), trade);
   tradesToday++;
   persist();

@@ -21,7 +21,7 @@ import {
   entrySignal, pendingSwingLow, currentBias, SWING_WINDOW, TP_R,
   REQUIRE_HIGHER_LOW, MIN_STOP_PCT, MAX_STOP_PCT_BY_TF, RISK_PCT, MAX_POSITION_PCT
 } from "./strategy.js";
-import { placeBuy, getCurrentPrice, fetchOHLC, getAccountBalance } from "./trader.js";
+import { placeBuy, getCurrentPrice, fetchOHLC, getAccountBalance, validateOrderRequest } from "./trader.js";
 import {
   registerTrade, postTradeOpened, isTradingEnabled, getTrade, getOpenTrades, closeTradeAtMarket,
   requireMonitorHealthForEntry, createSingleFlight
@@ -243,7 +243,15 @@ async function proposeBuyLocked(symbol, buy, channel) {
   // Risk-based sizing: risk RISK_PCT of free cash per trade, so the dollar risk is the
   // same whether the stop is 1.5% (1h) or 8% (1d). Capped at MAX_POSITION_PCT.
   const freeCash = await getAccountBalance();
+  if (!Number.isFinite(freeCash) || freeCash <= 0) {
+    return { traded: false, reason: "entry blocked: account balance must be finite and positive" };
+  }
   const capital  = Math.min(freeCash * MAX_POSITION_PCT, (freeCash * RISK_PCT) / stopFrac);
+  try {
+    validateOrderRequest({ symbol, side: "buy", price: entry, capital });
+  } catch (err) {
+    return { traded: false, reason: `entry blocked: ${err.message}` };
+  }
   if (capital < MIN_POSITION_USD) {
     return { traded: false, reason: `computed size $${capital.toFixed(2)} below the $${MIN_POSITION_USD} exchange minimum` };
   }

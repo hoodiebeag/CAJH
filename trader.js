@@ -35,6 +35,34 @@ export function symbolToPair(symbol) {
   return PAIR_MAP[symbol.toUpperCase()] ?? `${symbol.toUpperCase()}USD`;
 }
 
+export function resolveSupportedPair(symbol) {
+  const pair = PAIR_MAP[String(symbol ?? "").toUpperCase()];
+  if (!pair) throw new Error(`Unsupported trading symbol: ${symbol}`);
+  return pair;
+}
+
+const positiveFinite = (value) => typeof value === "number" && Number.isFinite(value) && value > 0;
+
+export function validateOrderRequest({ symbol, side, price, capital, volume }) {
+  const pair = resolveSupportedPair(symbol);
+  if (side !== "buy" && side !== "sell") throw new Error(`Unsupported order side: ${side}`);
+  if (!positiveFinite(price)) throw new Error("Order price must be finite and positive.");
+  if (side === "buy" && !positiveFinite(capital)) throw new Error("Buy capital must be finite and positive.");
+  if (side === "sell" && !positiveFinite(volume)) throw new Error("Sell volume must be finite and positive.");
+  return { pair };
+}
+
+export function validateTrackedTrade(trade) {
+  if (!trade || typeof trade !== "object") throw new Error("Tracked trade must be an object.");
+  resolveSupportedPair(trade.symbol);
+  for (const field of ["entry", "stopLoss", "takeProfit", "risk", "volume"]) {
+    if (!positiveFinite(trade[field])) throw new Error(`Tracked trade ${field} must be finite and positive.`);
+  }
+  if (trade.stopLoss >= trade.entry) throw new Error("Tracked long stopLoss must be strictly below entry.");
+  if (trade.takeProfit <= trade.entry) throw new Error("Tracked long takeProfit must be above entry.");
+  return true;
+}
+
 // ─── Pair metadata (lot decimals + minimum order size) ─────────────────────────
 // Kraken rejects orders with too many volume decimals or below the per-pair
 // minimum. We fetch AssetPairs once and cache it for the process lifetime.
@@ -63,7 +91,9 @@ async function getPairInfo(pair) {
 
 /** Round a volume to the pair's allowed lot decimals and validate the minimum. */
 async function normalizeVolume(pair, volume) {
+  if (!positiveFinite(volume)) throw new Error(`Computed volume for ${pair} must be finite and positive.`);
   const info     = await getPairInfo(pair);
+  if (!info) throw new Error(`Kraken pair metadata unavailable for ${pair}.`);
   const decimals = info?.lot_decimals ?? 8;
   const rounded  = Number(parseFloat(volume).toFixed(decimals));
 
@@ -228,7 +258,7 @@ async function confirmSellFill(txid, requestedVolume, quotedPrice) {
  * and price are the CONFIRMED executed values from Kraken (throws if unconfirmed).
  */
 export async function placeBuy({ symbol, capital, price }) {
-  const pair    = symbolToPair(symbol);
+  const { pair } = validateOrderRequest({ symbol, side: "buy", price, capital });
   const balance = await getAccountBalance();
   const volume  = await normalizeVolume(pair, capital / price);
 
@@ -263,7 +293,7 @@ export async function placeBuy({ symbol, capital, price }) {
  * only for logging; the returned result always uses a confirmed terminal fill.
  */
 export async function placeSell({ symbol, volume, price }) {
-  const pair    = symbolToPair(symbol);
+  const { pair } = validateOrderRequest({ symbol, side: "sell", price, volume });
   const volStr  = await normalizeVolume(pair, volume);
 
   logger.info(`[TRADER] SELL ${volStr} ${symbol}`);
