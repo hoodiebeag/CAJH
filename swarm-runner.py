@@ -49,6 +49,36 @@ AGENT_TIMEOUT = 900    # seconds per agent invocation
 LOG_CAP = 4000         # chars of test output retained in notes
 
 
+def task_paths(control):
+    paths = {".agent_state.json"}
+    for raw in str(control.get("target_file") or "").split(","):
+        path = raw.strip().replace("\\", "/")
+        if path:
+            paths.add(path)
+    return paths
+
+
+def git_status_paths(repo):
+    r = subprocess.run(["git", "status", "--porcelain"], cwd=repo,
+                       capture_output=True, text=True, timeout=60)
+    if r.returncode != 0:
+        raise RuntimeError((r.stderr or r.stdout or "git status failed").strip())
+    paths = []
+    for line in r.stdout.splitlines():
+        if not line:
+            continue
+        body = line[3:]
+        if " -> " in body:
+            body = body.split(" -> ", 1)[1]
+        paths.append(body.replace("\\", "/").strip('"'))
+    return paths
+
+
+def unexpected_git_paths(repo, owned_paths):
+    owned = {path.replace("\\", "/") for path in owned_paths}
+    return [path for path in git_status_paths(repo) if path not in owned]
+
+
 def read_state():
     if not os.path.exists(STATE_FILE) or os.path.getsize(STATE_FILE) == 0:
         return None
@@ -81,13 +111,26 @@ def log_ledger(state, agent, action, detail, tests=""):
 
 def git_checkpoint(label):
     try:
-        subprocess.run(["git", "add", "-A"], cwd=HERE, capture_output=True, timeout=60)
+        state = read_state()
+        if state is None:
+            print("   [git] checkpoint blocked: unreadable state")
+            return False
+        owned = task_paths(state.get("control", {}))
+        unexpected = unexpected_git_paths(HERE, owned)
+        if unexpected:
+            print(f"   [git] checkpoint blocked: unexpected dirty paths: {', '.join(unexpected[:10])}")
+            return False
+        subprocess.run(["git", "add", "--", *sorted(owned)], cwd=HERE,
+                       capture_output=True, timeout=60)
         r = subprocess.run(["git", "commit", "-q", "-m", f"swarm: {label}"],
                            cwd=HERE, capture_output=True, text=True, timeout=60)
         if r.returncode == 0:
             print(f"   [git] committed: {label}")
+            return True
+        return False
     except Exception as e:
         print(f"   [git] checkpoint skipped: {e}")
+        return False
 
 
 def run_agent(role, instructions):
