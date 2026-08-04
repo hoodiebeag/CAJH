@@ -238,6 +238,49 @@ test("economicMomentumViews reports tercile/top-N gross, turnover, and explicit 
   assert.equal(views.topN["2"].netReturn, (((0.06 + 0.03) / 2 - 0.01) + ((0.04 + 0.02) / 2)) / 2);
 });
 
+test("B1 rank=return leaves momentum panel output unchanged", () => {
+  const assets = ["BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "AVAX", "LINK"];
+  const series = new Map(assets.map((asset, i) => [asset, linearSeries(45, 100 + i * 10, 1)]));
+
+  assert.equal(
+    JSON.stringify(buildMomentumPanel(series, { universe: assets })),
+    JSON.stringify(buildMomentumPanel(series, { universe: assets, rank: "return" }))
+  );
+});
+
+test("B1 rank=negVol uses negative trailing volatility as the identical trailR ranking slot", () => {
+  const asset = [100, 110, 121, 145.2, 174.24].map((close, i) => candle(i, close));
+  const { rows } = buildMomentumPanel(new Map([["BTC", asset]]), {
+    universe: ["BTC"],
+    lookback: 2,
+    horizon: 1,
+    step: 1,
+    minAssets: 1,
+    rank: "negVol",
+    volWindow: 2
+  });
+
+  assert.equal(rows[0].date, "2025-01-04");
+  assert.ok(Math.abs(rows[0].trailR - -0.05) < 1e-12);
+});
+
+test("B1 rank=negBeta uses negative rolling BTC beta as the identical trailR ranking slot", () => {
+  const btc = Array.from({ length: 110 }, (_, i) => candle(i, 100 + i + (i % 5)));
+  const eth = btc.map((c) => ({ ...c, close: (c.close ** 2) / 100 }));
+  const { rows } = buildMomentumPanel(new Map([["BTC", btc], ["ETH", eth]]), {
+    universe: ["BTC", "ETH"],
+    lookback: 30,
+    horizon: 7,
+    step: 7,
+    minAssets: 2,
+    rank: "negBeta"
+  });
+
+  const ethRow = rows.find((r) => r.asset === "ETH");
+  assert.equal(ethRow.date, "2025-04-04");
+  assert.ok(Math.abs(ethRow.trailR - -2) < 1e-12);
+});
+
 test("rank correlation identifies a planted monotonic cross-section", () => {
   assert.deepEqual(ranks([3, 1, 1, 2]), [4, 1.5, 1.5, 3]);
   assert.equal(spearman([1, 2, 3, 4], [10, 20, 30, 40]), 1);
@@ -256,7 +299,7 @@ test("permutation and bootstrap preserve an obvious positive IC", () => {
 test("M5 freezes symbol and recent-date holdouts before any score selection", () => {
   const series = new Map(STABLE_13_FIXTURE.map((symbol) => [symbol, []]));
   const symbols = splitPrimarySymbols(series);
-  assert.deepEqual(symbols.holdout, ["ATOM", "BCH", "XLM"]);
+  assert.deepEqual(symbols.holdout, ["ATOM", "DOT", "LTC"]);
   assert.equal(symbols.train.includes("ATOM"), false);
 
   const panels = [0, 100, 200, 300].map((time) => ({ time }));

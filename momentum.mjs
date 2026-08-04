@@ -9,7 +9,8 @@ const DAY = 86400;
 export const STABLE_13 = Object.freeze([
   "BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "AVAX", "LINK", "DOT", "LTC", "BCH", "ATOM", "XLM"
 ]);
-export const PRIMARY_SYMBOL_HOLDOUT = Object.freeze(["ATOM", "BCH", "XLM"]);
+// Frozen before scoring; BCH/XLM are not present in the current stored watchlist.
+export const PRIMARY_SYMBOL_HOLDOUT = Object.freeze(["ATOM", "DOT", "LTC"]);
 export const RECENT_HOLDOUT_DAYS = 180;
 export const Q1_ONLY_START = "2026-01-01";
 export const Q1_ONLY_END = "2026-04-01";
@@ -289,6 +290,7 @@ export function buildMomentumPanel(series, {
   step = 7,
   minAssets = 8,
   transform = "raw",
+  rank = "return",
   factorAsset = "BTC",
   residualWindow = 90,
   volWindow = lookback,
@@ -340,6 +342,22 @@ export function buildMomentumPanel(series, {
         trailR /= vol;
       } else if (transform !== "raw") {
         throw new Error(`unknown momentum transform: ${transform}`);
+      }
+      if (rank === "negVol") {
+        if (assetIndex < volWindow) continue;
+        const assetRows = series.get(asset);
+        const returns = [];
+        for (let j = assetIndex - volWindow + 1; j <= assetIndex; j++) returns.push(assetRows[j].close / assetRows[j - 1].close - 1);
+        const vol = stdev(returns);
+        if (!vol) continue;
+        trailR = -vol;
+      } else if (rank === "negBeta") {
+        if (assetIndex < residualWindow || !factorAtDate || factorAtDate.i < residualWindow) continue;
+        const beta = betaAt(series.get(asset), factorRows, assetIndex, residualWindow);
+        if (beta === null) continue;
+        trailR = -beta;
+      } else if (rank !== "return") {
+        throw new Error(`unknown momentum rank variable: ${rank}`);
       }
       bucket.push({ date, asset, trailR, fwdR: forward / entry - 1 });
     }
