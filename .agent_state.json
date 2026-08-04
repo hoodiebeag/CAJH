@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "trader.js, monitor.js, api-resilience.test.mjs",
-    "objective": "Define bounded Kraken retry/timeout/staleness behavior for prices, balances, metadata, order confirmation, and reconciliation. Classify retryable versus terminal errors and propagate an explicit unknown state rather than a fallback fill or stale quote.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "bot.js, bot-lifecycle.test.mjs",
+    "objective": "Handle Discord lifecycle failures: attach sanitized client error/shardError listeners, handle client.login rejection, and add a bounded ready timeout. Do not start monitor or scheduled scans unless Discord reaches ready state.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-013 implemented. npm.cmd test ran 64 tests and all passed; target JS syntax checks passed. Added classifyKrakenError and bounded callKraken wrapper for Kraken API calls. Prices, balances, metadata, AddOrder, QueryOrders, and holdings valuation now retry bounded retryable failures, fail immediately on terminal errors, and throw explicit krakenState=unknown after exhaustion instead of returning fallback quotes/metadata. Tests cover retry success, terminal no-retry, exhausted unknown, malformed balance, metadata failure before AddOrder, and holdings valuation unknown propagation to reconciliation callers.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-04T11:30:07.489Z"
+    "notes": "R-013 verified: npm.cmd test ran 64 tests and all passed. API-resilience tests cover retry classification, bounded retry success/exhaustion, explicit unknown state, malformed balance rejection, metadata failure before AddOrder, and holdings valuation unknown propagation.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-04T11:30:35.267Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -220,7 +220,7 @@
       },
       {
         "id": "R-013",
-        "state": "verifying",
+        "state": "done",
         "severity": "high",
         "file": "trader.js, monitor.js, api-resilience.test.mjs",
         "owner": "executor",
@@ -235,7 +235,7 @@
       },
       {
         "id": "R-014",
-        "state": "pending",
+        "state": "executing",
         "severity": "high",
         "file": "bot.js, bot-lifecycle.test.mjs",
         "owner": "executor",
@@ -1473,6 +1473,14 @@
       "detail": "R-013: bounded Kraken API retry/unknown-state behavior for order-critical prices, balances, metadata, order confirmation, and holdings valuation; added API resilience tests.",
       "commit": "3c2502a",
       "tests": "64 passing (npm.cmd test); node --check trader.js monitor.js api-resilience.test.mjs"
+    },
+    {
+      "ts": "2026-08-04T11:30:35.267Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "R-013 API resilience verified with npm.cmd test 64/64 and unknown-state checks. Pulled R-014 into EXECUTOR_PENDING.",
+      "commit": "7698d79",
+      "tests": "64 passing (npm.cmd test)"
     }
   ],
   "budget": {
