@@ -142,6 +142,18 @@ export function isManualHalt()      { return manualHalt; }
 export function canResume({ liveOptIn, monitorHealthy }) { return liveOptIn === true && monitorHealthy === true; }
 export function getHaltState() { return { active: manualHalt || drawdownHalted, reason: haltReason, haltedAt }; }
 
+export function prepareFatalShutdown(reason = "fatal integrity loss") {
+  haltManual(reason);
+  const persisted = saveTradeState();
+  return {
+    tradingEnabled,
+    halt: getHaltState(),
+    persisted,
+    exitProtection: "software-polled",
+    warning: "software exits cannot be guaranteed while the process is shutting down; restart must reconcile before entries resume"
+  };
+}
+
 // Current calendar date in ET (YYYY-MM-DD), so daily stats roll over on the ET day.
 function todayET() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
@@ -401,7 +413,7 @@ export function removeTrade(symbol) {
 
 /** Persist after mutating a tracked trade in place (e.g. partial close). */
 export function saveTradeState() {
-  persist();
+  return persist();
 }
 
 export function applyConfirmedSellToTrade(trade, sold) {

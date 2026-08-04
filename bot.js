@@ -7,7 +7,7 @@ import { Client, GatewayIntentBits } from "discord.js";
 import cron from "node-cron";
 import { runScanner }      from "./scanner.js";
 import { loadConfig, saveConfig, isOwner } from "./storage.js";
-import { startMonitor, setDailyStartBalance, postDailySummary, disableTrading, haltManual } from "./monitor.js";
+import { startMonitor, setDailyStartBalance, postDailySummary, disableTrading, haltManual, prepareFatalShutdown } from "./monitor.js";
 import {
   handleHelp, handleWatchlist, handleWatch, handleUnwatch,
   handleSetChannel, handleStatus,
@@ -17,10 +17,17 @@ import {
 } from "./commands.js";
 import * as logger from './logger.js';
 
-// Last-resort safety net: an error that slips past every other handler must not kill
-// the process (which would also kill the stop-loss/take-profit monitor loop).
-process.on("unhandledRejection", (err) => logger.error("[BOT] Unhandled rejection:", err));
-process.on("uncaughtException",  (err) => logger.error("[BOT] Uncaught exception:", err));
+export function handleFatalProcessError(kind, err, exit = process.exit) {
+  const reason = `${kind}: ${err?.message ?? err ?? "unknown fatal error"}`;
+  const report = prepareFatalShutdown(reason);
+  logger.error(`[BOT] ${kind}; entries halted and state persistence attempted. ` +
+    `Software-polled exits cannot be guaranteed until restart/reconcile.`, err);
+  exit(1);
+  return report;
+}
+
+process.on("unhandledRejection", (err) => handleFatalProcessError("unhandledRejection", err));
+process.on("uncaughtException",  (err) => handleFatalProcessError("uncaughtException", err));
 
 // ─── Discord client ────────────────────────────────────────────────────────────
 
