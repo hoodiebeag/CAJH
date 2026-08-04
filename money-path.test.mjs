@@ -5,12 +5,28 @@ import { parseConfirmedSell } from "./trader.js";
 import {
   applyConfirmedSellToTrade,
   canResume,
+  checkDrawdown,
+  createSingleFlight,
+  enableTrading,
+  isTradingEnabled,
   reconcile,
   requireMonitorHealthForEntry,
+  resetDailyStats,
   resetMonitorHealthForTests
 } from "./monitor.js";
+import {
+  levelOnCooldown,
+  markLevelTraded,
+  resetLevelCooldownsForTests
+} from "./scanner.js";
 
 test.afterEach(() => resetMonitorHealthForTests());
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((r) => { resolve = r; });
+  return { promise, resolve };
+}
 
 test("entry eligibility fails closed until hydration, reconciliation, persistence, and heartbeat are healthy", () => {
   const now = 1_000_000;
@@ -51,6 +67,32 @@ test("manual or automated resume requires both explicit live opt-in and healthy 
   assert.equal(canResume({ liveOptIn: true, monitorHealthy: true }), true);
 });
 
+test("manual and scheduled money-path work cannot overlap the same single-flight guard", async () => {
+  const gate = createSingleFlight("MONEY-PATH");
+  const slow = deferred();
+  const first = gate.run(() => slow.promise.then(() => "first-complete"));
+
+  assert.equal(gate.telemetry().active, true);
+  assert.equal(await gate.run(() => "second-should-skip"), undefined);
+  assert.deepEqual(gate.telemetry(), { active: true, skipped: 1 });
+
+  slow.resolve();
+  assert.equal(await first, "first-complete");
+  assert.equal(await gate.run(() => "third-runs-after-release"), "third-runs-after-release");
+});
+
+test("structural-level cooldown blocks the same pivot until its exact hand-computed expiry", () => {
+  resetLevelCooldownsForTests();
+  const buy = { tf: "4h", pivotIndex: 12, pivotPrice: 90, trigger: 101 };
+  const now = Date.UTC(2026, 0, 1);
+  const expiry = now + 24 * 240 * 60 * 1000;
+
+  assert.equal(levelOnCooldown("BTC", buy, now), false);
+  assert.equal(markLevelTraded("BTC", buy, 240, now), true);
+  assert.equal(levelOnCooldown("BTC", buy, expiry - 1), true);
+  assert.equal(levelOnCooldown("BTC", buy, expiry), false);
+});
+
 test("reconciliation classifies stablecoins, dust, orphans, and ghosts without trading", () => {
   const result = reconcile(
     [
@@ -82,6 +124,19 @@ test("confirmed full and partial exits change tracked volume only by executed vo
   const confirmedPartial = parseConfirmedSell({ status: "closed", vol_exec: "0.75", price: "2100" }, partial.volume);
   assert.deepEqual(applyConfirmedSellToTrade(partial, confirmedPartial), { status: "partial", remaining: 1.75 });
   assert.equal(partial.volume, 1.75);
+});
+
+test("daily drawdown disables new entries at the exact configured 10% equity loss", () => {
+  enableTrading();
+  resetDailyStats(1_000);
+
+  assert.equal(checkDrawdown(901), false);
+  assert.equal(isTradingEnabled(), true);
+  assert.equal(checkDrawdown(900), true);
+  assert.equal(isTradingEnabled(), false);
+
+  resetDailyStats(1_000);
+  enableTrading();
 });
 
 test("unknown, non-terminal, and zero-fill exits retain the original position", () => {

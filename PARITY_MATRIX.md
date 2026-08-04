@@ -1,28 +1,30 @@
 # Money-path parity matrix
 
-This matrix is deliberately explicit about what is tested, what is only covered by
-an existing fixture, and what remains an implementation gap. A row marked `GAP` is
-not a claim of safety; it is a verifier-visible follow-up.
+R-006 covers the money paths that have deterministic seams today and names the remaining unsafe seams as blockers/follow-ons instead of treating a green test run as proof. Assertions are hand-computed state transitions, not snapshots.
 
 | Money path | Live behavior | Backtest/research behavior | Deterministic evidence | Status |
 | --- | --- | --- | --- | --- |
-| Entry eligibility | Monitor health gate blocks unknown startup, stale heartbeat, failed persistence, failed reconciliation, or failed tick | Backtests can run without live monitor health | `money-path.test.mjs`, `monitor.test.mjs`, `monitor-health.test.mjs` | COVERED / intentional difference |
-| Manual/cron race | Single-flight scan guard skips overlap | Backtest is synchronous | `scheduler.test.mjs` | COVERED / intentional difference |
-| Position-cap rotation | Scanner selects the most profitable open trade before a new entry | Backtest has its own portfolio accounting | `scanner.js`, `backtest.js`; no isolated hand fixture | GAP: add cap-rotation fixture |
-| Actual buy fill | Position is registered only after terminal Kraken buy confirmation | Backtest fills at its modeled entry | `trader.js` confirmation path; no API-seam fixture | GAP: add mocked QueryOrders fixture |
-| Full exit | Tracked position closes only for a confirmed terminal execution | Backtest closes on modeled stop/target/event | `money-path.test.mjs`, `trader.test.mjs` | COVERED |
-| Partial exit | Tracked volume is reduced by confirmed executed volume only | Backtest scale-out updates modeled volume | `money-path.test.mjs`, `trader.test.mjs` | COVERED |
-| Stop / take-profit | Monitor polls price and closes through confirmed sell flow | Backtest applies stop/target on candle path | `monitor.js`, `backtest.test.mjs`; no live clock/API fixture | GAP: add exit-trigger fixture |
-| Breakeven / trailing stop | Monitor mutates stop state from live prices | Backtest has trailing-stop model | `backtest.test.mjs`; live parity not isolated | GAP: classify exact live/backtest event timing |
-| Daily drawdown | Monitor disables entries after the configured equity drawdown threshold | Backtest applies its own drawdown rules | `monitor.js`; no hand-computed threshold fixture | GAP: add threshold and reset fixture |
-| Restart recovery | Versioned storage restores valid state; invalid state is unsafe, not empty | Backtest starts from an explicit portfolio | `storage.test.mjs`, `monitor.test.mjs` | COVERED |
-| Reconciliation | Holdings are classified as stable/dust/orphan/ghost; ghost cleanup removes tracking only and never sells | No exchange holdings to reconcile | `money-path.test.mjs`, `monitor.js` | COVERED |
-| Persistence failure | Failed writes mark health unsafe and disable entries | Not applicable | `storage.test.mjs`, `monitor.js` | COVERED |
-| Stale price / price failure | Current code must not trade on an unknown quote; explicit freshness/age contract is not yet tested | Backtest uses candle timestamps | `trader.js` and scanner guards; no injected stale-quote fixture | GAP: define quote age and test rejection |
-| Exchange errors | Order/quote failures return unknown state and preserve tracked positions | Research treats missing data as excluded | `trader.js` retry paths; no bounded error matrix | GAP: add retry/timeout fixture (R-013) |
+| Entry eligibility | New entries require healthy startup hydration, reconciliation, persistence, monitor tick, and a fresh heartbeat. | Historical simulations do not have live exit-management state. | `money-path.test.mjs`; `monitor.test.mjs`; `monitor-health.test.mjs` | COVERED / intentional live-only gate |
+| Manual/cron race | Shared single-flight guards skip overlapping work rather than duplicating orders or exits. | Backtests are synchronous. | `money-path.test.mjs`; `scheduler.test.mjs` | COVERED / intentional live-only guard |
+| One trade per structural level | The same pivot/trigger is persisted with a 24-bar expiry and cannot retrigger until the exact expiry. | Anticipate-mode backtests enforce equivalent one-level behavior. | `money-path.test.mjs`; `backtest.test.mjs`; `scanner.test.mjs` | COVERED |
+| Position-cap rotation | At six open positions, scanner attempts to close only the most profitable priced winner before opening the newest signal; failure refuses the new entry. | Research portfolio accounting does not always include live capacity rotation. | Sell-confirmation safety is covered by `trader.test.mjs`; no exported scanner seam isolates candidate ranking without live-code refactor. | BLOCKED/FOLLOW-ON: needs a scanner dependency-injection seam or targeted live-edit task |
+| Actual buy fill | Live position registration happens only after terminal Kraken buy confirmation; invalid order fields reject before `AddOrder`. | Backtests fill at deterministic modeled prices and charge modeled costs. | `order-validation.test.mjs`; R-005 runtime validation boundary | PARTIAL: validation covered; BLOCKED/FOLLOW-ON for mocked `QueryOrders` buy-fill seam |
+| Full exit | A tracked position is closed only by a confirmed terminal sell with positive executed volume and price. | Backtests close on modeled stop/target/event. | `money-path.test.mjs`; `trader.test.mjs` | COVERED |
+| Partial exit | Confirmed partial execution reduces tracked volume by the exact executed amount and leaves the remainder open. | Backtest scale-out reduces modeled remaining fraction. | `money-path.test.mjs`; `trader.test.mjs`; `backtest.test.mjs` | COVERED |
+| Unknown/canceled/expired/rejected sell | Ambiguous or non-terminal sell state leaves local tracked state intact. | No exchange ambiguity exists in research. | `money-path.test.mjs`; `trader.test.mjs` | COVERED / intentional live-only fail-closed behavior |
+| Stop-loss / take-profit | Monitor polls price and exits through the confirmed sell path; no exchange-native resting orders are asserted here. | Backtest resolves stop/target from candle paths and charges exit-side fees. | `backtest.test.mjs`; sell-confirmation tests cover the state mutation after an exit request. | PARTIAL: modeled exits covered; BLOCKED/FOLLOW-ON for live monitor clock/API trigger fixture |
+| Breakeven / trailing stop | Monitor mutates stop state from live prices after configured R thresholds. | Backtest has deterministic trailing/partial models. | `backtest.test.mjs` trailing and partial tests | PARTIAL: research model covered; BLOCKED/FOLLOW-ON for exact live polling/event-order fixture |
+| Daily drawdown | A 10% equity loss from daily start disables new entries. | Research reports drawdown unless explicitly modeling a kill-switch. | `money-path.test.mjs` hand-computes 901 = safe and 900 = halted from a 1,000 start. | COVERED |
+| Restart recovery | Versioned storage restores valid state; invalid state is unsafe, never a silently empty portfolio. | Backtests start from explicit data. | `storage.test.mjs`; restart/halt fixtures in `monitor.test.mjs`; cooldown restart tests in `scanner.test.mjs` | COVERED |
+| Reconciliation | Stablecoins and dust are ignored; untracked held assets are orphans; tracked-but-missing assets are ghosts; cleanup removes tracking only and never sells. | Backtests do not reconcile exchange holdings. | `money-path.test.mjs`; monitor reconciliation tests | COVERED |
+| Persistence failure | Failed writes mark monitor health unsafe and block new entries. | Not applicable to research. | `storage.test.mjs`; `monitor.test.mjs` health gating | COVERED |
+| Stale price / invalid balance | Scanner validates finite positive quote/balance-derived capital before consuming a cooldown or placing an order. | Backtests require finite candles. | `order-validation.test.mjs`; R-005 scanner validation path | PARTIAL: finite value boundary covered; BLOCKED/FOLLOW-ON for explicit quote-age contract |
+| Exchange errors / retries | Ambiguous remote state must never imply a fill. | Research excludes missing data rather than retrying an exchange. | Sell ambiguity covered by `money-path.test.mjs` and `trader.test.mjs`. | PARTIAL: sell side covered; BLOCKED/FOLLOW-ON R-013 owns timeout/exhaustion policy |
 
-## Verification rule
+## Verifier note
 
-The matrix is complete only when every `GAP` row has either a focused test or an
-explicit follow-on queue item. This run adds the deterministic pure-function tests;
-it does not claim that the remaining API, timing, or rotation seams are safe.
+No remaining blocker is hidden as a passing test. The matrix distinguishes:
+
+- `COVERED`: deterministic test exists today.
+- `PARTIAL`: the safety boundary is tested, but an API/timing seam still needs a production test seam.
+- `BLOCKED/FOLLOW-ON`: cannot be honestly completed inside this target without editing live code or adding dependency injection. Those rows must be routed as later queue items, not treated as safe.
