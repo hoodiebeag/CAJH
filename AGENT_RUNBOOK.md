@@ -88,3 +88,11 @@ stable-13 data, an unavailable whole-symbol holdout must be stated with its math
 reason and makes the verdict `CONTEXT-ONLY` (or an explicitly blocked limitation), regardless
 of train IC, FDR, or gross/net economic results. Never turn an unavailable test into a null
 result or evidence of an edge.
+
+### B1 pre-registration gate
+
+B1 may change only ranking-variable plumbing and direct tests. It must not alter
+`STABLE_13`, `PRIMARY_SYMBOL_HOLDOUT`, date splits, minimum cross-section, M5/M6 scoring,
+or any frozen momentum specification. A missing stored symbol or a desire to make a split
+work is an `ARCHITECT_PENDING` design blocker, not authorization to replace a holdout after
+inspection. Reject the item if its diff changes any of those inputs.
