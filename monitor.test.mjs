@@ -139,6 +139,29 @@ test("resume requires explicit opt-in plus healthy monitor state", () => {
   assert.equal(healthy.halt.active, false);
 });
 
+test("hydrateTrades validates every loaded trade before inserting monitor state", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-invalid-hydrate-"));
+  fs.writeFileSync(path.join(dir, "positions.json"), JSON.stringify([
+    { symbol: "NOPE", entry: 100, stopLoss: 90, takeProfit: 120, risk: 10, volume: 1 }
+  ]));
+
+  const result = runMonitor(dir, `
+    const hydrated = monitor.hydrateTrades();
+    console.log("__RESULT__" + JSON.stringify({
+      hydrated,
+      open: monitor.getOpenTrades(),
+      health: monitor.getMonitorHealth(),
+      enabled: monitor.isTradingEnabled()
+    }));
+  `);
+
+  assert.equal(result.hydrated, false);
+  assert.deepEqual(result.open, []);
+  assert.equal(result.health.hydrated, false);
+  assert.match(result.health.lastError, /Unsupported trading symbol/);
+  assert.equal(result.enabled, false);
+});
+
 test("unreadable persisted halt state restores fail-closed", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-halt-"));
   fs.writeFileSync(path.join(dir, "stats.json"), "{broken");
@@ -152,4 +175,15 @@ test("unreadable persisted halt state restores fail-closed", () => {
   assert.equal(result.restored, false);
   assert.equal(result.enabled, false);
   assert.equal(result.halt.active, true);
+});
+
+test("invalid hydrated trade is rejected before entering monitor state", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-invalid-trade-"));
+  fs.writeFileSync(path.join(dir, "positions.json"), JSON.stringify([
+    { symbol: "PUMP", entry: 100, stopLoss: 90, takeProfit: 120, risk: 10, volume: 1 }
+  ]));
+  const result = runMonitor(dir, "console.log('__RESULT__' + JSON.stringify({ hydrated: monitor.hydrateTrades(), health: monitor.getMonitorHealth() }))");
+  assert.equal(result.hydrated, false);
+  assert.equal(result.health.ok, false);
+  assert.match(result.health.lastError, /invalid hydrated position/);
 });

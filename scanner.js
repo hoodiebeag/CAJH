@@ -21,7 +21,7 @@ import {
   entrySignal, pendingSwingLow, currentBias, SWING_WINDOW, TP_R,
   REQUIRE_HIGHER_LOW, MIN_STOP_PCT, MAX_STOP_PCT_BY_TF, RISK_PCT, MAX_POSITION_PCT
 } from "./strategy.js";
-import { placeBuy, getCurrentPrice, fetchOHLC, getAccountBalance, validateOrderRequest } from "./trader.js";
+import { placeBuy, getCurrentPrice, getCurrentPriceSnapshot, fetchOHLC, getAccountBalanceSnapshot, validateOrderRequest } from "./trader.js";
 import {
   registerTrade, postTradeOpened, isTradingEnabled, getTrade, getOpenTrades, closeTradeAtMarket,
   requireMonitorHealthForEntry, createSingleFlight
@@ -221,7 +221,8 @@ async function proposeBuyLocked(symbol, buy, channel) {
     if (!rotated) return { traded: false, reason: `max open positions — rotating out ${best.trade.symbol} failed` };
   }
 
-  const entry    = await getCurrentPrice(symbol);
+  const quote    = await getCurrentPriceSnapshot(symbol);
+  const entry    = quote.price;
   const stopLoss = buy.pivotPrice;   // the candidate/confirmed swing low = structural invalidation
   const risk     = entry - stopLoss;
 
@@ -242,7 +243,8 @@ async function proposeBuyLocked(symbol, buy, channel) {
 
   // Risk-based sizing: risk RISK_PCT of free cash per trade, so the dollar risk is the
   // same whether the stop is 1.5% (1h) or 8% (1d). Capped at MAX_POSITION_PCT.
-  const freeCash = await getAccountBalance();
+  const balanceSnapshot = await getAccountBalanceSnapshot();
+  const freeCash = balanceSnapshot.balance;
   if (!Number.isFinite(freeCash) || freeCash <= 0) {
     return { traded: false, reason: "entry blocked: account balance must be finite and positive" };
   }
@@ -264,7 +266,10 @@ async function proposeBuyLocked(symbol, buy, channel) {
     return { traded: false, reason: "entry blocked: structural-level cooldown could not be persisted" };
   }
   try {
-    const trade = await placeBuy({ symbol, capital, price: entry });
+    const trade = await placeBuy({
+      symbol, capital, price: entry, priceAsOf: quote.asOf,
+      balance: freeCash, balanceAsOf: balanceSnapshot.asOf
+    });
     // Recompute off the actual fill (trade.price), not the pre-trade quote — a market
     // order can fill away from the quote, and stop/target must track the real entry.
     const actualRisk  = trade.price - stopLoss;

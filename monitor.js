@@ -244,7 +244,19 @@ export function hydrateTrades() {
   }
   const saved = result.value;
   for (const t of saved) {
-    if (t?.symbol) openTrades.set(t.symbol.toUpperCase(), t);
+    try {
+      validateTrackedTrade(t);
+      openTrades.set(t.symbol.toUpperCase(), t);
+    } catch (err) {
+      setMonitorHealth({
+        hydrated: false,
+        persistenceOk: false,
+        lastError: `invalid hydrated position: ${err.message}`
+      });
+      disableTrading();
+      logger.error(`[MONITOR] Invalid hydrated position; entries halted until storage is repaired: ${err.message}`);
+      return false;
+    }
   }
   setMonitorHealth({ hydrated: true, persistenceOk: persistenceHealthy(), lastError: null });
   if (saved.length) logger.info(`[MONITOR] Recovered ${saved.length} open position(s) from disk.`);
