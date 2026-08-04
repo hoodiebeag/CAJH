@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "monitor.js, scanner.js, bot.js, monitor.test.mjs",
     "objective": "Make manual and safety halts durable across restart, and require explicit opt-in before any resume can enable orders. Persist the halt reason; boot and resume must remain fail-closed when halt state cannot be read.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 4,
-    "notes": "Verifier passed R-008: npm.cmd test ran 26 tests and all passed. Confirmed sell execution is terminal-only, partial sells retain exact remainder, unknown/canceled/expired/rejected/zero-fill sells retain tracked state, and manual command path uses confirmed executed volume. Next eligible item pulled.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T10:59:31.818Z"
+    "notes": "R-009 implementation/tests are committed and pushed. npm.cmd test passed 32 tests. Review durable halt coverage: manual halt survives fresh module load, resume refuses without LIVE_TRADING=true, resume also requires healthy monitor state, and unreadable persisted halt state restores fail-closed.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:03:38.266Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -90,7 +90,7 @@
       },
       {
         "id": "R-009",
-        "state": "executing",
+        "state": "verifying",
         "severity": "critical",
         "file": "monitor.js, scanner.js, bot.js, monitor.test.mjs",
         "owner": "executor",
@@ -773,7 +773,7 @@
         "Manual/safety halt survives restart.",
         "LIVE_TRADING false or unset cannot be overridden through Discord."
       ],
-      "state": "queued"
+      "state": "verifying"
     },
     {
       "id": "R-010",
@@ -1044,6 +1044,22 @@
       "detail": "R-008 confirmed sell handling verified. npm.cmd test passed 26/26; tests cover terminal full sell, terminal partial sell, and unknown/non-terminal/zero-fill retention. Manual sell path uses confirmed executed volume.",
       "commit": "5d11666",
       "tests": "26 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:03:11.371Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-009: persisted halt metadata through runtime stats, restored halt state before monitoring, and made resume require LIVE_TRADING=true plus healthy monitor state; persistence failure keeps trading halted.",
+      "commit": "1109c88",
+      "tests": "29 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:03:38.266Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-009: added focused restart/opt-in/fail-closed halt tests around existing durable halt implementation. Manual halt persists, resume needs LIVE_TRADING=true plus healthy monitor state, unreadable halt state stays disabled.",
+      "commit": "2af4580",
+      "tests": "32 passing (npm.cmd test)"
     }
   ],
   "budget": {
