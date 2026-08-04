@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "VERIFIER_PENDING",
+                    "status":  "EXECUTOR_PENDING",
                     "target_file":  "momentum.mjs, momentum.test.mjs",
-                    "objective":  "Implement raw, 90-day rolling BTC-residual, and trailing-volatility-normalized rank transforms using only data at or before each decision date.",
+                    "objective":  "Tag every rebalance date bull/bear/flat from BTC versus its 200-day MA and report IC/count per regime without changing the primary full-sample statistic.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "M3 implemented in commit 1373729. npm.cmd test passed 96/96, including hand-computed BTC-residual and volatility-normalized transform tests.",
-                    "updated_by":  "executor",
-                    "updated_at":  "2026-08-04T12:05:17.7848352Z"
+                    "notes":  "M3 verified with npm.cmd test 96/96. Pulled M4 into EXECUTOR_PENDING.",
+                    "updated_by":  "verifier",
+                    "updated_at":  "2026-08-04T12:05:48.3339929Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -393,7 +393,7 @@
                                           },
                                           {
                                               "id":  "M3",
-                                              "state":  "verifying",
+                                              "state":  "done",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -407,7 +407,7 @@
                                           },
                                           {
                                               "id":  "M4",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -1673,6 +1673,14 @@
                        "detail":  "M3: added raw/default, 90-day BTC-residual, and trailing-volatility-normalized momentum transforms using only data at or before each decision date.",
                        "commit":  "1373729",
                        "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 96 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:05:48.3339929Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "M3 transform implementation verified. npm.cmd test passed 96/96; focused tests exercise BTC-residual and trailing-volatility-normalized transforms with hand-computed values and no future data leakage.",
+                       "commit":  "89655e3",
+                       "tests":  "npm.cmd test: 96 passing"
                    }
                ],
     "budget":  {
