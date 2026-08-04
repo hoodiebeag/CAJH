@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "scanner.js, storage.js, scanner.test.mjs",
-    "objective": "Persist one-trade-per-structural-level cooldowns with expiry and validate them during restart hydration, so a restart cannot immediately re-enter a stopped-out level.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "trader.js, monitor.js, trader.test.mjs",
+    "objective": "Require an explicit Kraken terminal execution confirmation before a sell removes or reduces a tracked position. An unknown, canceled, expired, rejected, or partial sell must leave tracked state intact (or reduce it only by confirmed executed volume) and raise a reconciliation alert.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 4,
-    "notes": "R-003 implementation is committed and pushed. npm.cmd test passed 22 tests. Review scanner.test.mjs restart fixtures: unexpired level survives restart, expired lock prunes, unreadable cooldown state blocks entry fail-closed.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-04T10:52:30.488Z"
+    "notes": "Verifier passed R-003: npm.cmd test ran 22 tests and all passed. scanner.test.mjs exercises restart survival for an unexpired cooldown, pruning of an expired cooldown, and fail-closed behavior for unreadable cooldown state. git pull --rebase was blocked by pre-existing unrelated unstaged files; do not discard them.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-04T10:52:59.864Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -65,7 +65,7 @@
       },
       {
         "id": "R-003",
-        "state": "verifying",
+        "state": "done",
         "severity": "critical",
         "file": "scanner.js, storage.js, scanner.test.mjs",
         "owner": "executor",
@@ -79,7 +79,7 @@
       },
       {
         "id": "R-008",
-        "state": "pending",
+        "state": "executing",
         "severity": "critical",
         "file": "trader.js, monitor.js, trader.test.mjs",
         "owner": "executor",
@@ -628,7 +628,7 @@
       "acceptance_criteria": [
         "Restart preserves unexpired cooldowns, prunes expired cooldowns, and cannot block unrelated levels."
       ],
-      "state": "verifying"
+      "state": "done"
     },
     {
       "id": "R-004",
@@ -1002,6 +1002,14 @@
       "agent": "executor",
       "action": "implement",
       "detail": "R-003: persisted one-trade-per-structural-level cooldowns with versioned atomic storage; scanner hydrates/prunes locks on restart and fails closed if cooldown state is unreadable.",
+      "commit": "58458ba",
+      "tests": "22 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T10:52:59.864Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "R-003 cooldown persistence verified. npm.cmd test passed 22/22; tests exercise restart persistence, expiry pruning, and unreadable-state fail-closed behavior. Pulled next eligible item into EXECUTOR_PENDING.",
       "commit": "58458ba",
       "tests": "22 passing (npm.cmd test)"
     }
