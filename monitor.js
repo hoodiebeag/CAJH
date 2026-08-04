@@ -385,6 +385,20 @@ async function closePosition(channel, symbol, trade, price, reason) {
     }
     return false;
   }
+  const executed = Number(sold.volume);
+  if (!Number.isFinite(executed) || executed <= 0) {
+    if (channel) await channel.send(`⚠️ **${symbol}** exit confirmation had no executed volume; position remains tracked.`);
+    return false;
+  }
+  if (executed < trade.volume) {
+    trade.volume -= executed;
+    const persisted = saveTradeState();
+    if (channel) await channel.send(
+      `⚠️ **${symbol}** exit partially filled (${executed} sold); ` +
+      `${trade.volume} remains tracked${persisted ? "." : ", but persistence failed — reconciliation required."}`
+    );
+    return false;
+  }
   await postTradeClosed(channel, trade, sold.price, reason);
   removeTrade(symbol);
   return true;

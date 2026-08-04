@@ -149,28 +149,6 @@ export async function getCurrentPrice(symbol) {
 // ─── Orders ────────────────────────────────────────────────────────────────────
 
 /**
- * Poll for a market order's actual average fill price via QueryOrders. Market orders
- * fill almost instantly, but AddOrder's response doesn't include the fill price, so we
- * ask again a few times. Falls back to the pre-trade quote if Kraken doesn't confirm in time.
- */
-async function getFillPrice(txid, quotedPrice) {
-  if (!txid) return quotedPrice;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    await new Promise(r => setTimeout(r, 500));
-    try {
-      const res   = await kraken.api("QueryOrders", { txid });
-      const order = res.result?.[txid];
-      const price = parseFloat(order?.price);
-      if (order?.status === "closed" && price > 0) return price;
-    } catch (err) {
-      logger.error(`[TRADER] QueryOrders failed for ${txid}:`, err.message);
-    }
-  }
-  logger.warn(`[TRADER] Could not confirm fill price for ${txid} — using quote $${quotedPrice}.`);
-  return quotedPrice;
-}
-
-/**
  * Confirm a buy actually FILLED before the caller tracks it as a position. Throws if
  * Kraken canceled/expired the order or never confirms the fill — a thrown error here
  * means "do NOT register a trade", which is exactly what prevents phantom positions
@@ -206,6 +184,42 @@ async function confirmBuyFill(txid, quotedPrice) {
     `could not confirm buy ${txid} filled — NOT tracking it. Run !reconcile: if the coin appears as an orphan, ` +
     `the buy did go through and should be closed manually or re-tracked.`
   );
+}
+
+/** Convert a terminal Kraken sell order into a confirmed execution. */
+export function parseConfirmedSell(order, requestedVolume) {
+  if (order?.status !== "closed") {
+    throw new Error(`sell order is not terminally confirmed (${order?.status ?? "unknown"})`);
+  }
+  const volume = parseFloat(order.vol_exec ?? 0);
+  const price = parseFloat(order.price ?? 0);
+  if (!Number.isFinite(volume) || volume <= 0 || !Number.isFinite(price) || price <= 0) {
+    throw new Error("sell order closed without a valid executed volume and price");
+  }
+  return {
+    volume: Math.min(volume, requestedVolume),
+    price,
+    fee: parseFloat(order.fee ?? 0)
+  };
+}
+
+async function confirmSellFill(txid, requestedVolume, quotedPrice) {
+  if (!txid) throw new Error("Kraken returned no sell transaction id; execution state is unknown.");
+  for (let attempt = 0; attempt < 10; attempt++) {
+    await new Promise(r => setTimeout(r, 700));
+    try {
+      const res = await kraken.api("QueryOrders", { txid });
+      const order = res.result?.[txid];
+      if (order?.status === "canceled" || order?.status === "expired" || order?.status === "rejected") {
+        throw new Error(`sell order ${txid} was ${order.status}; no confirmed close`);
+      }
+      if (order?.status === "closed") return parseConfirmedSell(order, requestedVolume);
+    } catch (err) {
+      if (/was (canceled|expired|rejected)/.test(err.message)) throw err;
+      logger.error(`[TRADER] QueryOrders failed for sell ${txid}:`, err.message);
+    }
+  }
+  throw new Error(`could not confirm sell ${txid} terminal execution; tracked position retained`);
 }
 
 /**
@@ -246,7 +260,7 @@ export async function placeBuy({ symbol, capital, price }) {
 /**
  * Places a spot market sell order to close a position.
  * Volume is the amount of the asset held. `price` (optional) is a pre-trade quote used
- * only as a fallback if the actual fill price can't be confirmed.
+ * only for logging; the returned result always uses a confirmed terminal fill.
  */
 export async function placeSell({ symbol, volume, price }) {
   const pair    = symbolToPair(symbol);
@@ -262,15 +276,16 @@ export async function placeSell({ symbol, volume, price }) {
   });
 
   const txid      = res.result?.txid?.[0];
-  const fillPrice = await getFillPrice(txid, price);
+  const fill = await confirmSellFill(txid, parseFloat(volStr), price);
 
   return {
     txid,
     symbol,
     pair,
     side:   "sell",
-    volume: parseFloat(volStr),
-    price:  fillPrice
+    volume: fill.volume,
+    price:  fill.price,
+    fee:    fill.fee
   };
 }
 
