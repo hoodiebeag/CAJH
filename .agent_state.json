@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "VERIFIER_PENDING",
+                    "status":  "EXECUTOR_PENDING",
                     "target_file":  "momentum.mjs, momentum.test.mjs",
-                    "objective":  "Add tercile and top-3/top-5 economic views: enter at close t+1, compute turnover, gross spread, and net spread after explicit round-trip costs. Do not add an execution strategy.",
+                    "objective":  "Parameterize the M1-M6 ranking variable so raw momentum, negative trailing volatility, and negative BTC beta run through the identical pipeline. Momentum output must remain bit-for-bit unchanged under rank=return.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "M6 implemented in commit e6aa86c. npm.cmd test passed 103/103, including t+1 entry and economic turnover/cost tests.",
-                    "updated_by":  "executor",
-                    "updated_at":  "2026-08-04T12:12:18.5283460Z"
+                    "notes":  "M6 verified with npm.cmd test 103/103. Pulled B1 into EXECUTOR_PENDING.",
+                    "updated_by":  "verifier",
+                    "updated_at":  "2026-08-04T12:12:47.0542311Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -437,7 +437,7 @@
                                           },
                                           {
                                               "id":  "M6",
-                                              "state":  "verifying",
+                                              "state":  "done",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -451,7 +451,7 @@
                                           },
                                           {
                                               "id":  "M7",
-                                              "state":  "pending",
+                                              "state":  "executing",
                                               "severity":  "medium",
                                               "file":  "ROADMAP.md",
                                               "owner":  "executor",
@@ -465,7 +465,7 @@
                                           },
                                           {
                                               "id":  "B1",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -1729,6 +1729,22 @@
                        "detail":  "M6: added t+1 entry-delay panel math and research-only tercile/top-N economic views with turnover, gross returns/spreads, and explicit round-trip net costs.",
                        "commit":  "e6aa86c",
                        "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 103 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:12:26.102Z",
+                       "agent":  "verifier",
+                       "action":  "verify-and-route",
+                       "detail":  "Verified M6 acceptance criteria and routed M7.",
+                       "commit":  "5e5575f",
+                       "tests":  "npm.cmd test: 103 passed, 0 failed"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:12:47.0542311Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "M6 economic views verified. npm.cmd test passed 103/103; tests exercise close t+1 forward-return math plus turnover, gross spread/returns, and explicit net round-trip cost calculations. No execution strategy was added.",
+                       "commit":  "85746a5",
+                       "tests":  "npm.cmd test: 103 passing"
                    }
                ],
     "budget":  {
