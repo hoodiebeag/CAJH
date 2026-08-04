@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "scanner.js, monitor.js, bot.js, scheduler.test.mjs",
-    "objective": "Add single-flight guards to scheduled/manual scans and monitor ticks so an async interval cannot overlap itself or duplicate balance/exit work. Record skipped-overlap health telemetry.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "monitor.js, scanner.js, bot.js, monitor-health.test.mjs",
+    "objective": "Complete monitor operational safety: perform and record startup reconciliation before entry eligibility, expose heartbeat/staleness/last-error status, alert on degradation, and document that exits remain software-polled. Do not add exchange-native orders in this task.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 4,
-    "notes": "R-010 implementation is committed and pushed. npm.cmd test passed 35 tests. Review scheduler.test.mjs deferred-promise fixtures: overlapping scan is skipped while active, single-flight monitor primitive skips overlapping tick work, telemetry records skipped count, and execution resumes after completion.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-04T11:08:17.933Z"
+    "notes": "Verifier passed R-010: npm.cmd test ran 35 tests and all passed. Deferred-promise fixtures prove overlapping scan and monitor single-flight work are skipped while active and normal execution resumes afterward. Next eligible item pulled.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-04T11:08:42.404Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -101,7 +101,7 @@
       },
       {
         "id": "R-010",
-        "state": "verifying",
+        "state": "done",
         "severity": "high",
         "file": "scanner.js, monitor.js, bot.js, scheduler.test.mjs",
         "owner": "executor",
@@ -115,7 +115,7 @@
       },
       {
         "id": "R-004",
-        "state": "pending",
+        "state": "executing",
         "severity": "high",
         "file": "monitor.js, scanner.js, bot.js, monitor-health.test.mjs",
         "owner": "executor",
@@ -795,7 +795,7 @@
       "acceptance_criteria": [
         "Concurrent invocation tests prove only one active scan/tick per loop and no duplicate order path."
       ],
-      "state": "verifying"
+      "state": "done"
     },
     {
       "id": "R-011",
@@ -1082,6 +1082,14 @@
       "agent": "executor",
       "action": "implement",
       "detail": "R-010: added single-flight guards for scanner and monitor tick paths, with skipped-overlap telemetry and deferred-promise scheduler tests.",
+      "commit": "c57975c",
+      "tests": "35 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:08:42.404Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "R-010 scheduler single-flight verified. npm.cmd test passed 35/35; overlap fixtures exercise scan skip and monitor tick skip/recovery. Pulled next eligible item into EXECUTOR_PENDING.",
       "commit": "c57975c",
       "tests": "35 passing (npm.cmd test)"
     }
