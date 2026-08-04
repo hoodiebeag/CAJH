@@ -89,57 +89,156 @@ const CONFIG_FILE = path.join(DATA_DIR, "config.json");
 // wiped on every *redeploy* — attach a volume to make recovery durable across deploys.
 
 const POSITIONS_FILE = path.join(DATA_DIR, "positions.json");
+const STORAGE_VERSION = 1;
+const storageHealth = new Map();
+
+const backupFile = (file) => `${file}.bak`;
+const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
+
+function validJson(value) {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(validJson);
+  return isObject(value) && Object.values(value).every(validJson);
+}
+
+function validTrades(trades) {
+  return Array.isArray(trades) && trades.every(trade => {
+    if (!isObject(trade) || typeof trade.symbol !== "string" || !trade.symbol.trim()) return false;
+    if (!isFiniteNumber(trade.entry) || trade.entry <= 0) return false;
+    if (!isFiniteNumber(trade.stopLoss) || trade.stopLoss <= 0 || trade.stopLoss >= trade.entry) return false;
+    if (!isFiniteNumber(trade.takeProfit) || trade.takeProfit <= trade.entry) return false;
+    if (!isFiniteNumber(trade.risk) || trade.risk <= 0) return false;
+    if (!isFiniteNumber(trade.volume) || trade.volume <= 0) return false;
+    return validJson(trade);
+  });
+}
+
+function validStats(stats) {
+  return isObject(stats) && validJson(stats) &&
+    (stats.date === undefined || typeof stats.date === "string") &&
+    (stats.dailyStartBalance === undefined || stats.dailyStartBalance === null || (isFiniteNumber(stats.dailyStartBalance) && stats.dailyStartBalance >= 0)) &&
+    (stats.dailyPnl === undefined || (isFiniteNumber(stats.dailyPnl))) &&
+    (stats.tradesToday === undefined || (Number.isInteger(stats.tradesToday) && stats.tradesToday >= 0));
+}
+
+function validConfig(config) {
+  return isObject(config) && validJson(config);
+}
+
+function unpack(raw, kind, validate) {
+  const value = isObject(raw) && raw.storageVersion === STORAGE_VERSION && raw.kind === kind && "data" in raw
+    ? raw.data
+    : raw;
+  return validate(value) ? value : null;
+}
+
+function readFile(file, kind, validate) {
+  const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+  const value = unpack(raw, kind, validate);
+  if (value === null) throw new Error(`invalid ${kind} schema`);
+  return value;
+}
+
+function atomicWrite(file, kind, value, validate) {
+  if (!validate(value)) throw new Error(`refusing to persist invalid ${kind}`);
+  const temp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${Date.now()}.tmp`);
+  const payload = JSON.stringify({ storageVersion: STORAGE_VERSION, kind, data: value }, null, 2);
+  let fd;
+  try {
+    fd = fs.openSync(temp, "w");
+    fs.writeFileSync(fd, payload);
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fd = undefined;
+    if (fs.existsSync(file)) {
+      try { readFile(file, kind, validate); fs.copyFileSync(file, backupFile(file)); }
+      catch { /* retain the previous known-good backup */ }
+    }
+    fs.renameSync(temp, file);
+  } catch (err) {
+    if (fd !== undefined) fs.closeSync(fd);
+    try { fs.unlinkSync(temp); } catch { /* nothing to clean up */ }
+    throw err;
+  }
+}
+
+function readRecord(file, kind, validate) {
+  try {
+    if (fs.existsSync(file)) {
+      return { ok: true, value: readFile(file, kind, validate), source: "primary" };
+    }
+    if (!fs.existsSync(backupFile(file))) {
+      return { ok: false, value: null, source: "missing", reason: `${kind} file is missing` };
+    }
+  } catch (err) {
+    logger.error(`[STORAGE] Could not read ${path.basename(file)}:`, err.message);
+  }
+  try {
+    const value = readFile(backupFile(file), kind, validate);
+    atomicWrite(file, kind, value, validate);
+    return { ok: false, value, source: "backup", reason: `${kind} recovered from backup` };
+  } catch (err) {
+    logger.error(`[STORAGE] Could not recover ${path.basename(file)}:`, err.message);
+    return { ok: false, value: null, source: "unsafe", reason: `${kind} state is unreadable` };
+  }
+}
+
+function setHealth(kind, result) {
+  storageHealth.set(kind, { ok: result.ok, source: result.source, reason: result.reason ?? null });
+  return result;
+}
+
+/** Explicit persistence status for the future monitor/entry health gate. */
+export function getStorageHealth() {
+  return Object.fromEntries(storageHealth);
+}
+
+/** Detailed position result. Callers that manage entries must reject ok: false. */
+export function loadTradesResult() {
+  return setHealth("positions", readRecord(POSITIONS_FILE, "positions", validTrades));
+}
 
 export function saveTrades(trades) {
   try {
-    fs.writeFileSync(POSITIONS_FILE, JSON.stringify(trades, null, 2));
+    atomicWrite(POSITIONS_FILE, "positions", trades, validTrades);
+    setHealth("positions", { ok: true, source: "primary" });
+    return true;
   } catch (err) {
     logger.error("[STORAGE] Failed to save positions.json:", err.message);
+    setHealth("positions", { ok: false, source: "unsafe", reason: err.message });
+    return false;
   }
 }
 
 export function loadTrades() {
-  try {
-    if (fs.existsSync(POSITIONS_FILE)) {
-      const data = JSON.parse(fs.readFileSync(POSITIONS_FILE, "utf8"));
-      if (Array.isArray(data)) return data;
-    }
-  } catch (err) {
-    logger.error("[STORAGE] Could not read positions.json:", err.message);
-  }
-  return [];
+  const result = loadTradesResult();
+  return result.value ?? [];
 }
 
 const STATS_FILE = path.join(DATA_DIR, "stats.json");
 
 export function saveStats(stats) {
   try {
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2));
+    atomicWrite(STATS_FILE, "stats", stats, validStats);
+    setHealth("stats", { ok: true, source: "primary" });
+    return true;
   } catch (err) {
     logger.error("[STORAGE] Failed to save stats.json:", err.message);
+    setHealth("stats", { ok: false, source: "unsafe", reason: err.message });
+    return false;
   }
 }
 
 export function loadStats() {
-  try {
-    if (fs.existsSync(STATS_FILE)) {
-      return JSON.parse(fs.readFileSync(STATS_FILE, "utf8"));
-    }
-  } catch (err) {
-    logger.error("[STORAGE] Could not read stats.json:", err.message);
-  }
-  return null;
+  const result = setHealth("stats", readRecord(STATS_FILE, "stats", validStats));
+  return result.value;
 }
 
 function readConfigFile() {
-  try {
-    if (fs.existsSync(CONFIG_FILE)) {
-      return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
-    }
-  } catch (err) {
-    logger.error("[STORAGE] Could not read config.json:", err.message);
-  }
-  return {};
+  const result = setHealth("config", readRecord(CONFIG_FILE, "config", validConfig));
+  return result.value ?? {};
 }
 
 export function loadConfig() {
@@ -158,9 +257,13 @@ export function saveConfig(config) {
       watchlist:     config.watchlist     ?? [],
       lastScanTime:  config.lastScanTime  ?? null
     };
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(payload, null, 2));
+    atomicWrite(CONFIG_FILE, "config", payload, validConfig);
+    setHealth("config", { ok: true, source: "primary" });
+    return true;
   } catch (err) {
     logger.error("[STORAGE] Failed to save config.json:", err.message);
+    setHealth("config", { ok: false, source: "unsafe", reason: err.message });
+    return false;
   }
 }
 
