@@ -59,3 +59,13 @@ tasks use sealed whole-symbol holdouts, non-overlapping samples, costs, reproduc
 seeds, and correctly scoped multiple-testing correction. A train-only or gross-only positive
 result is never an execution edge. A PASS remains research/paper-trade only; live promotion
 requires a human decision.
+
+### M5 sealed-holdout gate
+
+Before approving M5, prove with a fixture that every reported symbol-holdout IC has at least
+`minAssets` held-out symbols on every scored date and that none of those symbols enters train
+selection, the grid, or the primary headline. With the stable-13 universe and `minAssets = 8`,
+two disjoint symbol partitions cannot both satisfy the minimum (8 + 8 > 13). An empty or
+undersized symbol holdout is therefore a **BLOCKED design result**, not a null score or a
+passing fallback to the Q1-only pairs. Route it to `ARCHITECT_PENDING` to choose a pre-registered
+feasible split or explicitly downgrade/remove that holdout axis; never silently lower `minAssets`.
