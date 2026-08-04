@@ -89,6 +89,7 @@ const CONFIG_FILE = path.join(DATA_DIR, "config.json");
 // wiped on every *redeploy* — attach a volume to make recovery durable across deploys.
 
 const POSITIONS_FILE = path.join(DATA_DIR, "positions.json");
+const LEVEL_COOLDOWNS_FILE = path.join(DATA_DIR, "level_cooldowns.json");
 const STORAGE_VERSION = 1;
 const storageHealth = new Map();
 
@@ -113,6 +114,17 @@ function validTrades(trades) {
     if (!isFiniteNumber(trade.volume) || trade.volume <= 0) return false;
     return validJson(trade);
   });
+}
+
+function validLevelCooldowns(records) {
+  return Array.isArray(records) && records.every(record =>
+    isObject(record) &&
+    typeof record.key === "string" &&
+    record.key.length > 0 &&
+    isFiniteNumber(record.until) &&
+    record.until > 0 &&
+    validJson(record)
+  );
 }
 
 function validStats(stats) {
@@ -215,6 +227,22 @@ export function saveTrades(trades) {
 export function loadTrades() {
   const result = loadTradesResult();
   return result.value ?? [];
+}
+
+export function loadLevelCooldownsResult() {
+  return setHealth("levelCooldowns", readRecord(LEVEL_COOLDOWNS_FILE, "levelCooldowns", validLevelCooldowns));
+}
+
+export function saveLevelCooldowns(records) {
+  try {
+    atomicWrite(LEVEL_COOLDOWNS_FILE, "levelCooldowns", records, validLevelCooldowns);
+    setHealth("levelCooldowns", { ok: true, source: "primary" });
+    return true;
+  } catch (err) {
+    logger.error("[STORAGE] Failed to save level_cooldowns.json:", err.message);
+    setHealth("levelCooldowns", { ok: false, source: "unsafe", reason: err.message });
+    return false;
+  }
 }
 
 const STATS_FILE = path.join(DATA_DIR, "stats.json");

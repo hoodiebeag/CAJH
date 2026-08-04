@@ -26,7 +26,7 @@ import {
   registerTrade, postTradeOpened, isTradingEnabled, getTrade, getOpenTrades, closeTradeAtMarket,
   requireMonitorHealthForEntry
 } from "./monitor.js";
-import { saveChart, symbolToKrakenId } from "./storage.js";
+import { saveChart, symbolToKrakenId, loadLevelCooldownsResult, saveLevelCooldowns } from "./storage.js";
 import * as logger from './logger.js';
 
 const BEAG = () => process.env.BEAG_USER_ID || "795521432783552552";
@@ -122,26 +122,62 @@ function summarize(symbol, biases, buy) {
 const pendingBuys = new Set();
 
 // Structural levels already traded, key → timestamp. Without this, a stop-out leaves
-// price ABOVE the same candidate's trigger, so the very next 15-minute scan re-buys the
+// price ABOVE the same candidate's trigger, so the very next scan can re-buy the
 // identical setup — stop out, re-buy, stop out — bleeding a full stop plus round-trip
 // fees each cycle. One level, one trade, until the cooldown expires (24 bars of the
 // signal's own timeframe, so a 1h level frees up in a day, a 1d level in ~3 weeks).
 const tradedLevels = new Map();
 const levelKey = (symbol, buy) => `${symbol}|${buy.tf}|${buy.pivotPrice}`;
 const COOLDOWN_BARS = 24;
+let levelCooldownsLoaded = false;
+let levelCooldownsUnsafe = false;
 
-function levelOnCooldown(symbol, buy) {
-  const until = tradedLevels.get(levelKey(symbol, buy));
-  if (until == null) return false;
-  if (Date.now() >= until) { tradedLevels.delete(levelKey(symbol, buy)); return false; }
+function persistLevelCooldowns() {
+  const records = Array.from(tradedLevels, ([key, until]) => ({ key, until }));
+  if (!saveLevelCooldowns(records)) levelCooldownsUnsafe = true;
+}
+
+function hydrateLevelCooldowns(now = Date.now()) {
+  if (levelCooldownsLoaded || levelCooldownsUnsafe) return !levelCooldownsUnsafe;
+  const result = loadLevelCooldownsResult();
+  if (!result.ok && result.source === "unsafe") {
+    levelCooldownsUnsafe = true;
+    return false;
+  }
+  tradedLevels.clear();
+  for (const record of result.value ?? []) {
+    if (record.until > now) tradedLevels.set(record.key, record.until);
+  }
+  levelCooldownsLoaded = true;
+  persistLevelCooldowns();
   return true;
 }
 
-function markLevelTraded(symbol, buy, tfMinutes) {
+export function levelOnCooldown(symbol, buy, now = Date.now()) {
+  if (!hydrateLevelCooldowns(now)) return true;
+  const until = tradedLevels.get(levelKey(symbol, buy));
+  if (until == null) return false;
+  if (now >= until) {
+    tradedLevels.delete(levelKey(symbol, buy));
+    persistLevelCooldowns();
+    return false;
+  }
+  return true;
+}
+
+export function markLevelTraded(symbol, buy, tfMinutes, now = Date.now()) {
+  if (!hydrateLevelCooldowns(now)) return false;
   // Prune expired keys so the map can't grow without bound over a long uptime.
-  const now = Date.now();
   for (const [k, until] of tradedLevels) if (now >= until) tradedLevels.delete(k);
   tradedLevels.set(levelKey(symbol, buy), now + COOLDOWN_BARS * tfMinutes * 60 * 1000);
+  persistLevelCooldowns();
+  return !levelCooldownsUnsafe;
+}
+
+export function resetLevelCooldownsForTests() {
+  tradedLevels.clear();
+  levelCooldownsLoaded = false;
+  levelCooldownsUnsafe = false;
 }
 
 async function proposeBuy(symbol, buy, channel) {
@@ -216,7 +252,9 @@ async function proposeBuyLocked(symbol, buy, channel) {
 
   // Auto-execute — no confirmation needed. cajh places the trade itself. The level is
   // marked BEFORE the order so a mid-flight crash can't leave it re-triggerable.
-  markLevelTraded(symbol, buy, tfMinutes);
+  if (!markLevelTraded(symbol, buy, tfMinutes)) {
+    return { traded: false, reason: "entry blocked: structural-level cooldown could not be persisted" };
+  }
   try {
     const trade = await placeBuy({ symbol, capital, price: entry });
     // Recompute off the actual fill (trade.price), not the pre-trade quote — a market
