@@ -1,16 +1,16 @@
 ﻿{
     "version":  2,
     "control":  {
-                    "status":  "VERIFIER_PENDING",
-                    "target_file":  "ma-crossover-study.mjs, ma-crossover-study.test.mjs",
-                    "objective":  "Research exactly one pre-registered long/cash daily MA crossover: MA(50) crossing above MA(200) enters at the next daily close; crossing below exits at the next daily close. Use the fixed stable-13 universe, preserve the existing sealed whole-symbol and recent-time holdouts, charge 0.9% round-trip cost for each completed position, and compare only against buy-and-hold. Do not short, sweep parameters, or connect this study to live code.",
+                    "status":  "EXECUTOR_PENDING",
+                    "target_file":  "rsi-reversion-study.mjs, rsi-reversion-study.test.mjs",
+                    "objective":  "Research exactly one pre-registered daily RSI mean-reversion rule: RSI(14) crossing up through 30 enters at the next daily close; exit at the first subsequent close at or above MA(20), or after seven daily bars, whichever occurs first. Use stable-13 plus sealed whole-symbol and recent-time holdouts, charge 0.9% round-trip cost per completed position, and do not sweep thresholds, windows, or holding periods. Research only; do not alter live paths.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "TF1 implemented in 88e5f0e. npm.cmd test passed 136/136; focused tests prove t+1 execution/no same-bar fill, costed returns, buy-and-hold comparator, holdout preservation, and KILLED/CONTEXT-ONLY fail-closed verdicts.",
-                    "updated_by":  "executor",
-                    "updated_at":  "2026-08-04T13:39:02.9075854Z"
+                    "notes":  "Routed MR1: Synthetic fixtures prove entry and exit cannot use the trigger bar or future data; output includes fingerprint, row/trade counts, holdout dates, gross/net returns, cost/turnover, p or permutation evidence when sample size permits, and PASS/KILLED/CONTEXT-ONLY reason; npm.cmd test is green. Fail closed: Any threshold/window/exit tuning on holdout, too few completed holdout trades for the declared inference, or non-positive net holdout result is KILLED or CONTEXT-ONLY.",
+                    "updated_by":  "verifier",
+                    "updated_at":  "2026-08-04T13:40:52.9643412Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -696,7 +696,7 @@
                                           },
                                           {
                                               "id":  "TF1",
-                                              "state":  "verifying",
+                                              "state":  "done",
                                               "severity":  "medium",
                                               "file":  "ma-crossover-study.mjs, ma-crossover-study.test.mjs",
                                               "owner":  "executor",
@@ -711,7 +711,7 @@
                                           },
                                           {
                                               "id":  "MR1",
-                                              "state":  "pending",
+                                              "state":  "executing",
                                               "severity":  "medium",
                                               "file":  "rsi-reversion-study.mjs, rsi-reversion-study.test.mjs",
                                               "owner":  "executor",
@@ -1228,86 +1228,6 @@
                                  }
                              ],
     "ledger":  [
-                   {
-                       "ts":  "2026-07-30T18:35:00Z",
-                       "agent":  "architect",
-                       "action":  "seed",
-                       "detail":  "Defined AGENT_PROTOCOL.md contract and v2 blackboard/ledger schema.",
-                       "commit":  "a54b0e3",
-                       "tests":  "7 passing"
-                   },
-                   {
-                       "ts":  "2026-07-30T19:40:00Z",
-                       "agent":  "architect",
-                       "action":  "findings",
-                       "detail":  "Order-flow pooled analysis: cum-imbalance died under non-overlapping resampling; trade intensity survived at z=-1.90.",
-                       "commit":  "f82e36d",
-                       "tests":  "7 passing"
-                   },
-                   {
-                       "ts":  "2026-07-30T20:05:00Z",
-                       "agent":  "architect",
-                       "action":  "assign",
-                       "detail":  "Corrected swarm-runner.py (state-clobber, DONE/COMPLETE mismatch, uncapped loop, timeout handling). Assigned intensityfilter.mjs to Executor.",
-                       "commit":  "3488656",
-                       "tests":  "7 passing"
-                   },
-                   {
-                       "ts":  "2026-07-30T20:12:49Z",
-                       "agent":  "executor",
-                       "action":  "implement",
-                       "detail":  "Built intensityfilter.mjs. Corrected a factual error in the assignment (trades column is available for all 20 pairs/full history, not just BTC/ETH/SOL/2026 -- that limitation only applies to buyVol/sellVol/maxTrade). Self-contained simulation replicating the live 4h anticipation-entry rule exactly (verified byte-for-byte against backtestMultiTF on all 20 pairs after fixing an entry/exit ordering bug the cross-check itself caught). Result: filtering high-intensity entries does not improve net R/t at any threshold in any regime -- CIs overlap throughout. Trade-intensity-as-filter is closed.",
-                       "commit":  "af0c640",
-                       "tests":  "7 passing"
-                   },
-                   {
-                       "ts":  "2026-07-30T20:28:00Z",
-                       "agent":  "verifier",
-                       "action":  "validate",
-                       "detail":  "Ran npm test (7/7 green). Deep-checked intensityfilter.mjs: perfect cross-check alignment to backtestMultiTF (byte-for-byte on all 20 pairs), 6,397 pooled entries with no n\u003c30 cells, no suspicious pattern (all thresholds flat-to-worse, CIs overlapping). Conclusion sound and well-supported. Order-flow research thread complete.",
-                       "commit":  "af0c640",
-                       "tests":  "7 passing"
-                   },
-                   {
-                       "ts":  "2026-07-30T20:28:00Z",
-                       "agent":  "verifier",
-                       "action":  "queue",
-                       "detail":  "Queued follow-on task: expand backtest.test.mjs to test stopMode \u0027atr\u0027, one-trade-per-level guard, and anticipate-mode gates. Transitioned status to ARCHITECT_PENDING for next loop iteration.",
-                       "commit":  "af0c640",
-                       "tests":  "7 passing"
-                   },
-                   {
-                       "ts":  "2026-07-30T20:29:41.727Z",
-                       "agent":  "architect",
-                       "action":  "route",
-                       "detail":  "Flipped ARCHITECT_PENDING -\u003e EXECUTOR_PENDING for Q1 (no design needed; would have wasted a run under a 2-run budget). Recorded completion of the extended flow backfill.",
-                       "commit":  "",
-                       "tests":  "7 passing"
-                   },
-                   {
-                       "ts":  "2026-07-30T20:38:22.230Z",
-                       "agent":  "architect",
-                       "action":  "pause",
-                       "detail":  "Human called pause. Committed Q1 test work left uncommitted by the Executor run (4 tests, all green). Disabled the scheduled loop. Verified on the extended 7-month flow data that the settled order-flow claim still holds: 0 of 36 cells survive BH-FDR and clear cost.",
-                       "commit":  "",
-                       "tests":  "11 passing"
-                   },
-                   {
-                       "ts":  "2026-07-30T20:40:06.784Z",
-                       "agent":  "architect",
-                       "action":  "prep-resume",
-                       "detail":  "Wrote resume_on_reset: preflight (expect 11 tests green), budget reset values, first task (Q2), re-enable step, and the invariants. Executor and Verifier can both start without human input.",
-                       "commit":  "",
-                       "tests":  "11 passing"
-                   },
-                   {
-                       "ts":  "2026-08-04T00:00:00Z",
-                       "agent":  "architect",
-                       "action":  "audit-and-route",
-                       "detail":  "Completed the initial read-only safety audit, recorded R-001 through R-007, moved P0 remediation ahead of research, and handed R-001 atomic persistence plus focused tests to the Executor. Baseline uses npm.cmd test because PowerShell blocks npm.ps1.",
-                       "commit":  "",
-                       "tests":  "13 passing (npm.cmd test)"
-                   },
                    {
                        "ts":  "2026-08-04T00:10:00Z",
                        "agent":  "architect",
@@ -2099,6 +2019,14 @@
                        "detail":  "TF1: added research-only pre-registered MA(50)/MA(200) daily long/cash crossover study with next-close execution, 0.9% round-trip cost, sealed symbol/recent holdout summaries, buy-and-hold comparator, and KILLED/CONTEXT-ONLY fail-closed verdicts.",
                        "commit":  "88e5f0e",
                        "tests":  "node --check ma-crossover-study.mjs ma-crossover-study.test.mjs; node --test ma-crossover-study.test.mjs: 4 passing; npm.cmd test: 136 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:40:52.9643412Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "TF1 verified. npm.cmd test passed 136/136; tests exercise next-close execution/no same-bar fill, 0.9% costed net returns, buy-and-hold comparator, symbol/recent holdout preservation, and KILLED/CONTEXT-ONLY fail-closed verdicts. Later assertion-only commit 293eb6c was included in the tested tip.",
+                       "commit":  "293eb6c",
+                       "tests":  "npm.cmd test: 136 passing"
                    }
                ],
     "budget":  {
