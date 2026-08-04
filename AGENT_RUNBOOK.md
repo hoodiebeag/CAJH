@@ -1,0 +1,61 @@
+# CAJH agent runbook
+
+This is a working aid for the Architect, Executor, and Verifier. `ARCHITECT_DIRECTIVE.md`
+and `AGENT_PROTOCOL.md` remain authoritative when anything differs.
+
+## Every run
+
+1. Read `.agent_state.json`; act only when `control.status` names your phase.
+2. Inspect `git status --short`. Preserve other agents' changes; do not reset, restore,
+   clean, stash, or amend their work.
+3. Run the Windows-safe baseline: `npm.cmd test`. PowerShell may reject `npm test` because
+   `npm.ps1` is disabled; that is an invocation issue, not a test failure.
+4. Read only the target file, direct dependencies, the queue item's acceptance criteria, and
+   the relevant test. Never enable `LIVE_TRADING`, call `!resume`, or use a funded account.
+
+## Executor handoff
+
+- Implement one queue item only. Use the smallest patch that satisfies every `done_when` and
+  `fail_closed` clause.
+- Add deterministic fixtures around the actual failure mode; mocks must be able to fail.
+- Run `npm.cmd test`; commit only your source/tests, then re-read state and update it last.
+- Set the item `verifying`, put `VERIFIER_PENDING` in control, clear notes, and append one
+  ledger record containing commit and test count.
+- If an invariant or dependency cannot be met, set `BLOCKED` with the concrete reason. Do not
+  silently broaden scope or bypass a safety gate.
+
+## Verifier handoff
+
+For the active item, independently check:
+
+1. Diff is limited to the declared scope (implementation, direct tests, necessary docs).
+2. `npm.cmd test` passes from the committed state.
+3. Each acceptance condition is asserted—not merely described in a comment.
+4. Failure paths fail closed: no inferred fill, stale quote, empty-position fallback, or
+   re-enabled entry state.
+5. Live default remains halted, no secret is logged, and no real Kraken/Discord action is
+   executed by a test.
+
+On pass: mark the register item fixed, mark its queue item done, select the first pending
+item whose dependencies are all done, set `EXECUTOR_PENDING`, and append a ledger record in
+the same state update. On failure: give a minimal reproduction and exact violated criterion,
+then return to `EXECUTOR_PENDING`.
+
+## P0 task notes
+
+| Task | Critical assertion |
+|---|---|
+| R-003 cooldown persistence | An unexpired level remains blocked after hydration; bad cooldown state blocks entries. |
+| R-008 confirmed sell | No `QueryOrders` terminal execution confirmation means no tracked position is removed. |
+| R-009 durable halt | `LIVE_TRADING` unset/false plus any Discord command cannot enable orders. |
+| R-002/R-004 health | Failed hydration, persistence, reconciliation, or stale heartbeat blocks entries while exit monitoring stays best-effort. |
+| R-005/R-013 validation | NaN, Infinity, zero, stale, unsupported, or unknown values cannot reach `AddOrder`. |
+| R-010 concurrency | A second unresolved scan/tick is skipped, never run concurrently. |
+
+## Research guardrails
+
+Research begins only after P0/P1 dependencies clear. Momentum, low-volatility, and classifier
+tasks use sealed whole-symbol holdouts, non-overlapping samples, costs, reproducible random
+seeds, and correctly scoped multiple-testing correction. A train-only or gross-only positive
+result is never an execution edge. A PASS remains research/paper-trade only; live promotion
+requires a human decision.
