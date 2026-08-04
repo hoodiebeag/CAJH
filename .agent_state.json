@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "strategy.js, scanner.js, backtest.js, commands.js, README.md, context.js",
-    "objective": "Establish a validated configuration inventory. Classify every setting as active-live, active-research, deprecated, or experimental-disconnected; eliminate misleading duplicates only when proof and tests show they are unused. Update README, Discord help, and AI context to executable truth.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "trader.js, scanner.js, monitor.js, order-validation.test.mjs, monitor.test.mjs",
+    "objective": "Correct the R-005 verification gap: introduce timestamped quote/balance snapshots with an explicit maximum age; revalidate fresh finite quote, available balance, and capital immediately before AddOrder; validate every hydrated trade before inserting it into monitor state. Add transport-boundary tests that prove AddOrder is never called for stale quote, invalid/insufficient balance, unknown metadata, or invalid hydration.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-007 implemented. npm.cmd test ran 47 tests and all passed; target JS syntax checks passed. README now classifies active live+research, active research-only, and environment controls. strategy.js comments mark research-only gates that scanner does not import. Discord help/status and AI context now state the live scanner truth: 1h/4h/1d anticipation, risk sizing, no live alignment/trend gate, software-polled exits. Existing unrelated commands.js reconcile hunk was intentionally left unstaged/uncommitted.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-04T11:21:11.628Z"
+    "notes": "R-007 verified: npm.cmd test ran 47 tests and all passed. Content check confirms README, strategy.js comments, Discord help/status, and AI context now classify live-vs-research config and state no live alignment/trend gate.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-04T11:21:40.424Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -162,7 +162,7 @@
       },
       {
         "id": "R-005B",
-        "state": "pending",
+        "state": "executing",
         "severity": "critical",
         "file": "trader.js, scanner.js, monitor.js, order-validation.test.mjs, monitor.test.mjs",
         "owner": "executor",
@@ -176,7 +176,7 @@
       },
       {
         "id": "R-007",
-        "state": "verifying",
+        "state": "done",
         "severity": "medium",
         "file": "strategy.js, scanner.js, backtest.js, commands.js, README.md, context.js",
         "owner": "executor",
@@ -1186,6 +1186,14 @@
       "detail": "Independent verifier review reopened R-005 as R-005B for missing freshness, hydration, and AddOrder-unreachability proof. Updated swarm runner so an independent Verifier agent, rather than a test-only DONE branch, validates and routes the next eligible Executor task without human intervention.",
       "commit": "",
       "tests": "python -m py_compile swarm-runner.py"
+    },
+    {
+      "ts": "2026-08-04T11:21:40.424Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "R-007 config inventory verified with npm.cmd test 47/47 and content check. Pulled R-005B into EXECUTOR_PENDING.",
+      "commit": "d0f1258",
+      "tests": "47 passing (npm.cmd test)"
     }
   ],
   "budget": {
