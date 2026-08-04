@@ -105,3 +105,6 @@ post-`close[t+1]` holding window and report the same observation denominator. A 
 non-finite, or incomplete forward-volatility window must be counted and visibly excluded;
 it may not become zero, Infinity, or a silently reduced headline sample. Use a fixture with
 one invalid forward-volatility asset-date and hand-computed valid raw/vol-adjusted returns.
+For `entryDelay = 1` and horizon `H`, assert exactly `H` daily returns from the entry close
+through the same exit close used by raw forward return; an `assetIndex + H` endpoint omits
+the final day and is incorrect.
