@@ -3,14 +3,14 @@
     "control":  {
                     "status":  "EXECUTOR_PENDING",
                     "target_file":  "context.js, context.test.mjs",
-                    "objective":  "Expose read-only positions, recent decision logs, effective config, halt/health state, and latest ROADMAP verdict in buildLiveContext with redaction and bounded size.",
+                    "objective":  "Add a dynamic mission/limitations digest from live config and ROADMAP. It must state this is supplied system context, not persistent self-awareness, and that the current strategy is not validated for autonomous live trading.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
-                    "iteration":  1,
+                    "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "Bug Report — C2 live context gate failed despite npm.cmd test passing 129/129.\n\nActual test run: npm.cmd test passed 129 tests, including the two C2 tests from a477c7d.\n\nWhy this is not a PASS:\n1. C2 done_when requires fixtures answer skipped-asset questions from recorded data, not invented rationale. buildLiveContext loads asset_decision records, but its recent-decision formatter does not handle event.type === \"asset_decision\". Those records fall through to `${event.at}: ${event.type}`; C1 records use `ts`, not `at`, so a skipped BTC decision becomes \"undefined: asset_decision\" instead of \"skipped BTC 1h; no signal\".\n2. The C2 tests only assert headings, bounded length, and no source text. They do not inject or create an asset_decision fixture and therefore do not prove the context can answer why an asset was skipped.\n3. Redaction is incomplete for dynamic runtime fields: halt reason / recent decision reason can be rendered directly. Add a small redaction helper and test with token/API-looking text in a recorded decision or halt reason.\n\nRequired fix: format asset_decision records using ts/at, symbol, timeframe, taken/skipped, and reason; add deterministic tests proving a recorded skipped asset appears with its reason and that absent decisions are not invented. Add a redaction fixture for dynamic context fields. Keep scope to context.js and context.test.mjs.",
+                    "notes":  "C2 verified with npm.cmd test 131/131. Pulled C3 into EXECUTOR_PENDING.",
                     "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T13:30:44.9525944Z"
+                    "updated_at":  "2026-08-04T13:33:26.1548966Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -610,7 +610,7 @@
                                           },
                                           {
                                               "id":  "C2",
-                                              "state":  "in_progress",
+                                              "state":  "done",
                                               "severity":  "low",
                                               "file":  "context.js, context.test.mjs",
                                               "owner":  "executor",
@@ -624,7 +624,7 @@
                                           },
                                           {
                                               "id":  "C3",
-                                              "state":  "pending",
+                                              "state":  "in_progress",
                                               "severity":  "low",
                                               "file":  "context.js, context.test.mjs",
                                               "owner":  "executor",
@@ -2005,6 +2005,22 @@
                        "detail":  "C2 rejected: npm.cmd test passed 129/129, but buildLiveContext does not format asset_decision records and tests do not prove skipped-asset answers come from recorded decision data.",
                        "commit":  "a477c7d",
                        "tests":  "npm.cmd test: 129 passing; semantic gate failed"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:32:18.7547607Z",
+                       "agent":  "executor",
+                       "action":  "fix",
+                       "detail":  "Fixed C2 recorded asset-decision formatting and dynamic context redaction after verifier failure.",
+                       "commit":  "b82ba05",
+                       "tests":  "node --check context.js context.test.mjs; npm.cmd test: 131 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:33:26.1548966Z",
+                       "agent":  "verifier",
+                       "action":  "validate-and-route",
+                       "detail":  "C2 live context verified after failback. npm.cmd test passed 131/131; focused tests prove asset_decision skipped-asset formatting from recorded data, absent decisions are not invented, dynamic token-shaped text is redacted, and source code is not exposed. Routed C3.",
+                       "commit":  "b82ba05",
+                       "tests":  "npm.cmd test: 131 passing"
                    }
                ],
     "budget":  {
