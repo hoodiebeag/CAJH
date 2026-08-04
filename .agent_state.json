@@ -1,16 +1,16 @@
 ﻿{
     "version":  2,
     "control":  {
-                    "status":  "EXECUTOR_PENDING",
+                    "status":  "VERIFIER_PENDING",
                     "target_file":  "ma-crossover-study.mjs, ma-crossover-study.test.mjs",
                     "objective":  "Research exactly one pre-registered long/cash daily MA crossover: MA(50) crossing above MA(200) enters at the next daily close; crossing below exits at the next daily close. Use the fixed stable-13 universe, preserve the existing sealed whole-symbol and recent-time holdouts, charge 0.9% round-trip cost for each completed position, and compare only against buy-and-hold. Do not short, sweep parameters, or connect this study to live code.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "C3 verified with npm.cmd test 132/132. Pulled TF1 into EXECUTOR_PENDING.",
-                    "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T13:35:31.5490967Z"
+                    "notes":  "TF1 implemented in 88e5f0e. npm.cmd test passed 136/136; focused tests prove t+1 execution/no same-bar fill, costed returns, buy-and-hold comparator, holdout preservation, and KILLED/CONTEXT-ONLY fail-closed verdicts.",
+                    "updated_by":  "executor",
+                    "updated_at":  "2026-08-04T13:39:02.9075854Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -696,7 +696,7 @@
                                           },
                                           {
                                               "id":  "TF1",
-                                              "state":  "in_progress",
+                                              "state":  "verifying",
                                               "severity":  "medium",
                                               "file":  "ma-crossover-study.mjs, ma-crossover-study.test.mjs",
                                               "owner":  "executor",
@@ -777,7 +777,9 @@
                                               "file":  "agent-state-validator.ps1, agent-orchestrator.ps1",
                                               "owner":  "executor",
                                               "allow_live_edit":  false,
-                                              "depends_on":  [],
+                                              "depends_on":  [
+
+                                                             ],
                                               "task":  "Add a read-only UTF-8 state preflight for the autonomous loop. It must validate JSON shape, a single active writer/lease, control target/objective/test command, required queue fields (id, state, file, owner, allow_live_edit, task, done_when, fail_closed), known dependencies without cycles, and that frozen paths cannot be targeted unless allow_live_edit is true. The orchestrator must log and refuse dispatch on a failed preflight; it must not rewrite state while validating.",
                                               "done_when":  "A PowerShell fixture or self-test accepts the current valid state and rejects malformed JSON, duplicate active ownership, unknown/cyclic dependencies, an incomplete task, and a frozen-path task lacking permission; `powershell -NoProfile -ExecutionPolicy Bypass -File .\\agent-state-validator.ps1 -StatePath .\\.agent_state.json` succeeds on the real state; npm.cmd test remains green.",
                                               "fail_closed":  "Invalid or ambiguous control state dispatches no agent and logs the exact rejection reason.",
@@ -2089,6 +2091,14 @@
                        "detail":  "Queued C1B to correct the independently reproduced non-blocking decision-log safety gap, A1 for fail-closed autonomous-state preflight, and V1 for a deterministic research-verdict evidence gate. All have exact scope, tests, and failure modes.",
                        "commit":  null,
                        "tests":  "State JSON parsed; no executor source files modified"
+                   },
+                   {
+                       "ts":  "2026-08-04T13:39:02.9075854Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "TF1: added research-only pre-registered MA(50)/MA(200) daily long/cash crossover study with next-close execution, 0.9% round-trip cost, sealed symbol/recent holdout summaries, buy-and-hold comparator, and KILLED/CONTEXT-ONLY fail-closed verdicts.",
+                       "commit":  "88e5f0e",
+                       "tests":  "node --check ma-crossover-study.mjs ma-crossover-study.test.mjs; node --test ma-crossover-study.test.mjs: 4 passing; npm.cmd test: 136 passing"
                    }
                ],
     "budget":  {
