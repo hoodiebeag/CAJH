@@ -441,8 +441,6 @@ export function scoreClassifierHoldouts(rows, {
   };
 }
 
-export const scoreSealedHoldouts = scoreClassifierHoldouts;
-
 export function standardizedCoefficientReadout(model, columns = CLASSIFIER_COLUMNS) {
   assertScorableModel(model);
   return columns.map((column, index) => ({ column, coefficient: model.weights[index] ?? 0 }))
