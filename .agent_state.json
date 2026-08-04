@@ -1,16 +1,16 @@
 {
     "version":  2,
     "control":  {
-                    "status":  "EXECUTOR_PENDING",
+                    "status":  "VERIFIER_PENDING",
                     "target_file":  "momentum.mjs, momentum.test.mjs",
                     "objective":  "Build sealed whole-symbol primary holdout plus recent-month secondary holdout. Freeze stable-13 primary; run LxH exploratory grid only on train, non-overlapping at each H, with one BH-FDR family across grid/transforms/regimes.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
                     "iteration":  0,
                     "max_iterations":  6,
-                    "notes":  "M4 verified with npm.cmd test 97/97. Pulled M5 into EXECUTOR_PENDING.",
-                    "updated_by":  "verifier",
-                    "updated_at":  "2026-08-04T12:07:29.7298123Z"
+                    "notes":  "M5 implemented in commit 5cf1220. npm.cmd test passed 100/100, including sealed holdout/FDR tests.",
+                    "updated_by":  "executor",
+                    "updated_at":  "2026-08-04T12:09:42.2328674Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -421,7 +421,7 @@
                                           },
                                           {
                                               "id":  "M5",
-                                              "state":  "in_progress",
+                                              "state":  "verifying",
                                               "severity":  "medium",
                                               "file":  "momentum.mjs, momentum.test.mjs",
                                               "owner":  "executor",
@@ -1697,6 +1697,14 @@
                        "detail":  "M4 regime overlay verified. npm.cmd test passed 97/97; focused test confirms BTC-vs-200MA tags produce regime IC/count summaries without changing full-sample mean IC.",
                        "commit":  "1677415",
                        "tests":  "npm.cmd test: 97 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:09:42.2328674Z",
+                       "agent":  "executor",
+                       "action":  "implement",
+                       "detail":  "M5: added sealed stable-universe momentum study with train/recent/symbol/Q1 splits, non-overlapping LxH exploratory grid, and one BH-FDR family across grid/transforms/regimes.",
+                       "commit":  "5cf1220",
+                       "tests":  "node --check momentum.mjs momentum.test.mjs; npm.cmd test: 100 passing"
                    }
                ],
     "budget":  {
