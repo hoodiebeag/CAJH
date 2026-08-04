@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "researchlab.mjs, research-provenance.test.mjs",
     "objective": "Add immutable SHA-256 research-input provenance for candle content, universe, parameters/spec, and code revision. Invalidate caches by content rather than only mtime/size and attach fingerprints to saved run manifests.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "DQ2 verified: npm.cmd test ran 86 tests and all passed. research-data.test.mjs directly covers sorted resampling, incomplete current-bucket exclusion, explicit gap allow/error policy, and corrupt research-cache rebuild. Pulled next eligible item into EXECUTOR_PENDING.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:52:39.274Z"
+    "notes": "DQ3 executor handoff: added SHA-256 research provenance for candle content, normalized universe, parameters, and code revision; research caches now invalidate by candle content hash and corrupt/stale caches rebuild. npm.cmd test passed 89/89; node --check researchlab.mjs research-provenance.test.mjs passed.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:55:04.031Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -333,7 +333,7 @@
       },
       {
         "id": "DQ3",
-        "state": "executing",
+        "state": "verifying",
         "severity": "medium",
         "file": "researchlab.mjs, research-provenance.test.mjs",
         "owner": "executor",
@@ -1593,6 +1593,14 @@
       "detail": "DQ2 quality-aware resampling/cache behavior verified with npm.cmd test 86/86 and focused fixtures. Pulled DQ3 into EXECUTOR_PENDING.",
       "commit": "cfd3a83",
       "tests": "86 passing (npm.cmd test); node --check data.js researchlab.mjs research-data.test.mjs"
+    },
+    {
+      "ts": "2026-08-04T11:55:04.031Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "DQ3: added immutable SHA-256 research provenance for candle content, universe, parameters, and code revision; caches invalidate by content hash and experiment records carry provenance.",
+      "commit": "ba7ff98",
+      "tests": "89 passing (npm.cmd test); node --check researchlab.mjs research-provenance.test.mjs"
     }
   ],
   "budget": {
