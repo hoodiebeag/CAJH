@@ -79,3 +79,12 @@ and top-5 selections, a universe baseline for every reported spread, exact turno
 successive holdings, and the stated round-trip cost deduction. Missing next-bar prices must
 exclude the observation. A gross-only or same-bar economic result is fail-closed research
 output, never an execution conclusion.
+
+### M7 verdict gate
+
+Reject any `PASS` or “holdout-confirmed” momentum verdict unless the saved harness output
+contains a non-empty, minimum-cross-section whole-symbol holdout score. For the current
+stable-13 data, an unavailable whole-symbol holdout must be stated with its mathematical
+reason and makes the verdict `CONTEXT-ONLY` (or an explicitly blocked limitation), regardless
+of train IC, FDR, or gross/net economic results. Never turn an unavailable test into a null
+result or evidence of an edge.
