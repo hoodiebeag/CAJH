@@ -1,16 +1,16 @@
 ﻿{
     "version":  2,
     "control":  {
-                    "status":  "VERIFIER_PENDING",
+                    "status":  "EXECUTOR_PENDING",
                     "target_file":  "classifier.mjs, classifier.test.mjs",
                     "objective":  "Implement deterministic, L2-regularized, class-weighted logistic regression and Mann-Whitney AUC in plain JS; choose lambda by inner train-only folds. Do not add trees, boosting, or neural models.",
                     "allow_live_edit":  false,
                     "test_command":  "npm.cmd test",
-                    "iteration":  0,
+                    "iteration":  1,
                     "max_iterations":  6,
-                    "notes":  "P2 implemented in c49b4a9. npm.cmd test passed 116/116, including P2 tests for Mann-Whitney AUC ties, explicit class weights, deterministic planted-signal logistic fit, and train-only deterministic inner lambda folds.",
-                    "updated_by":  "executor",
-                    "updated_at":  "2026-08-04T12:30:03.2387247Z"
+                    "notes":  "Bug Report — P2 logistic-model gate failed despite npm.cmd test passing 116/116.\n\nActual test run: npm.cmd test passed 116 tests, including the four P2 tests added in c49b4a9.\n\nWhy this is not a PASS:\n1. P2 done_when requires a planted synthetic signal to produce AUC \u003e 0.5 and a null/noise fixture to be near 0.5. Current tests never compute model AUC on either a planted-signal fixture or a null fixture; they only assert monotonic probabilities on four separable rows.\n2. P2 fail_closed requires any non-convergent fit to be reported invalid rather than scored. Current fitLogisticRegression can return converged:false, and chooseLambdaByCv still computes validation AUC/logloss and returns a final model without rejecting non-convergence.\n3. P2 gate requires handoff evidence with declared lambda grid, fold count, selected lambda, convergence/iteration status, class weights, and Mann-Whitney AUC on planted-signal and null fixtures. Current code/tests do not expose or assert enough of that evidence.\n\nRequired fix: make non-convergence a hard invalid condition for scoring/tuning or explicitly throw from the scoring path; add deterministic hand-computed/fixture assertions that planted-signal AUC \u003e 0.5 and null fixture AUC is near 0.5; preserve plain JS L2 logistic regression only.",
+                    "updated_by":  "verifier",
+                    "updated_at":  "2026-08-04T12:30:43.9570501Z"
                 },
     "blackboard":  {
                        "repo_purpose":  "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -539,7 +539,7 @@
                                           },
                                           {
                                               "id":  "P2",
-                                              "state":  "verifying",
+                                              "state":  "in_progress",
                                               "severity":  "medium",
                                               "file":  "classifier.mjs, classifier.test.mjs",
                                               "owner":  "executor",
@@ -1833,6 +1833,14 @@
                        "detail":  "P2: added deterministic plain-JS L2 logistic regression with balanced class weights, Mann-Whitney AUC with tie handling, deterministic inner-fold lambda selection, and focused planted-signal/class-weight/fold tests.",
                        "commit":  "c49b4a9",
                        "tests":  "node --check classifier.mjs; node --check classifier.test.mjs; npm.cmd test: 116 passing"
+                   },
+                   {
+                       "ts":  "2026-08-04T12:30:43.9570501Z",
+                       "agent":  "verifier",
+                       "action":  "failback",
+                       "detail":  "P2 rejected: npm.cmd test passed 116/116, but tests do not assert planted-signal/null AUC and the implementation can score non-converged logistic fits, violating fail-closed criteria.",
+                       "commit":  "0ad6a6c",
+                       "tests":  "npm.cmd test: 116 passing; semantic gate failed"
                    }
                ],
     "budget":  {
