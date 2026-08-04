@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "bot.js, bot-lifecycle.test.mjs",
-    "objective": "Handle Discord lifecycle failures: attach sanitized client error/shardError listeners, handle client.login rejection, and add a bounded ready timeout. Do not start monitor or scheduled scans unless Discord reaches ready state.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "bot.js, bot-scheduler.test.mjs",
+    "objective": "Contain scheduled scan and config-persistence failures inside runScheduledScan. Record a failed scheduled-run health result; never update lastScanTime after failure or create an unhandled cron rejection.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-014 implemented. npm.cmd test ran 68 tests and all passed; bot.js and bot-lifecycle.test.mjs syntax checks passed. Added sanitized error formatting, Discord error/shardError listeners, bounded ready timeout, login rejection fatal routing, and CAJH_BOT_NO_LOGIN test guard. Monitor/schedules still start only inside the existing clientReady handler.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-04T11:32:01.357Z"
+    "notes": "R-014 verified: npm.cmd test ran 68 tests and all passed. Tests cover sanitized errors, bounded Discord ready timeout, clientReady clearing, and login rejection fatal routing. Monitor and cron setup remain inside clientReady only.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-04T11:32:35.274Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -235,7 +235,7 @@
       },
       {
         "id": "R-014",
-        "state": "verifying",
+        "state": "done",
         "severity": "high",
         "file": "bot.js, bot-lifecycle.test.mjs",
         "owner": "executor",
@@ -249,7 +249,7 @@
       },
       {
         "id": "R-015",
-        "state": "pending",
+        "state": "executing",
         "severity": "medium",
         "file": "bot.js, bot-scheduler.test.mjs",
         "owner": "executor",
@@ -1489,6 +1489,14 @@
       "detail": "R-014: added Discord lifecycle guards, sanitized client/shard error handling, login rejection fatal routing, and bounded ready timeout without starting monitor/schedules before clientReady.",
       "commit": "6c19469",
       "tests": "68 passing (npm.cmd test); node --check bot.js bot-lifecycle.test.mjs"
+    },
+    {
+      "ts": "2026-08-04T11:32:35.274Z",
+      "agent": "verifier",
+      "action": "validate-and-route",
+      "detail": "R-014 Discord lifecycle verified with npm.cmd test 68/68 and startup placement check. Pulled R-015 into EXECUTOR_PENDING.",
+      "commit": "5ea27df",
+      "tests": "68 passing (npm.cmd test)"
     }
   ],
   "budget": {
