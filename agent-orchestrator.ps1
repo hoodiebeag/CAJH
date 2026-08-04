@@ -53,8 +53,10 @@ function Invoke-AgentPhase([string]$Prompt, [string]$Status) {
 
 # This coordinator, not any agent session, owns the five-minute wait loop.
 $lock = $null
+$ownsLock = $false
 try {
     $lock = [System.IO.File]::Open($LockPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    $ownsLock = $true
     Write-CoordinatorLog "Started; polling every $PollSeconds seconds."
     do {
         $state = Get-AgentState
@@ -71,5 +73,5 @@ try {
     exit 1
 } finally {
     if ($lock) { $lock.Dispose() }
-    Remove-Item -LiteralPath $LockPath -Force -ErrorAction SilentlyContinue
+    if ($ownsLock) { Remove-Item -LiteralPath $LockPath -Force -ErrorAction SilentlyContinue }
 }
