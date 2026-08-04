@@ -206,12 +206,37 @@ function scoreRegimeSlices(rows, scoreOptions) {
   return out;
 }
 
+export function applySizeLiquidityControl(universe, controls = {}, {
+  minDollarVolume = 0,
+  excludeLargestN = 0
+} = {}) {
+  const largest = new Set([...universe]
+    .map((asset) => ({ asset, size: controls[asset]?.size || 0 }))
+    .sort((a, b) => b.size - a.size)
+    .slice(0, excludeLargestN)
+    .map((x) => x.asset));
+  const kept = [];
+  const excluded = [];
+  for (const asset of universe) {
+    const reason = largest.has(asset)
+      ? "largest"
+      : (controls[asset]?.dollarVolume || 0) < minDollarVolume ? "illiquid" : null;
+    if (reason) excluded.push({ asset, reason });
+    else kept.push(asset);
+  }
+  return { universe: kept, excluded, minDollarVolume, excludeLargestN };
+}
+
 export function runSealedMomentumPanelStudy(series, {
   primaryUniverse = STABLE_13,
   symbolHoldoutUniverse = null,
   lookbacks = [14, 30, 60, 90],
   horizons = [7, 14, 30],
   transforms = ["raw", "btcResidual90", "volNormalized"],
+  rankModes = ["return"],
+  liquidityControls = null,
+  liquidityControl = {},
+  roundTripCost = 0.009,
   minAssets = 8,
   recentHoldoutDates = 4,
   permutations = 1000,
@@ -219,7 +244,11 @@ export function runSealedMomentumPanelStudy(series, {
   seed = 20260305
 } = {}) {
   const scoreOptions = { minAssets, permutations, bootstrapIterations, seed };
-  const primary = buildMomentumPanel(series, { universe: primaryUniverse, minAssets, tagRegime: true });
+  const control = liquidityControls
+    ? applySizeLiquidityControl(primaryUniverse, liquidityControls, liquidityControl)
+    : { universe: [...primaryUniverse], excluded: [], minDollarVolume: 0, excludeLargestN: 0 };
+  const controlledUniverse = control.universe;
+  const primary = buildMomentumPanel(series, { universe: controlledUniverse, minAssets, tagRegime: true });
   const split = splitRecentRows(primary.rows, recentHoldoutDates);
   const available = [...series.keys()];
   const holdoutUniverse = symbolHoldoutUniverse || available.filter((asset) => !primaryUniverse.includes(asset));
@@ -227,21 +256,44 @@ export function runSealedMomentumPanelStudy(series, {
     ? buildMomentumPanel(series, { universe: holdoutUniverse, minAssets, tagRegime: true }).rows
     : [];
   const exploratory = [];
+  const byRank = {};
 
-  for (const lookback of lookbacks) for (const horizon of horizons) for (const transform of transforms) {
+  for (const rank of rankModes) {
+    const ranked = buildMomentumPanel(series, {
+      universe: controlledUniverse,
+      minAssets,
+      rank,
+      tagRegime: true,
+      entryDelay: 1,
+      includeForwardRiskAdjusted: true
+    });
+    const rankedSplit = splitRecentRows(ranked.rows, recentHoldoutDates);
+    byRank[rank] = {
+      raw: scoreMomentumPanelRows(rankedSplit.train, scoreOptions),
+      riskAdjusted: scoreMomentumPanelRows(
+        rankedSplit.train.filter((r) => Number.isFinite(r.fwdRiskAdjR)).map((r) => ({ ...r, fwdR: r.fwdRiskAdjR })),
+        scoreOptions
+      ),
+      economics: economicMomentumViews(rankedSplit.train, { minAssets, roundTripCost }),
+      recentHoldout: scoreMomentumPanelRows(rankedSplit.recentHoldout, scoreOptions)
+    };
+  }
+
+  for (const lookback of lookbacks) for (const horizon of horizons) for (const transform of transforms) for (const rank of rankModes) {
     const rows = buildMomentumPanel(series, {
-      universe: primaryUniverse,
+      universe: controlledUniverse,
       lookback,
       horizon,
       step: horizon,
       minAssets,
       transform,
+      rank,
       tagRegime: true
     }).rows;
     const trainRows = splitRecentRows(rows, recentHoldoutDates).train;
     const slices = scoreRegimeSlices(trainRows, scoreOptions);
     for (const [regimeName, scoreRow] of Object.entries(slices)) {
-      exploratory.push({ lookback, horizon, transform, regime: regimeName, ...scoreRow });
+      exploratory.push({ lookback, horizon, transform, rank, regime: regimeName, ...scoreRow });
     }
   }
 
@@ -251,6 +303,8 @@ export function runSealedMomentumPanelStudy(series, {
   for (const entry of fdrRows) entry.row.q = entry.q;
   return {
     primaryUniverse: [...primaryUniverse],
+    controlledUniverse: [...controlledUniverse],
+    liquidityControl: control,
     symbolHoldoutUniverse: [...holdoutUniverse],
     primary: {
       train: scoreMomentumPanelRows(split.train, scoreOptions),
@@ -258,6 +312,7 @@ export function runSealedMomentumPanelStudy(series, {
       symbolHoldout: scoreMomentumPanelRows(symbolHoldoutRows, scoreOptions),
       q1Only: scoreMomentumPanelRows(primary.q1Only, scoreOptions)
     },
+    byRank,
     holdoutDates: split.recentHoldoutDates,
     exploratory
   };
