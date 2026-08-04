@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "VERIFIER_PENDING",
     "target_file": "strategy.js, scanner.js, backtest.js, commands.js, README.md, context.js",
     "objective": "Establish a validated configuration inventory. Classify every setting as active-live, active-research, deprecated, or experimental-disconnected; eliminate misleading duplicates only when proof and tests show they are unused. Update README, Discord help, and AI context to executable truth.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "R-006 verified: npm.cmd test ran 47 tests and all passed. money-path.test.mjs exercises eligibility, resume opt-in, single-flight overlap, structural cooldown expiry, reconciliation, confirmed full/partial/ambiguous exits, and exact 10% daily drawdown halt. PARITY_MATRIX.md classifies remaining untestable API/timing seams as BLOCKED/FOLLOW-ON rather than safe.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-04T11:18:39.922Z"
+    "notes": "R-007 implemented. npm.cmd test ran 47 tests and all passed; target JS syntax checks passed. README now classifies active live+research, active research-only, and environment controls. strategy.js comments mark research-only gates that scanner does not import. Discord help/status and AI context now state the live scanner truth: 1h/4h/1d anticipation, risk sizing, no live alignment/trend gate, software-polled exits. Existing unrelated commands.js reconcile hunk was intentionally left unstaged/uncommitted.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-04T11:21:11.628Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -161,8 +161,22 @@
         "fail_closed": "Any uncovered or unclassified money-path difference is recorded as a blocker, not assumed safe."
       },
       {
+        "id": "R-005B",
+        "state": "pending",
+        "severity": "critical",
+        "file": "trader.js, scanner.js, monitor.js, order-validation.test.mjs, monitor.test.mjs",
+        "owner": "executor",
+        "allow_live_edit": true,
+        "depends_on": [
+          "R-006"
+        ],
+        "task": "Correct the R-005 verification gap: introduce timestamped quote/balance snapshots with an explicit maximum age; revalidate fresh finite quote, available balance, and capital immediately before AddOrder; validate every hydrated trade before inserting it into monitor state. Add transport-boundary tests that prove AddOrder is never called for stale quote, invalid/insufficient balance, unknown metadata, or invalid hydration.",
+        "done_when": "Tests stub the Kraken boundary and prove every invalid/stale/unknown input rejects before AddOrder; valid price/volume rounding remains unchanged; invalid persisted trades produce unsafe monitor health rather than tracked positions; npm.cmd test is green.",
+        "fail_closed": "No cached, stale, malformed, or unverified order-critical fact can become a live order or monitored position."
+      },
+      {
         "id": "R-007",
-        "state": "executing",
+        "state": "verifying",
         "severity": "medium",
         "file": "strategy.js, scanner.js, backtest.js, commands.js, README.md, context.js",
         "owner": "executor",
@@ -657,23 +671,23 @@
       "id": "R-005",
       "category": "correctness",
       "severity": "high",
-      "evidence": "scanner.js:185-240 calculates and submits an order with limited finite-value validation; trader.js:216-244 accepts price/capital without explicit finite/positive preconditions.",
+      "evidence": "R-005 initially added primitive validation, but independent review found no timestamped quote/balance freshness contract, no immediate pre-AddOrder revalidation, no hydration validation, and no transport-boundary proof that AddOrder is unreachable on rejection.",
       "risk": "Unexpected API or arithmetic values can reach AddOrder or register an invalid stop/target state.",
       "affected_paths": [
         "scanner.js",
         "trader.js",
         "monitor.js"
       ],
-      "proposed_resolution": "Add a shared fail-closed validation boundary for finite positive price, capital, volume, risk, stop, and target before submission or registration, covered by hand-computed tests.",
+      "proposed_resolution": "R-005B adds timestamped decision snapshots, immediate pre-order revalidation, hydrated-trade validation, and mocked AddOrder-unreachability tests alongside primitive field validation.",
       "requires_design": true,
       "requires_live_edit": true,
       "dependencies": [
-        "R-002"
+        "R-006"
       ],
       "acceptance_criteria": [
-        "No non-finite, non-positive, unsupported, or stop-at/above-entry long reaches AddOrder or tracked state."
+        "No non-finite, non-positive, unsupported, stale, or unverified order fact reaches AddOrder or tracked state."
       ],
-      "state": "discovered"
+      "state": "queued"
     },
     {
       "id": "R-006",
@@ -1156,6 +1170,14 @@
       "detail": "R-006 money-path parity verified with npm.cmd test 47/47; tests exercise the deterministic money-path seams and matrix explicitly routes remaining API/timing blockers. Pulled R-007 into EXECUTOR_PENDING.",
       "commit": "a0ff994",
       "tests": "47 passing (npm.cmd test)"
+    },
+    {
+      "ts": "2026-08-04T11:21:11.628Z",
+      "agent": "executor",
+      "action": "implement",
+      "detail": "R-007: documented validated configuration inventory and corrected README, Discord help/status, AI context, and strategy comments to distinguish live scanner settings from research-only gates.",
+      "commit": "5ca2120",
+      "tests": "47 passing (npm.cmd test); node --check target JS files"
     }
   ],
   "budget": {
