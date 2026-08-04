@@ -404,16 +404,20 @@ back to 2026-01-01.
 Working rule going forward: a signal must clear FDR **and** exceed cost. Neither alone is
 sufficient, and this run demonstrates why each check catches what the other misses.
 
-### Momentum M7: KILLED on the sealed harness
+### Momentum M7: KILLED on available train/time evidence; symbol arm unavailable
 
-**Pre-registration (frozen before holdout):** L=30d · H=7d · rebalance=weekly · primary
-transform = **residual (T2)**, β-window 90d · holdout = time plus whole-symbol (recent:
-180d; whole-symbol: ATOM/DOT/LTC). Universe stable-13:
+**Configured specification:** L=30d · H=7d · rebalance=weekly · primary transform =
+**residual (T2)**, β-window 90d · holdout = time plus whole-symbol (recent: 180d;
+whole-symbol: ATOM/DOT/LTC). Universe stable-13:
 [BTC, ETH, SOL, XRP, ADA, DOGE, AVAX, LINK, DOT, LTC, BCH, ATOM, XLM]. Q1-2026-only
 excluded early: [NEAR, FIL, APT, INJ, TAO, TIA, SUI].
 
+**Pre-registration deviation:** M5 originally recorded ATOM/BCH/XLM as the symbol split;
+B1 later substituted DOT/LTC after inspecting stored-symbol availability. No whole-symbol
+statistic from either split is used as confirmation or as a headline result.
+
 The current harness was run with 1,000 date permutations and the stored stable-13 data.
-The whole-symbol arm is not estimable here: five held symbols are below the registered
+The whole-symbol arm is not estimable here: three held symbols are below the registered
 eight-asset cross-sectional minimum, so it is reported as unavailable rather than
 zero-filled.
 
@@ -452,8 +456,9 @@ uncorrected residual point estimate was 0.3433 at L=14/H=30, p=0.1019.
 | top-3 harvest | -0.8410% | -1.0728% |
 | top-5 harvest | -0.1319% | -0.3447% (turnover 23.64%) |
 
-**VERDICT: KILLED** — deciding numbers: train p=0.5375, recent-holdout IC=-0.1026,
-and net top-tercile spread=-1.0728%.
+**VERDICT: KILLED** — deciding available evidence: train p=0.5375, recent-holdout
+IC=-0.1026, and net top-tercile spread=-1.0728%. This is not a fully sealed
+time-plus-symbol confirmation because the whole-symbol arm is unavailable.
 
 **Survivorship caveat:** the universe is survivors-only; this weakens any positive result,
 while the present null/sign reversal is conservative evidence against a robust edge.
