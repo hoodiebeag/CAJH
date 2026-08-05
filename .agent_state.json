@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "rsi-reversion-study.mjs, rsi-reversion-study.test.mjs, strategy-registry.mjs, strategy-registry.test.mjs, scanner.js",
-    "objective": "Verify TWO completed items: (1) MR1 RSI mean-reversion study, now GREEN - the iteration-1 failure is resolved; (2) the strategy router (SEL1+SEL2), implemented directly by the Architect, which edits scanner.js (FROZEN).",
-    "allow_live_edit": true,
+    "status": "EXECUTOR_PENDING",
+    "target_file": "rsi-reversion-study.test.mjs",
+    "objective": "MR1-COV: add a coverage test asserting reversionTrades() opens a SECOND trade after a SECOND, later, non-overlapping signal (currently only same-bar re-entry is covered). Use two clearly separated crossings; assert exactly 2 trades and that the second entryIndex is strictly greater than the first exitIndex.",
+    "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "ARCHITECT CORRECTION - the previous control block was STALE. It reported 141 pass / 1 fail and had the Executor debugging \"MR1 does not scan for a new entry while a position is open\". That failure is resolved: the full suite is 149/149 green and rsi-reversion-study.test.mjs is 6/6. Left alone, the Executor would have burned a cycle chasing a bug that no longer exists.\n\nARCHITECT CHECK ALREADY DONE (do not redo): the failing test was REPLACED by a narrower one (\"does not open a second position on the same bar the first one exits\"), which is the classic shape of turning red green by weakening the assertion. I traced reversionTrades(): on exit it sets position=null then continue, so bar i is skipped but bar i+1 resumes scanning - sequential trades ARE supported. Confirmed empirically on real data: XBT 9 trades, ETH 10, SOL 7. No hidden bug; the narrower test is legitimate.\n\nVERIFIER (a) MR1: the real gap is that NO test asserts a second, later signal opens a second trade. Real data proves it works, but a regression silently capping the study at one trade per symbol would corrupt every statistic and still pass the suite. Queued as MR1-COV.\n\nVERIFIER (b) ROUTER on a frozen path: confirm riskMultiplier is clamped to [0,1] and tops out at 0.5 today so it can only REDUCE size; confirm no existing gate (stop bands, position cap, min order size, validateOrderRequest, drawdown halt, level cooldown) was weakened or reordered; confirm cajh still TRADES (selectStrategy never returns null; uncovered cells fall back at 0.25x); confirm a KILLED strategy can never be selected; confirm expectedEdge is recorded unrounded and reads negative today.",
-    "updated_by": "architect",
-    "updated_at": "2026-08-05T19:03:21.422Z"
+    "notes": "MR1 and the strategy router both verified clean this pass -- no corrections needed, see ledger. Router stays live-safe: KILLED entries are unselectable, cajh always trades, sizing only ever shrinks via a [0,1]-clamped multiplier ahead of all pre-existing order gates. Next up per work_queue: MR1-COV (this handoff, no dependencies), then PWR1 (data-only, unblocks PWR2/3/4).",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-05T19:04:37.597Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -99,6 +99,14 @@
       "agent": "architect",
       "action": "restore+correct",
       "detail": "Rebuilt state from ca490e4 after the live file was reduced to {status, notes}. Corrected stale control (MR1 is green: 149/149 suite, 6/6 file). Traced the replaced concurrency test - reversionTrades supports sequential positions (XBT 9 / ETH 10 / SOL 7 on real data), so it hides no bug; queued MR1-COV for the genuine coverage gap. Restored work_queue with MR1-COV + PWR1-4. Implemented and committed the strategy router.",
+      "commit": "fbb585d",
+      "tests": "149 passing"
+    },
+    {
+      "ts": "2026-08-05T19:04:37.597Z",
+      "agent": "verifier",
+      "action": "verify",
+      "detail": "Verified both items the architect handed off. (1) MR1: npm.cmd test is 149/149 green (rsi-reversion-study.test.mjs 6/6); confirmed independently, not assumed. (2) Strategy router (SEL1/SEL2, commit fbb585d) on frozen scanner.js: read the actual diff. selectStrategy() filters out KILLED entries before ranking, always returns a strategy (falls back to the RELATIVE daily-trend-gated-atr default, never null/blocks), riskMultiplier is derived from evidence tier (validated 1.0 / relative 0.5 / unknown 0.25) and clamped to [0,1] again at the call site in scanner.js, and expectedEdge is the raw recorded value (negative today), not rounded. In scanner.js the multiplier only scales the numerator of the existing risk-based capital formula (freeCash * RISK_PCT * riskMultiplier / stopFrac) before MAX_POSITION_PCT cap, validateOrderRequest, and every other existing gate (stop bands, min order size, drawdown halt, level cooldown) -- none of those were touched or reordered. Agree with the architects trace: reversionTrades() does not cap at one trade per symbol (position=null then continue resumes scanning at i+1), so the narrowed concurrency test hides no bug; MR1-COV is the correct follow-up, not a re-open of MR1. No corrections needed to either item.",
       "commit": "fbb585d",
       "tests": "149 passing"
     }
