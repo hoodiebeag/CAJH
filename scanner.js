@@ -27,6 +27,7 @@ import {
   requireMonitorHealthForEntry, createSingleFlight
 } from "./monitor.js";
 import { saveChart, symbolToKrakenId, loadLevelCooldownsResult, saveLevelCooldowns, appendDecisionEvent } from "./storage.js";
+import { selectStrategy } from "./strategy-registry.mjs";
 import * as logger from './logger.js';
 
 const BEAG = () => process.env.BEAG_USER_ID || "795521432783552552";
@@ -198,7 +199,7 @@ export function resetLevelCooldownsForTests() {
   levelCooldownsUnsafe = false;
 }
 
-async function proposeBuy(symbol, buy, channel) {
+async function proposeBuy(symbol, buy, channel, regimeLabel = null) {
   if (pendingBuys.has(symbol)) {
     const result = { traded: false, reason: "a buy for this symbol is already in flight" };
     return result;
@@ -206,7 +207,7 @@ async function proposeBuy(symbol, buy, channel) {
   pendingBuys.add(symbol);
   let result;
   try {
-    result = await proposeBuyLocked(symbol, buy, channel);
+    result = await proposeBuyLocked(symbol, buy, channel, regimeLabel);
     return result;
   } catch (err) {
     result = { traded: false, reason: `proposal error: ${err.message}` };
@@ -216,7 +217,7 @@ async function proposeBuy(symbol, buy, channel) {
   }
 }
 
-async function proposeBuyLocked(symbol, buy, channel) {
+async function proposeBuyLocked(symbol, buy, channel, regimeLabel = null) {
   if (!isTradingEnabled()) return { traded: false, reason: "trading is halted (!resume to enable)" };
   const monitorGate = requireMonitorHealthForEntry();
   if (!monitorGate.ok) return { traded: false, reason: `entry blocked: ${monitorGate.reason}` };
@@ -277,7 +278,16 @@ async function proposeBuyLocked(symbol, buy, channel) {
   if (!Number.isFinite(freeCash) || freeCash <= 0) {
     return { traded: false, reason: "entry blocked: account balance must be finite and positive" };
   }
-  const capital  = Math.min(freeCash * MAX_POSITION_PCT, (freeCash * RISK_PCT) / stopFrac);
+  // Strategy registry decides HOW to take this entry, not whether. It returns the
+  // best-measured rule for this (asset, regime, timeframe) plus a risk multiplier that
+  // encodes how much evidence backs it: validated 1.0, merely-relative 0.5, uncovered
+  // 0.25. Confidence is expressed as SIZE, never as permission — cajh still trades, it
+  // just commits less where the evidence is thinner. The multiplier is <= 1 by
+  // construction, so this can only ever reduce exposure below the risk-based size.
+  const routed = selectStrategy({ asset: symbol, regime: regimeLabel, timeframe: buy.tf });
+  const riskMultiplier = Math.min(1, Math.max(0, routed.riskMultiplier));
+  const capital  = Math.min(freeCash * MAX_POSITION_PCT,
+                            (freeCash * RISK_PCT * riskMultiplier) / stopFrac);
   try {
     validateOrderRequest({ symbol, side: "buy", price: entry, capital });
   } catch (err) {
@@ -309,6 +319,14 @@ async function proposeBuyLocked(symbol, buy, channel) {
     trade.beMoved     = false;         // has the breakeven+ stop-raise happened yet?
     trade.sizePct     = trade.balance > 0 ? trade.capital / trade.balance : 0; // for display
     trade.signal      = signal;
+    // Audit trail: which strategy chose this entry, on what evidence, and how much
+    // confidence backed it. expectedEdge is recorded exactly as measured - it is
+    // negative today, and that must be visible rather than rounded away.
+    trade.strategyId    = routed.strategyId;
+    trade.expectedEdge  = routed.expectedEdge;
+    trade.confidence    = routed.confidence;
+    trade.riskMultiplier = riskMultiplier;
+    trade.strategyReason = routed.reason;
     trade.tf          = buy.tf;          // entry timeframe (for swing-high exit)
     trade.tfMinutes   = tfMinutes;
     trade.openedAt    = Date.now();      // ms — used to detect a *fresh* swing high
@@ -369,7 +387,7 @@ async function runScannerUnsafe(channel, state, verbose = false) {
 
       if (!buy) continue;   // no fresh setup on any timeframe → stay silent
 
-      const res = await proposeBuy(asset.symbol, buy, channel);
+      const res = await proposeBuy(asset.symbol, buy, channel, biases?.['1d'] ?? null);
       logAssetDecision({ symbol: asset.symbol, buy, result: res, biases });
       if (res.traded) {
         opened++;
@@ -442,7 +460,7 @@ export async function scanSymbol(symbol, channel, state) {
     });
 
     if (buy) {
-      const res = await proposeBuy(upper, buy, channel);
+      const res = await proposeBuy(upper, buy, channel, biases?.['1d'] ?? null);
       logAssetDecision({ symbol: upper, buy, result: res, biases });
       if (!res.traded) await channel.send(`ℹ️ **${upper}** setup not taken — ${res.reason}.`);
     } else {
