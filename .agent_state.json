@@ -2,15 +2,15 @@
   "version": 2,
   "control": {
     "status": "EXECUTOR_PENDING",
-    "target_file": "rsi-reversion-study.test.mjs",
-    "objective": "MR1-COV: add a coverage test asserting reversionTrades() opens a SECOND trade after a SECOND, later, non-overlapping signal (only same-bar re-entry is currently covered). Use two clearly separated crossings; assert exactly 2 trades and that the second entryIndex is strictly greater than the first exitIndex.",
+    "target_file": "funding.mjs",
+    "objective": "Q2: Kraken Futures funding-rate collector. Public endpoint (no auth): GET /derivatives/v1/funding/rates, ticker format pi_btcusd. Symbols: BTC, ETH, SOL (pi_XYZUSD). Idempotent CSV merge: append-only, dedup by timestamp. Print \"(rows) (date-from) to (date-to)\" per symbol and exit 0. Research-only; no live paths.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "State-truncation incident recovered a second time (see ledger) -- q2_spec/recent_completions from the colliding write were kept since they are accurate. MR1-COV is the live task now; PWR1 (data-only, unblocks PWR2/3/4) and Q2 (funding.mjs, fully specified in blackboard.q2_spec) remain queued behind it.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-05T19:07:25.739Z"
+    "notes": "STAGED BY ARCHITECT on direct human instruction (\"STAGE Q2\"). Full spec is blackboard.q2_spec (verbatim, unchanged). No design decision needed - Executor implements directly.\n\nDISCREPANCY ON HANDOFF (read before starting Q2 or afterward): the prior verifier commit (238bc97) jumped control from MR1-COV straight to Q2 and dropped work_queue entirely. Checked directly: MR1-COV was NOT implemented (rsi-reversion-study.test.mjs still has exactly 6 tests; no test asserts a second, later signal opens a second trade). PWR1 (marked P4-BLOCKER) was not done either - it unblocks the primary-axis re-test for momentum/low-vol/classifier, all three of which are currently data-gate kills, not measured nulls. Both are re-queued below rather than lost. Do Q2 first as instructed; MR1-COV and PWR1-4 remain next in line.",
+    "updated_by": "architect",
+    "updated_at": "2026-08-05T19:08:46.681Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -27,7 +27,7 @@
     "known_findings": "Trade intensity filter tested and closed (no improvement). Order-flow research complete. Current work: RSI mean-reversion pre-registered study, testing synthetic entry/exit logic.",
     "active_study": "MR1 — RSI(14)/30 crossing up, MA(20) exit or 7-day timeout. Synthetic test fixtures hand-verified. Test 3 ('concurrent positions guard') failing: second non-overlapping signal not generating a trade after first closes.",
     "in_flight": "Order-flow backfills for BTC/ETH/SOL may still run as background processes (research.js flow) — do NOT kill or touch candles/.",
-    "next_queue": "Verify MR1 + the router, then MR1-COV, then PWR1 (which unblocks PWR2/3/4 - the first real test of the primary axis for all three data-gated studies).",
+    "next_queue": "Q2 (funding.mjs, staged now) -> MR1-COV -> PWR1 (unblocks PWR2/3/4).",
     "work_queue": [
       {
         "id": "MR1-COV",
@@ -35,7 +35,7 @@
         "owner": "executor",
         "file": "rsi-reversion-study.test.mjs",
         "depends_on": [],
-        "task": "COVERAGE GAP. The concurrency test was narrowed to same-bar re-entry only, so nothing asserts that a SECOND, later signal opens a SECOND trade. reversionTrades() does support this (verified on real data: XBT 9 / ETH 10 / SOL 7 trades) but no test pins it. Add one test with two clearly separated signals asserting exactly 2 trades, the second entryIndex strictly greater than the first exitIndex.",
+        "task": "COVERAGE GAP, RE-QUEUED (verified NOT done - the test file still has exactly 6 tests, none asserting this). Nothing pins that a SECOND, later signal opens a SECOND trade. reversionTrades() supports it (confirmed on real data: XBT 9 / ETH 10 / SOL 7 trades) but no test proves it. Add one test with two clearly separated crossings; assert exactly 2 trades with the second entryIndex strictly greater than the first exitIndex.",
         "done_when": "The new test fails if reversionTrades is ever capped at one trade per symbol; npm.cmd test green."
       },
       {
@@ -45,7 +45,7 @@
         "file": "research/universe expansion (data only)",
         "depends_on": [],
         "priority": "P4-BLOCKER",
-        "task": "All three research verdicts (momentum, low-vol, classifier) are DATA-GATE kills sharing one cause: the sealed whole-symbol holdout arm produced 0 eligible dates/rows, so the PRIMARY axis was never tested on any of them. Root cause measured: the holdout is available-minus-STABLE_13, of which only 8 pairs have deep history, while perDateIC requires >=8 present per date - so it sat exactly at the threshold. Those 8 (APT,FIL,INJ,NEAR,POL,SUI,TIA,UNI) only all coexist from 2023-12-21 (POL binding). Data has since been backfilled to 2023-01-01, so the arm should now yield roughly 110 weekly dates. Diagnose precisely, then expand the deep-history universe from C:/Users/tmroa/OneDrive/Desktop/Kraken_OHLCVT.zip so the arm is not one pair away from empty. DATA ONLY - do not re-run or re-verdict any study in this task.",
+        "task": "RE-QUEUED (dropped without being done in the prior handoff). All three research verdicts (momentum, low-vol, classifier) are DATA-GATE kills sharing one cause: the sealed whole-symbol holdout arm produced 0 eligible dates/rows, so the PRIMARY axis was never tested on any of them. Root cause measured: the holdout is available-minus-STABLE_13, of which only 8 pairs have deep history, while perDateIC requires >=8 present per date - it sat exactly at the threshold. Those 8 (APT,FIL,INJ,NEAR,POL,SUI,TIA,UNI) only all coexist from 2023-12-21 (POL binding). Data has since been backfilled to 2023-01-01, so the arm should now yield roughly 110 weekly dates. Diagnose precisely, then expand the deep-history universe from C:/Users/tmroa/OneDrive/Desktop/Kraken_OHLCVT.zip so the arm is not one pair away from empty. DATA ONLY - do not re-run or re-verdict any study in this task.",
         "done_when": "Whole-symbol arm yields a non-zero eligible date count, or a precise structural reason it cannot; no study re-verdicted here; npm.cmd test green."
       },
       {
@@ -56,7 +56,7 @@
         "depends_on": [
           "PWR1"
         ],
-        "task": "FIRST EXECUTION of the sealed whole-symbol arm for momentum. This is NOT a re-test after seeing a null: that arm returned 0 rows, meaning no test was ever performed on it. Report the eligible date count alongside the statistic and update the ROADMAP verdict via VERDICT_TEMPLATE.md.",
+        "task": "FIRST EXECUTION of the sealed whole-symbol arm for momentum - not a re-test, that arm returned 0 rows, meaning no test was ever performed on it. Report eligible date count alongside the statistic; update the ROADMAP verdict via VERDICT_TEMPLATE.md.",
         "done_when": "Eligible row count and statistic reported (or a precise structural reason it is still empty); verdict updated with deciding numbers and the survivorship caveat."
       },
       {
@@ -126,6 +126,14 @@
       "action": "incident-recover",
       "detail": "SECOND occurrence of the same failure mode as ca490e4: commit 238bc97 (a concurrent verifier, independently reaching the same PASS conclusion on MR1+router -- legitimate work, preserved above) raced my aa15e73 push, read a stale pre-aa15e73 copy, and its full-rebuild-from-scratch wiped the ledger 3->1 and dropped work_queue, remediation_register, budget, resume_on_reset, and strategy_router/state_file_hygiene notes again. Restoring from aa15e73 (last known-complete) as base, merging in the two genuinely-new blackboard keys the other agent added (q2_spec, recent_completions -- accurate, worth keeping), and preserving its ledger entry as real history. This is now a recurring pattern (2 occurrences in one session), not a one-off: any agent that rebuilds this file from scratch instead of patching the freshly-read copy will keep destroying concurrent work under real race conditions. Flagging to the user directly rather than just re-patching silently again.",
       "commit": "238bc97"
+    },
+    {
+      "ts": "2026-08-05T19:08:46.682Z",
+      "agent": "architect",
+      "action": "stage",
+      "detail": "Staged Q2 (funding.mjs) per direct human instruction. Verified the prior handoff had dropped MR1-COV and PWR1-4 without completing them (MR1-COV: test file still 6/6, no new test present; PWR1: not attempted) - re-queued both behind Q2 rather than treating the drop as completion.",
+      "commit": "",
+      "tests": "149 passing"
     }
   ]
 }
