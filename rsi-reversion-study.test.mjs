@@ -112,6 +112,36 @@ test("MR1 opens a second trade once RSI re-crosses 30 well after the first one e
     "the second trade must open strictly after the first one's exit bar");
 });
 
+test("MR1 opens a second trade on a second, later, non-overlapping signal", () => {
+  // The existing same-bar guard test only proves a second position can't open on the
+  // exit bar itself — it says nothing about whether a genuinely later, separate signal
+  // is ever taken. Reuses the day-1 fixture's first trade (entry 25 -> exit 28, ma_reclaim,
+  // unchanged), then RSI is walked back down by a plain -1/day decline (indices 29-48,
+  // 194 -> 175: same constant-loss shape as the shared prefix, so avgGain -> 0 and RSI
+  // drifts under 30 well before the run ends) and reversed by a single +8 jump to 183
+  // (index 49). Hand/computed via the same rsiSeries formula the module implements:
+  // rsi[48]=14.05 < 30, rsi[49]=46.07 >= 30 -- crosses up 21 bars after the first exit,
+  // entry fills at index 50 (close 184). MA(20) at index 51 is 183.10 (window 32-51,
+  // dragged down by the preceding decline), so close 184 clears it on day 1: second
+  // trade exits ma_reclaim at index 51, flat (gross 0), not a timeout.
+  const closes = [...prefixCloses(), 189, 189, 189, 195];
+  for (let i = 0; i < 20; i++) closes.push(195 - 1 - i); // 194 down to 175
+  closes.push(183);
+  for (let i = 0; i < 8; i++) closes.push(184); // entry (184) + 7 flat days
+  const candles = closes.map((close, i) => candle(i, close));
+
+  const trades = reversionTrades(candles);
+  assert.equal(trades.length, 2, "a later, separate signal must open a second trade");
+  assert.equal(trades[0].entryIndex, 25);
+  assert.equal(trades[0].exitIndex, 28);
+  assert.equal(trades[1].entryIndex, 50);
+  assert.equal(trades[1].entry, 184);
+  assert.equal(trades[1].exitIndex, 51);
+  assert.equal(trades[1].exit, 184);
+  assert.equal(trades[1].exitReason, "ma_reclaim");
+  assert.ok(trades[1].entryIndex > trades[0].exitIndex, "second entry must strictly follow the first exit");
+});
+
 test("MR1 score reports signals, timeouts, position days, net cost, and buy-and-hold", () => {
   const closes = [...prefixCloses(), 189, 189, 189, 195];
   const score = scoreAsset("BTC", closes.map((close, i) => candle(i, close)));
