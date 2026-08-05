@@ -85,6 +85,33 @@ test("MR1 does not open a second position on the same bar the first one exits", 
   assert.ok(!trades.some((t) => t.entryIndex === 29), "no trade may open at the exit bar's very next index from this guard alone");
 });
 
+test("MR1 opens a second trade once RSI re-crosses 30 well after the first one exits", () => {
+  // Trade 1 is the unmodified ma_reclaim fixture: entry 25 (189), exit 28 (195).
+  // From index 29, a fresh 20-bar pure -1/day decline (194 -> 175) drags Wilder's
+  // avgGain/avgLoss back down regardless of the level left over from trade 1's exit —
+  // RSI(48) = 14.0470 (still < 30). A sharp reversal then pushes RSI(49) = 37.3093,
+  // crossing up through 30 between index 48 and 49, so a fresh signal fires and fills
+  // at rows[50] = 181. It exits at index 52 once close (200) clears MA(20) = 183.15.
+  // Every RSI/MA value here was traced through the same Wilder recursion and MA window
+  // reversionTrades() itself uses, independently of running the function under test.
+  const decline2 = Array.from({ length: 20 }, (_, i) => 194 - i); // 194, 193, ..., 175
+  const reversal2 = [180, 181, 182, 200];
+  const closes = [...prefixCloses(), 189, 189, 189, 195, ...decline2, ...reversal2];
+  const candles = closes.map((close, i) => candle(i, close));
+
+  const trades = reversionTrades(candles);
+  assert.equal(trades.length, 2, "a later, clearly-separated signal must open a second trade");
+  assert.equal(trades[0].entryIndex, 25);
+  assert.equal(trades[0].exitIndex, 28);
+  assert.equal(trades[1].entryIndex, 50);
+  assert.equal(trades[1].entry, 181);
+  assert.equal(trades[1].exitIndex, 52);
+  assert.equal(trades[1].exit, 200);
+  assert.equal(trades[1].exitReason, "ma_reclaim");
+  assert.ok(trades[1].entryIndex > trades[0].exitIndex,
+    "the second trade must open strictly after the first one's exit bar");
+});
+
 test("MR1 score reports signals, timeouts, position days, net cost, and buy-and-hold", () => {
   const closes = [...prefixCloses(), 189, 189, 189, 195];
   const score = scoreAsset("BTC", closes.map((close, i) => candle(i, close)));
