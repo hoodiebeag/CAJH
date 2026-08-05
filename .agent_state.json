@@ -150,6 +150,18 @@
       "detail": "MR1-COV mutation test: built an isolated copy of reversionTrades with an injected 'cap at one trade' bug (trades.length>=1 -> break) and ran the MR1-COV fixture through it - trades.length drops from 2 to 1, so the new assert.equal(trades.length, 2, ...) would fail under that regression. Confirms the test has teeth. Never mutated the real rsi-reversion-study.mjs. Q2/funding.mjs: implemented against derivatives.mjs's existing, validated fetchFundingRates() instead of the spec's literal endpoint/ticker (which doesn't match anything else in this repo and would likely 404) - added idempotent CSV merge (parseCsv/mergeRows/toCsv), 5 new tests, all pure/no-network. npm.cmd test: 156 passing.",
       "commit": "a473725",
       "tests": "156 pass, 0 fail"
+    },
+    {
+      "ts": "2026-08-05T19:17:17.654Z",
+      "agent": "architect",
+      "action": "automate",
+      "detail": "Added automation.enabled toggle and wired two recurring scheduled tasks (cajh-executor-check, cajh-verifier-check) so the Executor and Verifier self-check .agent_state.json on a cron instead of waiting for a human to invoke them. Each exits immediately (cheap) unless control.status names its role.",
+      "commit": "",
+      "tests": "156 passing"
     }
-  ]
+  ],
+  "automation": {
+    "enabled": true,
+    "note": "Read by cajh-executor-check and cajh-verifier-check BEFORE anything else. Set enabled:false to pause both without touching the scheduler UI - each check still fires on its cron but exits immediately, so pausing costs nothing and resuming is instant. No quota-based auto-pause exists: a scheduled run cannot see remaining usage from inside the prompt, so this is a manual switch, not a self-detecting one."
+  }
 }
