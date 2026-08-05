@@ -31,7 +31,7 @@
     "work_queue": [
       {
         "id": "MR1-COV",
-        "state": "pending",
+        "state": "done",
         "owner": "executor",
         "file": "rsi-reversion-study.test.mjs",
         "depends_on": [],
@@ -134,6 +134,14 @@
       "detail": "Staged Q2 (funding.mjs) per direct human instruction. Verified the prior handoff had dropped MR1-COV and PWR1-4 without completing them (MR1-COV: test file still 6/6, no new test present; PWR1: not attempted) - re-queued both behind Q2 rather than treating the drop as completion.",
       "commit": "",
       "tests": "149 passing"
+    },
+    {
+      "ts": "2026-08-05T19:09:48.267Z",
+      "agent": "architect",
+      "action": "correct",
+      "detail": "MR1-COV verified genuinely complete in 96b4558 (Executor) after my prior write re-queued it as pending on stale information. Confirmed: two new tests assert sequential trades with entryIndex[1] > exitIndex[0]. Marked done rather than left duplicated in the queue. PWR1-4 remain pending, unaffected.",
+      "commit": "96b4558",
+      "tests": "150 passing"
     }
   ]
 }
