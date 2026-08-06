@@ -463,6 +463,80 @@ time-plus-symbol confirmation because the whole-symbol arm is unavailable.
 **Survivorship caveat:** the universe is survivors-only; this weakens any positive result,
 while the present null/sign reversal is conservative evidence against a robust edge.
 
+### Momentum M7 — UPDATE: whole-symbol holdout executed (2026-08-06, PWR2)
+
+**Why this is an update, not a silent overwrite.** The KILLED verdict above (train p=0.5375,
+recent-holdout IC=-0.1026) came from `runMomentumStudy`, whose whole-symbol holdout is
+hardcoded to exactly 3 symbols (ATOM/DOT/LTC) — permanently below the registered `M_min=8`
+minimum regardless of data availability, so that arm reported "unavailable," never a null.
+Re-running that same function today (PWR2 diagnosis) reproduces `symbolHoldout.n = 0` again,
+confirming it is a structural limit of that function, not a data gap that PWR1 could fix.
+
+The correctly-scoped function, `runSealedMomentumPanelStudy` (`momentum.mjs`), widens the
+holdout universe to every stored symbol outside the stable-13 primary universe, and — as of
+PWR2-HARNESS (commit fdba9f5) — scores its primary cell under the pre-registered residual
+(T2) transform by default, with raw (T1) reported alongside as `study.primaryRaw`. This is
+the **first execution of that function against real data**: it had tests before today but had
+never been run against the live watchlist. Data availability (PWR1's deep-history backfill;
+the `loadWatchlist()` fix, commit 65e130b) is what makes the whole-symbol arm non-empty here —
+29 symbols are now loadable, versus 0 before.
+
+**Pre-registration (frozen before holdout):** L=30d · H=7d · rebalance=weekly · primary
+transform = **residual (T2)**, β-window 90d (`study.primaryTransform` confirms
+`"btcResidual90"`) · holdout = time (last 4 rebalance dates) plus whole-symbol (every stored
+symbol outside stable-13; 16 this run: ALGO, APT, EOS, ETC, FIL, INJ, NEAR, POL, SUI, TAO,
+TIA, TRX, UNI, XMR, XTZ, ZEC). Universe stable-13 (controlled/primary):
+[BTC, ETH, SOL, XRP, ADA, DOGE, AVAX, LINK, DOT, LTC, BCH, ATOM, XLM].
+
+**Primary confirmatory result — residual (T2, gated) and raw (T1, companion), all sealed arms
+(`study.primary` / `study.primaryRaw`, run via `node momentum.mjs sealed`):**
+
+| cell | N assets (range) | D dates | rows | mean IC | block-perm p | 95% CI |
+|---|---|---:|---:|---:|---:|---|
+| residual train | 11–13 | 140 | 1606 | 0.0280 | 0.7013 | [-0.0243, 0.0966] |
+| residual recent holdout (4wk) | 13 | 4 | 52 | 0.0934 | 0.7882 | [0.0934, 0.0934] |
+| **residual sealed whole-symbol holdout** | 8–16 | **73** | **881** | 0.0768 | 0.1289 | [-0.0006, 0.1805] |
+| residual Q1-2026-only slice | 13 | 12 | 156 | -0.1442 | 0.1808 | [-0.2505, -0.0755] |
+| raw train | 11–13 | 149 | 1721 | 0.0158 | 0.8382 | [-0.0435, 0.0797] |
+| raw recent holdout (4wk) | 13 | 4 | 52 | 0.1291 | 0.7303 | [0.1291, 0.1291] |
+| **raw sealed whole-symbol holdout** | 8–16 | **81** | **1007** | 0.0502 | 0.2907 | [-0.0060, 0.1434] |
+| raw Q1-2026-only slice | 13 | 12 | 156 | -0.2152 | 0.0649 | [-0.4625, -0.0549] |
+
+Eligible dates on the whole-symbol arm are non-zero for the first time: 73 dates under
+residual, 81 under raw — residual's 90-bar β warmup costs it the earliest ~8 dates that raw
+can still score, which is expected, not a bug.
+
+**Interpretation matrix (residual vs raw, sec 2.1 — sealed whole-symbol holdout is this run's
+headline cell; train shown for contrast):**
+
+| | raw IC | residual IC | reading |
+|---|---:|---:|---|
+| sealed whole-symbol holdout | 0.0502 (p=0.2907) | 0.0768 (p=0.1289) | + / + but neither clears p<0.05, and both 95% CIs span zero — directionally consistent with "real idiosyncratic and actionable," but not statistically confirmed |
+| train (stable-13) | 0.0158 (p=0.8382) | 0.0280 (p=0.7013) | ~0 / ~0 — no train signal |
+
+**VERDICT: KILLED (unchanged, now decided on complete evidence).** The pre-committed pass
+gate (§6) requires primary residual IC > 0 with block-permutation p < 0.05 **on train** before
+the holdout even counts; train residual p=0.7013 (95% CI [-0.0243, 0.0966], clearly spanning
+zero) fails that gate on its own, so momentum is killed on the train leg regardless of how the
+holdout reads. Deciding numbers: train residual IC=0.0280, p=0.7013; sealed whole-symbol
+holdout residual IC=0.0768, p=0.1289 (raw IC=0.0502, p=0.2907). The holdout point estimates
+are positive and directionally consistent with train's weak positive point estimate, but none
+reach the pre-registered significance bar anywhere. This supersedes the "symbol arm
+unavailable" caveat in the entry above: the arm is now available and reads null, not missing.
+
+**Survivorship caveat (mandatory, applies to this update too):** the universe (29 symbols via
+`loadWatchlist()`, deep-history-backfilled per PWR1) is survivors-only — coins that delisted
+or died are absent, so the loser tail is truncated. This weakens any positive reading (the
+whole-symbol holdout's positive-but-non-significant point estimates could partly be a
+survivors-only artifact) and makes the train-leg null, if anything, conservative evidence
+against a robust edge rather than for one.
+
+**What this update did not touch:** the exploratory grid and economic/net-of-cost tables in
+the entry above were produced by `runMomentumStudy` (train-only, stable-13, pre-PWR1/PWR2
+data) and were not re-run here. Re-scoring the exploratory grid and economics through
+`runSealedMomentumPanelStudy` on the widened universe is a separate task, not claimed as
+re-verified by this execution.
+
 ### Low-vol / low-beta B4: KILLED — no eligible holdout evidence in this workspace
 
 **Configured specification:** same sealed harness as Momentum M7, with ranking variable

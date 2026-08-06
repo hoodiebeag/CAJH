@@ -664,7 +664,26 @@ export function runMomentumStudy({ watchlist = loadWatchlist(), permutations = 1
 }
 
 const main = process.argv[1]?.endsWith("momentum.mjs");
-if (main) {
+if (main && process.argv[2] === "sealed") {
+  const watchlist = loadWatchlist().map((asset) => typeof asset === "string" ? { symbol: asset, id: symbolToKrakenId(asset) } : asset);
+  const series = dailySeries(watchlist);
+  const study = runSealedMomentumPanelStudy(series, { permutations: Number(process.env.PERMUTATIONS) || 1000 });
+  const file = saveExperiment("momentum-sealed", {
+    specification: "MOMENTUM_SPEC/v1-sealed",
+    primaryTransform: study.primaryTransform,
+    primaryUniverse: study.primaryUniverse,
+    controlledUniverse: study.controlledUniverse,
+    symbolHoldoutUniverse: study.symbolHoldoutUniverse
+  }, study);
+  console.log(JSON.stringify({
+    primaryTransform: study.primaryTransform,
+    controlledUniverse: study.controlledUniverse,
+    symbolHoldoutUniverse: study.symbolHoldoutUniverse,
+    primary: study.primary,
+    primaryRaw: study.primaryRaw,
+    saved: file
+  }, null, 2));
+} else if (main) {
   const study = runMomentumStudy({ permutations: Number(process.env.PERMUTATIONS) || 1000 });
   const file = saveExperiment("momentum", study.input, study.result);
   console.log(JSON.stringify({ ...study.result.primary, saved: file }, null, 2));
