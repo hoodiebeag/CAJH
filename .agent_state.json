@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "tournament.mjs",
-    "objective": "TOURNAMENT_ROADMAP.md Track 1. Run the existing tournament harness with costRate=0 across the full watchlist and report holdout avgR per family (anticipate, bos, breakout, trend_pullback, sweep_reclaim, rsi, rev, support) at zero cost, alongside the already-known net-of-cost numbers in TOURNAMENT_ROADMAP.md's baseline table. Decision rule (pre-registered, do not relax after seeing results): if ANY family reaches holdout avgR > 0 at zero cost, say so plainly and stop there (do not also implement Track 2 in the same run - that becomes a new queue item for a cost-reduction experiment on that family). If ALL families are still negative at zero cost, state that plainly as the Track 1 verdict; T2-VOLCONTRACTION is already queued as the next step and needs no further action here. If costRate isn't a tournament.mjs parameter already, check whether backtest.js exposes it before editing anything (backtest.js is frozen - do not edit it without control.allow_live_edit true and a target_file naming it; if a change there is genuinely required, set BLOCKED and route to Architect instead of editing a frozen path unauthorized). COLLISION SAFETY: as of staging, backtest.js/tournament.mjs/tournament.test.mjs/commands.js/strategy-search.mjs have uncommitted local changes from a concurrent, independently-operating process (not this 3-role loop) - confirmed via `git status` at staging time. Step 0.3 (git pull --rebase) will fail cleanly and cheap-exit on its own while those stay uncommitted; that is correct behavior, not a bug, and needs no special handling. Once they are committed and a pull succeeds, proceed normally. Never overwrite or stash that work - if pulled cleanly but the file already contains unrelated in-progress edits from that process, read what is there first and layer on top; if this task and that work would genuinely conflict, set BLOCKED with the precise conflict described rather than guessing which to keep.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "backtest.js (frozen - requires control.allow_live_edit:true when this is picked up), tournament.mjs",
+    "objective": "TOURNAMENT_ROADMAP.md Track 2. Implement the volatility-contraction-breakout entry exactly as specified: ATR(14) < 0.5x its own 50-bar median = compression state; entry trigger = close breaks above the compression range high; stop = below the range low; TP = 3R. Run the tournament with a 70/30 chronological split across the full watchlist. Score against the pre-registered gate written BEFORE running (holdout trades >= 150, holdout avgR/trade > +0.10 net of 0.9% cost, holdout win rate >= 40%, positive on >= 50% of tested assets) - do not adjust the gate after seeing results. Report pass/fail per TOURNAMENT_ROADMAP.md's abandonment criteria. COLLISION SAFETY: as of staging, backtest.js/tournament.mjs/tournament.test.mjs/commands.js/strategy-search.mjs have uncommitted local changes from a concurrent, independently-operating process (not this 3-role loop) - confirmed via `git status` at staging time. Step 0.3 (git pull --rebase) will fail cleanly and cheap-exit on its own while those stay uncommitted; that is correct behavior, not a bug, and needs no special handling. Once they are committed and a pull succeeds, proceed normally. Never overwrite or stash that work - if pulled cleanly but the file already contains unrelated in-progress edits from that process, read what is there first and layer on top; if this task and that work would genuinely conflict, set BLOCKED with the precise conflict described rather than guessing which to keep.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "T1-ZEROCOST done. breakout (1 of 8 baseline families) is holdout-positive at zero cost (+0.045R/trade at zero cost, -0.445R/trade net of real cost); the other 7 stay negative at zero cost. Per the pre-registered rule this stops Track 1 here - Track 2 was deliberately NOT implemented in this run. New follow-up item T1B-BREAKOUT-COSTFIX queued (cost-reduction on breakout only, separate in scope from T2-VOLCONTRACTION's brand-new entry signal). Please verify: (1) the feeRate/slipPct pass-through in tournament.mjs is genuinely a no-op when omitted (check tournament.test.mjs still passes and diff the code path), (2) re-run `node tournament.mjs --zero-cost` independently and confirm breakout's holdout numbers match what's written in TOURNAMENT_ROADMAP.md's new Track 1 RESULT section, (3) confirm h3/ma_dip were reported but NOT used to flip the decision-rule verdict, matching the architect_note's instruction.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-06T20:52:00.000Z"
+    "notes": "T1-ZEROCOST VERIFIED and complete. Verifier re-ran tournament with --zero-cost flag and confirmed breakout holdout avgR=+0.045R/trade on 3123 trades matches executor's claim exactly. TOURNAMENT_ROADMAP.md updated with Track 1 RESULT section; h3/ma_dip reported for completeness but correctly excluded from the pre-registered 8-family decision rule per architect note. feeRate/slipPct pass-through in tournament.mjs is a genuine no-op when omitted (costOverride={} spread changes nothing). Pulling T2-VOLCONTRACTION as next EXECUTOR_PENDING item - all pre-registered gates and experimental design notes from TOURNAMENT_ROADMAP.md should guide this work.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-06T21:15:00.000Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -84,7 +84,7 @@
       },
       {
         "id": "T2-VOLCONTRACTION",
-        "state": "pending",
+        "state": "started",
         "owner": "executor",
         "file": "backtest.js (frozen - requires control.allow_live_edit:true when this is picked up), tournament.mjs",
         "depends_on": [
@@ -388,6 +388,14 @@
       "action": "handoff",
       "detail": "T1-ZEROCOST executed. Added optional feeRate/slipPct pass-through to runTournament (byte-identical when omitted - confirmed via the existing tournament.test.mjs assertion, still 11 rows, still no promotion on empty watchlist) and a --zero-cost CLI flag on tournament.mjs, using backtest.js's already-overridable feeRate/slipPct options per the architect_note - no frozen-path edit, no allow_live_edit needed. Ran both net-of-cost and zero-cost tournaments across the full watchlist (28 assets; 27 for anticipate/bos). RESULT: breakout (one of the 8 pre-registered baseline families) reaches holdout avgR +0.045R/trade at zero cost vs -0.445R/trade net-of-cost, 3123 holdout trades, positive on 17/28 assets - triggers the pre-registered 'any family positive at zero cost' rule. Per that rule, stopped here rather than implementing Track 2 in this run; queued T1B-BREAKOUT-COSTFIX as the follow-up cost-reduction experiment on breakout only. The other 7 baseline families (anticipate, bos, trend_pullback, sweep_reclaim, rsi, rev, support) remain negative at zero cost - unchanged verdict, no edge. ma_dip (+0.101) and h3 (+0.030) holdout numbers reported in the roadmap doc for completeness but explicitly excluded from the decision rule (outside the 8-family baseline table; h3 additionally has no pre-registration anywhere and is not adopted or verdicted here, per the architect_note's explicit warning). TOURNAMENT_ROADMAP.md updated with a new appended 'Track 1 - RESULT' section (baseline table and everything else left intact, not overwritten). npm.cmd test: 168 passing, 0 failing throughout. Committed as f76c24e, pushed to origin/main.",
       "commit": "f76c24e",
+      "tests": "168 pass, 0 fail"
+    },
+    {
+      "ts": "2026-08-06T21:15:00.000Z",
+      "agent": "verifier",
+      "action": "verify+complete",
+      "detail": "T1-ZEROCOST PASS. npm.cmd test: 168/168 green, matches executor claim. Re-ran `node tournament.mjs --zero-cost` independently and confirmed breakout holdout avgR = +0.0451 on 3123 trades (executor reported +0.045, rounding difference only). Verified no-op pass-through: tournament.mjs runTournament() accepts optional feeRate/slipPct, builds costOverride conditionally (empty if both undefined), spreads into backtestMultiTF call - byte-identical to prior behavior when omitted. Confirmed tournament.test.mjs still asserts 11 rows (correct for 11 families), no test weakening. Verified TOURNAMENT_ROADMAP.md appended new Track 1 RESULT section (baseline table intact), decision rule applied only to 8-family baseline, h3/ma_dip reported but explicitly excluded. Marked work_queue T1-ZEROCOST done and T2-VOLCONTRACTION started; pulled T2-VOLCONTRACTION (depends_on T1-ZEROCOST ✓) into control as EXECUTOR_PENDING. Next item ready to start immediately.",
+      "commit": "pending",
       "tests": "168 pass, 0 fail"
     }
   ],
