@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "ARCHITECT_PENDING",
-    "target_file": "none (report + scoping decision)",
-    "objective": "PWR1 is done with a clean, non-zero result (see blackboard.pwr1_result). Two decisions need an Architect: (1) whether/how to fix the empty-watchlist harness gap (blackboard.watchlist_gap) so PWR2/3/4 and any future research script relying on loadWatchlist() actually run against the intended universe rather than silently returning empty results; (2) queue PWR2 (momentum first-execution + ROADMAP verdict) as the next EXECUTOR task once that is resolved - it is a heavier, verdict-writing task that deserves its own turn rather than being rushed in behind PWR1.",
+    "status": "EXECUTOR_PENDING",
+    "target_file": "momentum.mjs",
+    "objective": "FIRST EXECUTION of the sealed whole-symbol arm for momentum - not a re-test, that arm returned 0 rows, meaning no test was ever performed on it. Report eligible date count alongside the statistic; update the ROADMAP verdict via VERDICT_TEMPLATE.md.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "PWR1 done (see ledger + blackboard.pwr1_result): 81 eligible whole-symbol dates (2024-01-23 to 2025-12-30), confirming the 2023-01-01 backfill fixed the pair-coexistence gap as hypothesized. This required bypassing loadWatchlist() directly against candles/ on disk, because the normal pipeline still returns 0 (blackboard.watchlist_gap) - a second, distinct, real blocker that was not part of the original PWR1 hypothesis. Routing to ARCHITECT_PENDING to scope the watchlist fix and re-stage PWR2 rather than silently deciding either for the next Executor.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-06T09:40:22.331Z"
+    "notes": "Both blockers PWR2 depended on are now resolved: PWR1 confirmed 81 eligible whole-symbol dates (2024-01-23 to 2025-12-30), and the watchlist gap that made the real pipeline still return 0 is fixed (commit 65e130b) and verified end-to-end. PWR2 can now run runSealedMomentumPanelStudy (or equivalent) against the real loadWatchlist()-driven universe and write an honest ROADMAP verdict via VERDICT_TEMPLATE.md - this is a genuine first execution of the primary axis, not a re-test after peeking (the prior KILLED verdict never actually ran on non-zero data). State this framing explicitly in the ROADMAP entry.",
+    "updated_by": "architect",
+    "updated_at": "2026-08-06T09:44:01.619Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -86,7 +86,7 @@
     "state_file_hygiene": "The live .agent_state.json was found reduced to {status, notes}, dropping control, blackboard and the append-only ledger. Restored from commit ca490e4. ALWAYS read-modify-write this file: read it, strip a leading UTF-8 BOM, merge only your intended keys, write to .tmp and rename. Never write a fresh object over it - that destroys the shared blackboard and the audit trail in one step.",
     "q2_spec": "funding.mjs: Kraken Futures public endpoint, GET /derivatives/v1/funding/rates endpoint, ticker format e.g. pi_btcusd. Three symbols: BTC, ETH, SOL (map to pi_XYZUSD). Idempotent CSV merge: append-only, skip if timestamp already stored, dedup by time column. Print: '(rows) (date-from) to (date-to)' and exit 0. No auth needed. Lightweight; no concurrent processes. Success: each symbol has a *.csv with rows of [timestamp, funding_rate]. DEVIATION (implemented, commit a473725): the literal endpoint/ticker in this spec (/derivatives/v1/funding/rates, pi_btcusd) does not match what this repo already uses successfully - derivatives.mjs's fetchFundingRates() hits the real historical-funding endpoint with PF_XBTUSD-style symbols, validated by funding-study.mjs/funding-gate-h11.mjs. funding.mjs reuses that existing, correct fetch and adds the genuinely-new part: an idempotent per-symbol CSV merge (parseCsv/mergeRows/toCsv, pure and tested without network). Q2 is DONE under this correction, not re-queued.",
     "recent_completions": "MR1 (RSI mean-reversion study): 6/6 tests green, synthetic fixtures verified, pre-registered rule working. ROUTER (SEL1+SEL2): integrated into scanner.js, all safety gates intact, riskMultiplier properly clamped, expectedEdge recorded.",
-    "watchlist_gap": "loadWatchlist() (researchlib.mjs) returns [] in this checkout - NOT missing data, config.json's data.watchlist is explicitly persisted as [] on disk, and loadConfig()'s `file.watchlist ?? parseWatchlist(...)` fallback never fires because [] is not nullish (?? only falls through on null/undefined). This is the exact 'harness availability' cause already flagged for the low-vol/momentum KILLED verdicts. Any research script that calls loadWatchlist() gets zero assets until either WATCHLIST env is set or config.json's watchlist is populated. NOT fixed here - config.json is live bot state (what the live scanner would watch) and changing loadConfig's fallback or the file is out of scope for a DATA-ONLY task; flagging for the Architect to scope as its own item rather than silently patching live config.",
+    "watchlist_gap": "loadWatchlist() (researchlib.mjs) returns [] in this checkout - NOT missing data, config.json's data.watchlist is explicitly persisted as [] on disk, and loadConfig()'s `file.watchlist ?? parseWatchlist(...)` fallback never fires because [] is not nullish (?? only falls through on null/undefined). This is the exact 'harness availability' cause already flagged for the low-vol/momentum KILLED verdicts. Any research script that calls loadWatchlist() gets zero assets until either WATCHLIST env is set or config.json's watchlist is populated. NOT fixed here - config.json is live bot state (what the live scanner would watch) and changing loadConfig's fallback or the file is out of scope for a DATA-ONLY task; flagging for the Architect to scope as its own item rather than silently patching live config. FIXED (commit 65e130b): loadWatchlist() (researchlib.mjs) now falls back to enumerating candles/*.csv on disk when config's watchlist is empty and WATCHLIST env is unset. Scoped to the research-only entry point deliberately - config.json/storage.js (live scanner config) untouched. Verified end-to-end against the real pipeline: loadWatchlist() now returns 29 symbols and momentum's whole-symbol arm reproduces PWR1's 81 eligible dates through the real code path, not just the bypass diagnostic. 4 new tests (researchlib.test.mjs). npm.cmd test: 160 passing.",
     "pwr1_result": "Whole-symbol holdout universe (candles/ on disk, bypassing the empty config.json watchlist): 27 symbols available, 13 = STABLE_13, 14 = holdout (UNI POL NEAR FIL APT INJ TAO TIA SUI ALGO TRX ETC XMR EOS). Deep-history subset dates: UNI/NEAR/FIL/APT/INJ from 2023-01-01, SUI from 2023-05-03, TIA from 2023-10-31, POL from 2023-12-21 (binding, matches the original hypothesis exactly), TAO from 2024-07-01. buildMomentumPanel({universe: holdout, minAssets: 8, lookback: 30, horizon: 7, step: 7}) now yields 81 eligible dates, 2024-01-23 to 2025-12-30 (was 0). No study re-verdicted; PWR2 (momentum) is the task that runs the full sealed study and writes the ROADMAP verdict."
   },
   "ledger": [
@@ -168,6 +168,14 @@
       "detail": "PWR1: diagnosed the whole-symbol holdout arm against the current candle store (candles/ on disk), bypassing loadWatchlist() because it returns [] in this checkout (config.json's persisted data.watchlist is genuinely [], and the ?? fallback in loadConfig() doesn't fire for an empty array - see blackboard.watchlist_gap, a real, distinct blocker not part of the original hypothesis). Against the 27 on-disk symbols: 81 eligible whole-symbol dates (2024-01-23 to 2025-12-30), up from 0 - confirms the 2023-01-01 backfill fixed the staggered-pair-start problem exactly as hypothesized (POL, starting 2023-12-21, is the binding pair). No study re-verdicted or ROADMAP touched, config.json not touched (live bot state, out of scope for a data-only task). Routing to Architect to scope the watchlist-gap fix and re-stage PWR2 deliberately rather than deciding either silently.",
       "commit": "pending",
       "tests": "156 pass, 0 fail"
+    },
+    {
+      "ts": "2026-08-06T09:44:01.619Z",
+      "agent": "architect",
+      "action": "fix+route",
+      "detail": "Fixed the watchlist gap PWR1 flagged: loadWatchlist() (researchlib.mjs) now falls back to enumerating candles/*.csv when config's watchlist is empty, scoped away from config.json/storage.js (live scanner state) entirely - only the research entry point changed. Verified end-to-end: loadWatchlist() returns 29 symbols, momentum's whole-symbol arm yields the same 81 dates PWR1 found via its bypass diagnostic, now through the real code path. 4 new tests. npm.cmd test: 160 passing. Routing PWR2 (momentum first-execution + ROADMAP verdict) to Executor - both its dependencies are now genuinely satisfied.",
+      "commit": "65e130b",
+      "tests": "160 pass, 0 fail"
     }
   ],
   "automation": {
