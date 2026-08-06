@@ -185,3 +185,64 @@ of cost from the start, full watchlist, the existing R/trade gate, holdout n≥1
 legitimate open question and is recorded in `.agent_state.json`'s
 `blackboard.roadmap_v2_review` as a ready-to-stage candidate for the next genuine queue
 restock, not launched as a fresh 5-phase roadmap under looser, gross-of-fees gates.
+
+---
+
+## Track 1 — RESULT (2026-08-06)
+
+Ran the existing tournament twice, same 70/30 chronological split, same full watchlist
+(28 assets passing the `>=250` candle-per-TF filter; `anticipate`/`bos` see 27 — one
+asset's history is too short for the swing-detection warmup those two families need),
+via `node tournament.mjs` (net-of-cost, default `feeRate`/`slipPct`) and
+`node tournament.mjs --zero-cost` (`feeRate:0, slipPct:0`, wired as a genuine
+pass-through param on `runTournament`/`backtestMultiTF` — `backtest.js` already exposed
+`feeRate`/`slipPct` as overridable options, so this needed no frozen-path edit).
+
+**Coverage note:** the committed harness now runs 11 families, not the 8 this document's
+baseline table covers (`ma_dip` and `range_sweep_reclaim` were added after the baseline
+table was written; `h3` was added separately by a concurrent process and is pre-registered
+nowhere). Zero-cost numbers are reported for all 11 below, but the pre-registered decision
+rule is applied **only to the original 8** — a family with no net-of-cost baseline row
+cannot be judged "alongside the already-known net-of-cost numbers," and `h3` in particular
+is explicitly excluded from any verdict here per the architect's note on its provenance.
+
+**Net-of-cost (this run, full watchlist) vs. zero-cost, the 8 baseline families:**
+
+| Family | Train R/trade (net) | Holdout R/trade (net) | Train R/trade (zero-cost) | Holdout R/trade (zero-cost) | Holdout trades (zero-cost) |
+|---|---|---|---|---|---|
+| anticipate | -0.365 | -0.506 | +0.035 | -0.083 | 3891 |
+| bos | -0.431 | -0.535 | -0.054 | -0.126 | 269 |
+| **breakout** | -0.461 | -0.445 | **+0.021** | **+0.045** | **3123** |
+| trend_pullback | -0.398 | -0.606 | +0.057 | -0.139 | 1989 |
+| sweep_reclaim | -0.591 | -0.713 | -0.061 | -0.141 | 3145 |
+| rsi | -0.704 | -0.759 | -0.091 | -0.062 | 2260 |
+| rev | -2.206 | -2.043 | -0.181 | -0.153 | 24375 |
+| support | -2.190 | -2.014 | -0.186 | -0.149 | 53754 |
+
+(Net-of-cost numbers here are from this run against the current, larger watchlist and
+differ slightly from the original baseline table's figures — same sign and rough
+magnitude throughout, consistent with the same underlying result.)
+
+**Not part of the decision rule (reported for completeness only):** `ma_dip` zero-cost
+holdout avgR = **+0.101** (train +0.236, 10004 holdout trades) and `h3` zero-cost holdout
+avgR = **+0.030** (train +0.088, 4525 holdout trades) — both outside the 8-family
+baseline and therefore cannot be compared against a known net-of-cost number; `h3`
+additionally has no pre-registration anywhere in this document and must not be adopted,
+extended, or verdicted here regardless of its sign.
+
+**Decision rule applied:** one of the 8 baseline families — **`breakout`** — reaches
+holdout `avgR > 0` at zero cost (+0.045R/trade, 3123 holdout trades, positive on 17/28
+assets), while its net-of-cost holdout is -0.445R/trade. Per the pre-registered rule,
+**this stops Track 1 here**: the reading is cost drag, not signal absence, for
+`breakout` specifically. Track 2 (volatility-contraction breakout) is explicitly **not**
+implemented in this run per the rule ("do not also implement Track 2 in the same run").
+
+The other 7 baseline families stay negative at zero cost (`anticipate`, `bos`,
+`trend_pullback`, `sweep_reclaim`, `rsi`, `rev`, `support`) — for those seven, the
+verdict is unchanged: no edge, cost is not the explanation.
+
+**Follow-up (new queue item, not this one):** a cost-reduction experiment specifically on
+`breakout` — e.g. a higher R-multiple target or less frequent entries, per the Track 1
+experiment description above — is the next step for that one family.
+`T2-VOLCONTRACTION` remains queued as-is; this result does not change its scope, since it
+targets a different, new entry signal rather than `breakout`'s exit/frequency tuning.

@@ -30,12 +30,15 @@ function summarize(perAsset) {
 }
 
 /** Chronological 70/30 test. Parameters are fixed before examining the holdout. */
-export function runTournament({ watchlist = loadWatchlist(), split = .70 } = {}) {
+export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRate, slipPct } = {}) {
+  const costOverride = {};
+  if (feeRate !== undefined) costOverride.feeRate = feeRate;
+  if (slipPct !== undefined) costOverride.slipPct = slipPct;
   const datasets = normalize(watchlist).map((asset) => ({ symbol: asset.symbol, series: seriesFor(asset.id) }))
     .filter((d) => d.series.every((tf) => tf.candles.length >= 250))
     .map((d) => ({ symbol: d.symbol, train: splitSeries(d.series, split, false), holdout: splitSeries(d.series, split, true) }));
   const rows = families.map(([id, label, config]) => {
-    const score = (part) => summarize(datasets.map((d) => backtestMultiTF({ series: d[part] }, { ...config, entryTf: "1h" })));
+    const score = (part) => summarize(datasets.map((d) => backtestMultiTF({ series: d[part] }, { ...config, ...costOverride, entryTf: "1h" })));
     const train = score("train"), holdout = score("holdout");
     const promoted = train.trades >= 50 && holdout.trades >= 25 && train.avgR > 0 && holdout.avgR > 0 && holdout.positiveAssets / Math.max(1, holdout.assets) >= .5;
     return { id, label, config, train, holdout, promoted, robustness: Math.min(train.avgR, holdout.avgR) * Math.log1p(holdout.trades) };
@@ -46,6 +49,8 @@ export function runTournament({ watchlist = loadWatchlist(), split = .70 } = {})
 }
 
 if (process.argv[1]?.endsWith("tournament.mjs")) {
-  const report = runTournament(); const saved = saveExperiment("tournament", report.input, report.result);
+  const zeroCost = process.argv.includes("--zero-cost");
+  const report = zeroCost ? runTournament({ feeRate: 0, slipPct: 0 }) : runTournament();
+  const saved = saveExperiment(zeroCost ? "tournament-zero-cost" : "tournament", report.input, report.result);
   console.log(JSON.stringify({ ...report.result, saved }, null, 2));
 }
