@@ -216,7 +216,8 @@ export async function handleHelp(message, state) {
     `> \`!status\` — Bot status\n\n` +
 
     `**Extras (AI, no trades):**\n` +
-    `> \`@cajh $BTC\` or \`@cajh show me $ETH 4h\` — Pull charts ($ prefix required)  ·  \`@cajh analyze that\`\n` +
+    `> \`@cajh $BTC\` — Pull charts (requires $ prefix)\n` +
+    `> \`@cajh *hello\` — Force general chat (skip chart logic with * escape)\n` +
     `> \`@cajh\` general chat remembers the last ${MAX_CHAT_TURNS / 2} exchanges in this channel — \`!forget\` to reset it\n\n` +
 
     `**Status:** ${status}\n` +
