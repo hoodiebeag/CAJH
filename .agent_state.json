@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
-    "target_file": "momentum.mjs",
-    "objective": "FIRST EXECUTION of the sealed whole-symbol arm for momentum - not a re-test, that arm returned 0 rows, meaning no test was ever performed on it. Report eligible date count alongside the statistic; update the ROADMAP verdict via VERDICT_TEMPLATE.md.",
+    "status": "ARCHITECT_PENDING",
+    "target_file": "momentum.mjs, momentum.test.mjs (design decision, then implementation)",
+    "objective": "Decide how to make the sealed whole-symbol arm actually implement MOMENTUM_SPEC.md sec 2.1+3.5+5.6: residual (T2) as the primary statistic, holdout universe wide enough to clear minAssets=8. See blackboard.momentum_harness_gap for the precise diagnosis of why both existing functions fall short and what a fix requires.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "Both blockers PWR2 depended on are now resolved: PWR1 confirmed 81 eligible whole-symbol dates (2024-01-23 to 2025-12-30), and the watchlist gap that made the real pipeline still return 0 is fixed (commit 65e130b) and verified end-to-end. PWR2 can now run runSealedMomentumPanelStudy (or equivalent) against the real loadWatchlist()-driven universe and write an honest ROADMAP verdict via VERDICT_TEMPLATE.md - this is a genuine first execution of the primary axis, not a re-test after peeking (the prior KILLED verdict never actually ran on non-zero data). State this framing explicitly in the ROADMAP entry.",
-    "updated_by": "architect",
-    "updated_at": "2026-08-06T09:44:01.619Z"
+    "notes": "PWR1 and the watchlist-gap fix are both genuinely done and verified end-to-end (81 eligible whole-symbol dates through the real pipeline). PWR2 is blocked on a real methodology gap, not a data or environment problem - see blackboard.momentum_harness_gap. PWR3/PWR4 (low-vol, classifier) likely have the same primary-transform gap since they reuse the same buildMomentumPanel primary-cell pattern; worth checking before running either, not assuming PWR2 is an isolated case.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-06T09:48:13.398Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -50,13 +50,13 @@
       },
       {
         "id": "PWR2",
-        "state": "pending",
+        "state": "blocked",
         "owner": "executor",
         "file": "momentum.mjs",
         "depends_on": [
           "PWR1"
         ],
-        "task": "FIRST EXECUTION of the sealed whole-symbol arm for momentum - not a re-test, that arm returned 0 rows, meaning no test was ever performed on it. Report eligible date count alongside the statistic; update the ROADMAP verdict via VERDICT_TEMPLATE.md.",
+        "task": "FIRST EXECUTION of the sealed whole-symbol arm for momentum - not a re-test, that arm returned 0 rows, meaning no test was ever performed on it. Report eligible date count alongside the statistic; update the ROADMAP verdict via VERDICT_TEMPLATE.md. BLOCKED (see blackboard.momentum_harness_gap): neither existing function implements the pre-registered spec correctly. Needs an Architect decision before this can be finished, not another Executor run.",
         "done_when": "Eligible row count and statistic reported (or a precise structural reason it is still empty); verdict updated with deciding numbers and the survivorship caveat."
       },
       {
@@ -87,7 +87,8 @@
     "q2_spec": "funding.mjs: Kraken Futures public endpoint, GET /derivatives/v1/funding/rates endpoint, ticker format e.g. pi_btcusd. Three symbols: BTC, ETH, SOL (map to pi_XYZUSD). Idempotent CSV merge: append-only, skip if timestamp already stored, dedup by time column. Print: '(rows) (date-from) to (date-to)' and exit 0. No auth needed. Lightweight; no concurrent processes. Success: each symbol has a *.csv with rows of [timestamp, funding_rate]. DEVIATION (implemented, commit a473725): the literal endpoint/ticker in this spec (/derivatives/v1/funding/rates, pi_btcusd) does not match what this repo already uses successfully - derivatives.mjs's fetchFundingRates() hits the real historical-funding endpoint with PF_XBTUSD-style symbols, validated by funding-study.mjs/funding-gate-h11.mjs. funding.mjs reuses that existing, correct fetch and adds the genuinely-new part: an idempotent per-symbol CSV merge (parseCsv/mergeRows/toCsv, pure and tested without network). Q2 is DONE under this correction, not re-queued.",
     "recent_completions": "MR1 (RSI mean-reversion study): 6/6 tests green, synthetic fixtures verified, pre-registered rule working. ROUTER (SEL1+SEL2): integrated into scanner.js, all safety gates intact, riskMultiplier properly clamped, expectedEdge recorded.",
     "watchlist_gap": "loadWatchlist() (researchlib.mjs) returns [] in this checkout - NOT missing data, config.json's data.watchlist is explicitly persisted as [] on disk, and loadConfig()'s `file.watchlist ?? parseWatchlist(...)` fallback never fires because [] is not nullish (?? only falls through on null/undefined). This is the exact 'harness availability' cause already flagged for the low-vol/momentum KILLED verdicts. Any research script that calls loadWatchlist() gets zero assets until either WATCHLIST env is set or config.json's watchlist is populated. NOT fixed here - config.json is live bot state (what the live scanner would watch) and changing loadConfig's fallback or the file is out of scope for a DATA-ONLY task; flagging for the Architect to scope as its own item rather than silently patching live config. FIXED (commit 65e130b): loadWatchlist() (researchlib.mjs) now falls back to enumerating candles/*.csv on disk when config's watchlist is empty and WATCHLIST env is unset. Scoped to the research-only entry point deliberately - config.json/storage.js (live scanner config) untouched. Verified end-to-end against the real pipeline: loadWatchlist() now returns 29 symbols and momentum's whole-symbol arm reproduces PWR1's 81 eligible dates through the real code path, not just the bypass diagnostic. 4 new tests (researchlib.test.mjs). npm.cmd test: 160 passing.",
-    "pwr1_result": "Whole-symbol holdout universe (candles/ on disk, bypassing the empty config.json watchlist): 27 symbols available, 13 = STABLE_13, 14 = holdout (UNI POL NEAR FIL APT INJ TAO TIA SUI ALGO TRX ETC XMR EOS). Deep-history subset dates: UNI/NEAR/FIL/APT/INJ from 2023-01-01, SUI from 2023-05-03, TIA from 2023-10-31, POL from 2023-12-21 (binding, matches the original hypothesis exactly), TAO from 2024-07-01. buildMomentumPanel({universe: holdout, minAssets: 8, lookback: 30, horizon: 7, step: 7}) now yields 81 eligible dates, 2024-01-23 to 2025-12-30 (was 0). No study re-verdicted; PWR2 (momentum) is the task that runs the full sealed study and writes the ROADMAP verdict."
+    "pwr1_result": "Whole-symbol holdout universe (candles/ on disk, bypassing the empty config.json watchlist): 27 symbols available, 13 = STABLE_13, 14 = holdout (UNI POL NEAR FIL APT INJ TAO TIA SUI ALGO TRX ETC XMR EOS). Deep-history subset dates: UNI/NEAR/FIL/APT/INJ from 2023-01-01, SUI from 2023-05-03, TIA from 2023-10-31, POL from 2023-12-21 (binding, matches the original hypothesis exactly), TAO from 2024-07-01. buildMomentumPanel({universe: holdout, minAssets: 8, lookback: 30, horizon: 7, step: 7}) now yields 81 eligible dates, 2024-01-23 to 2025-12-30 (was 0). No study re-verdicted; PWR2 (momentum) is the task that runs the full sealed study and writes the ROADMAP verdict.",
+    "momentum_harness_gap": "Ran both existing momentum harnesses against the real data (watchlist gap now fixed). Neither matches MOMENTUM_SPEC.md's pre-registration: (1) runMomentumStudy (wired to `research.js momentum`, produced the existing ROADMAP M7 'KILLED' verdict) computes symbolHoldout by ranking ONLY among PRIMARY_SYMBOL_HOLDOUT (3 fixed symbols: ATOM/DOT/LTC) - structurally below M_min=8 (MOMENTUM_SPEC.md sec 3.5) FOREVER, regardless of data availability. Re-ran it just now: symbolHoldout.n = 0, identical to the recorded verdict - confirms this was never a data-gate issue for this function, it's a permanent design limitation. (2) runSealedMomentumPanelStudy (momentum.mjs:230, has tests, never run against real data before) correctly widens the holdout universe to available-minus-primaryUniverse (this is what PWR1 diagnosed - 81 eligible dates) but its primary-cell loop (momentum.mjs ~262-280) calls buildMomentumPanel WITHOUT `transform`, so it silently scores train/recentHoldout/symbolHoldout on RAW returns - contradicting MOMENTUM_SPEC.md sec 2.1, which explicitly settles market-neutral RESIDUAL (T2) as the one pre-registered, gated statistic ('the pass/kill gate in sec 6 is applied to residual, not raw'). Fixing this means adding a primaryTransform parameter (or hardcoding btcResidual90) to that call - a signature/behavior change, and the existing test for this function (momentum.test.mjs:172) uses an 80-bar synthetic fixture that is too short for the 90-bar residual window default, so it would need updating too. Per AGENT_PROTOCOL.md, changing an established function's behavior/signature over a design gap is an Architect call, not an Executor one - not silently redesigning it here. No ROADMAP verdict written; the existing M7 KILLED entry is unchanged and should NOT be treated as confirmed or superseded until this is resolved with a harness that actually implements the pre-registration."
   },
   "ledger": [
     {
@@ -176,6 +177,14 @@
       "detail": "Fixed the watchlist gap PWR1 flagged: loadWatchlist() (researchlib.mjs) now falls back to enumerating candles/*.csv when config's watchlist is empty, scoped away from config.json/storage.js (live scanner state) entirely - only the research entry point changed. Verified end-to-end: loadWatchlist() returns 29 symbols, momentum's whole-symbol arm yields the same 81 dates PWR1 found via its bypass diagnostic, now through the real code path. 4 new tests. npm.cmd test: 160 passing. Routing PWR2 (momentum first-execution + ROADMAP verdict) to Executor - both its dependencies are now genuinely satisfied.",
       "commit": "65e130b",
       "tests": "160 pass, 0 fail"
+    },
+    {
+      "ts": "2026-08-06T09:48:13.398Z",
+      "agent": "executor",
+      "action": "block+diagnose",
+      "detail": "PWR2: ran both existing momentum harnesses against real data now that the watchlist gap is fixed. runMomentumStudy's whole-symbol holdout (3 fixed symbols) is structurally below minAssets=8 and always will be - reran it, symbolHoldout.n=0, identical to the existing ROADMAP M7 verdict, confirming this specific 0 was never a data problem. runSealedMomentumPanelStudy has the right-sized holdout (matches PWR1's 81 dates) but silently scores its primary cell on raw returns, not the residual (T2) MOMENTUM_SPEC.md sec 2.1 settles as the one gated statistic - fixing that changes a function signature/behavior and touches an existing test's assumptions, which is an Architect-level call per AGENT_PROTOCOL.md, not something to redesign silently as Executor. No ROADMAP verdict written. Blocking PWR2, routing to Architect with the full diagnosis in blackboard.momentum_harness_gap.",
+      "commit": "",
+      "tests": "160 pass, 0 fail (no source changed this step)"
     }
   ],
   "automation": {
