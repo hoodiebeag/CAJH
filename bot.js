@@ -289,6 +289,10 @@ client.on("messageCreate", async (message) => {
   const userMessage = message.content.replace(/<@!?\d+>/g, "").trim();
   const userLower   = userMessage.toLowerCase();
 
+  // Escape prefix: @cajh *message bypasses chart logic entirely
+  const skipChartLogic = userMessage.startsWith("*");
+  const chatMessage = skipChartLogic ? userMessage.slice(1).trim() : userMessage;
+
   await message.channel.sendTyping();
 
   try {
@@ -300,8 +304,8 @@ client.on("messageCreate", async (message) => {
       return handleAnalyzeThat(message, state);
     }
 
-    const wasChartRequest = await handleChartRequest(message, userMessage, state);
-    if (!wasChartRequest) await handleGeneral(message, userMessage, state);
+    const wasChartRequest = !skipChartLogic && await handleChartRequest(message, chatMessage, state);
+    if (!wasChartRequest) await handleGeneral(message, chatMessage, state);
 
   } catch (err) {
     logger.error("[BOT] Message handler error:", err.message);
