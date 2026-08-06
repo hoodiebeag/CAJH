@@ -216,7 +216,8 @@ export async function handleHelp(message, state) {
     `> \`!status\` — Bot status\n\n` +
 
     `**Extras (AI, no trades):**\n` +
-    `> \`@cajh show me BTC 4h\`  ·  \`@cajh analyze that\`\n\n` +
+    `> \`@cajh show me BTC 4h\` or \`@cajh $BTC\`  ·  \`@cajh analyze that\`\n` +
+    `> \`@cajh\` chat remembers the last ${MAX_CHAT_TURNS / 2} exchanges in this channel — \`!forget\` to reset it\n\n` +
 
     `**Status:** ${status}\n` +
     `**Watchlist:** ${state.watchlist.map(a => a.symbol).join(", ")}`
@@ -407,9 +408,42 @@ export async function handleChartRequest(message, userMessage, state) {
   return true;
 }
 
+// ─── Conversation memory (per Discord channel) ───────────────────────────────────
+// @cajh chat is otherwise single-shot: one user message in, one reply out, nothing
+// carried forward. This keeps a rolling window of prior turns per channel and replays
+// them on every call so it's a real back-and-forth, not a fresh Q&A each time. Capped
+// so a long-lived channel can't grow the per-call token cost without bound; "!forget"
+// clears it explicitly rather than relying on the cap alone.
+const MAX_CHAT_TURNS = 20; // 10 user/assistant exchanges
+
+export function chatHistoryFor(state, channelId) {
+  state.chatHistory ??= new Map();
+  return state.chatHistory.get(channelId) || [];
+}
+
+export function appendChatTurn(state, channelId, userMessage, assistantText) {
+  state.chatHistory ??= new Map();
+  const history = state.chatHistory.get(channelId) || [];
+  history.push({ role: "user", content: userMessage }, { role: "assistant", content: assistantText });
+  state.chatHistory.set(channelId, history.slice(-MAX_CHAT_TURNS));
+}
+
+export function clearChatHistory(state, channelId) {
+  state.chatHistory ??= new Map();
+  state.chatHistory.delete(channelId);
+}
+
+export async function handleForget(message, state) {
+  clearChatHistory(state, message.channel.id);
+  await message.reply("🧹 Cleared this channel's conversation memory — next message starts fresh.");
+}
+
 // ─── cajh [general question] ─────────────────────────────────────────────────────
 
 export async function handleGeneral(message, userMessage, state) {
+  const channelId = message.channel.id;
+  const history = chatHistoryFor(state, channelId);
+
   let system =
     `You are cajh, a research-first crypto market intelligence system connected to a long-only Kraken spot executor.\n` +
     `Your trading is mechanical: you anticipate swing-low confirmations on the 1h, 4h,\n` +
@@ -429,7 +463,7 @@ export async function handleGeneral(message, userMessage, state) {
 
   const res = await anthropic.messages.create({
     model: MODEL, max_tokens: 2048, system,
-    messages: [{ role: "user", content: userMessage }]
+    messages: [...history, { role: "user", content: userMessage }]
   });
 
   let text = res.content[0]?.text ?? "…";
@@ -439,6 +473,7 @@ export async function handleGeneral(message, userMessage, state) {
     const continuation = await anthropic.messages.create({
       model: MODEL, max_tokens: 1024, system,
       messages: [
+        ...history,
         { role: "user", content: userMessage },
         { role: "assistant", content: text },
         { role: "user", content: "Continue exactly where you stopped. Finish the incomplete thought concisely; do not repeat earlier material." }
@@ -448,6 +483,7 @@ export async function handleGeneral(message, userMessage, state) {
       ? `\n\n${continuation.content[0].text}`
       : "\n\n[Response reached its length limit before it could be completed.]";
   }
+  appendChatTurn(state, channelId, userMessage, text);
   for (let i = 0; i < text.length; i += 1900) {
     await message.reply(text.slice(i, i + 1900));
   }

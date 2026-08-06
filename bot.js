@@ -13,7 +13,7 @@ import {
   handleSetChannel, handleStatus,
   handleScan, handleAnalyzeThat, handleChartRequest,
   handleGeneral, handleManualTrade, handleBacktest, handleOptimize, handleWhy, handleAlign, handleRoom, handleModes, handleProfile, handleValidate, handleDiscover, handleExits, handleExcursion, handleTournament,
-  handleStop, handleResume, handleSell, handlePort, handleReconcile
+  handleStop, handleResume, handleSell, handlePort, handleReconcile, handleForget
 } from "./commands.js";
 import * as logger from './logger.js';
 
@@ -242,6 +242,7 @@ client.on("messageCreate", async (message) => {
   // ── Info commands ────────────────────────────────────────────────────────────
 
   if (lower === "!help")       return safe(handleHelp(message, state), message);
+  if (lower === "!forget")     return safe(handleForget(message, state), message);
   if (lower === "!watchlist")  return safe(handleWatchlist(message, state), message);
   if (lower === "!setchannel") return safe(handleSetChannel(message, state, config), message);
   if (lower === "!status")     return safe(handleStatus(message, state), message);
