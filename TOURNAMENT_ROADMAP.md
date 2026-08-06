@@ -79,6 +79,26 @@ Run the existing tournament with `costRate = 0`. If any family reaches `avgR > 0
 4. TP: 3R
 5. Run tournament with 70/30 chronological split across the full watchlist
 
+**Implementation decisions, pre-registered before the run (Architect, 2026-08-06).** Steps 1-4
+above leave three things undefined that materially change the result; they are fixed here,
+before any run, and are **not** to be tuned after seeing output:
+- **Compression state at bar `k`** — `atr(H,L,C,k-1,14) < 0.5 x median(atr(H,L,C,j,14) for j in
+  [k-50, k-1])`. ATR is always evaluated to `k-1`, never `k`, so the entry candle cannot inflate
+  its own baseline (same convention as `breakoutEntry`).
+- **"The compression range"** — the contiguous run of bars immediately before `k` that are each in
+  the compression state. Range high = `max(H)` over that run, range low = `min(L)` over that run.
+  The run is scanned back at most 50 bars.
+- **Minimum run length = 5 bars.** Without a floor, a single compressed bar forms a degenerate
+  "range" and the signal collapses into an ordinary 1-bar breakout, which Track 1 already tested.
+  5 is a pre-registered floor, not a swept parameter.
+
+Family config is `minStopPct: .01, maxStopPct: .06, tpR: 3` — deliberately the same stop-size caps
+as the `breakout` family, the closest comparable, so the comparison is apples-to-apples and
+tiny-risk trades cannot inflate `avgR`. Consequence: compression ranges are narrow by
+construction, so `stopTooTight` rejections may hold the holdout sample under 150 trades. If that
+happens it is reported as a mechanical frequency failure **with the `reasons` histogram as
+evidence** — it is not grounds for silently loosening `minStopPct` and re-running.
+
 **What would cause abandonment:** Holdout `avgR < 0` after costs OR fewer than 150 holdout trades (insufficient signal frequency).
 
 ---
