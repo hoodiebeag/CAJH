@@ -216,8 +216,8 @@ export async function handleHelp(message, state) {
     `> \`!status\` — Bot status\n\n` +
 
     `**Extras (AI, no trades):**\n` +
-    `> \`@cajh show me BTC 4h\` or \`@cajh $BTC\`  ·  \`@cajh analyze that\`\n` +
-    `> \`@cajh\` chat remembers the last ${MAX_CHAT_TURNS / 2} exchanges in this channel — \`!forget\` to reset it\n\n` +
+    `> \`@cajh $BTC\` or \`@cajh show me $ETH 4h\` — Pull charts ($ prefix required)  ·  \`@cajh analyze that\`\n` +
+    `> \`@cajh\` general chat remembers the last ${MAX_CHAT_TURNS / 2} exchanges in this channel — \`!forget\` to reset it\n\n` +
 
     `**Status:** ${status}\n` +
     `**Watchlist:** ${state.watchlist.map(a => a.symbol).join(", ")}`
@@ -345,9 +345,10 @@ const TF_ALIASES = {
 const CHART_STOPWORDS = new Set(["show", "me", "a", "the", "chart", "charts", "for", "of", "please", "pull", "up", "cajh", "on", "send", "give", "get"]);
 
 /**
- * `@cajh BTC` → posts all three (1h/4h/1d) charts. `@cajh BTC 4h` → just that one.
+ * `@cajh $BTC` → posts all three (1h/4h/1d) charts. `@cajh $BTC 4h` → just that one.
  * Generates the charts itself from Kraken data. Returns true if it handled a chart
  * request, false otherwise (so the caller falls through to general chat).
+ * Requires explicit $ prefix or explicit chart-related keyword to trigger.
  */
 export async function handleChartRequest(message, userMessage, state) {
   const words = userMessage.trim().split(/\s+/).filter(Boolean);
@@ -359,21 +360,33 @@ export async function handleChartRequest(message, userMessage, state) {
     if (TF_ALIASES[key]) { tfMinutes = TF_ALIASES[key]; break; }
   }
 
-  // Symbol: first 2–5 letter token that isn't a stopword or timeframe
+  // Symbol: must start with $ to be recognized as an explicit chart request
   let symbol = null;
   for (const w of words) {
-    const t = w.replace(/[^a-zA-Z]/g, "");
-    const lo = t.toLowerCase();
-    if (t.length >= 2 && t.length <= 5 && !CHART_STOPWORDS.has(lo) && !TF_ALIASES[lo]) {
-      symbol = t.toUpperCase();
-      break;
+    if (w.startsWith("$")) {
+      const t = w.slice(1).replace(/[^a-zA-Z]/g, "");
+      if (t.length >= 2 && t.length <= 5) {
+        symbol = t.toUpperCase();
+        break;
+      }
     }
   }
-  if (!symbol) return false;
 
-  // Only treat as a chart request if it's short, names a timeframe, or uses a chart word.
-  const hasChartWord = /\b(chart|charts|show|pull|send|give|get)\b/i.test(userMessage);
-  if (!(tfMinutes != null || words.length <= 2 || hasChartWord)) return false;
+  // If no $ symbol found, only treat as chart request if it uses a chart word
+  if (!symbol) {
+    const hasChartWord = /\b(chart|charts|show|pull|send|give|get)\b/i.test(userMessage);
+    if (!hasChartWord) return false;
+    // If chart word used, try to extract symbol from 2-5 letter tokens
+    for (const w of words) {
+      const t = w.replace(/[^a-zA-Z]/g, "");
+      const lo = t.toLowerCase();
+      if (t.length >= 2 && t.length <= 5 && !CHART_STOPWORDS.has(lo) && !TF_ALIASES[lo]) {
+        symbol = t.toUpperCase();
+        break;
+      }
+    }
+    if (!symbol) return false;
+  }
 
   const known = (state?.watchlist || []).find(a => a.symbol === symbol);
   const id    = known?.id || symbolToKrakenId(symbol);
@@ -600,7 +613,7 @@ export async function handleOptimize(message, state) {
   // vs confirmed BOS), gate mode, and TP, with the per-TF stop cap the live bot uses.
   const grid = [];
   for (const entryTf of ["1h", "4h", "1d"])
-    for (const entryMode of ["anticipate", "bos"])
+    for (const entryMode of ["anticipate", "bos", "h3"])
       for (const trendGate of [false, true])
         for (const tpR of [3, 4, 6])
           grid.push({
@@ -1471,7 +1484,7 @@ export async function handleModes(message, state) {
   const cfgFor = mode => mode === "bos"
     ? { entryMode: "bos", entryTf: "1h", trendGate: true, trendGateMode: "ma", minStopPct: 0.015, maxStopPct: MAX_STOP_PCT_BY_TF["1h"], tpR: 4, lockBreakeven: true }
     : { entryMode: mode, entryTf: "1h", trendGate: false, alignMode: "none", minStopPct: 0, tpR: 5, lockBreakeven: true };
-  const modes = [["bos", "BOS (trend)"], ["support", "support bounce"], ["ma_dip", "MA dip"], ["rsi", "RSI oversold"], ["rev", "reversal (higher-low)"]];
+  const modes = [["bos", "BOS (trend)"], ["support", "support bounce"], ["ma_dip", "MA dip"], ["rsi", "RSI oversold"], ["rev", "reversal (higher-low)"], ["h3", "H3 hypothesis"]];
 
   const rows = modes.map(([mode, label]) => {
     const cfg = cfgFor(mode);
