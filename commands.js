@@ -2,6 +2,8 @@
  * commands.js — Discord command handlers
  */
 
+import fs from "fs";
+import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
 import { analyzeChart }                   from "./analyzer.js";
 import { runScanner, scanSymbol, fetchCandles, SCAN_INTERVALS } from "./scanner.js";
@@ -218,8 +220,11 @@ export async function handleHelp(message, state) {
     `**Extras (AI, no trades):**\n` +
     `> \`@cajh show me BTC 4h\`  ·  \`@cajh analyze that\`\n\n` +
 
-    `**Status:** ${status}\n` +
-    `**Watchlist:** ${state.watchlist.map(a => a.symbol).join(", ")}`
+    `> Owner-only: \`!edit <path>\` followed by the new file contents in the same message.
+
+` +
+    `**Status:** ${status}
+\n` +    `**Watchlist:** ${state.watchlist.map(a => a.symbol).join(", ")}`
   );
 }
 
@@ -289,6 +294,54 @@ export async function handleSetChannel(message, state, config) {
   config.scanChannelId = message.channel.id;
   saveConfig(config);
   await message.reply("✅ Scan and trade alerts will post in this channel.");
+}
+
+// ─── !edit <filepath> <content> ──────────────────────────────────────────────────
+
+export async function handleEdit(message, arg) {
+  if (!isOwner(message.author.id)) {
+    return message.reply("🚫 This command is restricted to cajh's owner.");
+  }
+
+  if (!arg?.trim()) {
+    return message.reply(
+      "Usage: `!edit <relative-path>` in the first line, followed by the new file contents on subsequent lines. " +
+      "Example:\n!edit commands.js\nconsole.log(\"hello\");"
+    );
+  }
+
+  const lines = arg.split(/\r?\n/);
+  const relativePath = lines.shift().trim();
+  const content = lines.join("\n");
+
+  if (!relativePath) {
+    return message.reply("Specify the relative file path on the first line after `!edit`.");
+  }
+
+  if (relativePath.includes("..") || path.isAbsolute(relativePath)) {
+    return message.reply("Invalid path. Please provide a relative path within the repository.");
+  }
+
+  const root = process.cwd();
+  const resolved = path.resolve(root, relativePath);
+  if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+    return message.reply("Invalid path. Please provide a relative path within the repository.");
+  }
+
+  if (!content) {
+    return message.reply(
+      "No file contents provided. Use `!edit <relative-path>` on the first line, then paste the new file text below."
+    );
+  }
+
+  try {
+    await fs.promises.mkdir(path.dirname(resolved), { recursive: true });
+    await fs.promises.writeFile(resolved, content, "utf8");
+    await message.reply(`✅ Saved **${relativePath}**. Restart cajh for the new code to take effect.`);
+  } catch (err) {
+    logger.error(`[COMMAND] !edit failed for ${relativePath}:`, err.message);
+    await message.reply(`⚠️ Failed to save ${relativePath}: ${err.message}`);
+  }
 }
 
 // ─── !status ───────────────────────────────────────────────────────────────────
@@ -562,6 +615,7 @@ export async function handleOptimize(message, state) {
 
   // 2) Config grid — all net-of-fees. Sweeps entry timeframe, entry mode (anticipation
   // vs confirmed BOS), gate mode, and TP, with the per-TF stop cap the live bot uses.
+  // Also adds the daily-only BB lower-band reversion hypothesis as a separate config.
   const grid = [];
   for (const entryTf of ["1h", "4h", "1d"])
     for (const entryMode of ["anticipate", "bos"])
@@ -572,6 +626,12 @@ export async function handleOptimize(message, state) {
             alignMode: "none", minStopPct: 0.015, maxStopPct: MAX_STOP_PCT_BY_TF[entryTf],
             lockBreakeven: true
           });
+  // Daily-only Bollinger mean-reversion hypothesis (H3).
+  grid.push({
+    entryMode: "bb_reversion", entryTf: "1d", stopMode: "atr", atrStopK: 2, atrPeriod: 14,
+    trendGate: false, alignMode: "none", minStopPct: 0, maxStopPct: MAX_STOP_PCT_BY_TF["1d"],
+    tpR: 999, lockBreakeven: false, maxHold: 5
+  });
 
   // 3) Run every config across the cached pairs, pooling NET results.
   const ranked = grid.map(cfg => {
@@ -1434,8 +1494,10 @@ export async function handleModes(message, state) {
   // BOS keeps its live gates; the dip-buy modes drop trend/alignment and run tight stops + high target.
   const cfgFor = mode => mode === "bos"
     ? { entryMode: "bos", entryTf: "1h", trendGate: true, trendGateMode: "ma", minStopPct: 0.015, maxStopPct: MAX_STOP_PCT_BY_TF["1h"], tpR: 4, lockBreakeven: true }
-    : { entryMode: mode, entryTf: "1h", trendGate: false, alignMode: "none", minStopPct: 0, tpR: 5, lockBreakeven: true };
-  const modes = [["bos", "BOS (trend)"], ["support", "support bounce"], ["ma_dip", "MA dip"], ["rsi", "RSI oversold"], ["rev", "reversal (higher-low)"]];
+    : mode === "bb_reversion"
+      ? { entryMode: "bb_reversion", entryTf: "1d", stopMode: "atr", atrStopK: 2, atrPeriod: 14, trendGate: false, alignMode: "none", minStopPct: 0, maxStopPct: MAX_STOP_PCT_BY_TF["1d"], tpR: 999, lockBreakeven: false, maxHold: 5 }
+      : { entryMode: mode, entryTf: "1h", trendGate: false, alignMode: "none", minStopPct: 0, tpR: 5, lockBreakeven: true };
+  const modes = [["bos", "BOS (trend)"], ["support", "support bounce"], ["ma_dip", "MA dip"], ["rsi", "RSI oversold"], ["rev", "reversal (higher-low)"], ["bb_reversion", "BB lower-band reversion"]];
 
   const rows = modes.map(([mode, label]) => {
     const cfg = cfgFor(mode);

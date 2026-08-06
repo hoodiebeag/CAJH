@@ -13,7 +13,7 @@ import {
   handleSetChannel, handleStatus,
   handleScan, handleAnalyzeThat, handleChartRequest,
   handleGeneral, handleManualTrade, handleBacktest, handleOptimize, handleWhy, handleAlign, handleRoom, handleModes, handleProfile, handleValidate, handleDiscover, handleExits, handleExcursion, handleTournament,
-  handleStop, handleResume, handleSell, handlePort, handleReconcile
+  handleStop, handleResume, handleSell, handlePort, handleReconcile, handleEdit
 } from "./commands.js";
 import * as logger from './logger.js';
 
@@ -221,7 +221,7 @@ client.on("messageCreate", async (message) => {
 
   // Commands that place/cancel real trades or change the halt state — owner only.
   // (!scan belongs here: a scan auto-executes any setup it finds.)
-  const TRADE_COMMANDS = new Set(["!stop", "!resume", "!sell", "!cancel", "!close", "!trade", "!scan"]);
+  const TRADE_COMMANDS = new Set(["!stop", "!resume", "!sell", "!cancel", "!close", "!trade", "!scan", "!edit"]);
   if (TRADE_COMMANDS.has(lower.split(/\s+/)[0]) && !isOwner(message.author.id)) {
     return message.reply("🚫 This command is restricted to cajh's owner.");
   }
@@ -256,6 +256,9 @@ client.on("messageCreate", async (message) => {
   if (lower === "!exits")      return safe(handleExits(message, state), message);
   if (lower === "!excursion")  return safe(handleExcursion(message, state), message);
   if (lower === "!tournament") return safe(handleTournament(message, state), message);
+  if (lower === "!edit" || lower.startsWith("!edit ")) {
+    return safe(handleEdit(message, raw.slice(5)), message);
+  }
 
   if (lower === "!why" || lower.startsWith("!why ")) {
     return safe(handleWhy(message, state, raw.slice(4).trim() || null), message);
