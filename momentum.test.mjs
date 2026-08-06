@@ -181,6 +181,7 @@ test("runSealedMomentumPanelStudy keeps train, recent, symbol, Q1, and explorato
   const study = runSealedMomentumPanelStudy(series, {
     primaryUniverse,
     symbolHoldoutUniverse,
+    primaryTransform: "raw",
     lookbacks: [2],
     horizons: [1, 2],
     transforms: ["raw"],
@@ -200,6 +201,37 @@ test("runSealedMomentumPanelStudy keeps train, recent, symbol, Q1, and explorato
   assert.equal(study.exploratory.length, 8);
   assert.equal(study.exploratory.every((row) => Object.hasOwn(row, "q")), true);
   assert.equal(study.exploratory.find((row) => row.horizon === 2 && row.regime === "all").nDates < study.exploratory.find((row) => row.horizon === 1 && row.regime === "all").nDates, true);
+});
+
+test("runSealedMomentumPanelStudy's primary cell defaults to the settled btcResidual90 transform, with raw reported alongside", () => {
+  const assets = ["BTC", "ETH", "SOL"];
+  const days = 150;
+  const series = new Map([
+    ["BTC", Array.from({ length: days }, (_, i) => candle(i, 100 + i + (i % 5)))],
+    ["ETH", Array.from({ length: days }, (_, i) => candle(i, ((100 + i + (i % 5)) ** 2) / 100))],
+    ["SOL", Array.from({ length: days }, (_, i) => candle(i, (100 + i + (i % 5)) * 1.5 + (i % 7)))]
+  ]);
+
+  const study = runSealedMomentumPanelStudy(series, {
+    primaryUniverse: assets,
+    minAssets: 3,
+    recentHoldoutDates: 2,
+    permutations: 10,
+    bootstrapIterations: 10,
+    seed: 11
+  });
+
+  assert.equal(study.primaryTransform, "btcResidual90");
+  assert.equal(study.primary.train.nRows > 0, true);
+  assert.equal(study.primaryRaw.train.nRows > 0, true);
+  // btcResidual90 requires a 90-bar rolling beta window before it emits a row, raw does not -
+  // if the default ever silently reverts to raw, these two counts collapse to equal.
+  assert.equal(study.primary.train.nRows < study.primaryRaw.train.nRows, true);
+
+  const directResidual = buildMomentumPanel(series, { universe: assets, minAssets: 3, tagRegime: true, transform: "btcResidual90" });
+  const directRaw = buildMomentumPanel(series, { universe: assets, minAssets: 3, tagRegime: true, transform: "raw" });
+  assert.equal(study.primary.train.nRows + study.primary.recentHoldout.nRows, directResidual.rows.length);
+  assert.equal(study.primaryRaw.train.nRows + study.primaryRaw.recentHoldout.nRows, directRaw.rows.length);
 });
 
 test("buildMomentumPanel can model entry at close t+1 for forward returns", () => {

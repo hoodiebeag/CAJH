@@ -230,6 +230,7 @@ export function applySizeLiquidityControl(universe, controls = {}, {
 export function runSealedMomentumPanelStudy(series, {
   primaryUniverse = STABLE_13,
   symbolHoldoutUniverse = null,
+  primaryTransform = "btcResidual90",
   lookbacks = [14, 30, 60, 90],
   horizons = [7, 14, 30],
   transforms = ["raw", "btcResidual90", "volNormalized"],
@@ -248,13 +249,28 @@ export function runSealedMomentumPanelStudy(series, {
     ? applySizeLiquidityControl(primaryUniverse, liquidityControls, liquidityControl)
     : { universe: [...primaryUniverse], excluded: [], minDollarVolume: 0, excludeLargestN: 0 };
   const controlledUniverse = control.universe;
-  const primary = buildMomentumPanel(series, { universe: controlledUniverse, minAssets, tagRegime: true });
-  const split = splitRecentRows(primary.rows, recentHoldoutDates);
   const available = [...series.keys()];
   const holdoutUniverse = symbolHoldoutUniverse || available.filter((asset) => !primaryUniverse.includes(asset));
-  const symbolHoldoutRows = holdoutUniverse.length >= minAssets
-    ? buildMomentumPanel(series, { universe: holdoutUniverse, minAssets, tagRegime: true }).rows
-    : [];
+
+  const buildPrimaryCell = (transform) => {
+    const panel = buildMomentumPanel(series, { universe: controlledUniverse, minAssets, tagRegime: true, transform });
+    const split = splitRecentRows(panel.rows, recentHoldoutDates);
+    const symbolHoldoutRows = holdoutUniverse.length >= minAssets
+      ? buildMomentumPanel(series, { universe: holdoutUniverse, minAssets, tagRegime: true, transform }).rows
+      : [];
+    return {
+      split,
+      cell: {
+        train: scoreMomentumPanelRows(split.train, scoreOptions),
+        recentHoldout: scoreMomentumPanelRows(split.recentHoldout, scoreOptions),
+        symbolHoldout: scoreMomentumPanelRows(symbolHoldoutRows, scoreOptions),
+        q1Only: scoreMomentumPanelRows(panel.q1Only, scoreOptions)
+      }
+    };
+  };
+
+  const primaryResult = buildPrimaryCell(primaryTransform);
+  const rawResult = buildPrimaryCell("raw");
   const exploratory = [];
   const byRank = {};
 
@@ -306,14 +322,11 @@ export function runSealedMomentumPanelStudy(series, {
     controlledUniverse: [...controlledUniverse],
     liquidityControl: control,
     symbolHoldoutUniverse: [...holdoutUniverse],
-    primary: {
-      train: scoreMomentumPanelRows(split.train, scoreOptions),
-      recentHoldout: scoreMomentumPanelRows(split.recentHoldout, scoreOptions),
-      symbolHoldout: scoreMomentumPanelRows(symbolHoldoutRows, scoreOptions),
-      q1Only: scoreMomentumPanelRows(primary.q1Only, scoreOptions)
-    },
+    primaryTransform,
+    primary: primaryResult.cell,
+    primaryRaw: rawResult.cell,
     byRank,
-    holdoutDates: split.recentHoldoutDates,
+    holdoutDates: primaryResult.split.recentHoldoutDates,
     exploratory
   };
 }
