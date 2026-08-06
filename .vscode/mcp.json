@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "cajh": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/mcp-server/dist/index.js"],
+      "env": {
+        "CAJH_ROOT": "${workspaceFolder}",
+        "MCP_APPROVAL_SECRET": "${env:MCP_APPROVAL_SECRET}"
+      }
+    }
+  }
+}
