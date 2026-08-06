@@ -1,6 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chatHistoryFor, appendChatTurn, clearChatHistory } from "./commands.js";
+import { chatHistoryFor, appendChatTurn, clearChatHistory, handleChartRequest } from "./commands.js";
+
+// Regression coverage for the chart-request gate: it must require a literal $ prefix
+// (e.g. $BTC) and never fall through to picking an arbitrary short word out of
+// ordinary conversation as a "symbol". A prior version matched common verbs
+// ("send", "get", "give", "show", "pull") anywhere in the message and then grabbed
+// any other 2-5 letter word not in a small stopword list — so "can you send that
+// over" misfired by treating "can" as a symbol.
+test("handleChartRequest ignores ordinary chat containing chart-adjacent verbs", async () => {
+  const nonTriggers = [
+    "can you send that over",
+    "give it a sec",
+    "I'll get back to you",
+    "hello",
+    "what",
+  ];
+  for (const msg of nonTriggers) {
+    assert.equal(await handleChartRequest({}, msg, {}), false, `expected no chart request for: "${msg}"`);
+  }
+});
+
+test("handleChartRequest without a $ prefix never reaches the network path even with a chart keyword", async () => {
+  assert.equal(await handleChartRequest({}, "show me the rundown please", {}), false);
+});
 
 test("chatHistoryFor starts empty and appendChatTurn records user/assistant pairs in order", () => {
   const state = {};

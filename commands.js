@@ -342,13 +342,13 @@ const TF_ALIASES = {
   "4h": 240, "4hr": 240, "4hour": 240,
   "1d": 1440, "1day": 1440, "daily": 1440, "24h": 1440
 };
-const CHART_STOPWORDS = new Set(["show", "me", "a", "the", "chart", "charts", "for", "of", "please", "pull", "up", "cajh", "on", "send", "give", "get"]);
-
 /**
  * `@cajh $BTC` → posts all three (1h/4h/1d) charts. `@cajh $BTC 4h` → just that one.
  * Generates the charts itself from Kraken data. Returns true if it handled a chart
  * request, false otherwise (so the caller falls through to general chat).
- * Requires explicit $ prefix or explicit chart-related keyword to trigger.
+ * Requires an explicit $ prefix (e.g. $BTC) — no keyword-based fallback, because
+ * common conversational words ("send", "get", "give", "show") were matching
+ * ordinary chat and then grabbing an unrelated short word as the "symbol".
  */
 export async function handleChartRequest(message, userMessage, state) {
   const words = userMessage.trim().split(/\s+/).filter(Boolean);
@@ -360,7 +360,7 @@ export async function handleChartRequest(message, userMessage, state) {
     if (TF_ALIASES[key]) { tfMinutes = TF_ALIASES[key]; break; }
   }
 
-  // Symbol: must start with $ to be recognized as an explicit chart request
+  // Symbol: must start with $ to be recognized as a chart request at all.
   let symbol = null;
   for (const w of words) {
     if (w.startsWith("$")) {
@@ -371,22 +371,7 @@ export async function handleChartRequest(message, userMessage, state) {
       }
     }
   }
-
-  // If no $ symbol found, only treat as chart request if it uses a chart word
-  if (!symbol) {
-    const hasChartWord = /\b(chart|charts|show|pull|send|give|get)\b/i.test(userMessage);
-    if (!hasChartWord) return false;
-    // If chart word used, try to extract symbol from 2-5 letter tokens
-    for (const w of words) {
-      const t = w.replace(/[^a-zA-Z]/g, "");
-      const lo = t.toLowerCase();
-      if (t.length >= 2 && t.length <= 5 && !CHART_STOPWORDS.has(lo) && !TF_ALIASES[lo]) {
-        symbol = t.toUpperCase();
-        break;
-      }
-    }
-    if (!symbol) return false;
-  }
+  if (!symbol) return false;
 
   const known = (state?.watchlist || []).find(a => a.symbol === symbol);
   const id    = known?.id || symbolToKrakenId(symbol);
