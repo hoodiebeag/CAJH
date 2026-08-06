@@ -284,6 +284,24 @@ export function backtestMultiTF({ series } = {}, {
     return stop < entry ? { entry, stop, tp: entry + tpR * (entry - stop) } : null;
   };
 
+  const h3Entry = (k) => {
+    // H3 hypothesis: selective higher-low reclaim entry.
+    // Require at least two prior confirmed swing lows and a higher-low structure,
+    // then buy when price closes back above the most recent swing low (reclaim).
+    const prior = swingLows.filter(s => s.ci < k);
+    if (prior.length < 2) return null;
+    const last = prior[prior.length - 1];
+    const prev = prior[prior.length - 2];
+    // require a higher low (selective reversal, not a falling knife)
+    if (!(last.price > prev.price)) return null;
+    // must close above the recent pivot (reclaim)
+    if (C[k] <= last.price) return null;
+    const entry = C[k];
+    const stop = Math.min(L[k], last.price) - 0.001 * entry; // slightly below the pivot / bar low
+    if (entry <= stop) return null;
+    return { entry, stop, tp: entry + tpR * (entry - stop) };
+  };
+
   const trades = [];
   const reasons = {};   // tally of why each candidate swing low was taken / rejected
   const exits   = {};   // tally of HOW each trade ended (stop / target / trail-be / partial / timeout)
@@ -387,6 +405,7 @@ export function backtestMultiTF({ series } = {}, {
        else if (entryMode === "trend_pullback") cand = trendPullbackEntry(k);
        else if (entryMode === "sweep_reclaim") cand = sweepReclaimEntry(k);
        else if (entryMode === "range_sweep_reclaim") cand = rangeSweepReclaimEntry(k);
+       else if (entryMode === "h3")    cand = h3Entry(k);
       if (cand) {
         const risk = cand.entry - cand.stop;
         let reason = "taken";

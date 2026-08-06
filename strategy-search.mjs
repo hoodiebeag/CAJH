@@ -6,7 +6,7 @@ import { backtestMultiTF } from "./backtest.js";
 import { loadResearchCandles, saveExperiment } from "./researchlab.mjs";
 import { loadWatchlist, symbolToKrakenId } from "./researchlib.mjs";
 
-const modes = ["anticipate", "bos", "support", "ma_dip", "rsi", "rev", "breakout", "trend_pullback", "sweep_reclaim", "range_sweep_reclaim"];
+const modes = ["anticipate", "bos", "support", "ma_dip", "rsi", "rev", "breakout", "trend_pullback", "sweep_reclaim", "range_sweep_reclaim", "h3"];
 const mean = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
 const normalize = (xs) => xs.map((x) => typeof x === "string" ? { symbol: x, id: symbolToKrakenId(x) } : x);
 const seriesFor = (id) => [["1h", 60], ["4h", 240], ["1d", 1440]].map(([label, mins]) => ({ label, mins, candles: loadResearchCandles(id, mins) }));
