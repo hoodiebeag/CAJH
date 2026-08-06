@@ -163,3 +163,25 @@ Run the existing tournament with `costRate = 0`. If any family reaches `avgR > 0
 **Run the zero-cost tournament (Track 1).** It takes minutes and definitively answers whether the problem is cost drag or signal absence. That answer determines everything else. If the entries have zero-cost positive EV, the research path is cost reduction. If they do not, the entire entry family must be replaced and Tracks 2-4 are the only viable directions.
 
 The strategy is not currently profitable. The roadmap above is the honest, falsifiable path to finding out whether a profitable one exists in this asset class.
+
+---
+
+## Addendum (2026-08-06) — "Research Roadmap v2" reviewed and rejected as duplicative
+
+A separately-proposed "Roadmap v2" (H1: swing-low trigger on 1d, lowest close of a 5-bar
+window, trigger = prior bar high, BTC/ETH/SOL only) was reviewed by three independent
+verifiers before being staged. **Verdict: DUPLICATE, not staged.** Its entry mechanism —
+a 5-bar local-low pivot plus a breakout-of-high trigger — is the same information source
+as the already-killed `anticipate` (holdout R/trade -0.508) and `bos` (-0.607) families
+above, differing only in a price-field substitution (close vs. low) and confirmation
+timing, not in information source. Staging it would have repeated the exact mistake this
+document's own "Honest Baseline" section warns against: rebuilding the same signal with
+different parameter names.
+
+The one genuine, non-fabricated gap it surfaced: **no family in this tournament has ever
+been tested on the 1d timeframe** (`tournament.mjs` hardcodes `entryTf: "1h"` for every
+run). A narrow, honestly-labeled follow-up — replicate `anticipate`/`bos` on 1d only, net
+of cost from the start, full watchlist, the existing R/trade gate, holdout n≥150 — is a
+legitimate open question and is recorded in `.agent_state.json`'s
+`blackboard.roadmap_v2_review` as a ready-to-stage candidate for the next genuine queue
+restock, not launched as a fresh 5-phase roadmap under looser, gross-of-fees gates.
