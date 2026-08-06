@@ -144,3 +144,24 @@ rule would have blocked the only agent able to fix it.
 
 The principle: a red baseline is a signal about *whose* work is unfinished, not an
 unconditional halt. Distinguish "someone broke the repo" from "this task isn't done yet."
+
+## Notification policy (added 2026-08-06 — "completely hands off")
+
+This loop runs unattended. The human is not reading the ledger in real time, so it must
+tell them, not wait to be asked. `blackboard.notification_policy` (in `.agent_state.json`)
+is the binding spec; the short version: only `cajh-architect-check` and the Verifier's
+narrow live-safety case call `PushNotification`, only for a decision the human actually
+needs to make (an unresolvable `BLOCKED`, an honestly empty queue, a new `PASS` verdict
+reaching the D3 human gate, or an active live-safety concern) — never for routine progress.
+Every send is deduplicated via the top-level `notifications` map (6h window per stable
+`reasonKey`) so a persistent issue notifies once, not every 5 minutes forever. A queue item
+whose owner/file is literally `"(human)"`, or which describes the D3 live-promotion
+decision, is refused immediately by the Executor (`BLOCKED`, not attempted) — that gate is
+never auto-satisfied by this loop, full stop.
+
+**Known gap:** `PushNotification` was newly added to these prompts and has never fired from
+a scheduled run before, so it is not yet in that task's stored tool-approval set. The first
+*genuine* trigger could pause on an unanswered approval prompt instead of notifying — the
+opposite of hands-off. Until the human has approved it once (e.g. via "Run now" on
+`cajh-architect-check`/`cajh-verifier-check`, ideally with a real or deliberately-staged
+trigger condition present), treat notification delivery as unverified.
