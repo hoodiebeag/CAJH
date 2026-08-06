@@ -25,6 +25,25 @@ Fixes vs the original draft:
   7. Test logs truncated before entering `notes` (they can be megabytes).
   8. The agent CLI is validated once, up front, instead of failing silently inside a
      2-second spin loop.
+
+STATUS (2026-08-06): the `claude` CLI this script depends on (SWARM_AGENT_CMD, "claude
+-p" by default) now works on this machine (npm-installed, v2.1.223 — an earlier download
+attempt failed with "not a valid application for this OS platform" and blocked this
+script entirely for most of the project). It is correctly implemented and could be run.
+
+RECOMMENDATION: don't run it. Three scheduled cloud tasks (cajh-executor-check,
+cajh-verifier-check, cajh-architect-check — see AGENT_PROTOCOL.md and the Scheduled panel)
+already drive this same .agent_state.json loop, offset ~10 minutes apart per role, and
+have been landing real work on that cadence without needing a human to keep anything
+running. Launching this script IN ADDITION would put a second, uncoordinated writer on a
+state file that has already been corrupted twice by a single writer conflicting with a
+concurrent edit — and unlike the scheduled tasks, this script only runs while someone
+keeps the process alive, which reintroduces exactly the "a human has to notice and
+restart it" failure mode the scheduled-task setup was built to remove.
+
+If you genuinely need tighter-than-10-minute cadence for a specific push: PAUSE the three
+scheduled tasks first (or set automation.enabled: false in .agent_state.json), run this
+script alone until done, then re-enable. Never both at once.
 """
 
 import json
