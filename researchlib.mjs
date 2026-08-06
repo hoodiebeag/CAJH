@@ -6,7 +6,26 @@
  * things. Consolidated here so there's one place to fix a bug in the stats math instead
  * of four. Each script still owns its actual analysis; this is just the boilerplate.
  */
+import fs from "fs";
+import path from "path";
 import { loadConfig, symbolToKrakenId } from "./storage.js";
+
+const dataDir = () => process.env.DATA_DIR || ".";
+// The only non-trivial reverse mapping symbolToKrakenId's PAIR_MAP applies (XBTUSD -> BTC,
+// not XBTUSD -> XBT); every other pair id is SYMBOL + "USD".
+const KRAKEN_ID_TO_SYMBOL = { XBTUSD: "BTC" };
+
+/** Every symbol with a local candle file, read straight off disk (no config involved). */
+function symbolsFromCandleStore() {
+  const dir = path.join(dataDir(), "candles");
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir)
+    .filter((f) => f.endsWith(".csv"))
+    .map((f) => f.slice(0, -4))
+    .map((id) => KRAKEN_ID_TO_SYMBOL[id] || id.replace(/USD$/, ""))
+    .filter(Boolean)
+    .sort();
+}
 
 /** WATCHLIST env (comma-separated symbols) if set, else the persisted config's watchlist. */
 export function loadWatchlist() {
@@ -14,7 +33,14 @@ export function loadWatchlist() {
   if (env.length) return env;
   // Older persisted configs stored bare symbols while current configs store { symbol, id }.
   // Research should accept both rather than silently producing an all-undefined universe.
-  return (loadConfig().watchlist || []).map((a) => typeof a === "string" ? a.toUpperCase() : a?.symbol).filter(Boolean);
+  const configured = (loadConfig().watchlist || []).map((a) => typeof a === "string" ? a.toUpperCase() : a?.symbol).filter(Boolean);
+  if (configured.length) return configured;
+  // config.json's watchlist can be genuinely persisted as [] (a fresh checkout, or an
+  // operator who cleared it for the live scanner) without that meaning no research
+  // universe exists. Research needs whatever candle data is actually on disk, independent
+  // of what the live bot is currently configured to watch - this never reads or writes
+  // config.json and changes no live-trading behavior.
+  return symbolsFromCandleStore();
 }
 
 export { symbolToKrakenId };
