@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "EXECUTOR_PENDING",
+    "status": "BLOCKED",
     "target_file": "backtest.js (frozen - requires control.allow_live_edit:true when this is picked up), tournament.mjs",
     "objective": "TOURNAMENT_ROADMAP.md Track 2. Implement the volatility-contraction-breakout entry exactly as specified: ATR(14) < 0.5x its own 50-bar median = compression state; entry trigger = close breaks above the compression range high; stop = below the range low; TP = 3R. Run the tournament with a 70/30 chronological split across the full watchlist. Score against the pre-registered gate written BEFORE running (holdout trades >= 150, holdout avgR/trade > +0.10 net of 0.9% cost, holdout win rate >= 40%, positive on >= 50% of tested assets) - do not adjust the gate after seeing results. Report pass/fail per TOURNAMENT_ROADMAP.md's abandonment criteria. COLLISION SAFETY: as of staging, backtest.js/tournament.mjs/tournament.test.mjs/commands.js/strategy-search.mjs have uncommitted local changes from a concurrent, independently-operating process (not this 3-role loop) - confirmed via `git status` at staging time. Step 0.3 (git pull --rebase) will fail cleanly and cheap-exit on its own while those stay uncommitted; that is correct behavior, not a bug, and needs no special handling. Once they are committed and a pull succeeds, proceed normally. Never overwrite or stash that work - if pulled cleanly but the file already contains unrelated in-progress edits from that process, read what is there first and layer on top; if this task and that work would genuinely conflict, set BLOCKED with the precise conflict described rather than guessing which to keep.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "T1-ZEROCOST VERIFIED and complete. Verifier re-ran tournament with --zero-cost flag and confirmed breakout holdout avgR=+0.045R/trade on 3123 trades matches executor's claim exactly. TOURNAMENT_ROADMAP.md updated with Track 1 RESULT section; h3/ma_dip reported for completeness but correctly excluded from the pre-registered 8-family decision rule per architect note. feeRate/slipPct pass-through in tournament.mjs is a genuine no-op when omitted (costOverride={} spread changes nothing). Pulling T2-VOLCONTRACTION as next EXECUTOR_PENDING item - all pre-registered gates and experimental design notes from TOURNAMENT_ROADMAP.md should guide this work.",
-    "updated_by": "verifier",
-    "updated_at": "2026-08-06T21:15:00.000Z"
+    "notes": "T2-VOLCONTRACTION BLOCKED, not attempted. Implementing the volatility-contraction-breakout entry exactly as specified (ATR(14) < 0.5x its own 50-bar median compression state; entry on close breaking above the compression range high; stop below range low; TP 3R) requires adding a new entryMode branch inside backtestMultiTF in backtest.js:404 (same dispatch point as breakoutEntry etc.) - this is where stop/TP simulation, R-multiple tracking, and MTF alignment all live, so the logic cannot be authored elsewhere and still be a fair apples-to-apples tournament comparison against the other families. backtest.js is on the HARD SAFETY frozen-paths list. control.target_file for this item literally says \"backtest.js (frozen - requires control.allow_live_edit:true when this is picked up)\" but control.allow_live_edit is currently false - the flag was never actually set when this item was staged as EXECUTOR_PENDING, so both frozen-path conditions (target_file naming it AND allow_live_edit===true) are not simultaneously satisfied. Per protocol this is a genuine blocker, not something to improvise past. DECISION NEEDED: Architect/human should either (a) set control.allow_live_edit=true for this item and re-queue EXECUTOR_PENDING, or (b) confirm scope/spec first if there is any reason not to touch backtest.js for this track. Nothing else attempted this run: no files edited, no tests run (no source changed), git pull --rebase was clean (already up to date, no collision with the concurrent process this time). tournament.mjs was read and confirmed it only maps entryMode strings to backtest.js implementations - no version of this task is completable in tournament.mjs alone.",
+    "updated_by": "executor",
+    "updated_at": "2026-08-06T21:45:00.000Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -84,7 +84,7 @@
       },
       {
         "id": "T2-VOLCONTRACTION",
-        "state": "started",
+        "state": "blocked",
         "owner": "executor",
         "file": "backtest.js (frozen - requires control.allow_live_edit:true when this is picked up), tournament.mjs",
         "depends_on": [
@@ -397,6 +397,14 @@
       "detail": "T1-ZEROCOST PASS. npm.cmd test: 168/168 green, matches executor claim. Re-ran `node tournament.mjs --zero-cost` independently and confirmed breakout holdout avgR = +0.0451 on 3123 trades (executor reported +0.045, rounding difference only). Verified no-op pass-through: tournament.mjs runTournament() accepts optional feeRate/slipPct, builds costOverride conditionally (empty if both undefined), spreads into backtestMultiTF call - byte-identical to prior behavior when omitted. Confirmed tournament.test.mjs still asserts 11 rows (correct for 11 families), no test weakening. Verified TOURNAMENT_ROADMAP.md appended new Track 1 RESULT section (baseline table intact), decision rule applied only to 8-family baseline, h3/ma_dip reported but explicitly excluded. Marked work_queue T1-ZEROCOST done and T2-VOLCONTRACTION started; pulled T2-VOLCONTRACTION (depends_on T1-ZEROCOST ✓) into control as EXECUTOR_PENDING. Next item ready to start immediately.",
       "commit": "pending",
       "tests": "168 pass, 0 fail"
+    },
+    {
+      "ts": "2026-08-06T21:45:00.000Z",
+      "agent": "executor",
+      "action": "blocked",
+      "detail": "T2-VOLCONTRACTION requires a new entryMode branch in backtest.js (frozen). control.allow_live_edit is false despite target_file naming backtest.js as requiring it - frozen-path hard rule trips. Set BLOCKED, no edits made, routing to Architect/human for allow_live_edit decision.",
+      "commit": "none",
+      "tests": "no source changed this step"
     }
   ],
   "automation": {
