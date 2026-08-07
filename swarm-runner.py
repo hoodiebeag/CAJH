@@ -31,19 +31,20 @@ STATUS (2026-08-06): the `claude` CLI this script depends on (SWARM_AGENT_CMD, "
 attempt failed with "not a valid application for this OS platform" and blocked this
 script entirely for most of the project). It is correctly implemented and could be run.
 
-RECOMMENDATION: don't run it. Three scheduled cloud tasks (cajh-executor-check,
-cajh-verifier-check, cajh-architect-check — see AGENT_PROTOCOL.md and the Scheduled panel)
-already drive this same .agent_state.json loop, offset ~10 minutes apart per role, and
-have been landing real work on that cadence without needing a human to keep anything
-running. Launching this script IN ADDITION would put a second, uncoordinated writer on a
-state file that has already been corrupted twice by a single writer conflicting with a
-concurrent edit — and unlike the scheduled tasks, this script only runs while someone
-keeps the process alive, which reintroduces exactly the "a human has to notice and
-restart it" failure mode the scheduled-task setup was built to remove.
+RECOMMENDATION: don't run it. One scheduled cloud task (cajh-loop-check — see
+AGENT_PROTOCOL.md and the Scheduled panel; retired 2026-08-07 from three separate
+per-role tasks into this single one for session-count efficiency, same coverage) already
+drives this same .agent_state.json loop and has been landing real work on that cadence
+without needing a human to keep anything running. Launching this script IN ADDITION would
+put a second, uncoordinated writer on a state file that has already been corrupted
+multiple times by a single writer conflicting with a concurrent edit — and unlike the
+scheduled task, this script only runs while someone keeps the process alive, which
+reintroduces exactly the "a human has to notice and restart it" failure mode the
+scheduled-task setup was built to remove.
 
-If you genuinely need tighter-than-10-minute cadence for a specific push: PAUSE the three
-scheduled tasks first (or set automation.enabled: false in .agent_state.json), run this
-script alone until done, then re-enable. Never both at once.
+If you genuinely need tighter cadence than cajh-loop-check's current interval for a
+specific push: PAUSE it first (or set automation.enabled: false in .agent_state.json), run
+this script alone until done, then re-enable. Never both at once.
 """
 
 import json

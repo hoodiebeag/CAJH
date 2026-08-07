@@ -149,19 +149,30 @@ unconditional halt. Distinguish "someone broke the repo" from "this task isn't d
 
 This loop runs unattended. The human is not reading the ledger in real time, so it must
 tell them, not wait to be asked. `blackboard.notification_policy` (in `.agent_state.json`)
-is the binding spec; the short version: only `cajh-architect-check` and the Verifier's
-narrow live-safety case call `PushNotification`, only for a decision the human actually
-needs to make (an unresolvable `BLOCKED`, an honestly empty queue, a new `PASS` verdict
-reaching the D3 human gate, or an active live-safety concern) — never for routine progress.
-Every send is deduplicated via the top-level `notifications` map (6h window per stable
-`reasonKey`) so a persistent issue notifies once, not every 5 minutes forever. A queue item
-whose owner/file is literally `"(human)"`, or which describes the D3 live-promotion
-decision, is refused immediately by the Executor (`BLOCKED`, not attempted) — that gate is
-never auto-satisfied by this loop, full stop.
+is the binding spec; the short version: `PushNotification` fires only for a decision the
+human actually needs to make (an unresolvable `BLOCKED`, an honestly empty queue, a new
+`PASS` verdict reaching the D3 human gate, or an active live-safety concern) — never for
+routine progress. Every send is deduplicated via the top-level `notifications` map (6h
+window per stable `reasonKey`) so a persistent issue notifies once, not every firing
+forever. A queue item whose owner/file is literally `"(human)"`, or which describes the D3
+live-promotion decision, is refused immediately by the Executor branch (`BLOCKED`, not
+attempted) — that gate is never auto-satisfied by this loop, full stop.
 
-**Known gap:** `PushNotification` was newly added to these prompts and has never fired from
-a scheduled run before, so it is not yet in that task's stored tool-approval set. The first
-*genuine* trigger could pause on an unanswered approval prompt instead of notifying — the
-opposite of hands-off. Until the human has approved it once (e.g. via "Run now" on
-`cajh-architect-check`/`cajh-verifier-check`, ideally with a real or deliberately-staged
-trigger condition present), treat notification delivery as unverified.
+**Known gap:** `PushNotification` has never fired from a scheduled run before, so it is not
+yet in `cajh-loop-check`'s stored tool-approval set. The first *genuine* trigger could pause
+on an unanswered approval prompt instead of notifying — the opposite of hands-off. Until the
+human has approved it once (e.g. via "Run now" on `cajh-loop-check`, ideally with a real or
+deliberately-staged trigger condition present), treat notification delivery as unverified.
+
+## Scheduling (updated 2026-08-07 — one task, not three)
+
+The loop originally ran as three independent scheduled tasks (`cajh-executor-check`,
+`cajh-verifier-check`, `cajh-architect-check`), each cheap-exiting unless `control.status`
+named its role. That meant most firings — the large majority, since only one role's turn is
+ever active — did nothing but read the state file and exit, at a combined rate of roughly
+13 sessions/hour. They are retired in favor of a single `cajh-loop-check` task that reads
+`control.status` once per firing and dispatches to whichever role (if any) actually has
+work, then always runs the shared watchdog/notification/restock checks before exiting —
+same coverage, roughly a third the session count. The turn-discipline invariant is
+unchanged: at most one role's active-turn work happens per firing, and a role that hands off
+does not immediately also run the role it handed off to in the same firing.

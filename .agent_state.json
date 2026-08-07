@@ -1,16 +1,16 @@
 {
   "version": 2,
   "control": {
-    "status": "VERIFIER_PENDING",
-    "target_file": "backtest.js, tournament.mjs, backtest.test.mjs, tournament.test.mjs",
-    "objective": "TOURNAMENT_ROADMAP.md Track 2 - volatility-contraction breakout. AUTHORIZED SCOPED FROZEN-PATH EDIT (allow_live_edit:true; call-path proof in notes). Add ONE new research-only entry helper plus ONE dispatch line to backtest.js, register the family in tournament.mjs, add fixture tests in backtest.test.mjs, fix the row-count assertion in tournament.test.mjs, then run the tournament at the standard 70/30 chronological split across the full watchlist and score it against the gate pre-registered in TOURNAMENT_ROADMAP.md (committed 8e9ae64, BEFORE any run: holdout trades >= 150, holdout avgR/trade > +0.10 net of 0.9% cost, holdout win rate >= 40%, positive on >= 50% of tested assets). Do not adjust the gate or any pre-registered constant after seeing results.",
-    "allow_live_edit": true,
+    "status": "EXECUTOR_PENDING",
+    "target_file": "backtest.js (frozen - requires control.allow_live_edit:true when this is picked up), tournament.mjs",
+    "objective": "TOURNAMENT_ROADMAP.md Track 3, REFINED 2026-08-06 per a second human-facing research proposal (received directly by the human, reconciled here by the Architect - not silently auto-applied). ORIGINAL scope was: BTC-above-200d-MA filter on BOTH anticipate and breakout, gate avgR>+0.05 n>=100. REFINEMENT proposes instead: filter breakout ONLY first (the best performer, -0.437R holdout unfiltered) as a single, cheap, definitive experiment, gate avgR>-0.10 n>=200 (looser R threshold, much stricter sample-size floor than the original). Implement regime filter (BTC close > 200d SMA) on breakout only; run holdout; score against both gate clauses (avgR>-0.10 AND trades>=200); report explicit pass/fail using TOURNAMENT_ROADMAP.md abandonment wording; npm.cmd test green.",
+    "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "T2-VOLCONTRACTION complete: FAIL, Track 2 abandoned. See ledger entry and TOURNAMENT_ROADMAP.md Track 2 RESULT section for the full gate scoring (holdout 98 trades / avgR -0.322 / win rate 40.8% / positive on 5 of 21 assets, vs the pre-registered >=150 / >+0.10 / >=40% / >=50% gate). npm.cmd test 170/170. Verifier: please independently confirm (a) the gate arithmetic in the new TOURNAMENT_ROADMAP.md section against research-runs/2026-08-07T10-08-48-816Z-tournament.json, (b) that backtest.js/tournament.mjs/backtest.test.mjs/tournament.test.mjs (committed earlier at cdcace6, not touched this run) still match control.notes verbatim, and (c) that no live/frozen path was altered - only vol_contraction, gated behind a literal entryMode string no live caller passes.",
-    "updated_by": "executor",
-    "updated_at": "2026-08-07T10:15:00.000Z"
+    "notes": "T2-VOLCONTRACTION PASS (Verifier verified). Independently confirmed vol_contraction tournament scores: holdout 98 trades / avgR -0.322 / win rate 40.8% / positive on 5/21 assets vs gate >=150 / >+0.10 / >=40% / >=50%. Both abandonment triggers fire (trades<150, avgR<0). Track 2 abandoned per TOURNAMENT_ROADMAP.md. T3-REGIMEFILTER ready to start.",
+    "updated_by": "verifier",
+    "updated_at": "2026-08-07T10:18:37.513Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -84,7 +84,7 @@
       },
       {
         "id": "T2-VOLCONTRACTION",
-        "state": "pending",
+        "state": "done",
         "owner": "executor",
         "file": "backtest.js (AUTHORIZED scoped frozen-path edit - allow_live_edit:true set by architect 2026-08-06), tournament.mjs, backtest.test.mjs, tournament.test.mjs",
         "depends_on": [
@@ -95,7 +95,7 @@
       },
       {
         "id": "T3-REGIMEFILTER",
-        "state": "pending",
+        "state": "started",
         "owner": "executor",
         "file": "backtest.js (frozen - requires control.allow_live_edit:true when this is picked up), tournament.mjs",
         "depends_on": [
@@ -157,8 +157,7 @@
     "notification_policy": {
       "description": "Binding spec for when scheduled agents may call PushNotification. Only for a decision the human actually needs to make - never for routine progress. Every send MUST be deduplicated via the top-level `notifications` map before sending. This object was described in AGENT_PROTOCOL.md's 'Notification policy' section and referenced by commit 2c50808's message, but the JSON itself was never actually written until this commit - reconstructed from that section, the ledger, and the scheduled-task specs verbatim.",
       "callers": [
-        "cajh-architect-check (general triggers)",
-        "cajh-verifier-check (live-safety trigger only)"
+        "cajh-loop-check (all triggers, including the Verifier branch's inline live-safety case)"
       ],
       "triggers": [
         {
@@ -175,12 +174,12 @@
         },
         {
           "reasonKey": "live-safety",
-          "when": "LIVE_TRADING is found true anywhere, or a diff weakens an existing safety gate (stop bands, position cap, drawdown halt, order validation, min stop) rather than just reporting a research finding. This is the one case where the Verifier notifies directly instead of waiting for the next Architect cycle - see cajh-verifier-check's STEP 0 urgent check."
+          "when": "LIVE_TRADING is found true anywhere, or a diff weakens an existing safety gate (stop bands, position cap, drawdown halt, order validation, min stop) rather than just reporting a research finding. This is the one case where the Verifier branch (STEP 3b) notifies directly instead of waiting for STEP 4 - see cajh-loop-check's STEP 3b urgent check."
         }
       ],
       "dedup": "Before calling PushNotification for a given reasonKey, read notifications[reasonKey]. If it exists and now - notifications[reasonKey].lastSentAt < 6 hours, skip (already notified, don't resend). Otherwise call PushNotification, then read-modify-write the state file (re-read immediately before writing, strip BOM, merge only this key, write to .tmp and rename) to set notifications[reasonKey] = { lastSentAt: <ISO-8601 now>, message: <text actually sent> }.",
       "message_format": "Under 200 chars. Leads with the concrete issue or risk, not a status label. No jargon a non-engineer human would have to decode at a glance.",
-      "known_gap": "PushNotification was newly added to these prompts and has never fired from a scheduled run before, so it is not yet in that task's stored tool-approval set. The first genuine trigger could pause on an unanswered approval prompt instead of notifying - the opposite of hands-off. Until the human has approved it once (e.g. via 'Run now' on cajh-architect-check/cajh-verifier-check, ideally with a real or deliberately-staged trigger condition present), treat notification delivery as unverified."
+      "known_gap": "PushNotification was newly added to these prompts and has never fired from a scheduled run before, so it is not yet in that task's stored tool-approval set. The first genuine trigger could pause on an unanswered approval prompt instead of notifying - the opposite of hands-off. Until the human has approved it once (e.g. via 'Run now' on cajh-loop-check, ideally with a real or deliberately-staged trigger condition present), treat notification delivery as unverified."
     },
     "roadmap_v2_review": "A pasted \"CAJH Research Roadmap v2\" (Phase 1 H1: swing-low trigger on 1d, lowest close of 5-bar window, trigger=prior bar high, BTC/ETH/SOL only, gate train Sharpe>=0.5/win-rate>=45%/n>=60 GROSS of fees) was reviewed by three independent verifiers before staging (2026-08-06). VERDICT: DUPLICATE, high confidence (~80%) from all three, NOT staged. Core finding: H1's mechanism (5-bar-window local-low pivot + breakout-of-high trigger) is the same information source as the already-killed `anticipate` (holdout R/trade -0.508) and `bos` (-0.607) families in tournament.mjs/backtest.js - same isLeftLow/detectSwings n=5 pivot primitive, differing only in price field (close vs low) and confirmation timing, which is a parameter tweak not a new information source. sweep_reclaim/range_sweep_reclaim/h3 are the same rolling-low+reclaim category with different N, also already killed. This directly violates TOURNAMENT_ROADMAP.md's own 'Honest Assessment' constraint that a rebuild must use a genuinely different information source, not another OHLCV price-structure variant. Additional integrity risks flagged independently by the structural reviewer, worth remembering if a similar proposal appears again: (1) gating on GROSS Sharpe/win-rate before applying costs risks laundering an already-net-negative signal into an apparent 'pass' under a different metric - Phase 1 should never be treated as validation, only as a diagnostic, exactly like TOURNAMENT_ROADMAP.md's own Track 1; (2) 3 correlated large-caps (BTC/ETH/SOL) with no per-asset dispersion gate is a real generalization risk, not a neutral narrowing - this repo's own standard is >=50% of the FULL watchlist (20 pairs per ROADMAP.md), not 2-of-3 correlated majors; (3) n>=60 is a TRAIN-only floor with no holdout-n minimum, which for a ~2yr daily-bar holdout window likely implies ~40-55 holdout trades - well under this repo's established ~150-200 reliability floor; (4) the roadmap never states what happens if H1 PASSES (only the fail branch is written), which is exactly the kind of ambiguous state AGENT_PROTOCOL.md treats as a hard stop, not something to infer at runtime. ONE genuinely open, real gap (not fabricated): tournament.mjs:38 hardcodes entryTf:\"1h\" for every family - no family, including anticipate/bos, has ever actually been tested on 1d. This is the only legitimate unexplored variable in v2. RECOMMENDED FOLLOW-UP (not yet staged - queue depth doesn't call for a restock right now; stage this at STEP 5 the next time it does, per AGENT_PROTOCOL.md - don't invent busywork by adding it early): a narrow, explicitly-labeled REPLICATION test of anticipate/bos on 1d only - net-of-cost from the start (no gross-first phase), full watchlist (not 3 assets), the existing R/trade-sign-both-windows gate (not a new Sharpe/win-rate metric), proper holdout-n floor (>=150 per this repo's standard). Frame it as 'does 1d change the anticipate/bos verdict', not as a fresh H1 under a new roadmap label - and if it also fails, that closes the swing-low/pivot-reclaim signal family across both tested timeframes, which is a genuinely stronger, more complete verdict than either timeframe alone."
   },
@@ -433,11 +432,27 @@
       "action": "complete",
       "detail": "T2-VOLCONTRACTION: found backtest.js/tournament.mjs/backtest.test.mjs/tournament.test.mjs already implemented and committed (cdcace6, by a prior executor pass that stopped before scoring, per its own commit message) - independently rebuilt the identical four-file diff from control.notes before discovering this, confirmed byte-for-byte identical via git diff HEAD (0 lines), so no redundant commit was made for code/tests. npm.cmd test: 170/170 green, including the two vol_contraction fixtures. Ran node tournament.mjs (default cost, 70/30 split, full 28-asset watchlist): holdout 98 trades, avgR -0.322 net of ~0.9% round-trip cost, win rate 40.8%, positive on 5/21 traded assets (23.8%); train 167 trades, avgR -0.638. Pulled the reasons histogram via a one-off script (not committed) since tournament.mjs does not expose it per-family: holdout taken 98 / stopTooTight 40 / stopTooFar 0 / priceBelowStop 0 - even crediting every stopTooTight rejection as a trade the sample tops out at 138, still under the 150 floor, so the shortfall is not solely a stop-size artifact. Scored against the four pre-registered gate criteria (TOURNAMENT_ROADMAP.md, committed 8e9ae64): trades>=150 FAIL, avgR>+0.10 FAIL, win rate>=40% PASS (marginal, 40.8%), positive on >=50% of assets FAIL. Both independent abandonment triggers this track pre-registered (holdout avgR<0, holdout trades<150) fire. No gate constant was touched after seeing results. Recorded the full result table, reasons histogram, and FAIL verdict in TOURNAMENT_ROADMAP.md under a new Track 2 RESULT section, committed and pushed (content landed inside da5c34b, a concurrent Architect commit that independently touched .agent_state.json cadence fields at the same moment and picked up my staged working-tree change - verified via git show --stat that the 45-line TOURNAMENT_ROADMAP.md insertion is exactly my content, and git diff HEAD is now clean). Track 2 is abandoned; T3-BTCREGIME is next per the roadmap.",
       "commit": "da5c34b"
+    },
+    {
+      "ts": "2026-08-07T10:18:37.514Z",
+      "agent": "verifier",
+      "action": "verify+complete",
+      "detail": "T2-VOLCONTRACTION PASS. npm.cmd test: 170/170 green, matches executor claim. Independently re-ran tournament and confirmed vol_contraction holdout scores exactly: 98 trades, avgR=-0.322, win rate 40.8%, positive on 5/21 assets (23.8%). Pre-registered gate: trades>=150 FAIL, avgR>+0.10 FAIL, win rate>=40% PASS (marginal), positive on >=50% FAIL. Both abandonment triggers (trades<150, avgR<0) fire. Verdict: Track 2 abandoned per the abandonment criteria - vol_contraction does not clear the gate. No frozen-path violation: entryMode=vol_contraction dispatch isolated, unreachable by live callers. Marked T2 done, pulled T3-REGIMEFILTER as next EXECUTOR_PENDING item (depends_on T2 satisfied).",
+      "commit": "b914d7d",
+      "tests": "170 pass, 0 fail"
+    },
+    {
+      "ts": "2026-08-07T16:06:14.615Z",
+      "agent": "architect",
+      "action": "consolidate",
+      "detail": "Retired the three independent scheduled tasks (cajh-executor-check /15, cajh-verifier-check 2-59/10, cajh-architect-check 18-59/20 - roughly 13 firings/hour combined, the large majority cheap-exiting doing nothing since only one role's turn is ever active) in favor of a single cajh-loop-check task (cron */15) that reads control.status once per firing and dispatches to whichever role has real work, then always runs the shared watchdog/notification/restock checks before exiting. Same coverage and turn discipline (at most one role's active-turn work per firing, no chaining a handoff into immediately also running the handed-off-to role), roughly a third the session count. Verified via a 5-way adversarial check (executor-fidelity, verifier-fidelity, architect-fidelity, dispatch-flow-safety, safety-invariant-integrity) before the old tasks were deleted - see the accompanying commit for what each check found and how it was resolved. Updated forward-looking references in this file (notification_policy.callers, the live-safety trigger's `when` text, known_gap's 'Run now' instruction, automation.note) to name cajh-loop-check; historical ledger entries describing the old three-task setup were left untouched (append-only, they were true when written). Also updated AGENT_PROTOCOL.md's Notification policy section and swarm-runner.py's status note to match. Two long-dead one-time tasks (cajh-flow-analysis-resume, cajh-resume-on-reset) were already gone from the scheduler by the time this ran - nothing to clean up there.",
+      "commit": "pending",
+      "tests": "no source changed this step"
     }
   ],
   "automation": {
     "enabled": true,
-    "note": "Read by cajh-executor-check and cajh-verifier-check BEFORE anything else. Set enabled:false to pause both without touching the scheduler UI - each check still fires on its cron but exits immediately, so pausing costs nothing and resuming is instant. No quota-based auto-pause exists: a scheduled run cannot see remaining usage from inside the prompt, so this is a manual switch, not a self-detecting one."
+    "note": "Read by cajh-loop-check BEFORE anything else, every firing regardless of which role's turn it is. Set enabled:false to pause both without touching the scheduler UI - each check still fires on its cron but exits immediately, so pausing costs nothing and resuming is instant. No quota-based auto-pause exists: a scheduled run cannot see remaining usage from inside the prompt, so this is a manual switch, not a self-detecting one."
   },
   "notifications": {
     "pull-deadlock-foreign-changes": {
