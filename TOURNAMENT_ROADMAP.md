@@ -139,6 +139,44 @@ evidence** — it is not grounds for silently loosening `minStopPct` and re-runn
 
 ---
 
+## Track 4 — RESULT (2026-08-07): ABANDONED
+
+Ran `runPortfolioStudy()` from `portfolio.mjs` unmodified — it already implements a
+sealed 70/30 chronological split (`splitFraction: .70`) with no look-ahead (each
+strategy call only reads price history at or before its own rebalance index; the
+train/holdout partition is a pure index range on the same panel). No harness changes
+were needed; this item was purely the "clean holdout run reported here" the track
+itself asks for. Full watchlist (28 assets, BTC excluded as the regime signal rather
+than a tradeable name, matching every other `portfolio.mjs` strategy). Both `momentum_30d`
+and `momentum_vol`, each at both rebalance frequencies:
+
+| Variant | Holdout Sharpe | Holdout total return | Holdout max drawdown |
+|---|---|---|---|
+| `momentum_30d`, 7d rebalance | -0.141 | -9.3% | -56.6% |
+| `momentum_30d`, 30d rebalance | 0.270 | +16.6% | -36.8% |
+| `momentum_vol`, 7d rebalance | -0.286 | -17.8% | -58.0% |
+| `momentum_vol`, 30d rebalance | 0.202 | +12.3% | -43.8% |
+
+**Gate check (pre-registered, both rebalance variants required per strategy — not
+either/or):**
+- `momentum_30d` 7d: Sharpe>0.5 FAIL, totalReturn>0 FAIL, maxDrawdown>-35% FAIL → all three FAIL
+- `momentum_30d` 30d: Sharpe>0.5 FAIL, totalReturn>0 PASS, maxDrawdown>-35% FAIL (-36.8% < -35%) → combined FAIL
+- `momentum_vol` 7d: Sharpe>0.5 FAIL, totalReturn>0 FAIL, maxDrawdown>-35% FAIL → all three FAIL
+- `momentum_vol` 30d: Sharpe>0.5 FAIL, totalReturn>0 PASS, maxDrawdown>-35% FAIL (-43.8% < -35%) → combined FAIL
+
+**Verdict: FAIL.** Neither strategy has even one rebalance variant clearing all three
+holdout clauses, let alone both as the gate requires. The 30d-rebalance variants come
+closest (positive holdout return, Sharpe in the 0.2–0.3 range) but both breach the
+drawdown floor and fall well short of the 0.5 Sharpe bar; the 7d-rebalance variants are
+outright negative on every clause. This does not meet the track's own stated
+abandonment trigger literally (holdout Sharpe is positive, not <0, on the 30d variants)
+but the pre-registered pass gate — not the abandonment trigger — is the one that governs
+promotion, and it is failed decisively and symmetrically by both strategies. Per
+`TOURNAMENT_ROADMAP.md`'s own execution order, Tracks 1–4 have now all failed:
+**a genuinely new hypothesis is needed next, not re-tuning any of these four.**
+
+---
+
 ## What Agents Must Not Do
 
 | Prohibited | Reason |
