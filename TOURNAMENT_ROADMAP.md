@@ -266,3 +266,48 @@ verdict is unchanged: no edge, cost is not the explanation.
 experiment description above — is the next step for that one family.
 `T2-VOLCONTRACTION` remains queued as-is; this result does not change its scope, since it
 targets a different, new entry signal rather than `breakout`'s exit/frequency tuning.
+
+---
+
+## Track 2 — RESULT (2026-08-07): ABANDONED
+
+Implemented exactly the pre-registered spec (Architect, 2026-08-06, commit
+8e9ae64): `volContractionEntry` added to `backtest.js` as a new `entryMode` branch
+(compression = `atr(k-1,14) < 0.5x` the 50-bar median ATR, evaluated only to the
+previous bar; range = the contiguous compressed run immediately before `k`, scanned
+back at most 50 bars, minimum 5-bar floor; entry on close above the range high, stop
+below the range low, TP = 3R). Registered as a new family in `tournament.mjs` with the
+pre-registered config (`minStopPct: .01, maxStopPct: .06, tpR: 3` — same caps as
+`breakout`, for an apples-to-apples comparison). No existing entry helper, exit
+simulator, cost model, split logic, or other family config was touched. Ran
+`node tournament.mjs` — net-of-cost (default `feeRate`/`slipPct`, round-trip ≈0.9%),
+70/30 chronological split, full watchlist (28 assets passing the `>=250`
+candle-per-TF filter).
+
+**Result:**
+
+| | Trades | avgR/trade (net) | Win rate | Assets traded | Positive assets |
+|---|---|---|---|---|---|
+| Train | 167 | -0.638 | 31.7% | 27 | 7 (25.9%) |
+| Holdout | 98 | -0.322 | 40.8% | 21 | 5 (23.8%) |
+
+**Holdout `reasons` histogram** (raw candidates before the stop-size filter, all 28
+assets): `taken: 98, stopTooTight: 40, stopTooFar: 0, priceBelowStop: 0` — 138 raw
+compression-breakout candidates total. Even counting every `stopTooTight` rejection as
+a would-be trade, the holdout sample tops out at 138, still short of the 150 floor; the
+frequency shortfall is not solely a stop-size artifact.
+
+**Gate check (pre-registered, must not be adjusted after seeing this):**
+- Holdout trades >= 150 → 98 → **FAIL**
+- Holdout `avgR/trade > +0.10` net of cost → -0.322 → **FAIL**
+- Holdout win rate >= 40% → 40.8% → PASS (marginal)
+- Positive on >= 50% of tested assets → 5/21 = 23.8% → **FAIL**
+
+**Verdict: FAIL.** 3 of 4 pre-registered criteria fail, including the two independent
+abandonment triggers named in this section's own pre-registration — holdout `avgR < 0`
+after costs, and holdout trades under 150. The compression-breakout signal has a
+genuinely negative holdout edge net of cost, not merely a small-sample or stop-size
+artifact (train is negative by a wider margin than holdout, -0.638 vs -0.322, which is
+the opposite of what a real edge obscured by noise would look like). Per this track's
+own pre-registered rule, **Track 2 is abandoned.** No parameter was loosened or
+re-run after seeing these numbers.
