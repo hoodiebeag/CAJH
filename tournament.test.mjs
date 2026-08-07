@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix, runBreakoutDecayExit } from "./tournament.mjs";
+import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix, runBreakoutDecayExit, runTimeframeIsolation } from "./tournament.mjs";
 
 test("tournament reports no promotion when its data gate cannot be met", () => {
   const report = runTournament({ watchlist: [] });
@@ -75,4 +75,28 @@ test("runBreakoutDecayExit: variant config only overrides maxHold, nothing else"
   const report = runBreakoutDecayExit({ watchlist: [] });
   assert.equal(report.input.variant.maxHold, 24);
   assert.equal(report.input.family, "breakout");
+});
+
+// ── T6-TIMEFRAME-ISOLATION — replicate anticipate/bos on 1d ────────────────────
+test("runTournament: entryTf override defaults to \"1h\" and passing it doesn't change row shape/count", () => {
+  const report = runTournament({ watchlist: [], entryTf: "1d" });
+  assert.equal(report.result.rows.length, 12);
+  assert.equal(report.result.rows.every((row) => !row.promoted), true);
+});
+
+test("runTimeframeIsolation: empty watchlist yields zero trades on both families and fails the gate honestly", () => {
+  const report = runTimeframeIsolation({ watchlist: [] });
+  assert.equal(report.result.families.length, 2);
+  assert.deepEqual(report.result.families.map((f) => f.family), ["anticipate", "bos"]);
+  for (const f of report.result.families) {
+    assert.equal(f.holdout.trades, 0, "0 trades must never read as a passing gate");
+    assert.equal(f.gate.passed, false);
+    assert.equal(f.gate.tradesPass, false);
+  }
+});
+
+test("runTimeframeIsolation: entryTf defaults to \"1d\" and only anticipate/bos are targeted", () => {
+  const report = runTimeframeIsolation({ watchlist: [] });
+  assert.equal(report.input.entryTf, "1d");
+  assert.deepEqual(report.input.families, ["anticipate", "bos"]);
 });

@@ -533,3 +533,52 @@ the earlier T1B-BREAKOUT-COSTFIX finding: `breakout`'s losses are dominated by c
 on frequent small losers, not by winners rotting into losers while a position sits open,
 so truncating hold time neither helps nor much hurts. **T5-DECAY-EXIT is closed as a
 FAIL.** No gate constant was touched after seeing these numbers.
+
+## T6-TIMEFRAME-ISOLATION RESULT (2026-08-07)
+
+Follow-up recorded in the "Roadmap v2 reviewed and rejected as duplicative" addendum
+above and staged in `.agent_state.json`'s `blackboard.roadmap_v2_review`: the one
+genuine open gap that review surfaced was that `tournament.mjs` hardcoded
+`entryTf: "1h"` for every family, so neither `anticipate` nor `bos` — the two families
+closest to the rejected "Roadmap v2" swing-low mechanism — had ever actually been
+tested on the 1d timeframe. This is a narrow, honestly-labeled REPLICATION on 1d only,
+framed as "does 1d change the verdict", not a fresh hypothesis.
+
+**Mechanism:** added an optional `entryTf` override to `runTournament` (default `"1h"`,
+byte-identical when omitted — same additive pattern as T1-ZEROCOST's `feeRate`/`slipPct`;
+the existing `rows.length === 12` test is unaffected). Added a new
+`runTimeframeIsolation` function that re-runs ONLY `anticipate` and `bos` — each
+family's exact pre-registered config, unmodified except `entryTf` — net-of-cost from the
+start, full watchlist, standard 70/30 chronological split.
+
+**Pre-registered gate (both required, holdout only, scored per family):**
+- Holdout `avgR/trade > 0`
+- Holdout trades >= 150
+
+Ran `node tournament.mjs --timeframe-isolation` (28 assets passing the `>=250`
+candle-per-TF filter).
+
+**Result:**
+
+| Family | Train trades | Train avgR | Holdout trades | Holdout avgR (net) | Holdout win rate | Positive assets |
+|---|---|---|---|---|---|---|
+| anticipate (1d) | 597 | -0.103 | 314 | -0.237 | 29.0% | 11/28 |
+| bos (1d) | 83 | +0.287 | 24 | -0.536 | 29.2% | 2/14 |
+
+Compared against the existing 1h baseline (net-of-cost holdout: anticipate -0.508, bos
+-0.607): 1d is less bad for `anticipate` (-0.237 vs -0.508) but still solidly negative,
+and clears the trades floor (314 >= 150). `bos` on 1d collapses to only 24 holdout
+trades (well under the 150 floor — the daily-bar warmup and 27/28-asset universe leave
+too little holdout history for a signal this infrequent) and stays negative regardless.
+
+**Gate check (pre-registered, not adjusted after seeing this):**
+- `anticipate`: avgR>0 → -0.237 → **FAIL**; trades>=150 → 314 → PASS → combined **FAIL**
+- `bos`: avgR>0 → -0.536 → **FAIL**; trades>=150 → 24 → **FAIL** → combined **FAIL**
+
+**Verdict: FAIL for both families.** 1d does not change the verdict — `anticipate` and
+`bos` remain killed on both tested timeframes. Per the addendum's own framing, this is a
+genuinely stronger and more complete verdict than either timeframe alone: the
+swing-low/pivot-reclaim signal family (`anticipate`, `bos`, and by the same-mechanism
+argument in the addendum, `sweep_reclaim`/`range_sweep_reclaim`/`h3`) is now closed
+across both the 1h and 1d timeframes. **T6-TIMEFRAME-ISOLATION is closed as a FAIL.**
+No gate constant was touched after seeing these numbers.

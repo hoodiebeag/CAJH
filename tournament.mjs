@@ -191,8 +191,48 @@ export function runBreakoutDecayExit({ watchlist = loadWatchlist(), split = .70 
   return { input, result };
 }
 
+/**
+ * T6-TIMEFRAME-ISOLATION (TOURNAMENT_ROADMAP.md Addendum "Roadmap v2 reviewed and
+ * rejected as duplicative", staged in .agent_state.json's blackboard.roadmap_v2_review):
+ * `runTournament` hardcoded `entryTf: "1h"` for every family — no family, including
+ * `anticipate`/`bos`, had ever actually been tested on 1d. This is a narrow, honestly
+ * labeled REPLICATION of those two families (the ones closest to the reviewed-and-
+ * rejected "Roadmap v2" swing-low mechanism) on 1d only: net-of-cost from the start (no
+ * gross-first phase), full watchlist, the existing R/trade-sign gate, proper holdout-n
+ * floor. Each family's exact pre-registered config is reused unmodified except entryTf —
+ * no other family, and no other config field, is touched.
+ *
+ * PRE-REGISTERED GATE (both required, holdout only, scored PER FAMILY, same convention
+ * as every other gate in this file): holdout avgR/trade > 0 AND holdout trades >= 150.
+ */
+export function runTimeframeIsolation({ watchlist = loadWatchlist(), split = .70, entryTf = "1d" } = {}) {
+  const targets = ["anticipate", "bos"];
+  const datasets = normalize(watchlist).map((asset) => ({ symbol: asset.symbol, series: seriesFor(asset.id) }))
+    .filter((d) => d.series.every((tf) => tf.candles.length >= 250))
+    .map((d) => ({ symbol: d.symbol, train: splitSeries(d.series, split, false), holdout: splitSeries(d.series, split, true) }));
+
+  const results = targets.map((id) => {
+    const [, , config] = families.find(([fid]) => fid === id);
+    const score = (part) => summarize(datasets.map((d) => backtestMultiTF({ series: d[part] }, { ...config, entryTf })));
+    const train = score("train"), holdout = score("holdout");
+    const avgRPass = holdout.avgR > 0;
+    const tradesPass = holdout.trades >= 150;
+    return { family: id, train, holdout, gate: { avgRPass, tradesPass, passed: avgRPass && tradesPass } };
+  });
+
+  const input = { specification: "strategy-tournament-timeframe-isolation/v1", split, entryTf, assets: datasets.map((d) => d.symbol), families: targets };
+  const passedFamilies = results.filter((r) => r.gate.passed).map((r) => r.family);
+  const result = {
+    entryTf, families: results,
+    verdict: passedFamilies.length === 0
+      ? "1d replication does not change the verdict: anticipate/bos remain killed on both tested timeframes, closing the swing-low/pivot-reclaim signal family"
+      : `1d changes the verdict for: ${passedFamilies.join(", ")} — clears the pre-registered gate (holdout avgR>0 AND trades>=150)`,
+  };
+  return { input, result };
+}
+
 /** Chronological 70/30 test. Parameters are fixed before examining the holdout. */
-export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRate, slipPct } = {}) {
+export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRate, slipPct, entryTf = "1h" } = {}) {
   const costOverride = {};
   if (feeRate !== undefined) costOverride.feeRate = feeRate;
   if (slipPct !== undefined) costOverride.slipPct = slipPct;
@@ -200,7 +240,7 @@ export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRat
     .filter((d) => d.series.every((tf) => tf.candles.length >= 250))
     .map((d) => ({ symbol: d.symbol, train: splitSeries(d.series, split, false), holdout: splitSeries(d.series, split, true) }));
   const rows = families.map(([id, label, config]) => {
-    const score = (part) => summarize(datasets.map((d) => backtestMultiTF({ series: d[part] }, { ...config, ...costOverride, entryTf: "1h" })));
+    const score = (part) => summarize(datasets.map((d) => backtestMultiTF({ series: d[part] }, { ...config, ...costOverride, entryTf })));
     const train = score("train"), holdout = score("holdout");
     const promoted = train.trades >= 50 && holdout.trades >= 25 && train.avgR > 0 && holdout.avgR > 0 && holdout.positiveAssets / Math.max(1, holdout.assets) >= .5;
     return { id, label, config, train, holdout, promoted, robustness: Math.min(train.avgR, holdout.avgR) * Math.log1p(holdout.trades) };
@@ -222,6 +262,10 @@ if (process.argv[1]?.endsWith("tournament.mjs")) {
   } else if (process.argv.includes("--decay-exit")) {
     const report = runBreakoutDecayExit();
     const saved = saveExperiment("tournament-decay-exit", report.input, report.result);
+    console.log(JSON.stringify({ ...report.result, saved }, null, 2));
+  } else if (process.argv.includes("--timeframe-isolation")) {
+    const report = runTimeframeIsolation();
+    const saved = saveExperiment("tournament-timeframe-isolation", report.input, report.result);
     console.log(JSON.stringify({ ...report.result, saved }, null, 2));
   } else {
     const zeroCost = process.argv.includes("--zero-cost");
