@@ -357,7 +357,9 @@ re-run after seeing these numbers.
 **Refined scope** (Architect, 2026-08-06/07, reconciling a second human-facing research
 proposal — see `.agent_state.json`'s `control.notes` at staging time for the full
 reasoning): filter the `breakout` family only (the strongest zero-cost performer from
-Track 1, -0.437R holdout unfiltered net-of-cost) on BTC>200d-SMA, rather than testing
+Track 1, -0.437R holdout unfiltered net-of-cost per the number known at staging time —
+see the RESULT section below for the corrected -0.445 figure from Track 1's actual run)
+on BTC>200d-SMA, rather than testing
 `anticipate`+`breakout` together. Gate loosened on `avgR` (`> -0.10`, not `> +0.05`) but
 tightened on sample size (`n >= 200`, not `n >= 100`) — a genuine pre-registration
 improvement adopted *before* any run, not a post-hoc relaxation. `anticipate` was
@@ -401,11 +403,16 @@ candle-per-TF filter for `breakout`).
 | Train | 4711 | -0.455 | 33.2% | 28 | 0 (0%) |
 | Holdout | 1408 | -0.379 | 36.0% | 20 | 0 (0%) |
 
-For comparison, `breakout` unfiltered (Track 1, same net-of-cost split): holdout
-avgR -0.437R/trade on 3123 trades, 28 assets. The BTC>200d-SMA gate removes roughly
-55% of holdout trades and 8 of 28 assets entirely (no trade in the gated regime at all),
-and improves avgR modestly (-0.437 → -0.379) — a real but small effect, not enough to
-approach the gate.
+For comparison, `breakout` unfiltered (Track 1, same net-of-cost split, 3123 trades,
+28 assets): holdout avgR **-0.445**R/trade (Track 1's own RESULT table above, the same
+run this trade count comes from — not the -0.437 in this document's earlier "Honest
+Baseline First" table, which predates the larger/updated watchlist Track 1 actually ran
+against; the two numbers were previously cited interchangeably here, corrected
+2026-08-07). The BTC>200d-SMA gate removes roughly 55% of holdout trades and 8 of 28
+assets entirely (no trade in the gated regime at all), and improves avgR modestly
+(-0.445 → -0.379) — a real but small effect, not enough to approach the gate. This
+correction does not change the verdict below either way: neither -0.437 nor -0.445 is
+within reach of the required >-0.10.
 
 **Gate check (pre-registered, must not be adjusted after seeing this):**
 - Holdout `avgR/trade > -0.10` → -0.379 → **FAIL**

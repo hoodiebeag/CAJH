@@ -406,6 +406,12 @@ sufficient, and this run demonstrates why each check catches what the other miss
 
 ### Momentum M7: KILLED on available train/time evidence; symbol arm unavailable
 
+> **Superseded below.** The "whole-symbol arm unavailable" caveat in this entry was
+> resolved on 2026-08-06 — see "Momentum M7 — UPDATE" further down, which reports the
+> actual whole-symbol holdout result. Verdict stays KILLED in both places; this entry's
+> *evidence* is incomplete, the UPDATE's is not. Added 2026-08-07 as a forward pointer
+> so a reader stopping at this entry doesn't mistake incomplete evidence for current.
+
 **Configured specification:** L=30d · H=7d · rebalance=weekly · primary transform =
 **residual (T2)**, β-window 90d · holdout = time plus whole-symbol (recent: 180d;
 whole-symbol: ATOM/DOT/LTC). Universe stable-13:

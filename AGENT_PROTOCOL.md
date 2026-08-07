@@ -158,11 +158,14 @@ forever. A queue item whose owner/file is literally `"(human)"`, or which descri
 live-promotion decision, is refused immediately by the Executor branch (`BLOCKED`, not
 attempted) — that gate is never auto-satisfied by this loop, full stop.
 
-**Known gap:** `PushNotification` has never fired from a scheduled run before, so it is not
-yet in `cajh-loop-check`'s stored tool-approval set. The first *genuine* trigger could pause
-on an unanswered approval prompt instead of notifying — the opposite of hands-off. Until the
-human has approved it once (e.g. via "Run now" on `cajh-loop-check`, ideally with a real or
-deliberately-staged trigger condition present), treat notification delivery as unverified.
+**Known gap (updated 2026-08-07):** `PushNotification` HAS fired once — a scheduled run hit
+a real pull deadlock on 2026-08-06 and tried to notify — but delivery failed:
+`.agent_state.json`'s `notifications["pull-deadlock-foreign-changes"]` records
+`deliveryResult: "Mobile push not sent (Remote Control inactive)"`. The tool call itself
+succeeded (so it's in the task's approval set now), but the message never reached the
+human; the deadlock was only resolved because the human found it independently in an
+interactive session. Delivery, not approval, is the open gap: connecting Remote Control
+would close it. Until then, a stuck loop has no working channel back to the human.
 
 ## Full control (2026-08-07 — supersedes "Hard rules" #2/#3/#6 and "Phase duties" below, for `cajh-loop-check` specifically)
 
