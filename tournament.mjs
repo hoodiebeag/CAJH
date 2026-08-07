@@ -146,6 +146,51 @@ export function runBreakoutCostFix({ watchlist = loadWatchlist(), split = .70 } 
   return { input, result };
 }
 
+/**
+ * T5-DECAY-EXIT (TOURNAMENT_ROADMAP.md, pre-registered 2026-08-07): does forcing a
+ * time-based exit rescue `breakout` (the one baseline family with a positive zero-cost
+ * edge, Track 1) from grinding an open position toward its downside stop? Reuses
+ * backtest.js's existing `maxHold` option rather than adding a duplicate mechanism —
+ * `maxHold` already forces a market exit at that bar's close the first time neither the
+ * stop nor the target has fired within `maxHold` bars of entry (backtest.js:513), which
+ * is exactly the requested decay-exit semantics, and is already a true no-op when
+ * omitted (default MAX_HOLD=100, same no-op pattern as `stopMode`/`atrStopK`/
+ * `breakoutLookback`). This variant sets it to 24 bars (1h timeframe, per the
+ * pre-registered spec); every other breakout config field, and every other family, is
+ * untouched.
+ *
+ * PRE-REGISTERED GATE (both required, holdout only, net-of-cost from the start):
+ * holdout avgR/trade > -0.30 AND holdout trades >= 150.
+ */
+export function runBreakoutDecayExit({ watchlist = loadWatchlist(), split = .70 } = {}) {
+  const [, , breakoutConfig] = families.find(([id]) => id === "breakout");
+  const variantConfig = { ...breakoutConfig, maxHold: 24 };
+
+  const datasets = normalize(watchlist).map((asset) => ({ symbol: asset.symbol, series: seriesFor(asset.id) }))
+    .filter((d) => d.series.every((tf) => tf.candles.length >= 250))
+    .map((d) => ({ symbol: d.symbol, train: splitSeries(d.series, split, false), holdout: splitSeries(d.series, split, true) }));
+  const score = (config, part) => summarize(datasets.map((d) => backtestMultiTF({ series: d[part] }, { ...config, entryTf: "1h" })));
+
+  const baseline = { train: score(breakoutConfig, "train"), holdout: score(breakoutConfig, "holdout") };
+  const variant = { train: score(variantConfig, "train"), holdout: score(variantConfig, "holdout") };
+
+  const avgRPass = variant.holdout.avgR > -0.30;
+  const tradesPass = variant.holdout.trades >= 150;
+  const gate = { avgRPass, tradesPass, passed: avgRPass && tradesPass };
+
+  const input = {
+    specification: "strategy-tournament-breakout-decayexit/v1", split, assets: datasets.map((d) => d.symbol),
+    family: "breakout", variant: { maxHold: variantConfig.maxHold },
+  };
+  const result = {
+    family: "breakout", baseline, variant, gate,
+    verdict: gate.passed
+      ? "breakout decay-exit variant (maxHold=24) clears the pre-registered gate (holdout avgR>-0.30 AND trades>=150)"
+      : "T5-DECAY-EXIT FAIL: decay-exit variant does not clear the pre-registered gate",
+  };
+  return { input, result };
+}
+
 /** Chronological 70/30 test. Parameters are fixed before examining the holdout. */
 export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRate, slipPct } = {}) {
   const costOverride = {};
@@ -173,6 +218,10 @@ if (process.argv[1]?.endsWith("tournament.mjs")) {
   } else if (process.argv.includes("--breakout-costfix")) {
     const report = runBreakoutCostFix();
     const saved = saveExperiment("tournament-breakout-costfix", report.input, report.result);
+    console.log(JSON.stringify({ ...report.result, saved }, null, 2));
+  } else if (process.argv.includes("--decay-exit")) {
+    const report = runBreakoutDecayExit();
+    const saved = saveExperiment("tournament-decay-exit", report.input, report.result);
     console.log(JSON.stringify({ ...report.result, saved }, null, 2));
   } else {
     const zeroCost = process.argv.includes("--zero-cost");

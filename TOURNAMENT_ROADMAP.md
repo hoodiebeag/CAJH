@@ -481,3 +481,55 @@ assets are net positive in holdout. Per this track's own pre-registered rule,
 these numbers. This closes the cost-reduction path for `breakout`; no further tpR/lookback
 variants are queued off this result without a new pre-registration and a stated reason
 the first variant's failure doesn't already answer the question.
+
+## Track 1 — T5-DECAY-EXIT RESULT (2026-08-07)
+
+New hypothesis (human-directed, pre-registered before any run): a time-based decay
+exit on `breakout`. Rationale — if a position hasn't hit TP or its stop within a set
+number of bars, the original entry thesis is likely dead and the position is just
+drifting toward the downside stop; force an exit rather than let it grind.
+
+**Mechanism:** reused `backtestMultiTF`'s existing `maxHold` option rather than adding a
+duplicate one — `maxHold` already forces a market exit at that bar's close the first
+time neither the stop nor the target has fired within `maxHold` bars of entry
+(`backtest.js`, the pre-existing `MAX_HOLD=100` default), which is exactly the requested
+decay-exit semantics, and is already a true no-op when omitted, matching the
+`stopMode`/`atrStopK`/`breakoutLookback` no-op pattern. Two fixture tests added
+(`backtest.test.mjs`) prove it fires at exactly `openedAt+maxHold` — not one bar early —
+and that omitting it is byte-identical to the explicit default 100. Pre-registered
+variant: `maxHold: 24` (1h timeframe) applied to `breakout` only; no other config field
+or family touched.
+
+**Pre-registered gate (both required, holdout only, net-of-cost from the start):**
+- Holdout `avgR/trade > -0.30`
+- Holdout trades >= 150
+
+Ran `node tournament.mjs --decay-exit` — net-of-cost, 70/30 chronological split, full
+watchlist (28 assets passing the `>=250` candle-per-TF filter for `breakout`).
+
+**Result:**
+
+| | Trades | avgR/trade (net) | Win rate | Assets traded | Positive assets |
+|---|---|---|---|---|---|
+| Baseline train (no maxHold override) | 7313 | -0.461 | 33.9% | 28 | 0 (0%) |
+| Baseline holdout | 3123 | -0.445 | 34.2% | 28 | 0 (0%) |
+| Variant train (maxHold=24) | 8107 | -0.463 | 33.4% | 28 | 0 (0%) |
+| Variant holdout (maxHold=24) | 3473 | -0.437 | 33.6% | 28 | 0 (0%) |
+
+Forcing the exit at 24 bars slightly *increases* trade count (3123 → 3473 holdout —
+positions that would otherwise still be open, or would go on to hit stop/target later,
+get cut short and a new entry becomes eligible sooner) and moves holdout avgR by only
++0.008R (-0.445 → -0.437), a negligible effect nowhere close to the required bar.
+Win rate is essentially unchanged (34.2% → 33.6%). Zero assets are net positive in
+holdout in either arm.
+
+**Gate check (pre-registered, not adjusted after seeing this):**
+- Holdout `avgR/trade > -0.30` → -0.437 → **FAIL**
+- Holdout trades >= 150 → 3473 → PASS
+
+**Verdict: FAIL.** The core clause fails by a wide margin — the decay exit does not
+meaningfully change breakout's economics in either direction. This is consistent with
+the earlier T1B-BREAKOUT-COSTFIX finding: `breakout`'s losses are dominated by cost drag
+on frequent small losers, not by winners rotting into losers while a position sits open,
+so truncating hold time neither helps nor much hurts. **T5-DECAY-EXIT is closed as a
+FAIL.** No gate constant was touched after seeing these numbers.

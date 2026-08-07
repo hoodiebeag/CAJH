@@ -393,3 +393,34 @@ test("breakout mode: a longer breakoutLookback can reject a candidate the defaul
   assert.equal(short.reasons.taken, 1, "20-bar lookback should take the breakout above the recent 101 high");
   assert.equal(long.reasons.taken ?? 0, 0, "40-bar lookback must reject the same candidate: 107 does not clear the 108 high 40 bars back");
 });
+
+// T5-DECAY-EXIT (TOURNAMENT_ROADMAP.md, pre-registered 2026-08-07): the decay-exit
+// experiment reuses the existing `maxHold` option (force a market exit at that bar's
+// close once neither the stop nor the target has fired within `maxHold` bars of entry)
+// rather than adding a duplicate mechanism. These tests prove it fires at exactly the
+// bar threshold — not one bar early or late — and stays a true no-op when omitted.
+function buildFlatHoldSeries(flatBarsAfterEntry) {
+  const c1h = [];
+  let t = 1_700_000_000;
+  for (let i = 0; i < 30; i++) { c1h.push(mk(t, 100, 101, 99, 100)); t += HOUR; }   // flat baseline, ATR(14)=2
+  c1h.push(mk(t, 100, 108, 100, 107)); t += HOUR;                                  // breakout: entry 107, stop 103, tp 119
+  for (let i = 0; i < flatBarsAfterEntry; i++) { c1h.push(mk(t, 107, 107.5, 106.5, 107)); t += HOUR; } // pinned strictly between stop and tp
+  return [{ label: "1h", mins: 60, candles: c1h }];
+}
+
+test("maxHold: forces the timeout exit at exactly openedAt+maxHold, not one bar early", () => {
+  const notYet = buildFlatHoldSeries(4);  // data ends at openedAt+4
+  const exact  = buildFlatHoldSeries(5);  // data ends at openedAt+5
+  const rNotYet = backtestMultiTF({ series: notYet }, { ...BREAKOUT_CFG, maxHold: 5 });
+  const rExact  = backtestMultiTF({ series: exact },  { ...BREAKOUT_CFG, maxHold: 5 });
+  assert.equal(rNotYet.trades, 0, "maxHold:5 must not have fired yet by bar openedAt+4 (position still open, not counted)");
+  assert.equal(rExact.trades, 1, "maxHold:5 must fire exactly at bar openedAt+5");
+  assert.equal(rExact.exits.timeout, 1);
+});
+
+test("maxHold: omitted is a true no-op (identical to explicit default 100)", () => {
+  const series = buildFlatHoldSeries(20);
+  const omitted = backtestMultiTF({ series }, BREAKOUT_CFG);
+  const explicit100 = backtestMultiTF({ series }, { ...BREAKOUT_CFG, maxHold: 100 });
+  assert.deepEqual(omitted, explicit100);
+});
