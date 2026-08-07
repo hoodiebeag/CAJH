@@ -280,3 +280,48 @@ test("anticipate mode: alignMode 'all' with a bearish higher TF blocks an entry 
   const blocked = backtestMultiTF({ series }, cfg("all"));
   assert.equal(blocked.trades, 0, "alignMode 'all' should block the same entry against a bearish higher TF");
 });
+
+// ── vol_contraction mode ─────────────────────────────────────────────────────
+// 60 high-ATR baseline bars (range 20, flat at 100) roll ATR(14) down over a following
+// tightly-compressed stretch (range 0.2, flat at 105) until aPrev < 0.5x the 50-bar
+// median — the compression state backtest.js checks bar-by-bar. A close above the
+// compressed run's high should open exactly one trade, with risk sized off the run's low.
+function buildCompressionSeries(compressedBars) {
+  const c1h = [];
+  let t = 1_700_000_000;
+  for (let i = 0; i < 60; i++) { c1h.push(mk(t, 100, 110, 90, 100)); t += HOUR; }        // high-ATR baseline
+  for (let i = 0; i < compressedBars; i++) { c1h.push(mk(t, 105, 105.1, 104.9, 105)); t += HOUR; }
+  c1h.push(mk(t, 105, 112, 104.8, 110)); t += HOUR;                                      // close 110 > range high 105.1
+  let p = 110;
+  for (let i = 0; i < 40; i++) { c1h.push(mk(t, p, p + 0.5, p - 0.1, p + 0.4)); p += 0.6; t += HOUR; } // grind up to TP
+  return [{ label: "1h", mins: 60, candles: c1h }];
+}
+
+const VC_CFG = {
+  entryTf: "1h", entryMode: "vol_contraction", alignMode: "none", trendGate: false, chopFilter: false,
+  requireHigherLow: false, maxStopPct: null, minStopPct: null, lockBreakeven: false, tpR: 3,
+  feeRate: 0.004, slipPct: 0.0005,
+};
+
+test("vol_contraction mode: a close above a >=5-bar compressed range opens one trade, risk off the run's low", () => {
+  const series = buildCompressionSeries(25);
+  const r = backtestMultiTF({ series }, VC_CFG);
+  assert.equal(r.trades, 1);
+  // entry 110, stop = rangeLow(104.9) - 0.001*110 = 104.79, risk 5.21; grinds up to hit the 3R target.
+  const entry = 110, risk = 110 - 104.79;
+  const tp = entry + 3 * risk;
+  const netWinR3 = 3 - (FEE * (entry + tp)) / risk;
+  assert.ok(Math.abs(r.results[0] - netWinR3) < 1e-6,
+    `winner R ${r.results[0]} != expected ${netWinR3}`);
+});
+
+test("vol_contraction mode: breaking to a new high WITHOUT a preceding compressed run opens no trade", () => {
+  // Same high-ATR baseline throughout (no contraction), then a close far above every prior high.
+  const c1h = [];
+  let t = 1_700_000_000;
+  for (let i = 0; i < 80; i++) { c1h.push(mk(t, 100, 110, 90, 100)); t += HOUR; }
+  c1h.push(mk(t, 100, 210, 95, 200));
+  const series = [{ label: "1h", mins: 60, candles: c1h }];
+  const r = backtestMultiTF({ series }, VC_CFG);
+  assert.equal(r.trades, 0, "no compressed run precedes the breakout, so vol_contraction must not fire");
+});

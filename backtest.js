@@ -247,6 +247,38 @@ export function backtestMultiTF({ series } = {}, {
     const entry = C[k], stop = entry - 2 * a;
     return stop < entry ? { entry, stop, tp: entry + tpR * (entry - stop) } : null;
   };
+  // ── vol_contraction mode ── TOURNAMENT_ROADMAP.md Track 2 (pre-registered 2026-08-06,
+  // commit 8e9ae64): buy the close that breaks above a compression range, stop below the
+  // range low. Compression at bar j = atr(j-1) < 0.5x the median of atr over [j-50, j-1];
+  // ATR is always evaluated to the PREVIOUS bar, matching breakoutEntry's no-look-ahead
+  // convention. The range is the contiguous compressed run immediately before k, scanned
+  // back at most 50 bars, with a pre-registered 5-bar floor (below that it degenerates
+  // into the 1-bar breakout Track 1 already tested).
+  const volContractionEntry = (k) => {
+    const isCompressed = (j) => {
+      const aPrev = atr(H, L, C, j - 1, atrPeriod);
+      if (aPrev == null) return false;
+      const lo = Math.max(0, j - 50);
+      const sample = [];
+      for (let i = lo; i < j; i++) {
+        const a = atr(H, L, C, i, atrPeriod);
+        if (a != null) sample.push(a);
+      }
+      if (!sample.length) return false;
+      sample.sort((x, y) => x - y);
+      const mid = sample.length >> 1;
+      const median = sample.length % 2 ? sample[mid] : (sample[mid - 1] + sample[mid]) / 2;
+      return aPrev < 0.5 * median;
+    };
+    let runStart = k;
+    for (let j = k - 1; j >= 0 && k - j <= 50 && isCompressed(j); j--) runStart = j;
+    if (k - runStart < 5) return null;
+    let rangeHigh = -Infinity, rangeLow = Infinity;
+    for (let j = runStart; j < k; j++) { rangeHigh = Math.max(rangeHigh, H[j]); rangeLow = Math.min(rangeLow, L[j]); }
+    if (C[k] <= rangeHigh) return null;
+    const entry = C[k], stop = rangeLow - 0.001 * entry;
+    return stop < entry ? { entry, stop, tp: entry + tpR * (entry - stop) } : null;
+  };
   const trendPullbackEntry = (k) => {
     const fast = maAt(k, 20), slow = maAt(k, 50), previousFast = maAt(k - 1, 20);
     if (fast == null || slow == null || previousFast == null) return null;
@@ -402,6 +434,7 @@ export function backtestMultiTF({ series } = {}, {
        else if (entryMode === "rsi")    cand = rsiEntry(k);
        else if (entryMode === "rev")    cand = revEntry(k);
        else if (entryMode === "breakout") cand = breakoutEntry(k);
+       else if (entryMode === "vol_contraction") cand = volContractionEntry(k);
        else if (entryMode === "trend_pullback") cand = trendPullbackEntry(k);
        else if (entryMode === "sweep_reclaim") cand = sweepReclaimEntry(k);
        else if (entryMode === "range_sweep_reclaim") cand = rangeSweepReclaimEntry(k);
