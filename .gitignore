@@ -16,3 +16,4 @@ __pycache__/
 *.log
 level_cooldowns.json
 candles-upload.tar.gz*
+.assistant_snapshots/
