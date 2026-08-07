@@ -109,6 +109,9 @@ export function backtestMultiTF({ series } = {}, {
   stopMode = "structural",
   atrStopK = 3,
   atrPeriod = 14,
+  // Bars of prior-high lookback for "breakout" mode's N-bar high trigger. Default 20
+  // reproduces the original hardcoded behaviour byte-for-byte when omitted.
+  breakoutLookback = 20,
   // Research-only entry veto. It receives only the completed entry bar's close time.
   // Live scanning never supplies this callback.
   entryGate = null
@@ -238,10 +241,9 @@ export function backtestMultiTF({ series } = {}, {
   // they require price to make a new N-bar high or resume above a rising moving average.
   // Their stops use ATR known before the entry candle, avoiding a volatility look-ahead.
   const breakoutEntry = (k) => {
-    const lookback = 20;
-    if (k < lookback) return null;
+    if (k < breakoutLookback) return null;
     let priorHigh = -Infinity;
-    for (let j = k - lookback; j < k; j++) priorHigh = Math.max(priorHigh, H[j]);
+    for (let j = k - breakoutLookback; j < k; j++) priorHigh = Math.max(priorHigh, H[j]);
     if (C[k] <= priorHigh) return null;
     const a = atr(H, L, C, k - 1, atrPeriod); if (!a) return null;
     const entry = C[k], stop = entry - 2 * a;

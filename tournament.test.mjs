@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runTournament, buildBtcAboveMa200At, scoreRegimeGate } from "./tournament.mjs";
+import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix } from "./tournament.mjs";
 
 test("tournament reports no promotion when its data gate cannot be met", () => {
   const report = runTournament({ watchlist: [] });
@@ -46,4 +46,19 @@ test("scoreRegimeGate: both clauses required (AND, not OR) — either one failin
   const g = scoreRegimeGate({ avgR: -0.05, trades: 100 });
   assert.equal(g.avgRPass, true);
   assert.equal(g.tradesPass, false, "individual clause results must be reported, not just the combined verdict");
+});
+
+// ── T1B-BREAKOUT-COSTFIX — TOURNAMENT_ROADMAP.md Track 1 follow-up ─────────────
+test("runBreakoutCostFix: empty watchlist yields zero trades on both arms and fails the gate honestly", () => {
+  const report = runBreakoutCostFix({ watchlist: [] });
+  assert.equal(report.result.variant.holdout.trades, 0);
+  assert.equal(report.result.gate.passed, false, "0 trades must never read as a passing gate");
+  assert.equal(report.result.gate.tradesPass, false);
+});
+
+test("runBreakoutCostFix: variant config only overrides tpR and breakoutLookback, nothing else", () => {
+  const report = runBreakoutCostFix({ watchlist: [] });
+  assert.equal(report.input.variant.tpR, 5);
+  assert.equal(report.input.variant.breakoutLookback, 55);
+  assert.equal(report.input.family, "breakout");
 });

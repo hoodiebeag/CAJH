@@ -425,3 +425,59 @@ regime is still net negative (0/20 positive). Per this track's own pre-registere
 **Track 3 is abandoned.** `anticipate` was not tested (per the refined scope's own
 reasoning: not worth testing a weaker performer once the strongest fails this
 decisively). No gate constant was touched after seeing these numbers.
+
+---
+
+## Track 1 — T1B-BREAKOUT-COSTFIX RESULT (2026-08-07)
+
+Follow-up from Track 1's own experiment text ("the fix is a higher R-multiple target or
+less frequent entries") on `breakout`, the one baseline family with a positive zero-cost
+holdout edge (+0.045R/trade, 3123 trades) but negative net-of-cost holdout (-0.445R/trade).
+
+**Pre-registered variant (both levers together, ONE variant — not a parameter sweep, to
+avoid tuning on the holdout):** `tpR: 3 -> 5`, and a new `breakoutLookback` option added to
+`backtestMultiTF` (default 20, byte-identical when omitted — same no-op pattern as
+`stopMode`/`atrStopK`) set to `55` for this variant, the classic Donchian breakout window
+— an externally-motivated round number, not cherry-picked after seeing results. No other
+`breakout` config field changed, no other family touched.
+
+**Pre-registered gate (all three required, holdout only, net-of-cost from the start):**
+- Holdout `avgR/trade > 0` (a genuine edge, the same bar `runTournament`'s own `promoted`
+  flag uses — not merely "less negative")
+- Holdout trades >= 150 (T5-DECAY-EXIT's sample-floor convention)
+- Holdout `positiveAssets/assets >= 0.5` (`runTournament`'s own promotion bar, for an
+  apples-to-apples comparison with how every other family here gets promoted)
+
+Ran `node tournament.mjs --breakout-costfix` — net-of-cost (default `feeRate`/`slipPct`),
+70/30 chronological split, full watchlist (28 assets passing the `>=250` candle-per-TF
+filter for `breakout`).
+
+**Result:**
+
+| | Trades | avgR/trade (net) | Win rate | Assets traded | Positive assets |
+|---|---|---|---|---|---|
+| Baseline train (tpR=3, lookback=20) | 7313 | -0.461 | 33.9% | 28 | 0 (0%) |
+| Baseline holdout | 3123 | -0.445 | 34.2% | 28 | 0 (0%) |
+| Variant train (tpR=5, lookback=55) | 3852 | -0.374 | 35.0% | 28 | 1 (3.6%) |
+| Variant holdout | 1569 | -0.381 | 34.4% | 28 | 2 (7.1%) |
+
+The variant roughly halves trade frequency (3123 → 1569 holdout trades) and improves
+holdout avgR by about 0.064R (-0.445 → -0.381) — a real, non-trivial effect in the
+predicted direction, consistent with cost being a smaller share of R on a bigger,
+rarer win. It falls far short of turning the edge positive.
+
+**Gate check (pre-registered, not adjusted after seeing this):**
+- Holdout `avgR/trade > 0` → -0.381 → **FAIL**
+- Holdout trades >= 150 → 1569 → PASS
+- Holdout `positiveAssets/assets >= 0.5` → 2/28 (7.1%) → **FAIL**
+
+**Verdict: FAIL.** Two of the three required (AND, not OR) clauses fail, including the
+core one (`avgR > 0`). Raising the R-multiple target and lengthening the breakout
+lookback both moved the holdout edge in the right direction and by a meaningful amount,
+confirming Track 1's cost-drag diagnosis was directionally correct — but the remaining
+gap (-0.381 vs the required >0) is large, not a rounding-error miss, and only 2 of 28
+assets are net positive in holdout. Per this track's own pre-registered rule,
+**T1B-BREAKOUT-COSTFIX is closed as a FAIL.** No gate constant was touched after seeing
+these numbers. This closes the cost-reduction path for `breakout`; no further tpR/lookback
+variants are queued off this result without a new pre-registration and a stated reason
+the first variant's failure doesn't already answer the question.

@@ -95,6 +95,57 @@ export function runBreakoutRegimeFilter({ watchlist = loadWatchlist(), split = .
   return { input, result };
 }
 
+/**
+ * TOURNAMENT_ROADMAP.md Track 1 follow-up (T1B-BREAKOUT-COSTFIX, pre-registered
+ * 2026-08-07): `breakout` is the one baseline family with a positive zero-cost holdout
+ * edge (+0.045R/trade, 3123 trades) but a negative net-of-cost holdout (-0.445R/trade).
+ * Track 1's own experiment text names the fix directly: "a higher R-multiple target
+ * and/or less frequent entries" — a fixed ~0.9% round-trip cost eats a smaller share of
+ * R when the win target is bigger, and fewer/more-selective entries raise the zero-cost
+ * edge those wins are drawn from. This tests BOTH levers together as ONE pre-registered
+ * variant (not a parameter sweep — sweeping after seeing holdout results would be
+ * tuning-on-the-holdout): `tpR: 3 -> 5` and `breakoutLookback: 20 -> 55`, the classic
+ * Donchian breakout window (a standard, externally-motivated choice, not cherry-picked
+ * post-hoc). Every other breakout config field (stop model, caps, lockBreakeven) is
+ * untouched, and no other family is touched.
+ *
+ * PRE-REGISTERED GATE (both required, holdout only, net-of-cost from the start):
+ * holdout avgR > 0 (a genuine edge, not merely "less negative" — the same avgR>0 bar
+ * runTournament's own `promoted` uses) AND holdout trades >= 150 (T5-DECAY-EXIT's
+ * sample-floor convention) AND holdout positiveAssets/assets >= 0.5 (runTournament's
+ * own promotion bar, for an apples-to-apples comparison with how every other family in
+ * this file gets promoted).
+ */
+export function runBreakoutCostFix({ watchlist = loadWatchlist(), split = .70 } = {}) {
+  const [, , breakoutConfig] = families.find(([id]) => id === "breakout");
+  const variantConfig = { ...breakoutConfig, tpR: 5, breakoutLookback: 55 };
+
+  const datasets = normalize(watchlist).map((asset) => ({ symbol: asset.symbol, series: seriesFor(asset.id) }))
+    .filter((d) => d.series.every((tf) => tf.candles.length >= 250))
+    .map((d) => ({ symbol: d.symbol, train: splitSeries(d.series, split, false), holdout: splitSeries(d.series, split, true) }));
+  const score = (config, part) => summarize(datasets.map((d) => backtestMultiTF({ series: d[part] }, { ...config, entryTf: "1h" })));
+
+  const baseline = { train: score(breakoutConfig, "train"), holdout: score(breakoutConfig, "holdout") };
+  const variant = { train: score(variantConfig, "train"), holdout: score(variantConfig, "holdout") };
+
+  const avgRPass = variant.holdout.avgR > 0;
+  const tradesPass = variant.holdout.trades >= 150;
+  const assetsPass = variant.holdout.positiveAssets / Math.max(1, variant.holdout.assets) >= 0.5;
+  const gate = { avgRPass, tradesPass, assetsPass, passed: avgRPass && tradesPass && assetsPass };
+
+  const input = {
+    specification: "strategy-tournament-breakout-costfix/v1", split, assets: datasets.map((d) => d.symbol),
+    family: "breakout", variant: { tpR: variantConfig.tpR, breakoutLookback: variantConfig.breakoutLookback },
+  };
+  const result = {
+    family: "breakout", baseline, variant, gate,
+    verdict: gate.passed
+      ? "breakout cost-reduction variant (tpR=5, breakoutLookback=55) clears the pre-registered gate (holdout avgR>0 AND trades>=150 AND positiveAssets/assets>=0.5)"
+      : "T1B-BREAKOUT-COSTFIX FAIL: cost-reduction variant does not clear the pre-registered gate",
+  };
+  return { input, result };
+}
+
 /** Chronological 70/30 test. Parameters are fixed before examining the holdout. */
 export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRate, slipPct } = {}) {
   const costOverride = {};
@@ -118,6 +169,10 @@ if (process.argv[1]?.endsWith("tournament.mjs")) {
   if (process.argv.includes("--regime-filter")) {
     const report = runBreakoutRegimeFilter();
     const saved = saveExperiment("tournament-regime-filter", report.input, report.result);
+    console.log(JSON.stringify({ ...report.result, saved }, null, 2));
+  } else if (process.argv.includes("--breakout-costfix")) {
+    const report = runBreakoutCostFix();
+    const saved = saveExperiment("tournament-breakout-costfix", report.input, report.result);
     console.log(JSON.stringify({ ...report.result, saved }, null, 2));
   } else {
     const zeroCost = process.argv.includes("--zero-cost");

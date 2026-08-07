@@ -360,3 +360,36 @@ test("breakout mode: entryGate rejecting every bar blocks the trade and tallies 
   assert.equal(r.trades, 0);
   assert.ok(r.reasons.externalGate > 0);
 });
+
+// T1B-BREAKOUT-COSTFIX (TOURNAMENT_ROADMAP.md Track 1 follow-up): breakoutLookback makes
+// the N-bar prior-high lookback configurable so a cost-reduction experiment can require
+// a more significant (longer-lookback) breakout before entering, i.e. fewer, higher-
+// conviction trades. Default 20 must reproduce the original hardcoded behaviour exactly.
+test("breakout mode: breakoutLookback omitted is a true no-op (identical to explicit 20)", () => {
+  const series = buildBreakoutSeries();
+  const omitted = backtestMultiTF({ series }, BREAKOUT_CFG);
+  const explicit20 = backtestMultiTF({ series }, { ...BREAKOUT_CFG, breakoutLookback: 20 });
+  assert.deepEqual(omitted, explicit20);
+});
+
+test("breakout mode: a longer breakoutLookback can reject a candidate the default 20-bar window takes", () => {
+  // Trigger candle closes at 107, above the 20-bar prior high of 101 (the flat baseline)
+  // but NOT above 108 seen ~40 bars back — a lookback long enough to pull in that higher
+  // prior bar must reject the same candidate the default 20-bar window accepts. Only a
+  // couple of flat bars follow the trigger (not a sustained grind), so a later bar can't
+  // independently re-trigger a breakout above 108 and confound the comparison; checking
+  // `reasons.taken` (tallied at the entry-attempt bar, not on trade close) means the
+  // still-open position's eventual resolution is irrelevant to this assertion.
+  const c1h = [];
+  let t = 1_700_000_000;
+  for (let i = 0; i < 10; i++) { c1h.push(mk(t, 100, 108, 99, 100)); t += HOUR; }  // a higher high 30-50 bars back
+  for (let i = 0; i < 30; i++) { c1h.push(mk(t, 100, 101, 99, 100)); t += HOUR; }  // flat baseline, ATR(14)=2
+  c1h.push(mk(t, 100, 108, 100, 107)); t += HOUR;                                 // close 107: > 20-bar high 101, but < 40-bar high 108
+  for (let i = 0; i < 3; i++) { c1h.push(mk(t, 107, 107.2, 106.9, 107)); t += HOUR; } // flat, no re-trigger
+  const series = [{ label: "1h", mins: 60, candles: c1h }];
+
+  const short = backtestMultiTF({ series }, { ...BREAKOUT_CFG, breakoutLookback: 20 });
+  const long = backtestMultiTF({ series }, { ...BREAKOUT_CFG, breakoutLookback: 40 });
+  assert.equal(short.reasons.taken, 1, "20-bar lookback should take the breakout above the recent 101 high");
+  assert.equal(long.reasons.taken ?? 0, 0, "40-bar lookback must reject the same candidate: 107 does not clear the 108 high 40 bars back");
+});
