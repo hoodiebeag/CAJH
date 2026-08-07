@@ -164,6 +164,36 @@ on an unanswered approval prompt instead of notifying — the opposite of hands-
 human has approved it once (e.g. via "Run now" on `cajh-loop-check`, ideally with a real or
 deliberately-staged trigger condition present), treat notification delivery as unverified.
 
+## Full control (2026-08-07 — supersedes "Hard rules" #2/#3/#6 and "Phase duties" below, for `cajh-loop-check` specifically)
+
+At direct human instruction, `cajh-loop-check` no longer uses the Architect/Executor/Verifier
+role separation or the frozen-path authorization requirement described in the sections below.
+Those sections are kept as historical record of the design that ran from 2026-08-05 through
+2026-08-07 and are still accurate for reasoning about *why* certain invariants exist, but they
+no longer describe current enforcement for the live scheduled task. Current behavior:
+
+- **No independent verify pass.** One firing designs, implements, self-checks, and commits in
+  a single continuous pass — see `cajh-loop-check`'s own prompt (STEP 3) for the exact
+  self-check discipline this relies on instead.
+- **No frozen-path authorization gate.** Any file, including the former frozen list
+  (`scanner.js`, `monitor.js`, `trader.js`, `bot.js`, `strategy.js`, `backtest.js`,
+  `commands.js`), can be edited without a separate `allow_live_edit` step.
+- **One thing is still protected, and enforced mechanically, not just by prompt text:** the
+  `LIVE_TRADING` env check, the halt/resume state machine in `monitor.js`, and the
+  order-validation chain in `trader.js`. `scripts/check-protected-logic.cjs`, run via
+  `.git/hooks/pre-commit`, scans every staged diff (any file, not just those three) for the
+  specific protected identifiers and refuses the commit unless a fresh, human-created,
+  single-use marker (`.git/ALLOW_PROTECTED_EDIT`) is present. This exists because an
+  adversarial review of the prompt-only version of this redesign found real gaps a narrative
+  instruction alone couldn't close: nothing re-checked a firing's own edits before it
+  committed them, and filename-scoped checking missed new call sites added elsewhere in the
+  repo. The hook is enforced by git at commit time — the actual deployment boundary — for
+  every commit made from this shared local checkout, regardless of which process makes it.
+- **The D3 human gate (live-promotion) and the `"(human)"`-owned-work refusal are unchanged.**
+  Removing process gates was explicitly scoped to internal workflow structure, not to the one
+  decision (moving a validated strategy from paper to `LIVE_TRADING`) that was never
+  automatable in the first place.
+
 ## Scheduling (updated 2026-08-07 — one task, not three)
 
 The loop originally ran as three independent scheduled tasks (`cajh-executor-check`,
