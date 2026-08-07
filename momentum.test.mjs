@@ -405,6 +405,63 @@ test("B3 sealed low-risk views report raw and risk-adjusted holdout outcomes wit
   assert.equal(study.exploratory.every((row) => row.rank === "negVol" || row.rank === "negBeta"), true);
 });
 
+test("runSealedMomentumPanelStudy's byRank cells score the sealed whole-symbol holdout arm, not just train (PWR3)", () => {
+  const primaryUniverse = ["BTC", "ETH", "SOL"];
+  const symbolHoldoutUniverse = ["XRP", "ADA", "DOGE"];
+  const all = [...primaryUniverse, ...symbolHoldoutUniverse];
+  const series = new Map(all.map((asset, assetIndex) => [
+    asset,
+    Array.from({ length: 80 }, (_, i) => candle(i, 100 + assetIndex * 20 + i * (assetIndex + 1)))
+  ]));
+
+  const study = runSealedMomentumPanelStudy(series, {
+    primaryUniverse,
+    symbolHoldoutUniverse,
+    rankModes: ["negVol"],
+    lookbacks: [2],
+    horizons: [1],
+    transforms: ["raw"],
+    minAssets: 3,
+    recentHoldoutDates: 2,
+    permutations: 10,
+    bootstrapIterations: 10,
+    seed: 11
+  });
+
+  assert.equal(study.byRank.negVol.symbolHoldout.nRows > 0, true);
+  const directHoldout = buildMomentumPanel(series, {
+    universe: symbolHoldoutUniverse,
+    minAssets: 3,
+    rank: "negVol",
+    tagRegime: true,
+    entryDelay: 1,
+    includeForwardRiskAdjusted: true
+  });
+  assert.equal(study.byRank.negVol.symbolHoldout.nRows, directHoldout.rows.length);
+  assert.equal(
+    study.byRank.negVol.symbolHoldoutRiskAdjusted.nRows,
+    directHoldout.rows.filter((r) => Number.isFinite(r.fwdRiskAdjR)).length
+  );
+
+  // Guard the gap this item was staged to fix: when the sealed holdout universe is empty
+  // (as B3's own test above deliberately sets it), symbolHoldout must report an honest
+  // zero, never silently reuse train/controlledUniverse rows.
+  const noHoldout = runSealedMomentumPanelStudy(series, {
+    primaryUniverse: all,
+    symbolHoldoutUniverse: [],
+    rankModes: ["negVol"],
+    lookbacks: [2],
+    horizons: [1],
+    transforms: ["raw"],
+    minAssets: 3,
+    recentHoldoutDates: 2,
+    permutations: 10,
+    bootstrapIterations: 10,
+    seed: 11
+  });
+  assert.equal(noHoldout.byRank.negVol.symbolHoldout.nRows, 0);
+});
+
 test("rank correlation identifies a planted monotonic cross-section", () => {
   assert.deepEqual(ranks([3, 1, 1, 2]), [4, 1.5, 1.5, 3]);
   assert.equal(spearman([1, 2, 3, 4], [10, 20, 30, 40]), 1);

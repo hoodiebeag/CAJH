@@ -545,6 +545,13 @@ re-verified by this execution.
 
 ### Low-vol / low-beta B4: KILLED — no eligible holdout evidence in this workspace
 
+> **Superseded below.** The "0 eligible holdout dates" data-gate cause in this entry was
+> resolved on 2026-08-07 — see "Low-vol / low-beta B4 — UPDATE" further down, which
+> reports the actual whole-symbol holdout result for both ranking variables. Verdict
+> stays KILLED in both places; this entry's *evidence* is incomplete, the UPDATE's is
+> not. Added 2026-08-07 as a forward pointer so a reader stopping at this entry doesn't
+> mistake incomplete evidence for current.
+
 **Configured specification:** same sealed harness as Momentum M7, with ranking variable
 swapped from return momentum to low-risk ranks: **−trailing volatility** and
 **−trailing BTC beta**. Outcomes are reported separately as forward raw return and
@@ -569,6 +576,93 @@ dates, so the majors-vs-anomaly distinction is unavailable rather than favorable
 **VERDICT: KILLED** — deciding number: **0 eligible holdout dates / 0 holdout rows**.
 No signal gets promoted without sealed net evidence. This is a data-gate kill, not a
 claim that low-volatility is economically false in crypto.
+
+### Low-vol / low-beta B4 — UPDATE: whole-symbol holdout executed (2026-08-07, PWR3)
+
+**Why this is an update, not a silent overwrite.** The KILLED verdict above was a
+data-gate kill: `loadWatchlist()` returned `[]` locally, so the stable-13 daily panel
+had 0 eligible dates for both ranking variables — no arm was ever actually scored.
+Since that entry, PWR1 backfilled deep history and fixed `loadWatchlist()`, and
+PWR2/PWR2-HARNESS made the momentum sealed harness (`runSealedMomentumPanelStudy`)
+score its primary cell against real data for the first time.
+
+**A second, distinct harness gap found and fixed before trusting this run.**
+`runSealedMomentumPanelStudy`'s `byRank` loop (the one B1's rank-mode parameterization
+runs through) computed `train`/`recentHoldout`/`economics` per rank mode but never
+scored the sealed whole-symbol holdout arm — there was no `symbolHoldout` key at all,
+unlike the primary/primaryRaw cells PWR2-HARNESS fixed. This is a different gap from
+PWR2-HARNESS's (that one was the primary cell defaulting to raw instead of residual);
+this one meant the low-vol/low-beta whole-symbol arm had never been computed by any
+code path, tested or run, regardless of data availability. Fixed in `momentum.mjs`:
+`byRank[rank]` now also builds `symbolHoldout` and `symbolHoldoutRiskAdjusted` from the
+same `holdoutUniverse` the primary cell uses, gated the same way
+(`holdoutUniverse.length >= minAssets`, else an honest empty result). Covered by a new
+test (`momentum.test.mjs`) that cross-checks the row count against a direct
+`buildMomentumPanel` call and asserts an honest zero when the holdout universe is empty
+(matching the existing B3 fixture test, which deliberately sets
+`symbolHoldoutUniverse: []`). Added a `node momentum.mjs sealed-lowrisk` CLI path
+(mirrors the existing `sealed` path) that runs the study with
+`rankModes: ["negVol", "negBeta"]` against the live watchlist.
+
+**Pre-registration (frozen before this run, per FOLLOWON_SPECS.md B3 and
+MOMENTUM_SPEC.md §6):** same M5/M6 sealed harness as momentum, ranking variable swapped
+to −trailing volatility (`negVol`) and −trailing BTC beta (`negBeta`), L=30d/H=7d
+weekly rebalance defaults, holdout = time (last 4 rebalance dates) plus whole-symbol
+(every stored symbol outside stable-13; 16 this run, identical set to PWR2's: ALGO,
+APT, EOS, ETC, FIL, INJ, NEAR, POL, SUI, TAO, TIA, TRX, UNI, XMR, XTZ, ZEC). Universe
+stable-13 (controlled/primary): [BTC, ETH, SOL, XRP, ADA, DOGE, AVAX, LINK, DOT, LTC,
+BCH, ATOM, XLM]. Gate is MOMENTUM_SPEC.md §6, applied identically: primary IC>0 with
+train block-permutation p<0.05, else KILLED regardless of how the holdout reads.
+
+**Result (`node momentum.mjs sealed-lowrisk`, live watchlist):**
+
+| rank var | cell | D dates | rows | mean IC | block-perm p | 95% CI |
+|---|---|---:|---:|---:|---:|---|
+| negVol | train | 149 | 1721 | 0.0924 | 0.2278 | [0.0378, 0.1446] |
+| negVol | recent holdout (4wk) | 4 | 52 | 0.0261 | 0.8691 | [0.0261, 0.0261] |
+| negVol | **sealed whole-symbol holdout** | **78** | **982** | 0.0731 | 0.0509 | [-0.0270, 0.1571] |
+| negBeta | train | 140 | 1606 | 0.0684 | 0.0579 | [0.0047, 0.1357] |
+| negBeta | recent holdout (4wk) | 4 | 52 | 0.1332 | 0.8282 | [0.1332, 0.1332] |
+| negBeta | **sealed whole-symbol holdout** | **71** | **865** | 0.0665 | 0.0709 | [-0.0014, 0.1416] |
+
+Eligible whole-symbol holdout dates are non-zero for the first time (78 for negVol, 71
+for negBeta) — the data-gate cause of the original KILLED verdict is resolved, via the
+same PWR1 backfill that unblocked PWR2.
+
+**Net-of-cost economics (train leg, informational — train significance already decides
+the verdict below):** negVol tercile net spread -0.0011 (gross 0.0026), top-3 net
++0.0041 / top-5 net +0.0020; negBeta tercile net spread +0.0003 (gross 0.0023), top-3
+net +0.0043 / top-5 net +0.0047 — all small relative to the pre-registered ~0.9%
+round-trip cost, and none change the verdict below since train significance already
+fails.
+
+**VERDICT: KILLED (unchanged, now decided on complete evidence for both ranking
+variables).** The pre-committed gate (§6) requires primary IC>0 with block-permutation
+p<0.05 **on train** before the holdout even counts. negVol train p=0.2278 (95% CI
+[0.0378, 0.1446], clearing zero but not the p<0.05 bar) and negBeta train p=0.0579
+(95% CI [0.0047, 0.1357], just above the 0.05 bar) both fail that gate. Both
+whole-symbol holdouts read positive and borderline (negVol p=0.0509, negBeta
+p=0.0709) — directionally consistent with train's weak positive point estimates, close
+to but not under the 0.05 bar — but §6 checks the train gate first and independently;
+neither ranking variable clears it, so both are killed on the train leg regardless of
+the holdout's near-miss reading. This supersedes the "0 eligible holdout dates"
+data-gate caveat in the entry above: the arm is now available for both variables and
+reads a weak, non-significant positive, not missing.
+
+**Size/liquidity control: not run this pass.** Same scope discipline as PWR2 (which
+also did not re-run the liquidity control against real data) — `applySizeLiquidityControl`
+is implemented and tested (`liquidityControls`/`liquidityControl` options on
+`runSealedMomentumPanelStudy`), but this workspace has no dollar-volume/market-cap data
+source wired up to feed it real inputs; supplying one would mean approximating "size"
+from candle volume, which is a data-sourcing decision out of this item's scope. B3/B4's
+"does it collapse to hold the majors" question stays open and untested, separate from
+this update.
+
+**Survivorship caveat (mandatory, applies to this update too):** same as PWR2 — the
+universe (29 symbols via `loadWatchlist()`, deep-history-backfilled per PWR1) is
+survivors-only, coins that delisted or died are absent, which weakens any positive
+reading and makes the train-leg null, if anything, conservative evidence against a
+robust edge rather than for one.
 
 ### Trade intensity: closed. 79× more data killed it.
 

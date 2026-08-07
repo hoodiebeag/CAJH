@@ -284,6 +284,16 @@ export function runSealedMomentumPanelStudy(series, {
       includeForwardRiskAdjusted: true
     });
     const rankedSplit = splitRecentRows(ranked.rows, recentHoldoutDates);
+    const symbolHoldoutRanked = holdoutUniverse.length >= minAssets
+      ? buildMomentumPanel(series, {
+          universe: holdoutUniverse,
+          minAssets,
+          rank,
+          tagRegime: true,
+          entryDelay: 1,
+          includeForwardRiskAdjusted: true
+        }).rows
+      : [];
     byRank[rank] = {
       raw: scoreMomentumPanelRows(rankedSplit.train, scoreOptions),
       riskAdjusted: scoreMomentumPanelRows(
@@ -291,7 +301,12 @@ export function runSealedMomentumPanelStudy(series, {
         scoreOptions
       ),
       economics: economicMomentumViews(rankedSplit.train, { minAssets, roundTripCost }),
-      recentHoldout: scoreMomentumPanelRows(rankedSplit.recentHoldout, scoreOptions)
+      recentHoldout: scoreMomentumPanelRows(rankedSplit.recentHoldout, scoreOptions),
+      symbolHoldout: scoreMomentumPanelRows(symbolHoldoutRanked, scoreOptions),
+      symbolHoldoutRiskAdjusted: scoreMomentumPanelRows(
+        symbolHoldoutRanked.filter((r) => Number.isFinite(r.fwdRiskAdjR)).map((r) => ({ ...r, fwdR: r.fwdRiskAdjR })),
+        scoreOptions
+      )
     };
   }
 
@@ -681,6 +696,27 @@ if (main && process.argv[2] === "sealed") {
     symbolHoldoutUniverse: study.symbolHoldoutUniverse,
     primary: study.primary,
     primaryRaw: study.primaryRaw,
+    saved: file
+  }, null, 2));
+} else if (main && process.argv[2] === "sealed-lowrisk") {
+  // B3/PWR3: sealed whole-symbol arm for the low-risk ranking variables (−vol, −beta),
+  // through the same M5/M6 harness as momentum (FOLLOWON_SPECS.md B3).
+  const watchlist = loadWatchlist().map((asset) => typeof asset === "string" ? { symbol: asset, id: symbolToKrakenId(asset) } : asset);
+  const series = dailySeries(watchlist);
+  const study = runSealedMomentumPanelStudy(series, {
+    rankModes: ["negVol", "negBeta"],
+    permutations: Number(process.env.PERMUTATIONS) || 1000
+  });
+  const file = saveExperiment("momentum-sealed-lowrisk", {
+    specification: "FOLLOWON_SPECS/B3-sealed",
+    controlledUniverse: study.controlledUniverse,
+    symbolHoldoutUniverse: study.symbolHoldoutUniverse,
+    rankModes: ["negVol", "negBeta"]
+  }, study);
+  console.log(JSON.stringify({
+    controlledUniverse: study.controlledUniverse,
+    symbolHoldoutUniverse: study.symbolHoldoutUniverse,
+    byRank: study.byRank,
     saved: file
   }, null, 2));
 } else if (main) {
