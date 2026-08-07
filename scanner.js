@@ -461,7 +461,7 @@ export async function scanSymbol(symbol, channel, state) {
 
     if (buy) {
       const res = await proposeBuy(upper, buy, channel, biases?.['1d'] ?? null);
-      logAssetDecision({ symbol: upper, buy, result: res, biases });
+       logAssetDecision({ symbol: upper, buy, result: res, biases });
       if (!res.traded) await channel.send(`ℹ️ **${upper}** setup not taken — ${res.reason}.`);
     } else {
       logAssetDecision({ symbol: upper, reason: "no signal", biases });
