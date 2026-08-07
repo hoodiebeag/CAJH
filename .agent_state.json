@@ -3,14 +3,14 @@
   "control": {
     "status": "IDLE",
     "target_file": null,
-    "objective": "T4-PORTFOLIO-MOMENTUM done (see ledger) - Tracks 1-4 of TOURNAMENT_ROADMAP.md have now all failed. No item in progress - next firing should pull the next pending+depends_on-satisfied work_queue item (PWR3, PWR4, T1B-BREAKOUT-COSTFIX, T5-DECAY-EXIT, T6-TIMEFRAME-ISOLATION are all pending+ready) per cajh-loop-check's one-item-per-firing rule. A genuinely new hypothesis for the tournament track is needed at some point per TOURNAMENT_ROADMAP.md's own conclusion, but that is a design/restock call, not something to invent mid-firing - none of the queued items are that, they are all pre-registered and ready as-is.",
+    "objective": "PWR3 done (see ledger/VERDICTS.md) - low-vol/low-beta B4 is now KILLED on complete evidence (both negVol and negBeta fail the train significance gate). Next firing should pull the next pending+depends_on-satisfied work_queue item (PWR4, T1B-BREAKOUT-COSTFIX, T5-DECAY-EXIT, T6-TIMEFRAME-ISOLATION are all pending+ready) per cajh-loop-check one-item-per-firing rule.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "T4-PORTFOLIO-MOMENTUM: this firing found the research and TOURNAMENT_ROADMAP.md doc update already committed (3e82137) by a prior firing that was evidently interrupted before STEP 6 - the state file still showed T4 as pending/IDLE-pointing-at-T4 on read. Verified the commit and doc section satisfy done_when, independently re-ran npm.cmd test (175/175 green), and reconciled work_queue/control/ledger to match reality. No new research performed this firing; no new work_queue item pulled (one-unit-per-firing rule treats completing this handoff as the unit). Result: FAIL on all four gate cells (momentum_30d and momentum_vol, 7d and 30d rebalance) - full numbers in the work_queue result field and TOURNAMENT_ROADMAP.md's 'Track 4 - RESULT' section.",
+    "notes": "PWR3: this firing found a real harness gap before trusting any verdict, exactly as the item warned to check for - runSealedMomentumPanelStudy byRank loop (rank modes negVol/negBeta) computed train/recentHoldout/economics but had no symbolHoldout key at all, so the low-vol whole-symbol arm had never been computed by any code path regardless of data availability (a different gap from PWR2-HARNESS, which was about the primary cells transform default). Fixed additively in momentum.mjs (byRank[rank].symbolHoldout + symbolHoldoutRiskAdjusted, same holdoutUniverse/gating pattern as the primary cell), added a cross-check test, added node momentum.mjs sealed-lowrisk CLI entry point mirroring the existing sealed path. Ran against the live 29-symbol watchlist: whole-symbol holdout arm non-zero for the first time for both ranking variables. Applied the pre-registered MOMENTUM_SPEC.md sec 6 train-significance gate exactly as PWR2 did: negVol train p=0.228, negBeta train p=0.058, both fail p<0.05, so both KILLED regardless of the holdout point estimates (which were themselves positive-but-borderline, p=0.051 and p=0.071 respectively - directionally consistent, not confirmatory). Updated ROADMAP.md as an appended UPDATE section (original entry left intact, forward-pointer added, same pattern as M7) and VERDICTS.md index. npm.cmd test: 176/176 green throughout. Read the full diff before committing - matches scope exactly (momentum.mjs +21/-1 lines, momentum.test.mjs one new test). Commit 9837597, pushed to origin/main.",
     "updated_by": "loop",
-    "updated_at": "2026-08-07T21:05:00.000Z"
+    "updated_at": "2026-08-07T21:30:00.000Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -116,14 +116,15 @@
       },
       {
         "id": "PWR3",
-        "state": "pending",
+        "state": "done",
         "owner": "executor",
         "file": "momentum.mjs",
         "depends_on": [
           "PWR1"
         ],
         "task": "FIRST EXECUTION of the sealed whole-symbol arm for low-vol (B3, rank=-vol/-beta). Same framing and honesty gates as PWR2. NOTE (architect): check for the SAME primary-transform gap this study just had (buildMomentumPanel calls silently defaulting to raw instead of the spec-settled transform) before trusting any verdict from this function - do not assume PWR2-HARNESS's fix automatically covers this file if the logic is duplicated rather than shared.",
-        "done_when": "Eligible row count and statistic reported; verdict updated."
+        "done_when": "Eligible row count and statistic reported; verdict updated.",
+        "result": "DONE. Found and fixed a real gap: runSealedMomentumPanelStudy byRank loop never scored the sealed whole-symbol holdout arm (only train/recentHoldout/economics existed) - the B4 low-vol study had never actually been run against real data by any code path, a different gap from PWR2-HARNESS. Added symbolHoldout+symbolHoldoutRiskAdjusted to byRank, gated like the primary cell (holdoutUniverse.length>=minAssets else honest empty), new cross-check test added. Added node momentum.mjs sealed-lowrisk CLI path. Ran against live watchlist: whole-symbol holdout non-zero for the first time (negVol 78 dates/982 rows, negBeta 71 dates/865 rows). Train significance gate (MOMENTUM_SPEC.md sec 6): negVol p=0.228 FAIL, negBeta p=0.058 FAIL. VERDICT: both KILLED on complete evidence, superseding the original 0-eligible-dates data-gate caveat. Full detail: ROADMAP.md new \"Low-vol / low-beta B4 - UPDATE\" section, VERDICTS.md updated. Size/liquidity control not run (no dollar-volume/market-cap data source wired up in this workspace - noted as open, separate from this item). npm.cmd test: 176/176 green. Commit 9837597."
       },
       {
         "id": "PWR4",
@@ -514,6 +515,14 @@
       "detail": "Blackboard rot cleanup per a 3-way audit workflow (2026-08-07): deleted active_study/in_flight/next_queue (fully superseded - MR1 finished 3 days ago, the collision they described resolved 2 days ago, work_queue moved past T1 5+ commits ago). Rewrote known_findings to point at the new VERDICTS.md index instead of a hardcoded summary that will drift again. Rewrote test_command to stop hardcoding a pass count (was '166 total', real count is 175 - a hardcoded count in this file will always eventually be wrong, so it now just names the command). Added frozen_paths_note clarifying the frozen_paths list no longer gates anything (superseded by the pre-commit hook, per AGENT_PROTOCOL.md's Full control section) - left frozen_paths itself in place as historical reference. Fixed roadmap_v2_review's 'not yet staged' claim (T6-TIMEFRAME-ISOLATION was staged same day). Fixed notification_policy.known_gap in both this file and AGENT_PROTOCOL.md - PushNotification has fired once (2026-08-06 pull deadlock), the real gap is delivery (Remote Control inactive), not approval. Created VERDICTS.md (repo root) as the single verdict index the audit found didn't exist - the direct cause of the Roadmap v2 duplicate-proposal incident. Also corrected a real data inconsistency in TOURNAMENT_ROADMAP.md (breakout unfiltered holdout cited as both -0.437 and -0.445 net-of-cost in the same document, from two different runs; -0.445/3123-trades is the correct current figure) and added a forward-pointer at ROADMAP.md's original M7 entry to its own UPDATE section. Did not touch T4's reconciliation (3e2e3b7) or control - that was the loop's own correct, independently-verified work, not stale.",
       "commit": "pending",
       "tests": "no source changed this step"
+    },
+    {
+      "ts": "2026-08-07T21:30:00.000Z",
+      "agent": "loop",
+      "action": "complete",
+      "detail": "PWR3: caught a real harness gap before trusting the result (per the items own warning to check for it) - runSealedMomentumPanelStudy byRank loop had no symbolHoldout scoring at all for rank modes negVol/negBeta, so the low-vol whole-symbol arm had never been computed, distinct from PWR2-HARNESSs earlier transform-default gap on the primary cell. Fixed additively (byRank[rank].symbolHoldout + symbolHoldoutRiskAdjusted, same gating as the primary cell), added a cross-check test proving the count matches a direct buildMomentumPanel call and that an empty holdout universe reports an honest zero (matching the existing B3 fixture which sets symbolHoldoutUniverse:[]). Added node momentum.mjs sealed-lowrisk CLI path. Ran against the live watchlist: whole-symbol holdout non-zero for the first time - negVol 78 dates/982 rows (train p=0.228), negBeta 71 dates/865 rows (train p=0.058). Both fail MOMENTUM_SPEC.md sec 6s train significance gate (p<0.05), so both KILLED on complete evidence - supersedes the original 0-eligible-dates data-gate caveat in ROADMAP.mds Low-vol/low-beta B4 entry. Recorded as a new UPDATE section (forward-pointer added to the original entry, same pattern as Momentum M7s UPDATE), VERDICTS.md index updated (Low-vol B4 row + PWR3 row). Size/liquidity control intentionally not run this pass - no dollar-volume/market-cap data source exists in this workspace to feed applySizeLiquidityControl real inputs; noted as a separate open question in the ROADMAP update, same scope discipline PWR2 used. npm.cmd test: 176/176 green. One work_queue item this firing per HYGIENE; PWR4/T1B-BREAKOUT-COSTFIX/T5-DECAY-EXIT/T6-TIMEFRAME-ISOLATION left pending+ready for the next firing. STEP 4: no notification - not BLOCKED, queue not empty (4 pending+ready items), no ROADMAP verdict newly reaching PASS (this is a KILLED/FAIL). STEP 5: 4 pending+ready items (>=3), no restock needed.",
+      "commit": "9837597",
+      "tests": "176 pass, 0 fail"
     }
   ],
   "automation": {
