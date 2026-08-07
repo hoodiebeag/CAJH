@@ -442,9 +442,11 @@ export function backtestMultiTF({ series } = {}, {
       if (cand) {
         const risk = cand.entry - cand.stop;
         let reason = "taken";
+        const tClose = T[k] + entryMins * 60;
         if (risk <= 0)                                          reason = "priceBelowStop";
         else if (maxStopPct && risk / cand.entry > maxStopPct)  reason = "stopTooFar";
         else if (minStopPct && risk / cand.entry < minStopPct)  reason = "stopTooTight";
+        else if (entryGate && !entryGate(tClose))               reason = "externalGate";
         reasons[reason] = (reasons[reason] || 0) + 1;
         if (reason === "taken") pos = { entry: cand.entry, stop: cand.stop, risk, tp: cand.tp, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: cand.entry, trailing: false };
       }

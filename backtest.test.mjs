@@ -325,3 +325,38 @@ test("vol_contraction mode: breaking to a new high WITHOUT a preceding compresse
   const r = backtestMultiTF({ series }, VC_CFG);
   assert.equal(r.trades, 0, "no compressed run precedes the breakout, so vol_contraction must not fire");
 });
+
+// ── entryGate wiring in the generic dip-buy branch (TOURNAMENT_ROADMAP.md Track 3) ──
+// entryGate was already wired into "anticipate" (backtest.js:415); this proves the
+// identical check now also gates the generic branch breakout/support/etc. share, and
+// that it is a true no-op — byte-identical output — whenever entryGate is omitted.
+function buildBreakoutSeries() {
+  const c1h = [];
+  let t = 1_700_000_000;
+  for (let i = 0; i < 30; i++) { c1h.push(mk(t, 100, 101, 99, 100)); t += HOUR; }   // flat baseline, ATR(14)=2
+  c1h.push(mk(t, 100, 108, 100, 107)); t += HOUR;                                  // close 107 > 20-bar prior high 101
+  let p = 107;
+  for (let i = 0; i < 40; i++) { c1h.push(mk(t, p, p + 0.5, p - 0.1, p + 0.4)); p += 0.6; t += HOUR; } // grinds to TP
+  return [{ label: "1h", mins: 60, candles: c1h }];
+}
+
+const BREAKOUT_CFG = {
+  entryTf: "1h", entryMode: "breakout", alignMode: "none", trendGate: false, chopFilter: false,
+  requireHigherLow: false, maxStopPct: null, minStopPct: null, lockBreakeven: false, tpR: 3,
+  feeRate: 0.004, slipPct: 0.0005,
+};
+
+test("breakout mode: entryGate is a true no-op when omitted (identical to an always-true gate)", () => {
+  const series = buildBreakoutSeries();
+  const withoutGate = backtestMultiTF({ series }, BREAKOUT_CFG);
+  const withTrueGate = backtestMultiTF({ series }, { ...BREAKOUT_CFG, entryGate: () => true });
+  assert.ok(withoutGate.trades > 0, "expected at least one trade from the breakout fixture");
+  assert.deepEqual(withoutGate, withTrueGate);
+});
+
+test("breakout mode: entryGate rejecting every bar blocks the trade and tallies externalGate", () => {
+  const series = buildBreakoutSeries();
+  const r = backtestMultiTF({ series }, { ...BREAKOUT_CFG, entryGate: () => false });
+  assert.equal(r.trades, 0);
+  assert.ok(r.reasons.externalGate > 0);
+});

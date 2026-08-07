@@ -30,6 +30,71 @@ function summarize(perAsset) {
   return { trades: results.length, avgR, totalR: results.reduce((a, b) => a + b, 0), winRate: results.length ? results.filter((x) => x > 0).length / results.length : 0, assets: assets.length, positiveAssets: assets.filter((x) => x.avgR > 0).length };
 }
 
+/**
+ * BTC-above-200d-SMA "as-of" gate, built locally rather than exported from backtest.js
+ * (whose maTimeline/makeAsOf are internal) — duplicating this small amount of pure
+ * arithmetic here is smaller and safer than widening backtest.js's export surface.
+ * Mirrors backtest.js's maTimeline (rolling-sum SMA, i>=period-1 before it's live) and
+ * makeAsOf (forward-walking cursor) exactly, so there is no lookahead: timeline point t
+ * is each daily candle's CLOSE time, matching every other AsOf timeline in this codebase.
+ */
+export function buildBtcAboveMa200At(candles, period = 200) {
+  const closes = candles.map((c) => parseFloat(c.close));
+  const timeline = []; let sum = 0;
+  for (let i = 0; i < candles.length; i++) {
+    sum += closes[i];
+    if (i >= period) sum -= closes[i - period];
+    const above = i >= period - 1 ? closes[i] > sum / period : false;
+    timeline.push({ t: parseInt(candles[i].time) + 1440 * 60, above });
+  }
+  let i = 0, v = false;
+  return (t) => {
+    while (i < timeline.length && timeline[i].t <= t) { v = timeline[i].above; i++; }
+    return v;
+  };
+}
+
+/** Both gate clauses required (AND, not OR) — see TOURNAMENT_ROADMAP.md Track 3. */
+export function scoreRegimeGate(holdout, { avgRMin = -0.10, tradesMin = 200 } = {}) {
+  const avgRPass = holdout.avgR > avgRMin;
+  const tradesPass = holdout.trades >= tradesMin;
+  return { avgRMin, tradesMin, avgRPass, tradesPass, passed: avgRPass && tradesPass };
+}
+
+/**
+ * TOURNAMENT_ROADMAP.md Track 3 (refined scope, 2026-08-06/07): does gating the existing
+ * `breakout` family on BTC>200d-SMA salvage it at all? Single-family, single-config
+ * experiment — reuses breakout's exact pre-registered config unmodified, adding only
+ * entryGate. Does NOT touch `families`/runTournament's 12-row output.
+ */
+export function runBreakoutRegimeFilter({ watchlist = loadWatchlist(), split = .70 } = {}) {
+  const [, , breakoutConfig] = families.find(([id]) => id === "breakout");
+  const btcCandles = loadResearchCandles(symbolToKrakenId("BTC"), 1440);
+
+  const datasets = normalize(watchlist).map((asset) => ({ symbol: asset.symbol, series: seriesFor(asset.id) }))
+    .filter((d) => d.series.every((tf) => tf.candles.length >= 250))
+    .map((d) => ({ symbol: d.symbol, train: splitSeries(d.series, split, false), holdout: splitSeries(d.series, split, true) }));
+  // A fresh as-of cursor per backtest call: each call replays its OWN candle series from
+  // the start, and buildBtcAboveMa200At's cursor only advances forward (mirrors backtest.js's
+  // makeAsOf convention, which is likewise built fresh inside each backtestMultiTF call).
+  // Sharing one cursor across assets/train+holdout would break on the very first asset
+  // boundary, since each asset's own timeline restarts earlier than where the previous
+  // asset's entries left the cursor.
+  const score = (part) => summarize(datasets.map((d) =>
+    backtestMultiTF({ series: d[part] }, { ...breakoutConfig, entryTf: "1h", entryGate: buildBtcAboveMa200At(btcCandles) })));
+  const train = score("train"), holdout = score("holdout");
+  const gate = scoreRegimeGate(holdout);
+
+  const input = { specification: "strategy-tournament-regime-filter/v1", split, assets: datasets.map((d) => d.symbol), family: "breakout", filter: "btc-above-200d-sma" };
+  const result = {
+    family: "breakout", filter: "btc-above-200d-sma", train, holdout, gate,
+    verdict: gate.passed
+      ? "breakout regime-gated by BTC>200dSMA clears the pre-registered gate (avgR>-0.10 AND trades>=200); extending to anticipate is a separate follow-up, not attempted here"
+      : "Track 3 abandoned per the abandonment criteria",
+  };
+  return { input, result };
+}
+
 /** Chronological 70/30 test. Parameters are fixed before examining the holdout. */
 export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRate, slipPct } = {}) {
   const costOverride = {};
@@ -50,8 +115,14 @@ export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRat
 }
 
 if (process.argv[1]?.endsWith("tournament.mjs")) {
-  const zeroCost = process.argv.includes("--zero-cost");
-  const report = zeroCost ? runTournament({ feeRate: 0, slipPct: 0 }) : runTournament();
-  const saved = saveExperiment(zeroCost ? "tournament-zero-cost" : "tournament", report.input, report.result);
-  console.log(JSON.stringify({ ...report.result, saved }, null, 2));
+  if (process.argv.includes("--regime-filter")) {
+    const report = runBreakoutRegimeFilter();
+    const saved = saveExperiment("tournament-regime-filter", report.input, report.result);
+    console.log(JSON.stringify({ ...report.result, saved }, null, 2));
+  } else {
+    const zeroCost = process.argv.includes("--zero-cost");
+    const report = zeroCost ? runTournament({ feeRate: 0, slipPct: 0 }) : runTournament();
+    const saved = saveExperiment(zeroCost ? "tournament-zero-cost" : "tournament", report.input, report.result);
+    console.log(JSON.stringify({ ...report.result, saved }, null, 2));
+  }
 }

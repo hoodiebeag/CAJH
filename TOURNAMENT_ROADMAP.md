@@ -311,3 +311,72 @@ artifact (train is negative by a wider margin than holdout, -0.638 vs -0.322, wh
 the opposite of what a real edge obscured by noise would look like). Per this track's
 own pre-registered rule, **Track 2 is abandoned.** No parameter was loosened or
 re-run after seeing these numbers.
+
+---
+
+## Track 3 — RESULT (2026-08-07): ABANDONED
+
+**Refined scope** (Architect, 2026-08-06/07, reconciling a second human-facing research
+proposal — see `.agent_state.json`'s `control.notes` at staging time for the full
+reasoning): filter the `breakout` family only (the strongest zero-cost performer from
+Track 1, -0.437R holdout unfiltered net-of-cost) on BTC>200d-SMA, rather than testing
+`anticipate`+`breakout` together. Gate loosened on `avgR` (`> -0.10`, not `> +0.05`) but
+tightened on sample size (`n >= 200`, not `n >= 100`) — a genuine pre-registration
+improvement adopted *before* any run, not a post-hoc relaxation. `anticipate` was
+deliberately not tested in this pass: if the strongest performer can't clear even a loose
+bar, a weaker one isn't worth testing either; extending to `anticipate` remains a
+separate, not-yet-attempted follow-up if this had passed.
+
+**Implementation:** a single-line `entryGate` wiring in `backtest.js`'s generic dip-buy
+branch (mirrors the existing `anticipate`-branch check verbatim — `else if (entryGate &&
+!entryGate(tClose)) reason = "externalGate"`), a no-op whenever `entryGate` is omitted
+(every existing caller). `tournament.mjs` gained `buildBtcAboveMa200At(candles)` — a
+local BTC daily 200-SMA "as-of" gate duplicating `backtest.js`'s internal
+`maTimeline`/`makeAsOf` pattern (not exported from `backtest.js`, to avoid widening its
+export surface for ~10 lines of pure arithmetic) — and `runBreakoutRegimeFilter()`,
+which reuses `breakout`'s exact pre-registered config unmodified, adding only
+`entryGate`. Neither `families` nor `runTournament`'s 12-row output was touched.
+
+**Bug caught before trusting any result:** the as-of cursor `buildBtcAboveMa200At`
+returns is stateful and forward-only, matching `backtest.js`'s own `makeAsOf` convention
+— correct *within* a single backtest call, whose entry timestamps are non-decreasing by
+construction. The first implementation built one cursor and reused it across every
+asset's train **and** holdout backtest call in the same `.map()`. Each asset's own
+candle history restarts near 2023-01-01, so the cursor regressed in time at every asset
+boundary after the first, silently freezing `above` at whatever the previous asset's
+last entry had left it. Symptom: holdout came back as 0 trades / 0 assets against a
+train of 293 trades / 2 assets — implausible next to Track 1's unfiltered breakout
+(3123 holdout trades / 28 assets). Fixed by building a fresh
+`buildBtcAboveMa200At(btcCandles)` cursor per backtest call (train and holdout, per
+asset) instead of one shared instance — same pattern `backtestMultiTF` itself uses
+internally for its own as-of timelines. Re-ran after the fix; the numbers below are
+post-fix.
+
+Ran `node tournament.mjs --regime-filter` — net-of-cost (default `feeRate`/`slipPct`),
+70/30 chronological split, full watchlist (28 assets passing the `>=250`
+candle-per-TF filter for `breakout`).
+
+**Result:**
+
+| | Trades | avgR/trade (net) | Win rate | Assets traded | Positive assets |
+|---|---|---|---|---|---|
+| Train | 4711 | -0.455 | 33.2% | 28 | 0 (0%) |
+| Holdout | 1408 | -0.379 | 36.0% | 20 | 0 (0%) |
+
+For comparison, `breakout` unfiltered (Track 1, same net-of-cost split): holdout
+avgR -0.437R/trade on 3123 trades, 28 assets. The BTC>200d-SMA gate removes roughly
+55% of holdout trades and 8 of 28 assets entirely (no trade in the gated regime at all),
+and improves avgR modestly (-0.437 → -0.379) — a real but small effect, not enough to
+approach the gate.
+
+**Gate check (pre-registered, must not be adjusted after seeing this):**
+- Holdout `avgR/trade > -0.10` → -0.379 → **FAIL**
+- Holdout trades >= 200 → 1408 → PASS
+
+**Verdict: FAIL.** Only one of the two required (AND, not OR) clauses clears. The regime
+filter has a real but small effect on `breakout`'s holdout edge — better than unfiltered,
+but nowhere near the pre-registered `-0.10` bar, and every traded asset in the gated
+regime is still net negative (0/20 positive). Per this track's own pre-registered rule,
+**Track 3 is abandoned.** `anticipate` was not tested (per the refined scope's own
+reasoning: not worth testing a weaker performer once the strongest fails this
+decisively). No gate constant was touched after seeing these numbers.
