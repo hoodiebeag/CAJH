@@ -1,4 +1,7 @@
 import { profileEntries } from "./backtest.js";
+import { loadWatchlist, symbolToKrakenId } from "./researchlib.mjs";
+import { loadResearchCandles, saveExperiment } from "./researchlab.mjs";
+import { STABLE_13 } from "./momentum.mjs";
 
 export const CLASSIFIER_COLUMNS = Object.freeze([
   "rsi",
@@ -292,20 +295,31 @@ export function chooseLambdaByCv(rows, {
   validateRows(rows);
   const innerFolds = makeInnerFolds(rows, { folds });
   const candidates = lambdas.map((lambda) => {
+    // A non-converging fold invalidates only THIS lambda's score for THIS fold, not the whole
+    // selection: gradient descent at lambda=0 (no regularization) can fail to converge on real,
+    // less-separable data even when the regularized candidates converge fine. Aborting the whole
+    // chooseLambdaByCv call on one candidate's fold failure would make CV unusable exactly when
+    // regularization is doing real work - the same "a failed fit is invalid, not a crash" rule
+    // scoreSealedSplit's permutation loop already applies is used here per-fold instead.
     const foldScores = innerFolds.map((fold) => {
-      const model = fitLogisticRegression(fold.train, { lambda, iterations, learningRate });
-      if (!model.converged) throw new Error(`logistic regression did not converge for lambda ${lambda}`);
+      let model;
+      try {
+        model = fitLogisticRegression(fold.train, { lambda, iterations, learningRate });
+      } catch {
+        return null;
+      }
+      if (!model.converged) return null;
       const scores = fold.validation.map((row) => predictLogistic(model, row));
       const auc = mannWhitneyAuc(scores, fold.validation.map((row) => row.y));
       const loss = logisticLogLoss(fold.validation, model);
       return { auc, loss, trainRows: fold.train.length, validationRows: fold.validation.length };
-    });
+    }).filter((score) => score !== null);
     const validAucs = foldScores.map((score) => score.auc).filter((auc) => auc !== null);
     return {
       lambda,
       folds: foldScores,
       meanAuc: validAucs.length ? mean(validAucs) : null,
-      meanLoss: mean(foldScores.map((score) => score.loss))
+      meanLoss: foldScores.length ? mean(foldScores.map((score) => score.loss)) : Infinity
     };
   });
 
@@ -320,6 +334,7 @@ export function chooseLambdaByCv(rows, {
   });
 
   const selected = candidates[0];
+  if (selected.meanAuc === null) throw new Error("logistic regression did not converge for any candidate lambda on any inner fold");
   const model = fitLogisticRegression(rows, { lambda: selected.lambda, iterations, learningRate });
   if (!model.converged) throw new Error(`logistic regression did not converge for selected lambda ${selected.lambda}`);
   return {
@@ -494,4 +509,59 @@ export function classifierOutcomeReport({ model, columns = CLASSIFIER_COLUMNS, t
       "Economic lift is research-only and net of the explicit round-trip cost."
     ]
   };
+}
+
+// PWR4: first real execution of the sealed whole-symbol classifier arm (SIGNAL3_CLASSIFIER_SPEC
+// sec 1/3). Series/btc4h construction mirrors tournament.mjs's seriesFor + the live !discover
+// command's seriesOf (commands.js) — ascending [1h,4h,1d] from on-disk research candles, BTC 4h
+// for bias context. Whole-symbol holdout universe reuses momentum's STABLE_13-vs-available split
+// (same convention PWR2/PWR3 already established) so the classifier's sealed evidence is directly
+// comparable to the momentum/low-vol verdicts, not a third ad hoc definition of "holdout".
+const CLASSIFIER_TFS = [["1h", 60], ["4h", 240], ["1d", 1440]];
+function seriesFor(pair) {
+  return CLASSIFIER_TFS.map(([label, mins]) => ({ label, mins, candles: loadResearchCandles(pair, mins) }));
+}
+
+export function buildClassifierUniverseRows(watchlist, { tpR = 4 } = {}) {
+  const btc4h = loadResearchCandles(symbolToKrakenId("BTC"), 240);
+  const rows = [];
+  for (const { symbol, id } of watchlist) {
+    const { records } = profileEntries({ series: seriesFor(id), btc4h }, { tpR });
+    rows.push(...buildFeatureMatrix(records, { symbol }).rows);
+  }
+  return rows;
+}
+
+const main = process.argv[1]?.endsWith("classifier.mjs");
+if (main && process.argv[2] === "sealed") {
+  const watchlist = loadWatchlist().map((asset) => typeof asset === "string" ? { symbol: asset, id: symbolToKrakenId(asset) } : asset);
+  const available = watchlist.map((a) => a.symbol);
+  const controlledUniverse = STABLE_13.filter((symbol) => available.includes(symbol));
+  const holdoutSymbols = available.filter((symbol) => !STABLE_13.includes(symbol));
+  const rows = buildClassifierUniverseRows(watchlist);
+
+  const primaryTrainRows = rows.filter((row) => !holdoutSymbols.includes(row.symbol));
+  const latest = primaryTrainRows.reduce((max, row) => Math.max(max, row.t), -Infinity);
+  const recentHoldoutTime = Number.isFinite(latest) ? latest - 180 * 86400 : null;
+  // SIGNAL3_CLASSIFIER_SPEC sec 3 requires K>=100 refit permutations; that floor is used as the
+  // default here (rather than momentum's 1000) because each classifier permutation refits a full
+  // scaler+lambda-CV+logistic pipeline, not a single rank correlation, and is far more expensive.
+  const permutations = Number(process.env.PERMUTATIONS) || 100;
+
+  const study = scoreClassifierHoldouts(rows, { holdoutSymbols, recentHoldoutTime, permutations });
+  const file = saveExperiment("classifier-sealed", {
+    specification: "SIGNAL3_CLASSIFIER_SPEC/v1-sealed",
+    controlledUniverse,
+    symbolHoldoutUniverse: holdoutSymbols,
+    recentHoldoutTime,
+    permutations
+  }, study);
+  console.log(JSON.stringify({
+    controlledUniverse,
+    symbolHoldoutUniverse: holdoutSymbols,
+    recentHoldoutTime,
+    primary: study.primary,
+    recent: study.recent,
+    saved: file
+  }, null, 2));
 }

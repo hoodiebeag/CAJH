@@ -175,6 +175,32 @@ test("P2 refuses to score a non-converged CV fit", () => {
   );
 });
 
+test("P2 CV survives a non-converging candidate lambda by selecting a lambda that does converge (PWR4)", () => {
+  // Near-separable planted data: unregularized (lambda=0) gradient descent pushes weights toward
+  // infinity and never satisfies the tolerance within the iteration budget, exactly what PWR4 hit
+  // on real classifier data (lambda=0 was the only DEFAULT_LAMBDAS candidate that failed). A single
+  // non-converging candidate must not abort CV for the other, regularized candidates.
+  const rows = [
+    ...Array.from({ length: 40 }, (_, i) => ({ y: 0, x: [-1 - (i % 5) * 0.01] })),
+    ...Array.from({ length: 40 }, (_, i) => ({ y: 1, x: [1 + (i % 5) * 0.01] }))
+  ];
+  const selected = chooseLambdaByCv(rows, { lambdas: [0, 0.01, 0.1, 1], folds: 3, iterations: 800, learningRate: 0.1 });
+  assert.ok([0.1, 1].includes(selected.lambda), `expected a converging lambda, got ${selected.lambda}`);
+  assert.equal(selected.model.converged, true);
+  const failedCandidate = selected.candidates.find((c) => c.lambda === 0);
+  assert.equal(failedCandidate.meanAuc, null, "lambda=0 should have failed every fold, not been silently scored");
+});
+
+test("P2 CV throws only when every candidate lambda fails to converge on every fold", () => {
+  const rows = [
+    { y: 0, x: [-2] }, { y: 0, x: [-1] }, { y: 1, x: [1] }, { y: 1, x: [2] }
+  ];
+  assert.throws(
+    () => chooseLambdaByCv(rows, { lambdas: [0.1, 1], folds: 2, iterations: 1, learningRate: 0.1 }),
+    /did not converge for any candidate lambda/
+  );
+});
+
 test("P3 refits the full pipeline per permutation and reports the exact p formula", () => {
   const rows = Array.from({ length: 12 }, (_, i) => ({
     symbol: i < 8 ? (i % 2 ? "ETH" : "BTC") : "SOL",
