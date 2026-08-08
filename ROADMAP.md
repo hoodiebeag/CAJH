@@ -1020,3 +1020,59 @@ completely different information source (short-horizon cross-sectional reversal 
 fitted multi-feature classifier). L=5 is killed independently on the train leg alone,
 regardless of its holdout reading. Closes FOLLOWON_SPECS.md Part B's one remaining unstaged
 footnote.
+
+### FEE-BUFFER-REVIEW: the breakeven-lock buffer is undersized against the real round-trip cost (2026-08-08)
+
+Diagnostic follow-up from FEE-DEFAULTS-UPDATE, which corrected `FEE_RATE` (0.004→0.008)
+and `FEE_BUFFER_PCT`'s comment to the real, verified ~1.6-1.7% round-trip taker cost
+(FEE-SCHEDULE-REBASE, TOURNAMENT_ROADMAP.md) but deliberately left `FEE_BUFFER_PCT` itself
+(0.01, i.e. 1%) unchanged since a value change affects live stop placement. This item
+answers the question that raised: is 1% still enough headroom.
+
+**Mechanism.** `monitor.js` (~line 657) and `intensityfilter.mjs` (~line 136, research-only
+mirror of the same formula) both compute the breakeven-lock stop as
+`entry + max(BE_LOCK_R * risk, FEE_BUFFER_PCT * entry)`, `BE_LOCK_R = 0.2`. Whichever term
+is larger sets the new stop; `monitor.js` tells the user by chat message that "this trade
+can no longer close at a loss" once it fires. That claim is only true if the chosen
+offset is actually ≥ the real round-trip cost.
+
+**Real round-trip cost, computed exactly (not the linear approximation).** With the now-
+corrected `FEE_RATE=0.008` and `SLIPPAGE_PCT=0.0005` (both per side), a position bought at
+`E` and sold at `X` is flat when `X*(1-FEE_RATE-SLIPPAGE_PCT) = E*(1+FEE_RATE+SLIPPAGE_PCT)`,
+i.e. `X/E - 1 = (1+0.0085)/(1-0.0085) - 1 = 1.71465%`. (The simple `2*(FEE_RATE+SLIPPAGE_PCT)
+= 1.70%` linear estimate used elsewhere in this repo's comments undershoots the exact figure
+by about 0.015 percentage points — a rounding note, not the main finding.)
+
+**How often does each term of the `max()` actually bind, on real data?** Replayed
+`strategy.js`'s exact swing-pivot logic (`detectSwings`, the same function `entrySignal`
+uses) against every symbol's real candle history (all three live timeframes, 1h/4h/1d),
+gated through the live `MIN_STOP_PCT`/`MAX_STOP_PCT_BY_TF` bounds exactly as `scanner.js`
+does at trade time — i.e. only signals the live bot would actually have accepted. n=162,690
+accepted-signal instances across the full watchlist. Resulting `stopFrac` (risk/entry)
+distribution: min 1.50% (the `MIN_STOP_PCT` floor), p10 1.69%, **p50 2.62%**, mean 2.86%,
+p90 4.11%, max (near the `MAX_STOP_PCT_BY_TF` ceiling) 9.69%.
+
+`BE_LOCK_R * risk` only reaches the real 1.71% breakeven line when `risk ≥ 1.71%/0.2 =
+8.57%` of entry — i.e. only for wide-stop trades near the very top of the observed
+distribution (near or above the `MAX_STOP_PCT_BY_TF` ceiling on any timeframe). Across the
+162,690 sampled accepted signals, that held **0.4% of the time**. For the other **99.6%**,
+`FEE_BUFFER_PCT * entry` is the binding term — meaning the buffer constant, not the R-based
+term, is what almost every real trade's breakeven lock actually depends on.
+
+**Verdict: FEE_BUFFER_PCT=0.01 is inadequate.** 1.00% vs the real 1.71465% needed is a
+shortfall of ~0.71 percentage points. A position that locks in profit at the current
+buffer and is later stopped out exactly at that level would realize a **net loss of about
+0.71% of entry value**, the opposite of what the "can no longer close at a loss" chat
+message promises — not a marginal miscalibration, since it is the binding term on
+essentially every real trade, not an edge case.
+
+**Recommended value: 0.018 (1.8%).** Exact breakeven (1.71465%) plus ~5% headroom, same
+"plus margin" intent already stated in the existing code comment, rounded to a clean
+constant. This is a proposed number, not applied in this item — routed to a follow-up
+work-queue item (`FEE-BUFFER-UPDATE`) for the actual constant change, mirroring how
+FEE-SCHEDULE-REBASE separated diagnosis from FEE-DEFAULTS-UPDATE's apply step. No verdict
+elsewhere in this repo depends on `FEE_BUFFER_PCT` (it is a live risk-management parameter,
+not a backtest cost input), so nothing here changes any existing PASS/KILL result.
+
+Diagnostic script (`scripts/fee-buffer-diagnose.mjs`, read-only, no production file
+touched) is left in the repo for reproducibility of the n=162,690 figure above.
