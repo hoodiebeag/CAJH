@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   CLASSIFIER_COLUMNS,
   applyZScoreScaler,
+  attachFundingFeature,
   balancedClassWeights,
   buildFeatureMatrix,
   chooseLambdaByCv,
@@ -13,6 +14,7 @@ import {
   fitZScoreScaler,
   makeInnerFolds,
   mannWhitneyAuc,
+  normalizeFundingPoints,
   predictLogistic,
   precisionRecallAtThreshold,
   scoreClassifierHoldouts,
@@ -287,4 +289,60 @@ test("P4 outcome report includes required imbalance and survivorship caveats", (
   assert.equal(report.economic.roundTripCost, .25);
   assert.equal(report.caveats.some((text) => text.includes("survivorship")), true);
   assert.equal(report.caveats.some((text) => text.includes("Class imbalance")), true);
+});
+
+test("CLASSIFIER-FUNDING-FEATURE normalizes Kraken historical-funding rows into ascending ms-keyed points, deduped", () => {
+  const points = normalizeFundingPoints([
+    { timestamp: "2026-01-02T00:00:00Z", relativeFundingRate: 0.0002 },
+    { timestamp: "2026-01-01T00:00:00Z", relativeFundingRate: 0.0001 },
+    { timestamp: "2026-01-01T00:00:00Z", relativeFundingRate: 0.0005 },
+    { timestamp: "not-a-date", relativeFundingRate: 0.0009 },
+    { timestamp: "2026-01-03T00:00:00Z", relativeFundingRate: NaN }
+  ]);
+  assert.deepEqual(points, [
+    { time: Date.parse("2026-01-01T00:00:00Z"), rate: 0.0005 },
+    { time: Date.parse("2026-01-02T00:00:00Z"), rate: 0.0002 }
+  ]);
+});
+
+test("CLASSIFIER-FUNDING-FEATURE attaches the last funding rate at or before each record's entry time", () => {
+  const fundingPoints = normalizeFundingPoints([
+    { timestamp: "2026-01-01T00:00:00Z", relativeFundingRate: 0.0001 },
+    { timestamp: "2026-01-01T08:00:00Z", relativeFundingRate: 0.0002 },
+    { timestamp: "2026-01-01T16:00:00Z", relativeFundingRate: 0.0003 }
+  ]);
+  const tSec = (iso) => Date.parse(iso) / 1000;
+  const records = [
+    { t: tSec("2026-01-01T00:00:00Z") },
+    { t: tSec("2026-01-01T05:00:00Z") },
+    { t: tSec("2026-01-01T20:00:00Z") }
+  ];
+  const attached = attachFundingFeature(records, fundingPoints);
+  assert.deepEqual(attached.map((r) => r.btcFundingRate), [0.0001, 0.0001, 0.0003]);
+});
+
+test("CLASSIFIER-FUNDING-FEATURE reports btcFundingRate as null (not zero-filled) before the funding series starts, and featureVector only zero-fills it at model-input time", () => {
+  const fundingPoints = normalizeFundingPoints([
+    { timestamp: "2026-01-05T00:00:00Z", relativeFundingRate: 0.0004 }
+  ]);
+  const tSec = (iso) => Date.parse(iso) / 1000;
+  const records = [{ t: tSec("2026-01-01T00:00:00Z") }, { t: tSec("2026-01-06T00:00:00Z") }];
+  const attached = attachFundingFeature(records, fundingPoints);
+  assert.equal(attached[0].btcFundingRate, null);
+  assert.equal(attached[1].btcFundingRate, 0.0004);
+  const idx = CLASSIFIER_COLUMNS.indexOf("btcFundingRate");
+  assert.equal(featureVector({ ...record("win", "BTC", 50, 1), btcFundingRate: attached[0].btcFundingRate })[idx], 0);
+  assert.equal(featureVector({ ...record("win", "BTC", 50, 1), btcFundingRate: attached[1].btcFundingRate })[idx], 0.0004);
+});
+
+test("CLASSIFIER-FUNDING-FEATURE gives each symbol its own lookup cursor so out-of-order symbols don't inherit stale rates", () => {
+  const fundingPoints = normalizeFundingPoints([
+    { timestamp: "2026-01-01T00:00:00Z", relativeFundingRate: 0.0001 },
+    { timestamp: "2026-01-02T00:00:00Z", relativeFundingRate: 0.0002 }
+  ]);
+  const tSec = (iso) => Date.parse(iso) / 1000;
+  const laterSymbolRecords = attachFundingFeature([{ t: tSec("2026-01-02T12:00:00Z") }], fundingPoints);
+  assert.equal(laterSymbolRecords[0].btcFundingRate, 0.0002);
+  const earlierSymbolRecords = attachFundingFeature([{ t: tSec("2026-01-01T06:00:00Z") }], fundingPoints);
+  assert.equal(earlierSymbolRecords[0].btcFundingRate, 0.0001);
 });

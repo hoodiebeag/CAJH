@@ -2,6 +2,8 @@ import { profileEntries } from "./backtest.js";
 import { loadWatchlist, symbolToKrakenId } from "./researchlib.mjs";
 import { loadResearchCandles, saveExperiment } from "./researchlab.mjs";
 import { STABLE_13 } from "./momentum.mjs";
+import { fetchFundingRates } from "./derivatives.mjs";
+import { fundingAsOf } from "./fundinglib.mjs";
 
 export const CLASSIFIER_COLUMNS = Object.freeze([
   "rsi",
@@ -23,7 +25,8 @@ export const CLASSIFIER_COLUMNS = Object.freeze([
   "biasHigh_bull",
   "biasHigh_bear",
   "btcBias4h_bull",
-  "btcBias4h_bear"
+  "btcBias4h_bear",
+  "btcFundingRate"
 ]);
 
 const asNumber = (value) => typeof value === "boolean" ? (value ? 1 : 0) : Number(value);
@@ -53,7 +56,8 @@ export function featureVector(record, columns = CLASSIFIER_COLUMNS) {
     biasHigh_bull: flag(record.biasHigh, "bull"),
     biasHigh_bear: flag(record.biasHigh, "bear"),
     btcBias4h_bull: flag(record.btcBias4h, "bull"),
-    btcBias4h_bear: flag(record.btcBias4h, "bear")
+    btcBias4h_bear: flag(record.btcBias4h, "bear"),
+    btcFundingRate: finiteOrZero(record.btcFundingRate)
   };
   return columns.map((column) => values[column] ?? 0);
 }
@@ -522,12 +526,41 @@ function seriesFor(pair) {
   return CLASSIFIER_TFS.map(([label, mins]) => ({ label, mins, candles: loadResearchCandles(pair, mins) }));
 }
 
-export function buildClassifierUniverseRows(watchlist, { tpR = 4 } = {}) {
+// CLASSIFIER-FUNDING-FEATURE: normalize Kraken's PF_XBTUSD historical-funding rows (ISO
+// timestamp + relativeFundingRate) into fundingAsOf()-compatible {time(ms), rate} points,
+// deduped and sorted ascending exactly like fundinglib.mjs's own normalize().
+export function normalizeFundingPoints(rates) {
+  const byTime = new Map();
+  for (const row of rates || []) {
+    const time = Date.parse(row?.timestamp);
+    const rate = Number(row?.relativeFundingRate);
+    if (Number.isFinite(time) && Number.isFinite(rate)) byTime.set(time, { time, rate });
+  }
+  return [...byTime.values()].sort((a, b) => a.time - b.time);
+}
+
+export async function loadBtcFundingPoints({ refresh = false } = {}) {
+  const payload = await fetchFundingRates({ symbol: "PF_XBTUSD", refresh });
+  return normalizeFundingPoints(payload.rates);
+}
+
+// record.t is entry-close time in SECONDS (backtest.js's T[k] = parseInt(candle.time)); fundingAsOf
+// takes timeSec and does its own *1000 conversion against the ms-keyed points, so pass record.t
+// straight through. A fresh asOf() cursor per symbol matters: fundingAsOf's internal pointer only
+// advances forward, and each symbol's own records are time-ordered but the watchlist as a whole is
+// not, so a single shared cursor across symbols would silently return stale, too-late rates.
+export function attachFundingFeature(records, fundingPoints) {
+  const asOf = fundingAsOf(fundingPoints);
+  return records.map((record) => ({ ...record, btcFundingRate: asOf(record.t) }));
+}
+
+export function buildClassifierUniverseRows(watchlist, { tpR = 4, fundingPoints = null } = {}) {
   const btc4h = loadResearchCandles(symbolToKrakenId("BTC"), 240);
   const rows = [];
   for (const { symbol, id } of watchlist) {
     const { records } = profileEntries({ series: seriesFor(id), btc4h }, { tpR });
-    rows.push(...buildFeatureMatrix(records, { symbol }).rows);
+    const withFunding = fundingPoints ? attachFundingFeature(records, fundingPoints) : records;
+    rows.push(...buildFeatureMatrix(withFunding, { symbol }).rows);
   }
   return rows;
 }
@@ -582,6 +615,68 @@ if (main && process.argv[2] === "sealed") {
   console.log(JSON.stringify({
     controlledUniverse,
     symbolHoldoutUniverse: holdoutSymbols,
+    recentHoldoutTime,
+    primary: study.primary,
+    recent: study.recent,
+    primaryOutcome,
+    saved: file
+  }, null, 2));
+} else if (main && process.argv[2] === "sealed-funding") {
+  // CLASSIFIER-FUNDING-FEATURE: same sealed whole-symbol harness as the "sealed" P5 baseline
+  // above, with btcFundingRate joined onto every symbol's rows and the study restricted to
+  // Kraken's PF_XBTUSD funding-covered date range (pre-registered: never zero-fill funding for
+  // pre-coverage rows, which would bias the coefficient across most of history).
+  const watchlist = loadWatchlist().map((asset) => typeof asset === "string" ? { symbol: asset, id: symbolToKrakenId(asset) } : asset);
+  const available = watchlist.map((a) => a.symbol);
+  const controlledUniverse = STABLE_13.filter((symbol) => available.includes(symbol));
+  const holdoutSymbols = available.filter((symbol) => !STABLE_13.includes(symbol));
+
+  const fundingPoints = await loadBtcFundingPoints();
+  const coverageStartSec = fundingPoints.length ? Math.ceil(fundingPoints[0].time / 1000) : null;
+  const allRows = buildClassifierUniverseRows(watchlist, { fundingPoints });
+  const rows = coverageStartSec == null ? [] : allRows.filter((row) => row.t >= coverageStartSec);
+
+  const primaryTrainRows = rows.filter((row) => !holdoutSymbols.includes(row.symbol));
+  const latest = primaryTrainRows.reduce((max, row) => Math.max(max, row.t), -Infinity);
+  const recentHoldoutTime = Number.isFinite(latest) ? latest - 180 * 86400 : null;
+  const permutations = Number(process.env.PERMUTATIONS) || 100;
+
+  const study = scoreClassifierHoldouts(rows, { holdoutSymbols, recentHoldoutTime, permutations });
+
+  // Report both the repo's long-standing 0.009 round-trip cost (direct comparison to P5's
+  // 0.5249/0.0198/-0.4616R) and FEE-SCHEDULE-REBASE's corrected real Kraken Tier-1 cost (~0.017),
+  // per that item's own note (momentum.mjs sealed-reversal) to report both explicitly rather than
+  // silently picking one.
+  const ROUND_TRIP_COSTS = { standard: 0.009, realCost: 0.017 };
+  let primaryOutcome = null;
+  if (study.primary.status === "available") {
+    const primaryHoldoutRows = rows.filter((row) => holdoutSymbols.includes(row.symbol));
+    const scaled = scaleTrainHoldout({ columns: [], train: primaryTrainRows, holdout: primaryHoldoutRows });
+    const selected = chooseLambdaByCv(scaled.train);
+    primaryOutcome = {
+      standard: classifierOutcomeReport({ model: selected.model, train: scaled.train, holdout: scaled.holdout, threshold: 0.5, roundTripCost: ROUND_TRIP_COSTS.standard }),
+      realCost: classifierOutcomeReport({ model: selected.model, train: scaled.train, holdout: scaled.holdout, threshold: 0.5, roundTripCost: ROUND_TRIP_COSTS.realCost })
+    };
+  }
+
+  const file = saveExperiment("classifier-funding-sealed", {
+    specification: "CLASSIFIER-FUNDING-FEATURE/v1-sealed",
+    controlledUniverse,
+    symbolHoldoutUniverse: holdoutSymbols,
+    fundingCoverageStart: coverageStartSec == null ? null : new Date(coverageStartSec * 1000).toISOString(),
+    coverageStartSec,
+    totalRowsBeforeRestriction: allRows.length,
+    totalRowsAfterRestriction: rows.length,
+    recentHoldoutTime,
+    permutations,
+    roundTripCosts: ROUND_TRIP_COSTS
+  }, { ...study, primaryOutcome });
+  console.log(JSON.stringify({
+    controlledUniverse,
+    symbolHoldoutUniverse: holdoutSymbols,
+    fundingCoverageStart: coverageStartSec == null ? null : new Date(coverageStartSec * 1000).toISOString(),
+    totalRowsBeforeRestriction: allRows.length,
+    totalRowsAfterRestriction: rows.length,
     recentHoldoutTime,
     primary: study.primary,
     recent: study.recent,

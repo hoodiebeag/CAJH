@@ -921,6 +921,77 @@ M7/B4: train p=0.4226 fails §6's train-significance clause, so its own whole-sy
 (p=0.0080, actually significant) does not get to count — pre-registration checks train first,
 independent of how holdout reads.
 
+### CLASSIFIER-FUNDING-FEATURE: btcFundingRate added to the P5 classifier — KILLED, stronger AUC, same cost failure
+
+Adds Kraken PF_XBTUSD funding rate as a 21st continuous covariate in Classifier P5's fitted
+logistic regression (`CLASSIFIER_COLUMNS`), broadcast to every symbol's row as market-context
+(same convention as the existing `btc4hRetPct`/`btcBias4h_*` columns), joined via a per-symbol
+`fundingAsOf` cursor (`attachFundingFeature`, classifier.mjs) so an out-of-time-order symbol in
+the watchlist loop can never inherit a stale rate from a different symbol's already-advanced
+pointer. Not a duplicate of H11 (a hard universal funding threshold *gate*, DATA-GATED/
+Binance-451) or funding-study.mjs (a BTC-only portfolio *cash rule*) — this is one more fitted
+covariate inside the same statistical object P5 already tested.
+
+**Pre-registered coverage restriction, honored exactly as written.** Kraken's PF_XBTUSD
+historical-funding cache covers 2025-07-27T08:00Z onward (~367 days) against candle history
+back to 2023-01-01 (~1306 days). `record.t` for rows before the funding series starts is never
+zero-filled or defaulted — `attachFundingFeature` leaves `btcFundingRate: null` on those rows
+(proven by a dedicated fixture in classifier.test.mjs), and the sealed CLI path
+(`classifier.mjs sealed-funding`) filters the whole-watchlist row set down to
+`row.t >= coverageStartSec` *before* any scoring, not after. Of 15076 rows built across the
+full 29-asset watchlist, 3969 fall inside the funding-covered window and were the only ones
+used.
+
+**Primary (whole-symbol holdout, 13 controlled / 16 held-out, same STABLE_13 split as P5):**
+trainRows=1806, holdoutRows=2163, positives train=310/1806 (17.2%), holdout=396/2163 (18.3%).
+trainAuc 0.6274, holdoutAuc 0.5943, gap 0.0332 (still small — not memorizing train, if wider
+than P5's 0.0253). Permutation null: K=100, all 100 valid, exceedances=0, **p=0.0099** — clears
+the pre-registered `p<0.05` gate more decisively than P5's own p=0.0198. selectedLambda=0.1,
+converged=true.
+
+**Recent (secondary):** trainRows=1258, holdoutRows=548, positives train=233/1258 (18.5%),
+holdout=77/548 (14.1%). trainAuc 0.6192, holdoutAuc 0.6236, gap -0.0044 (holdout slightly beats
+train — no overfitting). K=100, all 100 valid, exceedances=1, **p=0.0198** — also significant,
+a new result: P5's recent arm was not (p=0.257). Both sealed holdouts independently clear
+`p<0.05` here, not just the powered primary arm.
+
+**Economic lift net of cost (the decisive second gate clause) — threshold=0.5, reported at
+both the repo's long-standing 0.009 cost and FEE-SCHEDULE-REBASE's corrected real ~0.017 cost,
+side by side, per that item's own note:** of 2163 primary holdout rows, 737 score >=0.5.
+selectedNet = **-0.2412 R/trade** (0.009 cost) / **-0.2492 R/trade** (0.017 cost). baselineNet
+= -0.5387 R/trade (0.009) / -0.5467 R/trade (0.017). lift = **+0.2975 R/trade** at either cost
+(a per-trade constant cancels in the lift difference). Directly against P5's own numbers
+(holdoutAuc 0.5249, p=0.0198, selectedNet -0.4616R, baselineNet -0.5178R, lift +0.0562R): both
+the AUC lift and the economic lift are markedly stronger with funding included, and the
+model's best-scoring subset loses about half as much as P5's did. It is still **deeply
+net-negative on its own** — -0.24 to -0.25 R/trade, nowhere near profitable — the exact
+spec sec 0/4 trap ("a significant AUC can be real and un-tradeable") repeating a third time in
+this project (after Classifier P5 and B5-REVERSAL), now on a strictly stronger version of the
+same classifier.
+
+**Coefficients (train-only, standardized):** maDistPct +0.156 (largest), **btcFundingRate
+-0.137 (2nd largest magnitude of 21 features)**, displacement +0.126, pdlDistPct -0.080,
+btc4hRetPct -0.078, btcBias4h_bull +0.074/btcBias4h_bear -0.074, volRatio -0.070, fvg -0.058,
+swept -0.054, roomR -0.038, pdhDistPct +0.037, higherLow -0.034, rsi -0.031, stopPct -0.029,
+rangePos +0.028, atrPct -0.020, biasMid_bear +0.008/biasMid_bull -0.008, biasHigh_bear
+-0.003/biasHigh_bull +0.003. Funding is not a diffuse also-ran: its standardized coefficient
+is the second-largest in the model, negative-signed — higher relative BTC funding (more
+crowded/expensive leveraged longs) predicts a lower win probability at entry, an economically
+sensible direction (an overheated funding regime is more likely to mean-revert against a fresh
+long), not an arbitrary sign. Threshold=0.5 precision/recall: train 0.237/0.619, holdout
+0.244/0.455 (precision stable train-to-holdout; recall drops, a real but partial
+generalization gap, smaller than the AUC gap alone would suggest).
+
+**VERDICT: KILLED**, on complete sealed evidence, under the exact P5 gate (both clauses
+required, AND). It clears the *first* clause (`holdout AUC beats permutation null, p<0.05`)
+more decisively than any classifier run in this project to date, on both the primary and
+(newly) the recent arm. It fails the *second*, required clause (`the lift survives cost`):
+the model's own best-scoring subset still nets -0.24 to -0.25 R/trade after cost. Funding is
+a real, interpretable, second-most-important feature — it measurably strengthens the
+classifier's statistical signal without meaningfully changing the verdict. No feature
+combination tested in this project (price-technical alone, or price-technical plus funding)
+has produced a classifier whose best-scoring subset is profitable net of cost.
+
 **Net-of-cost economics (train leg) — §6 clause 3, all figures net of turnover×cost:**
 
 | L | reading | 0.9% cost tercile net | top-3 net | top-5 net | 1.7% (real) cost tercile net | top-3 net | top-5 net |
