@@ -8,9 +8,9 @@
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "No-op firing (16th consecutive check). STEP 0: automation.enabled=true, git pull --rebase clean (already up to date, HEAD 7090c24, no new commits, nothing to skim). STEP 1: state-file shape healthy (control object / blackboard.work_queue array (16 items, all done) / ledger array all present and well-typed) - no corruption, STEP 2 skipped. STEP 3: control.status IDLE, independently confirmed work_queue has zero pending items (0 not-done out of 16) - nothing to pull. STEP 5 restock re-verified independently this firing (pending+ready count 0 < 3): git log on ROADMAP.md/TOURNAMENT_ROADMAP.md/VERDICTS.md/FOLLOWON_SPECS.md/SELF_AWARENESS_SPEC.md still tops out at d304419 (predates C1-C3) - nothing changed since the immediately preceding firing; grep VERDICTS.md for PASS - zero matches; TOURNAMENT_ROADMAP.md's 7 PASS hits are all individual gate clauses inside combined-FAIL verdicts, not a new overall PASS. No new work_queue item added - still an honest empty queue. STEP 4: empty-queue notification already recorded at 2026-08-08T03:25:00Z, within the 6h dedup window (checked at 07:46:54Z, ~4h22m elapsed) - correctly skipped a resend; no BLOCKED state; no new PASS verdict found; no live-safety concern. npm.cmd test run once this firing, clean on the first try: 199/199 pass, 0 fail, 0 cancelled, duration_ms 3740.06.",
+    "notes": "No-op firing (17th consecutive check). STEP 0: automation.enabled=true, git pull --rebase clean (already up to date, HEAD fc2610e, no new commits, nothing to skim). STEP 1: state-file shape healthy (control object / blackboard.work_queue array (16 items, all done) / ledger array all present and well-typed) - no corruption, STEP 2 skipped. STEP 3: control.status IDLE, independently confirmed work_queue has zero pending items (0 not-done out of 16) - nothing to pull. STEP 5 restock re-verified independently this firing (pending+ready count 0 < 3): git log on ROADMAP.md/TOURNAMENT_ROADMAP.md/VERDICTS.md/FOLLOWON_SPECS.md/SELF_AWARENESS_SPEC.md still tops out at d304419 (predates C1-C3) - nothing changed since the immediately preceding firing; grep VERDICTS.md for PASS - zero matches. No new work_queue item added - still an honest empty queue. STEP 4: empty-queue notification already recorded at 2026-08-08T03:25:00Z, within the 6h dedup window (checked at 08:01:40Z, ~4h37m elapsed) - correctly skipped a resend; no BLOCKED state; no new PASS verdict found; no live-safety concern. npm.cmd test run once this firing, clean on the first try: 199/199 pass, 0 fail, 0 cancelled, duration_ms 4158.83.",
     "updated_by": "cajh-loop-check",
-    "updated_at": "2026-08-08T07:46:54.000Z"
+    "updated_at": "2026-08-08T08:01:40.000Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -750,6 +750,14 @@
       "agent": "cajh-loop-check",
       "action": "no_op_check",
       "detail": "Queue re-confirmed genuinely empty (16th consecutive check): 0/16 work_queue items pending, no new PASS verdict in VERDICTS.md (TOURNAMENT_ROADMAP.md's 7 PASS hits are individual gate clauses inside combined-FAIL verdicts, not new overall PASS), no repo changes since d304419 (HEAD 7090c24, git pull --rebase already up to date). npm test clean 199/199 first try. empty-queue notification deduped (last sent 03:25:00Z, ~4h22m elapsed, within 6h window).",
+      "commit": null,
+      "tests": "199/199 pass"
+    },
+    {
+      "ts": "2026-08-08T08:01:40.000Z",
+      "agent": "cajh-loop-check",
+      "action": "no_op_check",
+      "detail": "Queue re-confirmed genuinely empty (17th consecutive check): 0/16 work_queue items pending, no new PASS verdict in VERDICTS.md, no repo changes since d304419 (HEAD fc2610e). npm test clean 199/199 first try. empty-queue notification deduped (last sent 03:25:00Z, ~4h37m elapsed, within 6h window).",
       "commit": null,
       "tests": "199/199 pass"
     }
