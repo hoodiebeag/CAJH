@@ -189,10 +189,14 @@ function runSizedDCAStudy(rule, { watchlist = loadWatchlist(), splitFraction = 0
 }
 
 export const runMartingaleDCAStudy = (opts) => runSizedDCAStudy("martingale", opts);
+export const runAntimartingaleDCAStudy = (opts) => runSizedDCAStudy("antimartingale", opts);
 
 if (process.argv[1]?.endsWith("dca.mjs")) {
   const which = process.argv[2] || "fixed-interval";
-  const report = which === "martingale" ? runMartingaleDCAStudy() : runFixedIntervalDCAStudy();
+  const report =
+    which === "martingale" ? runMartingaleDCAStudy() :
+    which === "antimartingale" ? runAntimartingaleDCAStudy() :
+    runFixedIntervalDCAStudy();
   const saved = saveExperiment(`dca-${which}`, report.input, report.result);
   console.log(JSON.stringify({ ...report.result, saved }, null, 2));
 }
