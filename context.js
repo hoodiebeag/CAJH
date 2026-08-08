@@ -34,6 +34,26 @@ function latestRoadmapVerdict(maxBytes = 120000) {
   } catch { return "not available"; }
 }
 
+// VERDICTS.md is the repo's own curated one-row-per-hypothesis index (updated in the
+// same commit as each verdict it records, per that file's own header), so reading it
+// live gives a short multi-hypothesis digest instead of just the single latest
+// ROADMAP.md verdict line, which names no hypothesis.
+export function buildVerdictsDigest(maxBytes = 60000, limit = 6) {
+  try {
+    const text = fs.readFileSync(path.join(process.cwd(), "VERDICTS.md"), "utf8").slice(-maxBytes);
+    const rows = text.split("\n")
+      .filter((line) => line.startsWith("|") && !/^\|\s*-+\s*\|/.test(line) && !/^\|\s*ID\s*\|/i.test(line))
+      .map((line) => line.split("|").map((cell) => cell.trim()).filter((cell) => cell.length));
+    const meaningful = rows.filter((cols) => cols.length >= 3 && !/^(pending|done\s*—)/i.test(cols[2]));
+    const chosen = meaningful.slice(-limit);
+    if (!chosen.length) return "no recorded verdicts yet";
+    return chosen.map((cols) => `${cols[0]}: ${cols[2]}`).join("; ");
+  } catch { return "not available"; }
+}
+
+const ENTRY_GATES_SUMMARY = "anticipation swing-low trigger on 1h/4h/1d, per-timeframe stop band, min stop floor; no live alignment/trend gate";
+const SIZING_SUMMARY = "risk-based at 0.5% cash risk, 20% notional cap, six-position cap with winner rotation, software-polled stop/TP";
+
 export function redactContextText(value) {
   return String(value ?? "")
     .replace(/(KRAKEN_API_(?:KEY|SECRET)|DISCORD_TOKEN|ANTHROPIC_API_KEY)\s*[:=]\s*[^\s,;]+/gi, "$1=[REDACTED]")
@@ -54,12 +74,16 @@ export function formatDecisionForContext(event) {
   return redactContextText(`${stamp}: ${event?.type ?? "unknown decision"}`);
 }
 
-export function buildMissionDigest({ config = {}, verdict = "not recorded", trading = "halted" } = {}) {
+export function buildMissionDigest({ config = {}, verdict = "not recorded", verdictsDigest, trading = "halted", strategySummary } = {}) {
   const symbols = (config.watchlist || []).map((asset) => asset.symbol).filter(Boolean).slice(0, 20);
+  const digest = verdictsDigest || verdict;
   return redactContextText([
     "mission/limitations digest:",
     "This is supplied system context generated from current runtime state and recorded research; it is not persistent self-awareness or memory.",
-    `Current configured watchlist: ${symbols.join(", ") || "none recorded"}; trading state: ${trading}; latest ROADMAP verdict: ${verdict}.`,
+    "CAJH is a research-first market-intelligence system connected to a long-only Kraken spot executor; its primary objective is finding a repeatable, cost-aware crypto strategy that survives out-of-sample testing, with live trading as a secondary, currently-unearned outcome.",
+    `Current strategy: ${strategySummary || `${ENTRY_GATES_SUMMARY}; ${SIZING_SUMMARY}`}.`,
+    `Current configured watchlist: ${symbols.join(", ") || "none recorded"}; trading state: ${trading}.`,
+    `Trading defaults off because every entry-signal and portfolio-rotation hypothesis tested to date is net-negative, insignificant, or fails its economic gate after realistic costs — recent verdicts: ${digest}.`,
     "The current strategy is not validated for autonomous live trading. Do not infer an edge from live samples, incomplete holdouts, or unavailable data.",
     "Require chronological holdouts, realistic costs, adequate sample size, and explicit failure analysis before any paper-trading promotion."
   ].join(" "));
@@ -111,15 +135,15 @@ export function buildLiveContext(state, { maxChars = 12000, bootedAt = Date.now(
     `- trading: ${trading}`,
     `- watchlist: ${watch}`,
     `- timeframes scanned: 1h, 4h, 1d`,
-    `- live entry gates: anticipation swing-low trigger, per-timeframe stop band, min stop floor, monitor health, durable halt; no alignment/trend gate`,
-    `- sizing/exits: risk-based at 0.5% cash risk, 20% notional cap, six-position cap with winner rotation, software-polled stop/TP`,
+    `- live entry gates: ${ENTRY_GATES_SUMMARY}, monitor health, durable halt`,
+    `- sizing/exits: ${SIZING_SUMMARY}`,
     `- open positions:\n${positions}`,
     `- effective safe config: ${JSON.stringify(safeConfig)}`,
     `- halt state: ${redactContextText(JSON.stringify({ active: halt.active, reason: halt.reason, haltedAt: halt.haltedAt, likelyCause: haltCause }))}`,
     `- monitor health: ${JSON.stringify({ ok: monitorHealth.ok, hydrated: monitorHealth.hydrated, reconciled: monitorHealth.reconciled, persistenceOk: monitorHealth.persistenceOk, tickOk: monitorHealth.tickOk, stale: monitorHealth.stale, exitProtection: monitorHealth.exitProtection })}`,
     `- storage health: ${JSON.stringify(Object.fromEntries(Object.entries(storageHealth).map(([key, value]) => [key, { ok: value.ok, source: value.source }])))}`,
     `- latest roadmap verdict: ${latestRoadmapVerdict()}`,
-    `- ${buildMissionDigest({ config, verdict: latestRoadmapVerdict(), trading })}`,
+    `- ${buildMissionDigest({ config, verdict: latestRoadmapVerdict(), verdictsDigest: buildVerdictsDigest(), trading })}`,
     `- in-memory decision records: ${recentDecisions.length} (persisted journal is authoritative when present)`,
     `- last scan: ${state.lastScanTime ?? "none yet"}`,
     `- durable decision history: ${journal.length} recent records loaded; ${setups.length} evaluated setups (${passed} passed), ${exits.length} realized exits, ${wins} wins, realized P&L $${totalPnl.toFixed(2)}`,

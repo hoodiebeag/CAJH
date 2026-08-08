@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { buildLiveContext, buildMissionDigest, formatDecisionForContext, describeHaltCause } from "./context.js";
+import { buildLiveContext, buildMissionDigest, buildVerdictsDigest, formatDecisionForContext, describeHaltCause } from "./context.js";
 
 const monitorUrl = pathToFileURL(path.join(process.cwd(), "monitor.js")).href;
 const contextUrl = pathToFileURL(path.join(process.cwd(), "context.js")).href;
@@ -74,6 +74,68 @@ test("C3 mission digest is dynamic and states its context and live-trading limit
   assert.match(digest, /BTC, ETH/);
   assert.match(digest, /KILLED/);
   assert.match(digest, /not validated for autonomous live trading/);
+});
+
+test("C3 mission digest states what cajh is, its current strategy, and why trading defaults off, from a multi-hypothesis verdict digest", () => {
+  const digest = buildMissionDigest({
+    config: { watchlist: [{ symbol: "BTC" }, { symbol: "ETH" }] },
+    verdictsDigest: "Momentum M7: KILLED; Classifier P5: KILLED (economic lift fails cost)",
+    trading: "halted"
+  });
+  assert.match(digest, /research-first market-intelligence system/);
+  assert.match(digest, /long-only Kraken spot executor/);
+  assert.match(digest, /Current strategy: anticipation swing-low trigger/);
+  assert.match(digest, /Trading defaults off because/);
+  assert.match(digest, /Momentum M7: KILLED; Classifier P5: KILLED \(economic lift fails cost\)/);
+});
+
+test("buildVerdictsDigest reads VERDICTS.md live, drops pending/folded-in rows, and keeps the most recent meaningful ones", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-verdicts-"));
+  fs.writeFileSync(path.join(dir, "VERDICTS.md"), [
+    "| ID | Hypothesis | Verdict | Deciding metric | Holdout n | Date | Commit |",
+    "|---|---|---|---|---|---|---|",
+    "| A | first hypothesis | KILLED | x | 1 | d | c |",
+    "| B | second hypothesis | pending | x | 1 | d | c |",
+    "| C | third hypothesis | done — result folded into A above | x | 1 | d | c |",
+    "| D | fourth hypothesis | FAIL | x | 1 | d | c |"
+  ].join("\n"));
+  const cwd = process.cwd();
+  try {
+    process.chdir(dir);
+    const digest = buildVerdictsDigest();
+    assert.match(digest, /A: KILLED/);
+    assert.doesNotMatch(digest, /B: pending/);
+    assert.doesNotMatch(digest, /C: done/);
+    assert.match(digest, /D: FAIL/);
+  } finally {
+    process.chdir(cwd);
+  }
+});
+
+test("buildVerdictsDigest reports an honest empty state when no meaningful verdict rows exist", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-verdicts-empty-"));
+  fs.writeFileSync(path.join(dir, "VERDICTS.md"), [
+    "| ID | Hypothesis | Verdict | Deciding metric | Holdout n | Date | Commit |",
+    "|---|---|---|---|---|---|---|",
+    "| A | only hypothesis | pending | x | 1 | d | c |"
+  ].join("\n"));
+  const cwd = process.cwd();
+  try {
+    process.chdir(dir);
+    assert.equal(buildVerdictsDigest(), "no recorded verdicts yet");
+  } finally {
+    process.chdir(cwd);
+  }
+});
+
+test("C3: buildLiveContext's verdict digest is a real multi-hypothesis digest pulled live from VERDICTS.md, not just the single latest bare verdict word", () => {
+  const context = buildLiveContext({ watchlist: [] }, { maxChars: 20000 });
+  const match = context.match(/recent verdicts: (.+?)\./);
+  assert.ok(match, context);
+  assert.ok(match[1].length > 40, `expected a multi-hypothesis digest, got: ${JSON.stringify(match[1])}`);
+  assert.match(match[1], /:/);
+  assert.match(context, /Current strategy: anticipation swing-low trigger/);
+  assert.match(context, /research-first market-intelligence system/);
 });
 
 test("C2 exposes an open position's R and entry reason from strategyReason", () => {
