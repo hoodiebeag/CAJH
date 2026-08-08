@@ -784,3 +784,67 @@ feature combination here is a harvest/FOLLOWON-Part-A candidate; the caveats alr
 record (survivorship, `tpR=4`-conditional label, within-symbol correlation, class
 imbalance) all still apply and none of them would flip this verdict if relaxed, since the
 gap is ~0.46R/trade, not a rounding error.
+
+### H11 funding gate — diagnosed: a total access ceiling, not a data-gate bug (2026-08-08)
+
+H11 (`funding-gate-h11.mjs`) has produced `eligibleAssets: []` on every attempt since it was
+staged (last run 2026-08-04). This looked like the same watchlist/history-length data-gate
+PWR1 diagnosed and fixed for momentum/low-vol/classifier, so this item re-ran the same style
+of diagnosis rather than assuming it. It is not the same problem.
+
+**Instrumentation added first, not a blind re-run.** `runFundingGateH11` previously wrapped
+its whole per-asset body in a bare `try { } catch { /* excluded, reported by coverage */ }`
+that discarded the actual error — the comment claimed coverage reporting that didn't exist.
+Added a `coverage` array (additive to `report.input`, one entry per watchlist symbol with
+`included` and, when excluded, a precise `reason`: `insufficient-candle-history`,
+`funding-history-short (X of Y days)`, or `funding-fetch-error: <message>`) and an injectable
+`fetchFunding` parameter (defaults to the real `fetchBinanceFunding`, byte-identical when
+omitted — same no-op-when-omitted pattern already used for `stopMode`/`atrStopK`/`maxHold`/
+`entryGate`). This changes no trading/scoring logic and no other file; `eligibleAssets`,
+`train`, `holdout`, and `promoted` are computed exactly as before. 4 new fixture tests
+(`funding-gate-h11.test.mjs`) prove each coverage reason classifies correctly and that
+inclusion is unchanged when both gates genuinely clear.
+
+**Root cause, with the instrumented run against the live 29-symbol watchlist:** 28 of 29
+assets fail with `funding-fetch-error: Request failed with status code 451` — Binance's
+USD-M futures funding endpoint (`fapi.binance.com`, the only data source `fundinglib.mjs`
+ever calls) returns HTTP 451 ("Service unavailable from a restricted location... Binance
+terms 'b. Eligibility'") for *every* symbol from this environment's network, unconditionally.
+Confirmed directly with a bare request (no repo code involved): same 451 on BTCUSDT and
+ETHUSDT. This is a total, symbol-independent access block — nothing to do with `toBinancePerp`
+symbol mapping (checked and correct: `XBT`→`BTCUSDT` etc.) or per-symbol funding history depth,
+both of which the item's own task text anticipated as the likely causes and neither of which
+is the actual one. The 1 remaining asset (`EOS`) fails on `insufficient-candle-history`, a
+pre-existing, unrelated gap already noted in GRID-SIM's result (EOS's local candle history
+stops 2025-06-30). **Zero of the 29 watchlist assets have ever reached the funding-history-depth
+check** — the "0 eligible assets" result recorded 2026-08-04 was never actually testing
+funding-history coverage; it was silently reporting a network access failure as if it were an
+empty data set.
+
+**Checked whether a narrow fix exists: no safe one does.** This repo already has a second,
+independent, *working* on-chain funding data path — `derivatives.mjs`'s `fetchFundingRates()`
+against Kraken's public `futures.kraken.com/derivatives/api/v3/historical-funding-rates`
+(the same endpoint `funding.mjs`/`funding-study.mjs` already use successfully, per Q2's
+precedent of reusing an existing validated fetch rather than the spec's literal one). Verified
+directly it is reachable and returns real data for `PF_XBTUSD` (8804 rows, `result: "success"`).
+But its earliest available point is **2025-08-06 — only ~367 days of history**, well under
+this item's pre-registered `minHistoryDays=730`. The endpoint has no pagination/continuation
+parameter beyond `symbol`; there is no way to request more history than Kraken publishes.
+So swapping the data source would not be a narrow fix that clears the gate — it would still
+produce 0 eligible assets (now via `funding-history-short`, ~367 of 730 days, for every
+symbol, including majors), *unless* `minHistoryDays` were lowered, which this item's own
+pre-registration explicitly forbids doing after seeing results. No safe, narrow, in-scope fix
+exists that lets H11 clear its pre-registered gate today. OI/open-interest coverage was not
+investigated further, per this item's own scope note (that is separate, later work if H11
+ever clears on funding rate alone).
+
+**VERDICT: DATA-GATED, honest non-verdict** — not promoted, not killed. This is a genuine
+external data-availability ceiling on two independent fronts (Binance inaccessible from this
+network; Kraken's own history too short for the pre-registered floor), not a bug, not a
+watchlist gap PWR1-style, and not evidence against the underlying hypothesis (funding-rate
+confirmation on `anticipate`) either way. `promoted` correctly reads `false` and the gate
+clauses are correctly unmet, but treating that as a kill would overstate what was actually
+tested — exactly the trap PWR1-4 were staged to avoid for the other three studies. Re-opening
+this only makes sense if either (a) this environment gains non-geo-blocked access to Binance's
+futures API, or (b) a funding-history source with genuine 730+-day depth becomes available;
+neither is a code change to this repo.
