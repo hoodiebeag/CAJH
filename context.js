@@ -65,12 +65,25 @@ export function buildMissionDigest({ config = {}, verdict = "not recorded", trad
   ].join(" "));
 }
 
-export function buildLiveContext(state, { maxChars = 12000 } = {}) {
+// A default-off boot and an operator-issued pause currently record the same reason
+// string, so the only available signal to tell them apart is timing: the default halt
+// call lands within the startup sequence (login, balance fetch, monitor start); a
+// pause issued once the process has been running a while doesn't. Pure so it can be
+// tested against plain halt-state objects without exercising the real halt machinery.
+export function describeHaltCause(halt, bootedAt = Date.now() - process.uptime() * 1000, windowMs = 120000) {
+  if (!halt?.active) return null;
+  if (halt.haltedAt != null && halt.haltedAt - bootedAt <= windowMs) {
+    return "automatic startup default (halted shortly after process start)";
+  }
+  return "manual pause during a running session (e.g. !stop)";
+}
+
+export function buildLiveContext(state, { maxChars = 12000, bootedAt = Date.now() - process.uptime() * 1000 } = {}) {
   const trading = isTradingEnabled() ? "active" : "halted";
   const open    = getOpenTrades();
   const positions = open.length
     ? open.map(t =>
-        `${t.symbol}: entry $${t.entry}, stop $${t.stopLoss}, TP $${t.takeProfit}`
+        `${t.symbol}: entry $${t.entry}, stop $${t.stopLoss}, TP $${t.takeProfit}, R $${t.risk ?? "unrecorded"}, reason: ${t.strategyReason ?? t.signal ?? "unrecorded"}`
       ).join("\n")
     : "none";
   const watch = (state.watchlist || []).map(a => a.symbol).join(", ") || "empty";
@@ -78,6 +91,7 @@ export function buildLiveContext(state, { maxChars = 12000 } = {}) {
   const recentDecisions = getRecentDecisions({ limit: 20 });
   const monitorHealth = getMonitorHealth();
   const halt = getHaltState();
+  const haltCause = describeHaltCause(halt, bootedAt);
   const storageHealth = getStorageHealth();
   const config = loadConfig();
   const exits = journal.filter((event) => event.type === "exit" && Number.isFinite(event.exit?.pnl));
@@ -101,7 +115,7 @@ export function buildLiveContext(state, { maxChars = 12000 } = {}) {
     `- sizing/exits: risk-based at 0.5% cash risk, 20% notional cap, six-position cap with winner rotation, software-polled stop/TP`,
     `- open positions:\n${positions}`,
     `- effective safe config: ${JSON.stringify(safeConfig)}`,
-    `- halt state: ${redactContextText(JSON.stringify({ active: halt.active, reason: halt.reason, haltedAt: halt.haltedAt }))}`,
+    `- halt state: ${redactContextText(JSON.stringify({ active: halt.active, reason: halt.reason, haltedAt: halt.haltedAt, likelyCause: haltCause }))}`,
     `- monitor health: ${JSON.stringify({ ok: monitorHealth.ok, hydrated: monitorHealth.hydrated, reconciled: monitorHealth.reconciled, persistenceOk: monitorHealth.persistenceOk, tickOk: monitorHealth.tickOk, stale: monitorHealth.stale, exitProtection: monitorHealth.exitProtection })}`,
     `- storage health: ${JSON.stringify(Object.fromEntries(Object.entries(storageHealth).map(([key, value]) => [key, { ok: value.ok, source: value.source }])))}`,
     `- latest roadmap verdict: ${latestRoadmapVerdict()}`,

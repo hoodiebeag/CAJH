@@ -1,6 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildLiveContext, buildMissionDigest, formatDecisionForContext } from "./context.js";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
+import { buildLiveContext, buildMissionDigest, formatDecisionForContext, describeHaltCause } from "./context.js";
+
+const monitorUrl = pathToFileURL(path.join(process.cwd(), "monitor.js")).href;
+const contextUrl = pathToFileURL(path.join(process.cwd(), "context.js")).href;
+
+// DATA_DIR is read at module-load time, so a real open position can only be set up
+// in a subprocess started with a temp DATA_DIR — never against this process's own
+// (repo-root) storage.
+function runContext(dir, body) {
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
+    import * as monitor from ${JSON.stringify(monitorUrl)};
+    import * as context from ${JSON.stringify(contextUrl)};
+    ${body}
+  `], { env: { ...process.env, DATA_DIR: dir }, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const line = result.stdout.split("\n").find(value => value.startsWith("__RESULT__"));
+  assert.ok(line, result.stdout);
+  return JSON.parse(line.slice("__RESULT__".length));
+}
 
 test("C2 exposes bounded read-only operational context without secrets", () => {
   const context = buildLiveContext({
@@ -51,4 +74,55 @@ test("C3 mission digest is dynamic and states its context and live-trading limit
   assert.match(digest, /BTC, ETH/);
   assert.match(digest, /KILLED/);
   assert.match(digest, /not validated for autonomous live trading/);
+});
+
+test("C2 exposes an open position's R and entry reason from strategyReason", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-ctx-pos-"));
+  fs.writeFileSync(path.join(dir, "positions.json"), JSON.stringify([
+    { symbol: "BTC", entry: 100, stopLoss: 90, takeProfit: 130, risk: 10, volume: 1, strategyReason: "anticipation swing-low trigger" }
+  ]));
+  const result = runContext(dir, `
+    monitor.hydrateTrades();
+    console.log("__RESULT__" + JSON.stringify({
+      context: context.buildLiveContext({ watchlist: [] }, { maxChars: 20000 })
+    }));
+  `);
+  assert.match(result.context, /BTC: entry \$100, stop \$90, TP \$130, R \$10, reason: anticipation swing-low trigger/);
+});
+
+test("C2 falls back to the entry signal name when no strategy reason was recorded", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-ctx-pos2-"));
+  fs.writeFileSync(path.join(dir, "positions.json"), JSON.stringify([
+    { symbol: "ETH", entry: 200, stopLoss: 180, takeProfit: 260, risk: 20, volume: 1, signal: "anticipate" }
+  ]));
+  const result = runContext(dir, `
+    monitor.hydrateTrades();
+    console.log("__RESULT__" + JSON.stringify({
+      context: context.buildLiveContext({ watchlist: [] }, { maxChars: 20000 })
+    }));
+  `);
+  assert.match(result.context, /ETH: entry \$200, stop \$180, TP \$260, R \$20, reason: anticipate/);
+});
+
+test("C2's halt-cause heuristic labels a halt landing within the boot window as the automatic default", () => {
+  assert.equal(
+    describeHaltCause({ active: true, haltedAt: 1_000_000 }, 999_500),
+    "automatic startup default (halted shortly after process start)"
+  );
+});
+
+test("C2's halt-cause heuristic labels a halt landing well after boot as a manual pause", () => {
+  assert.equal(
+    describeHaltCause({ active: true, haltedAt: 1_000_000 }, 1_000_000 - 10 * 60 * 1000),
+    "manual pause during a running session (e.g. !stop)"
+  );
+});
+
+test("C2's halt-cause heuristic returns null when trading is not halted", () => {
+  assert.equal(describeHaltCause({ active: false, haltedAt: null }, Date.now()), null);
+});
+
+test("C2 threads the halt-cause label into the live context's halt state field", () => {
+  const context = buildLiveContext({ watchlist: [] }, { maxChars: 20000 });
+  assert.match(context, /"likelyCause":null/);
 });
