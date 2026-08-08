@@ -424,3 +424,56 @@ test("maxHold: omitted is a true no-op (identical to explicit default 100)", () 
   const explicit100 = backtestMultiTF({ series }, { ...BREAKOUT_CFG, maxHold: 100 });
   assert.deepEqual(omitted, explicit100);
 });
+
+// TRAIL-STOP-EXIT (100-strategy triage #100, pre-registered 2026-08-08): a dynamic
+// trailing take-profit — remove the fixed TP, track the peak price since entry, exit
+// the first time price pulls back `trailingTpPct` from that peak (indefinite hold
+// otherwise, so `maxHold` also does not apply while this option is set). These tests
+// prove the pullback exit fires at exactly the peak*(1-pct) threshold — not one tick
+// early — and that omitting the option is a true no-op.
+function buildTrailingTpSeries(afterPeak) {
+  const c1h = [];
+  let t = 1_700_000_000;
+  for (let i = 0; i < 30; i++) { c1h.push(mk(t, 100, 101, 99, 100)); t += HOUR; }   // flat baseline, ATR(14)=2
+  c1h.push(mk(t, 100, 108, 100, 107)); t += HOUR;                                  // breakout: entry 107, stop 103, risk 4
+  let p = 107;
+  for (let i = 0; i < 20; i++) { c1h.push(mk(t, p, p + 1, p, p + 1)); p += 1; t += HOUR; } // clean grind to a 127 peak
+  for (const bar of afterPeak) { c1h.push(mk(t, ...bar)); t += HOUR; }
+  return [{ label: "1h", mins: 60, candles: c1h }];
+}
+
+test("trailingTpPct: exits at exactly the peak pullback threshold, not one tick early", () => {
+  const peak = 127, pct = 0.05, trigger = peak * (1 - pct);
+  const notYet = buildTrailingTpSeries([[peak, peak, trigger + 0.01, trigger + 0.01]]); // stops just short
+  const exact  = buildTrailingTpSeries([[peak, peak, trigger, trigger]]);               // touches the trigger exactly
+  const rNotYet = backtestMultiTF({ series: notYet }, { ...BREAKOUT_CFG, trailingTpPct: pct });
+  const rExact  = backtestMultiTF({ series: exact },  { ...BREAKOUT_CFG, trailingTpPct: pct });
+  assert.equal(rNotYet.trades, 0, "must not fire while price stays above the pullback trigger (position still open)");
+  assert.equal(rExact.trades, 1, "must fire exactly when price touches peak*(1-pct)");
+  assert.equal(rExact.exits.trailingTp, 1);
+  const netAt = (px, entry = 107, risk = 4) => (px - entry) / risk - (0.0045 * (entry + px)) / risk;
+  assert.ok(Math.abs(rExact.results[0] - netAt(trigger)) < 1e-9,
+    `R ${rExact.results[0]} != expected ${netAt(trigger)}`);
+});
+
+test("trailingTpPct: removes the fixed TP and the maxHold timeout while active", () => {
+  // Grind straight through where the fixed TP (tpR=3 -> tp=119) would have fired, and
+  // past maxHold's default 100 bars, without ever pulling back — position must still
+  // be open (uncounted), proving neither the old TP nor maxHold applies.
+  const c1h = [];
+  let t = 1_700_000_000;
+  for (let i = 0; i < 30; i++) { c1h.push(mk(t, 100, 101, 99, 100)); t += HOUR; }
+  c1h.push(mk(t, 100, 108, 100, 107)); t += HOUR;
+  let p = 107;
+  for (let i = 0; i < 110; i++) { c1h.push(mk(t, p, p + 1, p, p + 1)); p += 1; t += HOUR; }
+  const series = [{ label: "1h", mins: 60, candles: c1h }];
+  const r = backtestMultiTF({ series }, { ...BREAKOUT_CFG, trailingTpPct: 0.05 });
+  assert.equal(r.trades, 0, "position must still be open — no fixed-TP exit and no maxHold timeout");
+});
+
+test("trailingTpPct: omitted is a true no-op (identical to explicit null)", () => {
+  const series = buildTrailingTpSeries([[127, 127, 100, 100]]);
+  const omitted = backtestMultiTF({ series }, BREAKOUT_CFG);
+  const explicitNull = backtestMultiTF({ series }, { ...BREAKOUT_CFG, trailingTpPct: null });
+  assert.deepEqual(omitted, explicitNull);
+});

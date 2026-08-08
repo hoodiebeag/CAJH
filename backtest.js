@@ -102,6 +102,11 @@ export function backtestMultiTF({ series } = {}, {
   partialAtR = null,      // bank `partialFrac` of the position at this R (null = off)
   partialFrac = 0.5,
   maxHold = MAX_HOLD,     // bars before a stale position is closed at the market
+  // Dynamic trailing take-profit (null = off, true no-op): replaces the fixed TP with an
+  // exit the first time price pulls back this fraction from the running peak price since
+  // entry (e.g. 0.05 = 5%). While active, `maxHold` also does not apply to the position —
+  // the hold is indefinite until the initial stop or the pullback trigger fires.
+  trailingTpPct = null,
   // Stop placement. "structural" = the candidate swing low (what live does today).
   // "atr" = a volatility-scaled stop atrStopK ATRs below entry, so the invalidation is
   // the same "size of move" on a 1%-ATR major and a 8%-ATR alt. R scales with it, so a
@@ -476,8 +481,15 @@ export function backtestMultiTF({ series } = {}, {
 
       // Stop first, against the stop as it stood entering this candle (conservative: if
       // both stop and target are touched in one bar, assume the stop hit first).
+      // trailingTpPct replaces the fixed TP: the pullback trigger is checked against the
+      // peak as it stood entering this candle (updated below, after this check, so it
+      // only binds on later candles — same ordering as the trailR trailing stop).
       if (lo <= pos.stop) closeLeg(pos.stop, pos.open, pos.beMoved || pos.trailing ? "trail/be" : "stop");
-      else if (hi >= pos.tp) closeLeg(pos.tp, pos.open, "target");
+      else if (!trailingTpPct && hi >= pos.tp) closeLeg(pos.tp, pos.open, "target");
+      else if (trailingTpPct && pos.peak > pos.entry) {
+        const pullbackPx = pos.peak * (1 - trailingTpPct);
+        if (lo <= pullbackPx) closeLeg(pullbackPx, pos.open, "trailingTp");
+      }
 
       // Partial scale-out: bank `partialFrac` at the partial target, let the rest run.
       if (pos && partialAtR && !pos.partialDone) {
@@ -498,6 +510,10 @@ export function backtestMultiTF({ series } = {}, {
         }
       }
 
+      // Trailing take-profit: extend the running peak for the next candle's pullback
+      // check above. Updated after that check, so it only binds on later candles.
+      if (pos && trailingTpPct) pos.peak = Math.max(pos.peak, hi);
+
       // Breakeven-plus: once this candle's high reaches the trigger, lift the stop
       // above entry for subsequent candles.
       if (pos && lockBreakeven && !pos.beMoved) {
@@ -510,7 +526,8 @@ export function backtestMultiTF({ series } = {}, {
       }
       // Structure-based take-profit: a swing high confirmed here, while in profit.
       if (pos && exitOnSwingHigh && highAt.has(k) && C[k] > pos.entry) closeLeg(C[k], pos.open, "swingHigh");
-      if (pos && k - pos.openedAt >= maxHold) closeLeg(C[k], pos.open, "timeout");
+      // trailingTpPct holds the position indefinitely (stop or pullback only) — no timeout.
+      if (pos && !trailingTpPct && k - pos.openedAt >= maxHold) closeLeg(C[k], pos.open, "timeout");
     }
 
     // Anticipation candidate tracking — same transitions as detectSwings/pendingSwingLow,

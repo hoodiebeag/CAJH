@@ -231,6 +231,54 @@ export function runTimeframeIsolation({ watchlist = loadWatchlist(), split = .70
   return { input, result };
 }
 
+/**
+ * TRAIL-STOP-EXIT (100-strategy triage #100, pre-registered 2026-08-08): does a dynamic
+ * trailing take-profit — track the peak price since entry, exit once price pulls back a
+ * fixed percentage from that peak, hold indefinitely otherwise — beat the fixed-TP
+ * baseline on `breakout` (the one baseline family with a positive zero-cost edge, Track
+ * 1)? Distinct information source from T5-DECAY-EXIT (a bar-count timeout, already
+ * tested: FAIL) — this is a trailing-drawdown exit, not a time-based one. Reuses
+ * backtest.js's `trailingTpPct` option (true no-op when omitted, same pattern as
+ * `stopMode`/`atrStopK`/`maxHold`), applied to `breakout` only — no other family or
+ * config field touched. Two pre-registered trailing percentages, decided before any run:
+ * 5% and 10%.
+ *
+ * PRE-REGISTERED GATE (both required, holdout only, net-of-cost from the start, scored
+ * PER VARIANT): holdout avgR/trade > -0.30 (same bar T5-DECAY-EXIT used, for direct
+ * comparability) AND holdout trades >= 150.
+ */
+export function runBreakoutTrailingTpExit({ watchlist = loadWatchlist(), split = .70 } = {}) {
+  const [, , breakoutConfig] = families.find(([id]) => id === "breakout");
+  const pcts = [0.05, 0.10];
+
+  const datasets = normalize(watchlist).map((asset) => ({ symbol: asset.symbol, series: seriesFor(asset.id) }))
+    .filter((d) => d.series.every((tf) => tf.candles.length >= 250))
+    .map((d) => ({ symbol: d.symbol, train: splitSeries(d.series, split, false), holdout: splitSeries(d.series, split, true) }));
+  const score = (config, part) => summarize(datasets.map((d) => backtestMultiTF({ series: d[part] }, { ...config, entryTf: "1h" })));
+
+  const baseline = { train: score(breakoutConfig, "train"), holdout: score(breakoutConfig, "holdout") };
+  const variants = pcts.map((pct) => {
+    const config = { ...breakoutConfig, trailingTpPct: pct };
+    const train = score(config, "train"), holdout = score(config, "holdout");
+    const avgRPass = holdout.avgR > -0.30;
+    const tradesPass = holdout.trades >= 150;
+    return { trailingTpPct: pct, train, holdout, gate: { avgRPass, tradesPass, passed: avgRPass && tradesPass } };
+  });
+
+  const input = {
+    specification: "strategy-tournament-breakout-trailingtp/v1", split, assets: datasets.map((d) => d.symbol),
+    family: "breakout", variants: variants.map((v) => ({ trailingTpPct: v.trailingTpPct })),
+  };
+  const passed = variants.filter((v) => v.gate.passed).map((v) => v.trailingTpPct);
+  const result = {
+    family: "breakout", baseline, variants,
+    verdict: passed.length
+      ? `breakout trailing-TP variant(s) ${passed.join(", ")} clear the pre-registered gate (holdout avgR>-0.30 AND trades>=150)`
+      : "TRAIL-STOP-EXIT FAIL: neither trailing-TP variant clears the pre-registered gate",
+  };
+  return { input, result };
+}
+
 /** Chronological 70/30 test. Parameters are fixed before examining the holdout. */
 export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRate, slipPct, entryTf = "1h" } = {}) {
   const costOverride = {};
@@ -266,6 +314,10 @@ if (process.argv[1]?.endsWith("tournament.mjs")) {
   } else if (process.argv.includes("--timeframe-isolation")) {
     const report = runTimeframeIsolation();
     const saved = saveExperiment("tournament-timeframe-isolation", report.input, report.result);
+    console.log(JSON.stringify({ ...report.result, saved }, null, 2));
+  } else if (process.argv.includes("--trailing-tp-exit")) {
+    const report = runBreakoutTrailingTpExit();
+    const saved = saveExperiment("tournament-trailing-tp-exit", report.input, report.result);
     console.log(JSON.stringify({ ...report.result, saved }, null, 2));
   } else {
     const zeroCost = process.argv.includes("--zero-cost");

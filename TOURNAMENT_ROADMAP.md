@@ -582,3 +582,62 @@ swing-low/pivot-reclaim signal family (`anticipate`, `bos`, and by the same-mech
 argument in the addendum, `sweep_reclaim`/`range_sweep_reclaim`/`h3`) is now closed
 across both the 1h and 1d timeframes. **T6-TIMEFRAME-ISOLATION is closed as a FAIL.**
 No gate constant was touched after seeing these numbers.
+
+## TRAIL-STOP-EXIT RESULT (2026-08-08)
+
+From the 100-strategy triage (workflow wgnuzvc1r, item #100): a dynamic trailing
+take-profit on `breakout` (the one baseline family with a positive zero-cost edge,
+Track 1). Rationale — instead of a fixed R-multiple target, let a winner run and only
+exit once it has genuinely turned, giving up a fixed percentage from its peak. Distinct
+information source from T5-DECAY-EXIT (a bar-count timeout, already tested: FAIL) — this
+is a trailing-drawdown exit, not a time-based one.
+
+**Mechanism:** added a new `trailingTpPct` option to `backtestMultiTF` (`backtest.js`,
+null = off, true no-op when omitted — same no-op pattern as `stopMode`/`atrStopK`/
+`maxHold`). While active it replaces the fixed TP with an exit the first time price
+pulls back `trailingTpPct` from the running peak price since entry, and also removes the
+`maxHold` timeout for that position (hold is indefinite until the initial stop or the
+pullback trigger fires). Two fixture tests (`backtest.test.mjs`) prove the pullback exit
+fires at exactly `peak*(1-pct)` — not one tick early — and that omitting the option is
+byte-identical to the prior fixed-TP/maxHold behavior. Pre-registered variants: 5% and
+10%, both decided before any run, applied to `breakout` only; no other config field or
+family touched.
+
+**Pre-registered gate (both required, holdout only, net-of-cost from the start, scored
+per variant):**
+- Holdout `avgR/trade > -0.30` (T5-DECAY-EXIT's bar, for direct comparability)
+- Holdout trades >= 150
+
+Ran `node tournament.mjs --trailing-tp-exit` — net-of-cost, 70/30 chronological split,
+full watchlist (28 assets passing the `>=250` candle-per-TF filter for `breakout`).
+
+**Result:**
+
+| | Trades | avgR/trade (net) | Win rate | Assets traded | Positive assets |
+|---|---|---|---|---|---|
+| Baseline train (fixed TP, tpR=3) | 7313 | -0.461 | 33.9% | 28 | 0 (0%) |
+| Baseline holdout | 3123 | -0.445 | 34.2% | 28 | 0 (0%) |
+| Variant train (trailingTpPct=0.05) | 6486 | -0.402 | 32.2% | 28 | 1 (3.6%) |
+| Variant holdout (trailingTpPct=0.05) | 2675 | -0.381 | 32.7% | 28 | 1 (3.6%) |
+| Variant train (trailingTpPct=0.10) | 5230 | -0.375 | 33.8% | 28 | 1 (3.6%) |
+| Variant holdout (trailingTpPct=0.10) | 2257 | -0.469 | 33.6% | 28 | 2 (7.1%) |
+
+The 5% variant improves holdout avgR by +0.064R (-0.445 -> -0.381), similar in magnitude
+to T1B-BREAKOUT-COSTFIX's cost-reduction variant, but still falls short of the -0.30
+bar. The 10% variant is *worse* than baseline on holdout (-0.445 -> -0.469) despite
+being better than baseline on train (-0.461 -> -0.375) — a train/holdout sign flip
+consistent with a wider trailing band giving back more of a winner's gain on the
+specific assets/periods in the holdout window, not a robust improvement. Both variants
+reduce trade count materially (3123 -> 2675 / 2257 holdout trades), as expected: letting
+winners run longer means fewer new entries fit in the same window.
+
+**Gate check (pre-registered, not adjusted after seeing this):**
+- 5%: holdout avgR/trade > -0.30 -> -0.381 -> **FAIL**; trades >= 150 -> 2675 -> PASS -> combined **FAIL**
+- 10%: holdout avgR/trade > -0.30 -> -0.469 -> **FAIL**; trades >= 150 -> 2257 -> PASS -> combined **FAIL**
+
+**Verdict: FAIL for both variants.** Neither trailing percentage clears the
+pre-registered gate. The 5% variant is directionally the more promising of the two
+(smaller pullback holds the exit tighter to the peak) but is still a wide margin short
+of the bar, and the 10% variant's train/holdout sign flip argues against loosening the
+band further. **TRAIL-STOP-EXIT is closed as a FAIL.** No gate constant was touched
+after seeing these numbers.

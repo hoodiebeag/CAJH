@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix, runBreakoutDecayExit, runTimeframeIsolation } from "./tournament.mjs";
+import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix, runBreakoutDecayExit, runTimeframeIsolation, runBreakoutTrailingTpExit } from "./tournament.mjs";
 
 test("tournament reports no promotion when its data gate cannot be met", () => {
   const report = runTournament({ watchlist: [] });
@@ -99,4 +99,22 @@ test("runTimeframeIsolation: entryTf defaults to \"1d\" and only anticipate/bos 
   const report = runTimeframeIsolation({ watchlist: [] });
   assert.equal(report.input.entryTf, "1d");
   assert.deepEqual(report.input.families, ["anticipate", "bos"]);
+});
+
+// ── TRAIL-STOP-EXIT — trailing take-profit via backtest.js's trailingTpPct ─────
+test("runBreakoutTrailingTpExit: empty watchlist yields zero trades on both variants and fails their gates honestly", () => {
+  const report = runBreakoutTrailingTpExit({ watchlist: [] });
+  assert.equal(report.result.variants.length, 2);
+  assert.deepEqual(report.result.variants.map((v) => v.trailingTpPct), [0.05, 0.10]);
+  for (const v of report.result.variants) {
+    assert.equal(v.holdout.trades, 0, "0 trades must never read as a passing gate");
+    assert.equal(v.gate.passed, false);
+    assert.equal(v.gate.tradesPass, false);
+  }
+});
+
+test("runBreakoutTrailingTpExit: variant configs only override trailingTpPct, nothing else, both pre-registered percentages present", () => {
+  const report = runBreakoutTrailingTpExit({ watchlist: [] });
+  assert.deepEqual(report.input.variants, [{ trailingTpPct: 0.05 }, { trailingTpPct: 0.10 }]);
+  assert.equal(report.input.family, "breakout");
 });
