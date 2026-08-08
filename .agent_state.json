@@ -3,14 +3,14 @@
   "control": {
     "status": "IDLE",
     "target_file": null,
-    "objective": "DCA-FIXED-INTERVAL done. Queue has 5 pending items left (DCA-MARTINGALE, DCA-ANTIMARTINGALE - both unblocked since DCA-SIZING-HARNESS, GRID-SIM, TRAIL-STOP-EXIT, H11-COVERAGE-DIAGNOSIS), all independent or single-dependency, none touching a frozen/live-trading path.",
+    "objective": "DCA-MARTINGALE done. Queue has 4 pending items left (DCA-ANTIMARTINGALE - unblocked since DCA-SIZING-HARNESS, GRID-SIM, TRAIL-STOP-EXIT, H11-COVERAGE-DIAGNOSIS), all independent or single-dependency, none touching a frozen/live-trading path.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "STEP 0: automation.enabled=true, git pull --rebase clean (already up to date, nothing to rebase). STEP 1: state-file shape healthy (control object / blackboard.work_queue array / ledger array) - no corruption, STEP 2 skipped. STEP 3: control.status was IDLE; work_queue had 6 pending items eligible (depends_on all done): DCA-FIXED-INTERVAL, DCA-MARTINGALE, DCA-ANTIMARTINGALE, GRID-SIM, TRAIL-STOP-EXIT, H11-COVERAGE-DIAGNOSIS. Picked DCA-FIXED-INTERVAL (queue order, and it's the simplest/cheapest of the remaining DCA-triage items - a pure control baseline with no sizing-scheme or entry-signal dependency). Implemented dca.mjs + dca.test.mjs; caught and fixed a real bug (value-curve math zeroing positions on stale-data trailing days, not the fixed-interval mechanism itself) before trusting the real-data run - see item's own executor_result for full detail. npm.cmd test: 212/212 green (was 205), clean after the fix. Committed 8207566, pushed. One work_queue item this firing per HYGIENE - stopping here; DCA-MARTINGALE/DCA-ANTIMARTINGALE/GRID-SIM/TRAIL-STOP-EXIT/H11-COVERAGE-DIAGNOSIS left for future firings. STEP 4: queue not empty (5 pending remain), no new PASS verdict, control not BLOCKED - no notification trigger fired this firing. STEP 5: pending+ready count is 5 (>=3) - no restock needed, one-line check only.",
+    "notes": "STEP 0: automation.enabled=true, git pull --rebase clean (already up to date, nothing to rebase). STEP 1: state-file shape healthy (control object / blackboard.work_queue array / ledger array) - no corruption, STEP 2 skipped. STEP 3: control.status was IDLE; work_queue had 5 pending items eligible (depends_on all done): DCA-MARTINGALE, DCA-ANTIMARTINGALE, GRID-SIM, TRAIL-STOP-EXIT, H11-COVERAGE-DIAGNOSIS. Picked DCA-MARTINGALE (queue order). Added buildIntervalTrades() to dca.mjs, converting each fixed-interval DCA buy into a discrete trade (r = basket equal-weighted return from interval entry to holdout end, mark-to-market) so sizing.mjs.simulateSizedEquity (built by DCA-SIZING-HARNESS) could drive the martingale sizing rule directly - no logic duplicated from sizing.mjs. Sealed 70/30 holdout, 57 intervals: martingale-sized DCA hit ruin (equity deeply negative, avgR/unit-capital -0.2313) vs fixed-interval DCA baseline -19.67% total return over the same window - the expected martingale-ruin pattern on a negative-expectancy population, reported plainly, not fabricated. 3 new tests for buildIntervalTrades (mark-to-market return math, intervalDays spacing parity with simulateFixedIntervalDCA, missing-symbol handling). npm.cmd test: 215/215 green (was 212), clean. Committed adaef56, pushed. One work_queue item this firing per HYGIENE - stopping here; DCA-ANTIMARTINGALE (same buildIntervalTrades/runSizedDCAStudy plumbing, just rule=antimartingale) left for a future firing, along with GRID-SIM/TRAIL-STOP-EXIT/H11-COVERAGE-DIAGNOSIS. STEP 4: queue not empty (4 pending remain), no new PASS verdict, control not BLOCKED - no notification trigger fired this firing. STEP 5: pending count is 4 (>=3) - no restock needed, one-line check only.",
     "updated_by": "cajh-loop-check",
-    "updated_at": "2026-08-08T09:52:00.000Z"
+    "updated_at": "2026-08-08T10:10:00.000Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -225,7 +225,7 @@
       },
       {
         "id": "DCA-MARTINGALE",
-        "state": "pending",
+        "state": "done",
         "owner": "executor",
         "file": "sizing.mjs (from DCA-SIZING-HARNESS) + tournament.mjs or dca.mjs for the entry-timing wiring",
         "depends_on": [
@@ -878,6 +878,14 @@
       "detail": "DCA-FIXED-INTERVAL done. New dca.mjs (simulateFixedIntervalDCA + simulateBuyAndHold) + dca.test.mjs (7 tests). Found and fixed a real bug before trusting the real-data run: missing-price handling was zeroing out positions on days a symbol had no fresh candle print, and near the holdout tail only 1-3 of 29 watchlist symbols had fresh prints (staggered collection cadence) - this collapsed the naive equity curve to -100% for both DCA and buy-and-hold, a data-quality artifact, not a real finding. Fixed via forward-fill of last-known price (no look-ahead), added a regression test for it. Sealed 70/30 holdout, full watchlist: DCA total return -19.67%/max drawdown -52.5% vs buy-and-hold -24.9%/-56.6% - DCA modestly smooths sequence risk as expected. Compared explicitly against breakout (-0.445R/trade net-of-cost, T1-ZEROCOST): not unit-comparable, but both negative on this window - no tested signal beats blind DCA here. Framed as a control baseline throughout, not a pass/kill hypothesis, per the item's task text; no ROADMAP.md/VERDICTS.md section written (not required by this item's done_when), result preserved in research-runs/ via saveExperiment. 5 items remain pending for future firings (DCA-MARTINGALE, DCA-ANTIMARTINGALE, GRID-SIM, TRAIL-STOP-EXIT, H11-COVERAGE-DIAGNOSIS).",
       "commit": "8207566",
       "tests": "212 pass, 0 fail"
+    },
+    {
+      "ts": "2026-08-08T10:10:00.000Z",
+      "agent": "cajh-loop-check",
+      "action": "completed-work-item",
+      "detail": "DCA-MARTINGALE: added buildIntervalTrades() + runMartingaleDCAStudy() to dca.mjs, reusing sizing.mjs simulateSizedEquity. Real-data result: martingale sizing hit ruin (avgR/unit-capital -0.2313, ruin=true) on sealed holdout vs fixed-interval DCA baseline -19.67% total return - classic martingale-ruin pattern on a negative-expectancy population. 3 new tests, 215/215 green.",
+      "commit": "adaef56",
+      "tests": "215/215"
     }
   ],
   "automation": {
