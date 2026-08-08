@@ -549,19 +549,43 @@ if (main && process.argv[2] === "sealed") {
   const permutations = Number(process.env.PERMUTATIONS) || 100;
 
   const study = scoreClassifierHoldouts(rows, { holdoutSymbols, recentHoldoutTime, permutations });
+
+  // SIGNAL3_CLASSIFIER_SPEC P4/P5: scoreSealedSplit (above) already proves significance (AUC + p
+  // + gap) but never surfaces the model itself, so it can't answer P5's second gate clause ("the
+  // lift survives cost"). Refit once on the same primary train/holdout split — same scaler,
+  // lambda-CV, and logistic fit scoreSealedSplit used internally for its real (non-permuted) fit,
+  // just exposed here — then read off coefficients + economic lift net of the repo's standard
+  // 0.9% round-trip cost (2*(feeRate 0.004 + slipPct 0.0005), same convention as tournament.mjs).
+  const ROUND_TRIP_COST = 0.009;
+  let primaryOutcome = null;
+  if (study.primary.status === "available") {
+    const primaryHoldoutRows = rows.filter((row) => holdoutSymbols.includes(row.symbol));
+    const scaled = scaleTrainHoldout({ columns: [], train: primaryTrainRows, holdout: primaryHoldoutRows });
+    const selected = chooseLambdaByCv(scaled.train);
+    primaryOutcome = classifierOutcomeReport({
+      model: selected.model,
+      train: scaled.train,
+      holdout: scaled.holdout,
+      threshold: 0.5,
+      roundTripCost: ROUND_TRIP_COST
+    });
+  }
+
   const file = saveExperiment("classifier-sealed", {
     specification: "SIGNAL3_CLASSIFIER_SPEC/v1-sealed",
     controlledUniverse,
     symbolHoldoutUniverse: holdoutSymbols,
     recentHoldoutTime,
-    permutations
-  }, study);
+    permutations,
+    roundTripCost: ROUND_TRIP_COST
+  }, { ...study, primaryOutcome });
   console.log(JSON.stringify({
     controlledUniverse,
     symbolHoldoutUniverse: holdoutSymbols,
     recentHoldoutTime,
     primary: study.primary,
     recent: study.recent,
+    primaryOutcome,
     saved: file
   }, null, 2));
 }

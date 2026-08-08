@@ -725,3 +725,62 @@ costs. This is not evidence that a classifier is impossible; it is evidence that
 has been demonstrated here. Results remain conditional on the fixed exit label and the
 survivors-only universe, with within-symbol correlation and class imbalance reported as
 limitations.
+
+### Signal 3 classifier P5 — UPDATE (PWR4, first sealed production run)
+
+The data gate above is now closed: `node classifier.mjs sealed` was run against the live
+watchlist (28 assets; `controlledUniverse` = STABLE_13 present = 13 symbols, whole-symbol
+`symbolHoldoutUniverse` = 16 held-out symbols) with K=100 refit permutations, all 100
+valid. `classifierOutcomeReport` (coefficients + threshold PR + net-of-cost economic lift,
+`roundTripCost=0.009` matching the repo's standard round-trip cost) was newly wired into
+the sealed CLI path (classifier.mjs) and computed via a non-permuted refit on the same
+primary train/holdout split — this refit reproduced `trainAuc`/`holdoutAuc` exactly against
+the already-completed permutation study before its coefficients/economics were trusted,
+confirming the pipeline is deterministic. Full inputs+outputs saved to
+`research-runs/*-classifier-sealed.json` and `*-classifier-sealed-outcome.json` (gitignored
+local evidence, per researchlab.mjs convention; provenance recorded in each file).
+
+**Primary (whole-symbol holdout, the powered arm per spec sec 3):** trainRows=7496,
+holdoutRows=7580, positives train=1481/7496 (19.8%), holdout=1410/7580 (18.6%). trainAuc
+0.5501, holdoutAuc 0.5249, gap 0.0253 (small — not memorizing train). Permutation null:
+K=100, all 100 valid, exceedances=1, **p=0.0198** — the holdout AUC clears the pre-registered
+`p<0.05` significance gate. selectedLambda=0.1, converged=true.
+
+**Recent (secondary, per spec sec 3):** trainRows=6948, holdoutRows=548, positives
+train=1404/6948 (20.2%), holdout=77/548 (14.1%). trainAuc 0.5505, holdoutAuc 0.5364, gap
+0.0141. p=0.257 — not significant on its own (small holdout, 548 rows), but directionally
+consistent with primary and not contradicting it.
+
+**Economic lift net of cost (spec sec 4, the decisive second gate clause) — threshold=0.5,
+roundTripCost=0.009:** of 7580 primary holdout rows, 3282 score >=0.5. selectedNet
+(mean netR of those 3282, net of cost) = **-0.4616 R/trade**. baselineNet (mean netR of all
+7580 holdout rows, net of cost) = -0.5178 R/trade. lift = **+0.0562 R/trade** — real and in
+the direction the significant AUC predicts (the model-selected subset loses less than the
+unfiltered population), but the selected subset is still deeply net-negative on its own:
+-0.46R/trade, nowhere near profitable. This is exactly the failure mode spec sec 0/4
+pre-registered as the trap to avoid ("a 0.53 AUC can be real and un-tradeable") — and it is
+what happened: the AUC lift is real (p=0.0198) but does not survive cost.
+
+**Coefficients (train-only, standardized, sign shows direction):** volRatio -0.060 (largest
+magnitude), higherLow +0.052, biasHigh_bear -0.050, btcBias4h_bear -0.036, biasMid_bull
+-0.035, displacement +0.034, atrPct -0.033, pdlDistPct -0.026, btcBias4h_bull +0.024,
+rangePos +0.023, biasMid_bear +0.021, maDistPct +0.018, biasHigh_bull -0.014, btc4hRetPct
+-0.014, stopPct -0.011, swept +0.008, pdhDistPct +0.007, fvg -0.007, roomR +0.004, rsi
++0.003. No single feature dominates; the combination is diffuse, consistent with the AUC
+being only barely above 0.5. Threshold=0.5 precision/recall: train 0.222/0.540, holdout
+0.200/0.465 (train and holdout close, no overfitting collapse; precision ~0.20 reflects the
+~19% base rate more than genuine discrimination).
+
+**VERDICT: KILLED**, on complete sealed evidence — supersedes the "no sealed production
+evidence" data-gate above. The classifier clears spec sec 4's *first* gate clause
+(`holdout AUC beats permutation null, p<0.05`) for the first time in this project across
+momentum/low-vol/classifier — the AUC lift is statistically real, not noise. It fails the
+*second*, required-AND clause (`the lift survives cost`): the model's own best subset of
+holdout trades still nets -0.46R/trade after cost, essentially unchanged from the
+population's -0.52R/trade. Per SIGNAL3_CLASSIFIER_SPEC.md sec 0/4, a real-but-unprofitable
+AUC is exactly "the entry is empty" restated with more precision, not a smaller edge to
+chase — the swing-low entry-quality question is closed, not softened, by this result. No
+feature combination here is a harvest/FOLLOWON-Part-A candidate; the caveats already on
+record (survivorship, `tpR=4`-conditional label, within-symbol correlation, class
+imbalance) all still apply and none of them would flip this verdict if relaxed, since the
+gap is ~0.46R/trade, not a rounding error.
