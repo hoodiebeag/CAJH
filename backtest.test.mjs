@@ -76,7 +76,7 @@ test("ANTICIPATE mode: entry when the high crosses the trigger, before any confi
 
 test("profileEntries resolves the confirmed candidate with identical netR", () => {
   const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
-  const { records } = profileEntries({ series }, { tpR: 4 });
+  const { records } = profileEntries({ series }, { tpR: 4, feeRate: 0.004, slipPct: 0.0005 });
   assert.equal(records.length, 1);
   assert.equal(records[0].outcome, "win");
   assert.ok(Math.abs(records[0].netR - netWinR(97.7, 2.7)) < 1e-9,

@@ -759,8 +759,8 @@ export async function handleExits(message, state) {
   // Maker rate reflects a limit-only fill at Kraken's low-volume maker tier.
   const FEE_TIERS = [
     ["gross (no costs)", { feeRate: 0,      slipPct: 0 }],
-    ["maker 0.16%",      { feeRate: 0.0016, slipPct: 0.0002 }],
-    ["taker 0.40%",      {}],   // the live assumption
+    ["maker 0.40%",      { feeRate: 0.004,  slipPct: 0.0002 }],
+    ["taker 0.80%",      {}],   // the live assumption
   ];
   const probeModels = [EXIT_MODELS[0], ...[...rows].filter(r => r.is.n >= 50).sort((a, b) => b.is.rpt - a.is.rpt).slice(0, 1).map(r => [r.label, r.cfg])];
   const feeLines = probeModels.map(([label, cfg]) => {
