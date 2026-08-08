@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { simulateFixedIntervalDCA, simulateBuyAndHold } from "./dca.mjs";
+import { simulateFixedIntervalDCA, simulateBuyAndHold, buildIntervalTrades } from "./dca.mjs";
 
 test("fixed-interval DCA: buy timing and totalInvested tracking on flat prices", () => {
   const dates = [0, 1, 2, 3];
@@ -77,4 +77,36 @@ test("fixed-interval DCA reduces to buy-and-hold when the entire amount is deplo
   const bh = simulateBuyAndHold(data, { start: 0, end: 2, costRate: 0.005 });
   assert.ok(Math.abs(dca.totalReturn - bh.totalReturn) < 1e-12);
   assert.ok(Math.abs(dca.maxDrawdownPct - bh.maxDrawdownPct) < 1e-12);
+});
+
+test("buildIntervalTrades: one trade per interval, r is the mark-to-end-date return from that interval's entry price", () => {
+  const dates = [0, 1, 2, 3];
+  const prices = new Map([["A", new Map([[0, 100], [1, 50], [2, 100], [3, 200]])]]);
+  const data = { symbols: ["A"], dates, prices };
+  const trades = buildIntervalTrades(data, { start: 0, end: 3, intervalDays: 1 });
+  assert.equal(trades.length, 4);
+  const rs = trades.map((t) => t.r);
+  assert.ok(Math.abs(rs[0] - 1) < 1e-12); // entered at 100, ends at 200
+  assert.ok(Math.abs(rs[1] - 3) < 1e-12); // entered at 50, ends at 200
+  assert.ok(Math.abs(rs[2] - 1) < 1e-12); // entered at 100, ends at 200
+  assert.ok(Math.abs(rs[3] - 0) < 1e-12); // entered at 200, ends at 200
+  assert.deepEqual(trades.map((t) => t.timestamp), [0, 1, 2, 3]);
+});
+
+test("buildIntervalTrades: respects intervalDays spacing, same buy-timing rule as simulateFixedIntervalDCA", () => {
+  const dates = [0, 1, 2, 3];
+  const prices = new Map([["A", new Map(dates.map((d) => [d, 100]))]]);
+  const data = { symbols: ["A"], dates, prices };
+  const trades = buildIntervalTrades(data, { start: 0, end: 3, intervalDays: 2 });
+  assert.deepEqual(trades.map((t) => t.timestamp), [0, 2]);
+});
+
+test("buildIntervalTrades: a symbol missing that day's price is excluded from that trade's basket, not counted as a zero", () => {
+  const dates = [0, 1];
+  const prices = new Map([["A", new Map([[0, 100], [1, 200]])], ["B", new Map([[0, 50]])]]);
+  const data = { symbols: ["A", "B"], dates, prices };
+  const trades = buildIntervalTrades(data, { start: 0, end: 1, intervalDays: 1 });
+  // Trade at day 0: A entered at 100 -> ends at 200 (r=1); B entered at 50, forward-filled to
+  // end at 50 (r=0). Basket r = avg(1, 0) = 0.5, not dragged toward -1 by a phantom zero.
+  assert.ok(Math.abs(trades[0].r - 0.5) < 1e-12);
 });
