@@ -3,14 +3,14 @@
   "control": {
     "status": "IDLE",
     "target_file": null,
-    "objective": "Work queue is empty (23/23 done, 0 pending). No study-level PASS in ROADMAP.md/TOURNAMENT_ROADMAP.md (re-checked all PASS-substring matches - all are isolated gate-clauses inside combined-FAIL results, unchanged set of line numbers from the prior check). FOLLOWON_SPECS/SELF_AWARENESS_SPEC/SIGNAL3_CLASSIFIER_SPEC all still gated on killed prerequisites, unchanged since last check (no commits touching them since 758f3d2, confirmed via git log range). Next firing: re-check restock in case ROADMAP/TOURNAMENT_ROADMAP gain a new PASS or a human adds backlog items.",
+    "objective": "Work queue is empty (23/23 done, 0 pending, 0 started). No study-level PASS in ROADMAP.md/TOURNAMENT_ROADMAP.md (0 PASS-substring matches in ROADMAP.md; 9 matches in TOURNAMENT_ROADMAP.md at the same isolated gate-clause lines as prior checks, all inside combined-FAIL verdicts). FOLLOWON_SPECS/SELF_AWARENESS_SPEC/SIGNAL3_CLASSIFIER_SPEC all still gated on killed prerequisites - zero commits touching ROADMAP.md/TOURNAMENT_ROADMAP.md since e511b73..HEAD and zero touching the follow-on spec files since 758f3d2..HEAD. Next firing: re-check restock in case ROADMAP/TOURNAMENT_ROADMAP gain a new PASS or a human adds backlog items.",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "STEP 0: automation.enabled=true, git status clean, git pull --rebase already up to date (no foreign commits since prior firing, HEAD unchanged at be6630a). STEP 1: state-file shape healthy (control object / blackboard.work_queue array (23 items) / ledger array (88 items)) - no corruption, STEP 2 skipped. STEP 3: control.status IDLE, independently re-verified programmatically that 0/23 work_queue items are pending and 0 are started - nothing eligible to pull, no work performed. STEP 5 restock (genuine independent re-check, pending+started=0<3): git log e511b73..HEAD on ROADMAP.md/TOURNAMENT_ROADMAP.md and 758f3d2..HEAD on FOLLOWON_SPECS.md/SELF_AWARENESS_SPEC.md/SIGNAL3_CLASSIFIER_SPEC.md both returned empty - no commits touching any of them since the prior firing check. Grepped ROADMAP.md for PASS - zero matches. Grepped TOURNAMENT_ROADMAP.md for PASS - matches at the same lines 163/165/341/419/471/528/575/635/636 as before, all isolated gate-clause PASSes inside combined-FAIL verdicts, no study-level PASS. Listed repo-root *.md files - same 17 files as before, no new triage/backlog source list. No restock performed - honest empty queue. STEP 4: queue empty (honest-empty, re-verified), no new PASS reached, control not BLOCKED - empty-queue notification last sent 2026-08-08T12:55:00.000Z, ~3.4h elapsed, within the 6h dedup window - not resent. Ran npm.cmd test independently this firing: 230/230 green, matches last known-good count exactly. STEP 6: writing this no-op confirmation.",
+    "notes": "STEP 0: automation.enabled=true, git status clean, git pull --rebase already up to date (zero foreign commits since prior firing, HEAD unchanged at 00ab602 going into this firing). STEP 1: state-file shape healthy (control object / blackboard.work_queue array (23 items, all state:\"done\") / ledger array (89 items)) - no corruption, STEP 2 skipped. STEP 3: control.status IDLE, independently re-verified programmatically that 0/23 work_queue items are pending and 0 are started - nothing eligible to pull, no work performed. STEP 5 restock (genuine independent re-check, pending+started=0<3): git log e511b73..HEAD on ROADMAP.md/TOURNAMENT_ROADMAP.md and 758f3d2..HEAD on FOLLOWON_SPECS.md/SELF_AWARENESS_SPEC.md/SIGNAL3_CLASSIFIER_SPEC.md both returned empty - no commits touching any of them since the prior firing check. Grepped ROADMAP.md for PASS - zero matches. Grepped TOURNAMENT_ROADMAP.md for PASS - 9 matches at the same lines as before (163/165/341/419/471/528/575/635/636), all isolated gate-clause PASSes inside combined-FAIL verdicts, no study-level PASS. No restock performed - honest empty queue. STEP 4: queue empty (honest-empty, re-verified), no new PASS reached, control not BLOCKED - empty-queue notification last sent 2026-08-08T12:55:00.000Z, ~3.6h elapsed, within the 6h dedup window - not resent. Ran npm.cmd test independently this firing: 230/230 green, matches last known-good count exactly. STEP 6: writing this no-op confirmation.",
     "updated_by": "cajh-loop-check",
-    "updated_at": "2026-08-08T16:16:20.000Z"
+    "updated_at": "2026-08-08T16:32:00.000Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -1016,6 +1016,14 @@
       "detail": "Queue confirmed genuinely empty (23/23 done, 0 pending/started). No new study-level PASS in ROADMAP.md/TOURNAMENT_ROADMAP.md (unchanged since e511b73). No commits touching FOLLOWON_SPECS/SELF_AWARENESS_SPEC/SIGNAL3_CLASSIFIER_SPEC since 758f3d2. No restock eligible. empty-queue notification within 6h dedup window, not resent. control set to IDLE.",
       "commit": null,
       "tests": "230/230 pass"
+    },
+    {
+      "ts": "2026-08-08T16:32:00.000Z",
+      "agent": "cajh-loop-check",
+      "action": "no-op-check",
+      "detail": "Empty queue reconfirmed (23/23 done), no new PASS in ROADMAP.md/TOURNAMENT_ROADMAP.md, no restock candidates, tests 230/230 green. control left IDLE.",
+      "commit": null,
+      "tests": "230/230"
     }
   ],
   "automation": {
