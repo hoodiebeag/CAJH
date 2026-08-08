@@ -3,14 +3,14 @@
   "control": {
     "status": "IDLE",
     "target_file": null,
-    "objective": "C2 (self-awareness live-context: position R/reason + halt-cause heuristic) done. C3 (mission/purpose context block) next, ready.",
+    "objective": "C3 (mission/purpose context block) done. SELF_AWARENESS_SPEC.md Phases 1-2 are now complete. Queue is empty and honestly so - Phase 3 (D1-D3) and FOLLOWON_SPECS Part A/B all require a signal verdict of PASS that does not exist anywhere in this project (every tournament track and every PWR study is KILLED/FAIL/ABANDONED per VERDICTS.md).",
     "allow_live_edit": true,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "C2 closed this firing - see work_queue.C2.executor_result for full detail. Restock check: pending+ready drops to 1 (C3, depends_on C2, now satisfied) after this closure, under the <3 trigger. Did not add a new item: re-checked ROADMAP.md tail (classifier P5 KILLED, the most recent verdict) and TOURNAMENT_ROADMAP.md (Tracks 1-4 all FAIL, closed) - every gated follow-on (FOLLOWON_SPECS Part A/B, SELF_AWARENESS_SPEC Phase 3 D1-D3) requires a signal verdict of PASS that does not exist anywhere in this project yet. 1 pending item (C3, ready) is an honest queue depth given that, not an under-restocked one. Next firing pulling C3: implement the dynamic mission/purpose digest (buildMissionDigest already exists and is dynamic per commit 83518e0/b82ba05 - verify against C3 done_when the same way this firing and the C1 firing did before writing new code) and verify against the two example prompts in SELF_AWARENESS_SPEC.md Phase 2.",
+    "notes": "C3 closed this firing. Verified buildMissionDigest against the task text before writing new code (per the prior firing's own instruction, same pattern as the C1/C2 firings): it already existed and was already dynamic, but had two real, narrow gaps against SELF_AWARENESS_SPEC.md Phase 2's exact requirements - (1) it surfaced only the single latest ROADMAP.md verdict word (e.g. bare \"KILLED\"), not the \"short digest of ROADMAP verdicts\" (plural) the spec asks for, and (2) \"what cajh is\" / \"its current strategy\" lived only in commands.js's static per-message system-prompt string, not in the dynamic context block itself. Fixed both narrowly: added buildVerdictsDigest() (context.js), which reads VERDICTS.md live - the repo's own curated one-row-per-hypothesis index, updated in the same commit as each verdict per that file's own header - and returns the last 6 non-pending, non-folded-in hypotheses as an \"ID: verdict\" digest; added an identity line and a shared (non-duplicated) current-strategy summary to buildMissionDigest, sourced from the same ENTRY_GATES_SUMMARY/SIZING_SUMMARY constants buildLiveContext already used for its own entry-gates/sizing lines, so the strategy description now has one source of truth in this file instead of a second hardcoded copy. Verified end-to-end against real repo data (not synthetic fixtures alone) that buildLiveContext - included in every handleGeneral chat system prompt per commands.js:453 - now contains an identity line, a current-strategy line, explicit halt-cause reasoning tied to findings, and a real multi-hypothesis verdict digest (currently: Classifier P5, Roadmap v2, T1-ZEROCOST, T2-VOLCONTRACTION, T3-REGIMEFILTER, T4-PORTFOLIO-MOMENTUM), satisfying both Phase 2 example prompts. Did not touch commands.js (its static intro string is redundant with the new digest content but not broken; out of scope for this item, noted here rather than deleted per CLAUDE.md surgical-changes guidance). 4 new tests added (buildVerdictsDigest parsing incl. an honest-empty-state case via temp-cwd fixtures; buildMissionDigest's new identity/strategy/multi-verdict content; an integration assertion against real VERDICTS.md/ROADMAP.md proving the digest is genuinely multi-hypothesis, not just length-padded). npm.cmd test: 199/199 green (was 195). Commit b864d0f, pushed to origin/main. Diff grepped clean against scripts/check-protected-logic.cjs's PROTECTED_PATTERNS before committing (context.js/context.test.mjs only, no monitor.js/bot.js/trader.js touch) - hook ran with no output, commit went through on the first attempt. Restock check performed (STEP 5): re-read ROADMAP.md's tail (Classifier P5 KILLED, still the most recent verdict), TOURNAMENT_ROADMAP.md (Tracks 1-4 plus T1B/T5/T6 follow-ups all FAIL/ABANDONED/closed), FOLLOWON_SPECS.md (Part A gated on momentum passing MOMENTUM_SPEC.md sec 6, which it did not), and SELF_AWARENESS_SPEC.md Phase 3 (D1-D3 gated on any signal verdict == PASS). None satisfied anywhere in VERDICTS.md. No new work_queue item added - this is an honest empty queue, not an under-restocked one. Sent an empty-queue PushNotification this firing (reasonKey had no prior entry, so not deduped) since the loop would otherwise idle with nothing to hand the next firing and per notification_policy trigger (b) this needs a human decision (a new hypothesis) to proceed.",
     "updated_by": "loop",
-    "updated_at": "2026-08-08T03:20:00Z"
+    "updated_at": "2026-08-08T03:25:00Z"
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -192,14 +192,15 @@
       },
       {
         "id": "C3",
-        "state": "pending",
+        "state": "done",
         "owner": "executor",
         "file": "context.js",
         "depends_on": [
           "C2"
         ],
         "task": "SELF_AWARENESS_SPEC.md Phase 2, C3. Add a dynamic mission/purpose context block for the chat AI: what cajh is, its current strategy, that trading defaults off and why (the break-even/negative-EV findings), and a short digest of ROADMAP verdicts - pulled live so it stays accurate as findings change, not a hardcoded blurb.",
-        "done_when": "'@cajh what are you for?' and 'what have you learned?' answer accurately from live config + ROADMAP, verified on real examples; npm.cmd test green."
+        "done_when": "'@cajh what are you for?' and 'what have you learned?' answer accurately from live config + ROADMAP, verified on real examples; npm.cmd test green.",
+        "executor_result": "DONE 2026-08-08T03:25Z. buildMissionDigest already existed and was already dynamic (pre-dating this item), but only surfaced the single latest ROADMAP.md verdict word and lacked an identity/current-strategy statement of its own (that content lived only in commands.js's static system-prompt string). Added buildVerdictsDigest() reading VERDICTS.md live (last 6 non-pending/non-folded-in hypotheses as 'ID: verdict'), an identity line, and a shared current-strategy summary (same ENTRY_GATES_SUMMARY/SIZING_SUMMARY constants buildLiveContext already used, avoiding a third hardcoded copy). Verified end-to-end against real repo data that buildLiveContext (in every chat system prompt) answers both example prompts. 4 new tests, npm.cmd test 199/199 green. Full detail in control.notes at closure time; commit b864d0f, pushed to origin/main."
       }
     ],
     "strategy_router": "strategy-registry.mjs decides HOW cajh trades, never whether. selectStrategy({asset,regime,timeframe}) ALWAYS returns a strategy; confidence is expressed as POSITION SIZE (validated 1.0x / relative 0.5x / uncovered 0.25x), so weak evidence shrinks exposure instead of blocking a trade. No PASS exists yet, so nothing sizes above 0.5x and expectedEdge reads negative - tests assert both, so a future edit claiming a positive edge without new sealed evidence FAILS the suite rather than quietly trading on it. Adding a PASS entry requires a genuine sealed verdict plus the D3 human gate.",
@@ -615,6 +616,14 @@
       "detail": "Verified buildLiveContext against C2 task text before writing code (prior firing flagged this as likely mostly-done). Two real gaps found and fixed narrowly: positions lacked R/reason (trade.risk/strategyReason already recorded by scanner.js, just not surfaced); halt reason=\"manual\" is identical for boot-default and an operator !stop, so added a pure describeHaltCause() timing heuristic (injectable bootedAt, no monitor.js/bot.js edits, confirmed zero overlap with check-protected-logic.cjs PROTECTED_PATTERNS in the actual diff before committing). 6 new tests, all via either plain-object calls to the new pure function or the temp-DATA_DIR subprocess pattern already used elsewhere in this repo (monitor.hydrateTrades is not a protected identifier). npm.cmd test 195/195 green.",
       "commit": "ddd86d1",
       "tests": "195/195"
+    },
+    {
+      "ts": "2026-08-08T03:25:00Z",
+      "agent": "loop",
+      "action": "C3 done (dynamic mission/purpose digest: multi-hypothesis VERDICTS.md digest + identity/strategy line); SELF_AWARENESS_SPEC.md Phases 1-2 complete; queue now honestly empty",
+      "detail": "Verified buildMissionDigest against C3 task text before writing code (prior firing flagged this as likely mostly-done, same pattern as the C1/C2 firings). Found two real gaps: it surfaced only the single latest bare ROADMAP.md verdict word, not a digest of verdicts (plural); and 'what cajh is'/'current strategy' lived only in commands.js's static per-message system-prompt string, not the dynamic block itself. Added buildVerdictsDigest() reading VERDICTS.md live (last 6 non-pending/non-folded-in hypotheses), an identity line, and a current-strategy line sourced from the same constants buildLiveContext already used for its own entry-gates/sizing lines (single source of truth, no third hardcoded copy). Verified end-to-end against real repo data that buildLiveContext (in every chat system prompt) satisfies both Phase 2 example prompts. 4 new tests. npm.cmd test 199/199 green. Diff grepped clean against check-protected-logic.cjs's PROTECTED_PATTERNS before committing (context.js/context.test.mjs only). Restock check (STEP 5): ROADMAP.md/TOURNAMENT_ROADMAP.md/VERDICTS.md/FOLLOWON_SPECS.md/SELF_AWARENESS_SPEC.md Phase 3 all re-checked - every remaining follow-on is gated on a signal verdict of PASS that does not exist anywhere; no new item added. Sent an empty-queue PushNotification (not previously deduped).",
+      "commit": "b864d0f",
+      "tests": "199/199"
     }
   ],
   "automation": {
@@ -635,6 +644,11 @@
       "lastSentAt": "2026-08-07T23:16:00.000Z",
       "deliveryResult": "Mobile push requested (tool call succeeded; delivery to device not independently confirmed - see notification_policy.known_gap).",
       "message": "cajh: PWR4 stuck. 7 duplicate 'node classifier.mjs sealed' runs have piled up (~90min, none finished) from repeat firings. Needs manual process cleanup - loop can't kill them. Fix committed (496f8cb)."
+    },
+    "empty-queue": {
+      "lastSentAt": "2026-08-08T03:25:00.000Z",
+      "deliveryResult": "Mobile push requested (tool call succeeded; delivery to device not independently confirmed - see notification_policy.known_gap).",
+      "message": "cajh: research queue is empty. C3 done - Phases 1&2 self-awareness complete. Tournament Tracks 1-4 + all follow-ups now closed FAIL/KILLED; nothing left to test without a new hypothesis or a PASS verdict."
     }
   }
 }
