@@ -231,6 +231,8 @@ export function runSealedMomentumPanelStudy(series, {
   primaryUniverse = STABLE_13,
   symbolHoldoutUniverse = null,
   primaryTransform = "btcResidual90",
+  primaryLookback = 30,
+  primaryHorizon = 7,
   lookbacks = [14, 30, 60, 90],
   horizons = [7, 14, 30],
   transforms = ["raw", "btcResidual90", "volNormalized"],
@@ -253,10 +255,10 @@ export function runSealedMomentumPanelStudy(series, {
   const holdoutUniverse = symbolHoldoutUniverse || available.filter((asset) => !primaryUniverse.includes(asset));
 
   const buildPrimaryCell = (transform) => {
-    const panel = buildMomentumPanel(series, { universe: controlledUniverse, minAssets, tagRegime: true, transform });
+    const panel = buildMomentumPanel(series, { universe: controlledUniverse, lookback: primaryLookback, horizon: primaryHorizon, step: primaryHorizon, minAssets, tagRegime: true, transform });
     const split = splitRecentRows(panel.rows, recentHoldoutDates);
     const symbolHoldoutRows = holdoutUniverse.length >= minAssets
-      ? buildMomentumPanel(series, { universe: holdoutUniverse, minAssets, tagRegime: true, transform }).rows
+      ? buildMomentumPanel(series, { universe: holdoutUniverse, lookback: primaryLookback, horizon: primaryHorizon, step: primaryHorizon, minAssets, tagRegime: true, transform }).rows
       : [];
     return {
       split,
@@ -338,8 +340,11 @@ export function runSealedMomentumPanelStudy(series, {
     liquidityControl: control,
     symbolHoldoutUniverse: [...holdoutUniverse],
     primaryTransform,
+    primaryLookback,
+    primaryHorizon,
     primary: primaryResult.cell,
     primaryRaw: rawResult.cell,
+    primaryEconomics: economicMomentumViews(primaryResult.split.train, { minAssets, roundTripCost }),
     byRank,
     holdoutDates: primaryResult.split.recentHoldoutDates,
     exploratory
@@ -719,6 +724,52 @@ if (main && process.argv[2] === "sealed") {
     byRank: study.byRank,
     saved: file
   }, null, 2));
+} else if (main && process.argv[2] === "sealed-reversal") {
+  // B5-REVERSAL: same sealed whole-symbol harness as PWR2/PWR3 (runSealedMomentumPanelStudy),
+  // parameterized to a short lookback (L=3 primary, L=5 secondary) via primaryLookback/primaryHorizon.
+  // rank="return" raw IC is unchanged math from momentum's own primary cell - reversal is the same
+  // statistic with L<<30 and an a priori NEGATIVE expected sign, not a different harness.
+  const watchlist = loadWatchlist().map((asset) => typeof asset === "string" ? { symbol: asset, id: symbolToKrakenId(asset) } : asset);
+  const series = dailySeries(watchlist);
+  const permutations = Number(process.env.PERMUTATIONS) || 1000;
+  const byLookback = {};
+  for (const L of [3, 5]) {
+    const study = runSealedMomentumPanelStudy(series, {
+      primaryTransform: "raw",
+      primaryLookback: L,
+      primaryHorizon: L,
+      rankModes: [],
+      permutations
+    });
+    // A negative IC means the profitable direction is long-recent-losers/short-recent-winners,
+    // the OPPOSITE of primaryEconomics' top-trailR-wins convention (that convention is a momentum
+    // read, not a reversal one). Reuse the same economicMomentumViews function - no new statistical
+    // machinery - on trailR negated, so "top of the ranking" becomes "lowest raw return", matching
+    // the reversal hypothesis' actual trade direction. Same panel/train split, sign-flipped input only.
+    const panel = buildMomentumPanel(series, { universe: study.controlledUniverse, lookback: L, horizon: L, step: L, minAssets: 8, tagRegime: true, transform: "raw" });
+    const trainRows = splitRecentRows(panel.rows, 4).train;
+    const reversedRows = trainRows.map((r) => ({ ...r, trailR: -r.trailR }));
+    // FEE-SCHEDULE-REBASE (2026-08-08, this repo) found Kraken's real Tier-1 taker cost is ~2x
+    // this file's own 0.009 default (real round-trip ~0.017, not ~0.009) - report both explicitly
+    // per that item's own note to use the corrected figure here once it lands, rather than silently
+    // picking one.
+    const reversalEconomics = economicMomentumViews(reversedRows, { minAssets: 8, roundTripCost: 0.009 });
+    const reversalEconomicsRealCost = economicMomentumViews(reversedRows, { minAssets: 8, roundTripCost: 0.017 });
+    byLookback[L] = {
+      controlledUniverse: study.controlledUniverse,
+      symbolHoldoutUniverse: study.symbolHoldoutUniverse,
+      primary: study.primary,
+      primaryEconomics: study.primaryEconomics,
+      reversalEconomics,
+      reversalEconomicsRealCost
+    };
+  }
+  const file = saveExperiment("momentum-sealed-reversal", {
+    specification: "FOLLOWON_SPECS/B5-sealed",
+    lookbacks: [3, 5],
+    primaryTransform: "raw"
+  }, byLookback);
+  console.log(JSON.stringify({ byLookback, saved: file }, null, 2));
 } else if (main) {
   const study = runMomentumStudy({ permutations: Number(process.env.PERMUTATIONS) || 1000 });
   const file = saveExperiment("momentum", study.input, study.result);

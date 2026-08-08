@@ -848,3 +848,104 @@ tested — exactly the trap PWR1-4 were staged to avoid for the other three stud
 this only makes sense if either (a) this environment gains non-geo-blocked access to Binance's
 futures API, or (b) a funding-history source with genuine 730+-day depth becomes available;
 neither is a code change to this repo.
+
+### Short-term reversal B5: KILLED, but the first PRIMARY train-leg IC ever to clear §6 significance (2026-08-08)
+
+FOLLOWON_SPECS.md Part B ends with a footnote never actually staged: short-lookback (L=3-5d)
+cross-sectional reversal — "recent losers bounce" — is the same rank-IC machinery as momentum
+(B1's ranking-variable parameterization, already shipped for negVol/negBeta), just at a much
+shorter lookback and with an a priori **negative** expected sign. Never tested at L<14 before
+(the existing exploratory grid's floor was L=14).
+
+**A real harness gap, fixed first (additive, no-op when omitted).**
+`runSealedMomentumPanelStudy`'s primary cell hardcoded `lookback`/`horizon` to
+`buildMomentumPanel`'s defaults (30d/7d) — there was no way to ask it for L=3 without a new
+harness. Added `primaryLookback`/`primaryHorizon` options (default 30/7, byte-identical to the
+existing behavior when omitted — matching this project's established no-op-when-omitted
+pattern for optional overrides), threaded into both primary-cell `buildMomentumPanel` calls
+with `step` explicitly set to `horizon` (matching the exploratory grid's own convention). This
+is a parameterization of the *existing* M5/M6 sealed harness, not a new one — PWR2/PWR3's
+results are unaffected (two new regression tests confirm omitting the new options reproduces
+the old output exactly, and that overriding them measurably changes the panel). Also added
+`primaryEconomics` (train-leg `economicMomentumViews` on the primary cell, previously only
+computed for `byRank` cells) and a `node momentum.mjs sealed-reversal` CLI path.
+
+**Pre-registration (frozen before this run, per FOLLOWON_SPECS.md's B5 footnote and
+MOMENTUM_SPEC.md §6):** primary L=3d, secondary L=5d, H=L (rebalance = lookback, this
+project's existing `step=horizon` convention), transform=raw (raw price reversal, not
+market-neutral residual — the footnote frames this as "same harness... with a sign flip",
+not a residual-adjusted variant), rank='return', universe stable-13 (train) /
+PWR1-backfilled watchlist-minus-stable-13 (whole-symbol sealed holdout, same split PWR2/PWR3
+used). Two-stage gate, same as M7/B4: train block-permutation p<0.05 required before the
+holdout counts at all — and a **positive** train IC here falsifies the reversal hypothesis
+rather than confirming it (expected sign is negative). Net-of-cost economics reported
+regardless of significance, via the existing `economicMomentumViews`, at both this project's
+long-standing 0.9% round-trip assumption and (since FEE-SCHEDULE-REBASE closed the same day)
+the corrected real Kraken Tier-1 cost of ~1.7%, stated explicitly as recommended by that item's
+own note.
+
+**A sign-direction subtlety, surfaced rather than glossed over.** `economicMomentumViews`
+ranks by *highest* `trailR` and reports that side's forward return — a momentum-direction
+convention. For a *negative*-IC (reversal) result, the economically-correct trade is the
+opposite side (long recent losers, i.e. *lowest* `trailR`). Reported both: `primaryEconomics`
+(the raw top-trailR/momentum-direction reading, for direct comparability with every other
+economics table in this project) and `reversalEconomics`/`reversalEconomicsRealCost` (the same
+function, same train rows, `trailR` sign-negated so "top of the ranking" = lowest raw
+return — the actual reversal trade), at both cost assumptions. No new statistical machinery:
+same `economicMomentumViews` call, sign-flipped input.
+
+**Result (`node momentum.mjs sealed-reversal`, live watchlist, stable-13 train / 16-symbol
+whole-symbol holdout — same split PWR2/PWR3 used):**
+
+| L | cell | D dates | rows | mean IC | block-perm p | 95% CI |
+|---|---|---:|---:|---:|---:|---|
+| 3 | train | 361 | 4191 | **-0.0685** | **0.0010** | [-0.1028, -0.0351] |
+| 3 | recent holdout (4wk) | 4 | 52 | -0.3668 | 0.2657 | [-0.3668, -0.3668] |
+| 3 | **sealed whole-symbol holdout** | **206** | **2553** | -0.0416 | 0.1049 | [-0.0855, 0.0053] |
+| 5 | train | 215 | 2493 | -0.0272 | 0.4226 | [-0.0747, 0.0140] |
+| 5 | recent holdout (4wk) | 4 | 52 | -0.0495 | 0.7982 | [-0.0495, -0.0495] |
+| 5 | sealed whole-symbol holdout | 125 | 1543 | -0.0872 | 0.0080 | [-0.1504, -0.0144] |
+
+**L=3 clears the pre-registered train significance gate — the first time any primary-cell IC
+in this project has (§6's train clause).** Sign is correctly negative (as pre-registered;
+had it come back positive, that would have falsified the hypothesis outright) with
+train p=0.0010, well under 0.05. The whole-symbol sealed holdout is same-sign (-0.0416) with
+an overlapping CI (train [-0.1028,-0.0351] vs holdout [-0.0855,0.0053]) — §6 clause 2 ("same
+sign with overlapping-CI magnitude on the sealed holdout") reads as satisfied, even though the
+holdout's own p=0.1049 doesn't independently clear 0.05. Negative sign holds in every train
+regime (bull -0.067, bear -0.053, flat -0.170, unknown -0.061 — present well beyond just the
+non-bear regime §6 clause 4 requires) and the L=5 neighbor is same-signed though not
+independently significant (train p=0.4226) — directionally consistent, not a lone grid cell,
+though weaker. **L=5 itself is KILLED on the train leg alone**, same two-stage discipline as
+M7/B4: train p=0.4226 fails §6's train-significance clause, so its own whole-symbol holdout
+(p=0.0080, actually significant) does not get to count — pre-registration checks train first,
+independent of how holdout reads.
+
+**Net-of-cost economics (train leg) — §6 clause 3, all figures net of turnover×cost:**
+
+| L | reading | 0.9% cost tercile net | top-3 net | top-5 net | 1.7% (real) cost tercile net | top-3 net | top-5 net |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 3 | momentum-direction (`primaryEconomics`, top-trailR) | -0.0179 | -0.0046 | -0.0030 | — | — | — |
+| 3 | **reversal-direction** (long lowest-trailR) | -0.0088 | -0.0007 | **+0.0001** | **-0.0207** | **-0.0069** | **-0.0046** |
+| 5 | reversal-direction | -0.0127 | +0.0013 | +0.0023 | **-0.0243** | **-0.0050** | **-0.0025** |
+
+At this project's long-standing 0.9% cost assumption, L=3's reversal-direction economics are a
+mixed bag — tercile and top-3 net negative, top-5 net **+0.00012** (essentially zero,
+statistically indistinguishable from breakeven, not a number anyone should trade real capital
+on) — genuinely the closest any quantile spread in this project has come to clearing §6 clause
+3. That ambiguity resolves cleanly once FEE-SCHEDULE-REBASE's corrected real Kraken Tier-1 cost
+(~1.7% round-trip, roughly double the 0.9% this project had been assuming) is substituted, per
+that item's own note to use the corrected figure once available: every reading, both
+lookbacks, both selection widths, goes decisively negative (-0.0025 to -0.0243). Turnover here
+is high (59-78% per 3-5 day rebalance) precisely because the signal is short-horizon by
+construction, which is exactly what makes it this cost-sensitive.
+
+**VERDICT: KILLED for both L=3 and L=5**, under §6 (PASS requires ALL four clauses; KILLED
+needs only one to fail). L=3 clears the train-significance clause (a first for this project)
+and the sealed-holdout sign/CI-overlap clause, but fails clause 3 (net economics) decisively
+once priced at this project's actual real trading cost — the same "real signal, dead on
+arrival at cost" pattern Classifier P5 already established, now confirmed a second time on a
+completely different information source (short-horizon cross-sectional reversal vs P5's
+fitted multi-feature classifier). L=5 is killed independently on the train leg alone,
+regardless of its holdout reading. Closes FOLLOWON_SPECS.md Part B's one remaining unstaged
+footnote.
