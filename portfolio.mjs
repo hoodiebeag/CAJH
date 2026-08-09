@@ -123,10 +123,20 @@ export function simulatePortfolio(data, strategy, { start = 200, end = data.date
       const changed = .5 * [...symbols].reduce((sum, symbol) => sum + Math.abs((weights.get(symbol) || 0) - (next.get(symbol) || 0)), 0);
       equity *= 1 - changed * costRate; turnover += changed; weights = next;
     }
-    const nextReturn = [...weights].reduce((sum, [symbol, weight]) => {
+    // A weighted symbol can go a day without a fresh print (staggered collection cadence)
+    // or stop being collected entirely (dead pair). Freezing that weight at a phantom 0%
+    // forever is a no-op only for a transient gap; for a permanent stop it silently mutes
+    // that slice of the portfolio for the rest of the run instead of reflecting that the
+    // capital isn't really sitting idle. Exclude unpriced symbols from today's return and
+    // renormalize across whichever weighted symbols DO have a priced move today, so the
+    // realized return reflects full deployment among tradable (priced) positions — the same
+    // "stale data isn't tradable" stance `returns()` already takes when ranking candidates.
+    const priced = [...weights].map(([symbol, weight]) => {
       const a = data.prices.get(symbol)?.get(data.dates[index]), b = data.prices.get(symbol)?.get(data.dates[index + 1]);
-      return sum + (a > 0 && b > 0 ? weight * (b / a - 1) : 0);
-    }, 0);
+      return a > 0 && b > 0 ? { weight, ret: b / a - 1 } : null;
+    }).filter(Boolean);
+    const activeWeight = priced.reduce((sum, x) => sum + x.weight, 0);
+    const nextReturn = activeWeight > 0 ? priced.reduce((sum, x) => sum + x.weight * x.ret, 0) / activeWeight : 0;
     equity *= 1 + nextReturn; dailyReturns.push(nextReturn); peak = Math.max(peak, equity); maxDrawdown = Math.min(maxDrawdown, equity / peak - 1);
   }
   const totalReturn = equity - 1, volatility = stdev(dailyReturns) * Math.sqrt(365), annualReturn = dailyReturns.length ? equity ** (365 / dailyReturns.length) - 1 : 0;

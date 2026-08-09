@@ -177,6 +177,72 @@ promotion, and it is failed decisively and symmetrically by both strategies. Per
 
 ---
 
+## Track 4 — T4-COVERAGE-FIX rerun (2026-08-09): verdict unchanged, closest clause now clears
+
+`T4-COVERAGE-FIX` (queued 2026-08-09 by a data-integrity-audit workflow) found that
+`portfolio.mjs`'s `panel()` builds the shared date calendar as the union of every
+watchlist symbol's timestamps, including BTC (loaded but excluded only from the
+tradable list) — the same "in-calendar-but-excluded-from-tradable" pattern behind the
+`DCA-FIXED-INTERVAL`/`GRID-SIM` coverage fixes. On the real candle store, BTC/ETH/SOL
+run to 2026-07-29/30 while ~24 of the other 28 tradable symbols stop dead at
+2026-03-31, pushing 121 of the 392 holdout days (31%) below 50% same-day price coverage
+across the tradable universe. `simulatePortfolio`'s return accumulator scored a held
+position with no fresh print that day as exactly 0% return — silently freezing that
+slice of the portfolio rather than reflecting that the capital wasn't really idle.
+
+**Fix chosen: exclude-and-renormalize, not forward-fill.** DCA-FIXED-INTERVAL's
+precedent forward-fills the last known price for valuation. That pattern is mathematically
+a no-op for this specific coverage gap: since the affected symbols stop printing
+*permanently* from 2026-03-31 onward (not a transient day-or-two gap), a forward-filled
+price never changes again either, so `b/a - 1` still evaluates to exactly 0% every day
+after the freeze — identical to the pre-fix number. Forward-fill only matters for
+short, self-healing gaps; it does not correct a permanent stop. Instead, `simulatePortfolio`
+now excludes any weighted symbol that lacks a priced move on a given day from that day's
+return and renormalizes across whichever weighted symbols *do* have a priced move,
+matching the "liquidating/reallocating with weight renormalization" alternative named in
+the work item, and matching the stance `returns()` already takes when ranking momentum
+candidates (a symbol with no valid price is not tradable, so it should not count as a
+static holding either). Regression tests in `portfolio.test.mjs` cover a two-symbol
+stale-partway-through fixture (mirroring DCA-FIXED-INTERVAL's own staleness fixture) and
+confirm the renormalized result differs from the un-renormalized old behavior.
+
+Re-ran only `runPortfolioStudy()`'s 4 already-defined T4 variants on the same sealed
+70/30 split, no other harness touched:
+
+| Variant | Holdout Sharpe (old → new) | Holdout total return (old → new) | Holdout max drawdown (old → new) |
+|---|---|---|---|
+| `momentum_30d`, 7d rebalance | -0.141 → -0.165 | -9.3% → -10.9% | -56.6% → -57.4% |
+| `momentum_30d`, 30d rebalance | 0.270 → 0.360 | +16.6% → +22.9% | **-36.8% → -34.0%** |
+| `momentum_vol`, 7d rebalance | -0.286 → -0.308 | -17.8% → -19.2% | -58.0% → -58.7% |
+| `momentum_vol`, 30d rebalance | 0.202 → 0.295 | +12.3% → +18.6% | -43.8% → -40.6% |
+
+(Train-window numbers move by <0.5pp on every variant — the coverage gap is
+concentrated in the holdout window, as expected from the 2026-03-31 cutoff falling
+after the 70/30 split date of 2025-07-03.)
+
+**Gate outcome, re-checked clause by clause:**
+- `momentum_30d` 7d: still all three FAIL. No change.
+- `momentum_30d` 30d: Sharpe>0.5 still FAIL (0.360), totalReturn>0 still PASS (+22.9%),
+  **maxDrawdown>-35% flips FAIL→PASS** (-34.0% now clears the floor, where -36.8% didn't).
+  Combined per-variant outcome is still FAIL — the gate requires all three clauses, and
+  Sharpe is the one still missing, now by a wider margin than the drawdown clause was.
+- `momentum_vol` 7d: still all three FAIL. No change.
+- `momentum_vol` 30d: still Sharpe FAIL, totalReturn PASS, maxDrawdown still FAIL
+  (-40.6%, improved from -43.8% but not enough to clear -35%). No clause-level flip.
+
+**No variant's combined gate outcome changes.** `T4-PORTFOLIO-MOMENTUM` remains
+**ABANDONED** — corrected coverage handling does not produce a promotable variant.
+Flagging plainly rather than folding in quietly, per this item's own instructions: the
+`momentum_30d` 30d-rebalance maxDrawdown clause — the single closest miss in the
+original table — does flip from FAIL to PASS under corrected coverage handling. This
+does not change the verdict (Sharpe is now the sole blocking clause, not drawdown), but
+it confirms the original -36.8%/-35% near-miss was partly a data-coverage artifact
+rather than a purely genuine result, and the corrected numbers above are the ones that
+should be cited going forward. `VERDICTS.md`'s `T4-PORTFOLIO-MOMENTUM` row is updated to
+point here for the corrected figures.
+
+---
+
 ## What Agents Must Not Do
 
 | Prohibited | Reason |
