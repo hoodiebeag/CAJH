@@ -641,3 +641,80 @@ pre-registered gate. The 5% variant is directionally the more promising of the t
 of the bar, and the 10% variant's train/holdout sign flip argues against loosening the
 band further. **TRAIL-STOP-EXIT is closed as a FAIL.** No gate constant was touched
 after seeing these numbers.
+
+## FEE-SCHEDULE-REBASE RESULT (2026-08-08)
+
+Own-initiative finding (Architect): `strategy.js`'s `FEE_RATE = 0.004` (per-side taker
+estimate) and `SLIPPAGE_PCT = 0.0005` were verified against Kraken's published fee
+schedule (kraken.com/features/fee-schedule, two independent fetches, consistent both
+times) to be stale — Kraken Pro's current Tier 1 (the tier a $0–$2.5k 30-day-volume
+account trades at) is **Maker 0.40%, Taker 0.80%**, roughly double the assumed rate on
+both sides. `trader.js`'s `placeBuy`/`placeSell` hardcode `ordertype:"market"`, so every
+live fill pays the taker rate — the relevant correction is 0.40% assumed → 0.80% real.
+
+**Step 1 — confirm the actual account tier (not just the published schedule).** Read-only
+query against Kraken's private `TradeVolume` endpoint (`XXBTZUSD`), run via a throwaway
+script using the same `kraken-api` client/credentials `trader.js` uses — no frozen file
+was edited to do this, and no order was placed. Result: 30-day volume **$1,225.03**
+(well under the $2,500 Tier 1 ceiling — `nextvolume: 2500.00000`, `tiervolume: 0.00000`),
+taker fee **0.8000%**, maker fee **0.4000%** on `XXBTZUSD`. This is an exact match to the
+verified published Tier 1 numbers, confirmed directly from the live account rather than
+assumed.
+
+**Aside — `commands.js`'s own fee-tier diagnostic (~line 762) is also stale.** Its
+`FEE_TIERS` probe assumes `"maker 0.16%"` (`feeRate: 0.0016`); the real Tier 1 maker rate
+is 0.40%, 2.5x higher. Not changed in this item (diagnosis/report only, no production
+files edited) — flagged for whoever acts on the recommendation below.
+
+**Step 2 — re-run `breakout` (the one baseline family with a positive zero-cost holdout
+edge, Track 1) under the corrected real cost basis.** Used `runTournament({ feeRate:
+0.008, slipPct: 0.0005 })` — an explicit override on the existing pass-through param
+(same mechanism Track 1's `--zero-cost` run already used), `strategy.js`'s module-level
+defaults left untouched. Net-of-cost, 70/30 chronological split, full watchlist (28
+assets).
+
+**Three-way comparison (zero-cost / old assumption 0.9% round-trip / corrected-real 1.7%
+round-trip):**
+
+| | Trades | Train avgR/trade | Holdout avgR/trade | Holdout win rate | Positive assets |
+|---|---|---|---|---|---|
+| Zero-cost (`feeRate:0, slipPct:0`) | 7313 / 3123 | +0.021 | **+0.045** | — | 17/28 |
+| Old assumption (`feeRate:0.004, slipPct:0.0005`, default) | 7313 / 3123 | -0.461 | **-0.445** | 34.2% | 0/28 |
+| Corrected real (`feeRate:0.008, slipPct:0.0005`) | 7313 / 3123 | -0.889 | **-0.881** | 21.0% | 0/28 |
+
+(Trade counts are identical across all three rows — cost doesn't change which trades
+fire, only their realized R — so one count column covers all three.)
+
+**Does this change the "costs vs no edge" read for `breakout`?** No verdict change: the
+family was already negative and stays negative — a family that was already negative
+getting more negative under a higher real cost is a confirmation of KILLED, not new
+information. But the *size* of the gross/net gap is informative on the "only costs are
+eating it, maker fills are a real lever" alternative reading `commands.js`'s own
+diagnostic comment raises. By coincidence, the *old* assumed taker rate (0.004) equals
+the *real* maker rate (0.004) — so the existing "old assumption" net-of-cost row above
+(-0.445R holdout) is exactly what `breakout` would net under a hypothetical 100%-maker
+execution at real rates. That number is still comfortably negative and clears none of
+the gates this project has already tested against `breakout` (not `runTournament`'s own
+`avgR>0`, not T1B/T5/TRAIL-STOP-EXIT's looser `avgR>-0.30`). **This resolves the open
+question the `commands.js` comment poses for `breakout` specifically: even a switch to
+100% maker/limit fills would not rescue it.** The gap does confirm cost dominates over
+signal absence directionally (consistent with Track 1's original finding), just by a
+larger margin than previously measured.
+
+**Recommendation (not applied here — routed to Architect for a separate, deliberate
+decision, per this item's own instruction not to fold a defaults change into this
+commit):** update `strategy.js`'s `FEE_RATE` default from 0.004 to 0.008 (and consider
+whether `commands.js`'s `"maker 0.16%"` tier should become 0.40%) so every future
+tournament/backtest run reflects the account's real, verified execution cost by default
+instead of understating it by roughly 2x on the fee component. Because every track this
+project has run (T1–T6, PWR1–4, TRAIL-STOP-EXIT) was already comfortably outside its
+gate even at the old, lower-cost assumption, this correction would not flip any existing
+verdict — it only matters for future work, and for keeping the live-trading gate's cost
+model honest if `breakout` or any other family is ever revisited. Note also that the
+account's 30-day volume ($1,225) is well under the $2,500 Tier 1 ceiling, so this rate is
+not a temporary artifact — it will hold until trading volume genuinely increases.
+
+**Verdict: FEE-SCHEDULE-REBASE closed.** Actual fee tier confirmed live (not assumed);
+`breakout` re-run and reported under corrected real cost; no existing verdict changes;
+defaults-update recommendation stated explicitly and left for the Architect to act on,
+not applied unilaterally.

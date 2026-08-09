@@ -848,3 +848,231 @@ tested — exactly the trap PWR1-4 were staged to avoid for the other three stud
 this only makes sense if either (a) this environment gains non-geo-blocked access to Binance's
 futures API, or (b) a funding-history source with genuine 730+-day depth becomes available;
 neither is a code change to this repo.
+
+### Short-term reversal B5: KILLED, but the first PRIMARY train-leg IC ever to clear §6 significance (2026-08-08)
+
+FOLLOWON_SPECS.md Part B ends with a footnote never actually staged: short-lookback (L=3-5d)
+cross-sectional reversal — "recent losers bounce" — is the same rank-IC machinery as momentum
+(B1's ranking-variable parameterization, already shipped for negVol/negBeta), just at a much
+shorter lookback and with an a priori **negative** expected sign. Never tested at L<14 before
+(the existing exploratory grid's floor was L=14).
+
+**A real harness gap, fixed first (additive, no-op when omitted).**
+`runSealedMomentumPanelStudy`'s primary cell hardcoded `lookback`/`horizon` to
+`buildMomentumPanel`'s defaults (30d/7d) — there was no way to ask it for L=3 without a new
+harness. Added `primaryLookback`/`primaryHorizon` options (default 30/7, byte-identical to the
+existing behavior when omitted — matching this project's established no-op-when-omitted
+pattern for optional overrides), threaded into both primary-cell `buildMomentumPanel` calls
+with `step` explicitly set to `horizon` (matching the exploratory grid's own convention). This
+is a parameterization of the *existing* M5/M6 sealed harness, not a new one — PWR2/PWR3's
+results are unaffected (two new regression tests confirm omitting the new options reproduces
+the old output exactly, and that overriding them measurably changes the panel). Also added
+`primaryEconomics` (train-leg `economicMomentumViews` on the primary cell, previously only
+computed for `byRank` cells) and a `node momentum.mjs sealed-reversal` CLI path.
+
+**Pre-registration (frozen before this run, per FOLLOWON_SPECS.md's B5 footnote and
+MOMENTUM_SPEC.md §6):** primary L=3d, secondary L=5d, H=L (rebalance = lookback, this
+project's existing `step=horizon` convention), transform=raw (raw price reversal, not
+market-neutral residual — the footnote frames this as "same harness... with a sign flip",
+not a residual-adjusted variant), rank='return', universe stable-13 (train) /
+PWR1-backfilled watchlist-minus-stable-13 (whole-symbol sealed holdout, same split PWR2/PWR3
+used). Two-stage gate, same as M7/B4: train block-permutation p<0.05 required before the
+holdout counts at all — and a **positive** train IC here falsifies the reversal hypothesis
+rather than confirming it (expected sign is negative). Net-of-cost economics reported
+regardless of significance, via the existing `economicMomentumViews`, at both this project's
+long-standing 0.9% round-trip assumption and (since FEE-SCHEDULE-REBASE closed the same day)
+the corrected real Kraken Tier-1 cost of ~1.7%, stated explicitly as recommended by that item's
+own note.
+
+**A sign-direction subtlety, surfaced rather than glossed over.** `economicMomentumViews`
+ranks by *highest* `trailR` and reports that side's forward return — a momentum-direction
+convention. For a *negative*-IC (reversal) result, the economically-correct trade is the
+opposite side (long recent losers, i.e. *lowest* `trailR`). Reported both: `primaryEconomics`
+(the raw top-trailR/momentum-direction reading, for direct comparability with every other
+economics table in this project) and `reversalEconomics`/`reversalEconomicsRealCost` (the same
+function, same train rows, `trailR` sign-negated so "top of the ranking" = lowest raw
+return — the actual reversal trade), at both cost assumptions. No new statistical machinery:
+same `economicMomentumViews` call, sign-flipped input.
+
+**Result (`node momentum.mjs sealed-reversal`, live watchlist, stable-13 train / 16-symbol
+whole-symbol holdout — same split PWR2/PWR3 used):**
+
+| L | cell | D dates | rows | mean IC | block-perm p | 95% CI |
+|---|---|---:|---:|---:|---:|---|
+| 3 | train | 361 | 4191 | **-0.0685** | **0.0010** | [-0.1028, -0.0351] |
+| 3 | recent holdout (4wk) | 4 | 52 | -0.3668 | 0.2657 | [-0.3668, -0.3668] |
+| 3 | **sealed whole-symbol holdout** | **206** | **2553** | -0.0416 | 0.1049 | [-0.0855, 0.0053] |
+| 5 | train | 215 | 2493 | -0.0272 | 0.4226 | [-0.0747, 0.0140] |
+| 5 | recent holdout (4wk) | 4 | 52 | -0.0495 | 0.7982 | [-0.0495, -0.0495] |
+| 5 | sealed whole-symbol holdout | 125 | 1543 | -0.0872 | 0.0080 | [-0.1504, -0.0144] |
+
+**L=3 clears the pre-registered train significance gate — the first time any primary-cell IC
+in this project has (§6's train clause).** Sign is correctly negative (as pre-registered;
+had it come back positive, that would have falsified the hypothesis outright) with
+train p=0.0010, well under 0.05. The whole-symbol sealed holdout is same-sign (-0.0416) with
+an overlapping CI (train [-0.1028,-0.0351] vs holdout [-0.0855,0.0053]) — §6 clause 2 ("same
+sign with overlapping-CI magnitude on the sealed holdout") reads as satisfied, even though the
+holdout's own p=0.1049 doesn't independently clear 0.05. Negative sign holds in every train
+regime (bull -0.067, bear -0.053, flat -0.170, unknown -0.061 — present well beyond just the
+non-bear regime §6 clause 4 requires) and the L=5 neighbor is same-signed though not
+independently significant (train p=0.4226) — directionally consistent, not a lone grid cell,
+though weaker. **L=5 itself is KILLED on the train leg alone**, same two-stage discipline as
+M7/B4: train p=0.4226 fails §6's train-significance clause, so its own whole-symbol holdout
+(p=0.0080, actually significant) does not get to count — pre-registration checks train first,
+independent of how holdout reads.
+
+### CLASSIFIER-FUNDING-FEATURE: btcFundingRate added to the P5 classifier — KILLED, stronger AUC, same cost failure
+
+Adds Kraken PF_XBTUSD funding rate as a 21st continuous covariate in Classifier P5's fitted
+logistic regression (`CLASSIFIER_COLUMNS`), broadcast to every symbol's row as market-context
+(same convention as the existing `btc4hRetPct`/`btcBias4h_*` columns), joined via a per-symbol
+`fundingAsOf` cursor (`attachFundingFeature`, classifier.mjs) so an out-of-time-order symbol in
+the watchlist loop can never inherit a stale rate from a different symbol's already-advanced
+pointer. Not a duplicate of H11 (a hard universal funding threshold *gate*, DATA-GATED/
+Binance-451) or funding-study.mjs (a BTC-only portfolio *cash rule*) — this is one more fitted
+covariate inside the same statistical object P5 already tested.
+
+**Pre-registered coverage restriction, honored exactly as written.** Kraken's PF_XBTUSD
+historical-funding cache covers 2025-07-27T08:00Z onward (~367 days) against candle history
+back to 2023-01-01 (~1306 days). `record.t` for rows before the funding series starts is never
+zero-filled or defaulted — `attachFundingFeature` leaves `btcFundingRate: null` on those rows
+(proven by a dedicated fixture in classifier.test.mjs), and the sealed CLI path
+(`classifier.mjs sealed-funding`) filters the whole-watchlist row set down to
+`row.t >= coverageStartSec` *before* any scoring, not after. Of 15076 rows built across the
+full 29-asset watchlist, 3969 fall inside the funding-covered window and were the only ones
+used.
+
+**Primary (whole-symbol holdout, 13 controlled / 16 held-out, same STABLE_13 split as P5):**
+trainRows=1806, holdoutRows=2163, positives train=310/1806 (17.2%), holdout=396/2163 (18.3%).
+trainAuc 0.6274, holdoutAuc 0.5943, gap 0.0332 (still small — not memorizing train, if wider
+than P5's 0.0253). Permutation null: K=100, all 100 valid, exceedances=0, **p=0.0099** — clears
+the pre-registered `p<0.05` gate more decisively than P5's own p=0.0198. selectedLambda=0.1,
+converged=true.
+
+**Recent (secondary):** trainRows=1258, holdoutRows=548, positives train=233/1258 (18.5%),
+holdout=77/548 (14.1%). trainAuc 0.6192, holdoutAuc 0.6236, gap -0.0044 (holdout slightly beats
+train — no overfitting). K=100, all 100 valid, exceedances=1, **p=0.0198** — also significant,
+a new result: P5's recent arm was not (p=0.257). Both sealed holdouts independently clear
+`p<0.05` here, not just the powered primary arm.
+
+**Economic lift net of cost (the decisive second gate clause) — threshold=0.5, reported at
+both the repo's long-standing 0.009 cost and FEE-SCHEDULE-REBASE's corrected real ~0.017 cost,
+side by side, per that item's own note:** of 2163 primary holdout rows, 737 score >=0.5.
+selectedNet = **-0.2412 R/trade** (0.009 cost) / **-0.2492 R/trade** (0.017 cost). baselineNet
+= -0.5387 R/trade (0.009) / -0.5467 R/trade (0.017). lift = **+0.2975 R/trade** at either cost
+(a per-trade constant cancels in the lift difference). Directly against P5's own numbers
+(holdoutAuc 0.5249, p=0.0198, selectedNet -0.4616R, baselineNet -0.5178R, lift +0.0562R): both
+the AUC lift and the economic lift are markedly stronger with funding included, and the
+model's best-scoring subset loses about half as much as P5's did. It is still **deeply
+net-negative on its own** — -0.24 to -0.25 R/trade, nowhere near profitable — the exact
+spec sec 0/4 trap ("a significant AUC can be real and un-tradeable") repeating a third time in
+this project (after Classifier P5 and B5-REVERSAL), now on a strictly stronger version of the
+same classifier.
+
+**Coefficients (train-only, standardized):** maDistPct +0.156 (largest), **btcFundingRate
+-0.137 (2nd largest magnitude of 21 features)**, displacement +0.126, pdlDistPct -0.080,
+btc4hRetPct -0.078, btcBias4h_bull +0.074/btcBias4h_bear -0.074, volRatio -0.070, fvg -0.058,
+swept -0.054, roomR -0.038, pdhDistPct +0.037, higherLow -0.034, rsi -0.031, stopPct -0.029,
+rangePos +0.028, atrPct -0.020, biasMid_bear +0.008/biasMid_bull -0.008, biasHigh_bear
+-0.003/biasHigh_bull +0.003. Funding is not a diffuse also-ran: its standardized coefficient
+is the second-largest in the model, negative-signed — higher relative BTC funding (more
+crowded/expensive leveraged longs) predicts a lower win probability at entry, an economically
+sensible direction (an overheated funding regime is more likely to mean-revert against a fresh
+long), not an arbitrary sign. Threshold=0.5 precision/recall: train 0.237/0.619, holdout
+0.244/0.455 (precision stable train-to-holdout; recall drops, a real but partial
+generalization gap, smaller than the AUC gap alone would suggest).
+
+**VERDICT: KILLED**, on complete sealed evidence, under the exact P5 gate (both clauses
+required, AND). It clears the *first* clause (`holdout AUC beats permutation null, p<0.05`)
+more decisively than any classifier run in this project to date, on both the primary and
+(newly) the recent arm. It fails the *second*, required clause (`the lift survives cost`):
+the model's own best-scoring subset still nets -0.24 to -0.25 R/trade after cost. Funding is
+a real, interpretable, second-most-important feature — it measurably strengthens the
+classifier's statistical signal without meaningfully changing the verdict. No feature
+combination tested in this project (price-technical alone, or price-technical plus funding)
+has produced a classifier whose best-scoring subset is profitable net of cost.
+
+**Net-of-cost economics (train leg) — §6 clause 3, all figures net of turnover×cost:**
+
+| L | reading | 0.9% cost tercile net | top-3 net | top-5 net | 1.7% (real) cost tercile net | top-3 net | top-5 net |
+|---|---|---:|---:|---:|---:|---:|---:|
+| 3 | momentum-direction (`primaryEconomics`, top-trailR) | -0.0179 | -0.0046 | -0.0030 | — | — | — |
+| 3 | **reversal-direction** (long lowest-trailR) | -0.0088 | -0.0007 | **+0.0001** | **-0.0207** | **-0.0069** | **-0.0046** |
+| 5 | reversal-direction | -0.0127 | +0.0013 | +0.0023 | **-0.0243** | **-0.0050** | **-0.0025** |
+
+At this project's long-standing 0.9% cost assumption, L=3's reversal-direction economics are a
+mixed bag — tercile and top-3 net negative, top-5 net **+0.00012** (essentially zero,
+statistically indistinguishable from breakeven, not a number anyone should trade real capital
+on) — genuinely the closest any quantile spread in this project has come to clearing §6 clause
+3. That ambiguity resolves cleanly once FEE-SCHEDULE-REBASE's corrected real Kraken Tier-1 cost
+(~1.7% round-trip, roughly double the 0.9% this project had been assuming) is substituted, per
+that item's own note to use the corrected figure once available: every reading, both
+lookbacks, both selection widths, goes decisively negative (-0.0025 to -0.0243). Turnover here
+is high (59-78% per 3-5 day rebalance) precisely because the signal is short-horizon by
+construction, which is exactly what makes it this cost-sensitive.
+
+**VERDICT: KILLED for both L=3 and L=5**, under §6 (PASS requires ALL four clauses; KILLED
+needs only one to fail). L=3 clears the train-significance clause (a first for this project)
+and the sealed-holdout sign/CI-overlap clause, but fails clause 3 (net economics) decisively
+once priced at this project's actual real trading cost — the same "real signal, dead on
+arrival at cost" pattern Classifier P5 already established, now confirmed a second time on a
+completely different information source (short-horizon cross-sectional reversal vs P5's
+fitted multi-feature classifier). L=5 is killed independently on the train leg alone,
+regardless of its holdout reading. Closes FOLLOWON_SPECS.md Part B's one remaining unstaged
+footnote.
+
+### FEE-BUFFER-REVIEW: the breakeven-lock buffer is undersized against the real round-trip cost (2026-08-08)
+
+Diagnostic follow-up from FEE-DEFAULTS-UPDATE, which corrected `FEE_RATE` (0.004→0.008)
+and `FEE_BUFFER_PCT`'s comment to the real, verified ~1.6-1.7% round-trip taker cost
+(FEE-SCHEDULE-REBASE, TOURNAMENT_ROADMAP.md) but deliberately left `FEE_BUFFER_PCT` itself
+(0.01, i.e. 1%) unchanged since a value change affects live stop placement. This item
+answers the question that raised: is 1% still enough headroom.
+
+**Mechanism.** `monitor.js` (~line 657) and `intensityfilter.mjs` (~line 136, research-only
+mirror of the same formula) both compute the breakeven-lock stop as
+`entry + max(BE_LOCK_R * risk, FEE_BUFFER_PCT * entry)`, `BE_LOCK_R = 0.2`. Whichever term
+is larger sets the new stop; `monitor.js` tells the user by chat message that "this trade
+can no longer close at a loss" once it fires. That claim is only true if the chosen
+offset is actually ≥ the real round-trip cost.
+
+**Real round-trip cost, computed exactly (not the linear approximation).** With the now-
+corrected `FEE_RATE=0.008` and `SLIPPAGE_PCT=0.0005` (both per side), a position bought at
+`E` and sold at `X` is flat when `X*(1-FEE_RATE-SLIPPAGE_PCT) = E*(1+FEE_RATE+SLIPPAGE_PCT)`,
+i.e. `X/E - 1 = (1+0.0085)/(1-0.0085) - 1 = 1.71465%`. (The simple `2*(FEE_RATE+SLIPPAGE_PCT)
+= 1.70%` linear estimate used elsewhere in this repo's comments undershoots the exact figure
+by about 0.015 percentage points — a rounding note, not the main finding.)
+
+**How often does each term of the `max()` actually bind, on real data?** Replayed
+`strategy.js`'s exact swing-pivot logic (`detectSwings`, the same function `entrySignal`
+uses) against every symbol's real candle history (all three live timeframes, 1h/4h/1d),
+gated through the live `MIN_STOP_PCT`/`MAX_STOP_PCT_BY_TF` bounds exactly as `scanner.js`
+does at trade time — i.e. only signals the live bot would actually have accepted. n=162,690
+accepted-signal instances across the full watchlist. Resulting `stopFrac` (risk/entry)
+distribution: min 1.50% (the `MIN_STOP_PCT` floor), p10 1.69%, **p50 2.62%**, mean 2.86%,
+p90 4.11%, max (near the `MAX_STOP_PCT_BY_TF` ceiling) 9.69%.
+
+`BE_LOCK_R * risk` only reaches the real 1.71% breakeven line when `risk ≥ 1.71%/0.2 =
+8.57%` of entry — i.e. only for wide-stop trades near the very top of the observed
+distribution (near or above the `MAX_STOP_PCT_BY_TF` ceiling on any timeframe). Across the
+162,690 sampled accepted signals, that held **0.4% of the time**. For the other **99.6%**,
+`FEE_BUFFER_PCT * entry` is the binding term — meaning the buffer constant, not the R-based
+term, is what almost every real trade's breakeven lock actually depends on.
+
+**Verdict: FEE_BUFFER_PCT=0.01 is inadequate.** 1.00% vs the real 1.71465% needed is a
+shortfall of ~0.71 percentage points. A position that locks in profit at the current
+buffer and is later stopped out exactly at that level would realize a **net loss of about
+0.71% of entry value**, the opposite of what the "can no longer close at a loss" chat
+message promises — not a marginal miscalibration, since it is the binding term on
+essentially every real trade, not an edge case.
+
+**Recommended value: 0.018 (1.8%).** Exact breakeven (1.71465%) plus ~5% headroom, same
+"plus margin" intent already stated in the existing code comment, rounded to a clean
+constant. This is a proposed number, not applied in this item — routed to a follow-up
+work-queue item (`FEE-BUFFER-UPDATE`) for the actual constant change, mirroring how
+FEE-SCHEDULE-REBASE separated diagnosis from FEE-DEFAULTS-UPDATE's apply step. No verdict
+elsewhere in this repo depends on `FEE_BUFFER_PCT` (it is a live risk-management parameter,
+not a backtest cost input), so nothing here changes any existing PASS/KILL result.
+
+Diagnostic script (`scripts/fee-buffer-diagnose.mjs`, read-only, no production file
+touched) is left in the repo for reproducibility of the n=162,690 figure above.

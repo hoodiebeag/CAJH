@@ -234,6 +234,67 @@ test("runSealedMomentumPanelStudy's primary cell defaults to the settled btcResi
   assert.equal(study.primaryRaw.train.nRows + study.primaryRaw.recentHoldout.nRows, directRaw.rows.length);
 });
 
+test("runSealedMomentumPanelStudy's primary cell defaults to L=30/H=7 (byte-identical when primaryLookback/primaryHorizon are omitted)", () => {
+  const assets = ["BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "AVAX", "LINK"];
+  const series = new Map(assets.map((asset, i) => [asset, linearSeries(120, 100 + i * 10, 1)]));
+
+  const implicit = runSealedMomentumPanelStudy(series, {
+    primaryUniverse: assets, primaryTransform: "raw", minAssets: 8, recentHoldoutDates: 2, permutations: 10, bootstrapIterations: 10, seed: 11
+  });
+  const explicit = runSealedMomentumPanelStudy(series, {
+    primaryUniverse: assets, primaryTransform: "raw", primaryLookback: 30, primaryHorizon: 7, minAssets: 8, recentHoldoutDates: 2, permutations: 10, bootstrapIterations: 10, seed: 11
+  });
+
+  assert.equal(implicit.primaryLookback, 30);
+  assert.equal(implicit.primaryHorizon, 7);
+  assert.deepEqual(implicit.primary, explicit.primary);
+  assert.deepEqual(implicit.primary.train.perDate, explicit.primary.train.perDate);
+});
+
+test("runSealedMomentumPanelStudy's primaryLookback/primaryHorizon override is real (B5-REVERSAL's short-window mechanism)", () => {
+  const assets = ["BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "AVAX", "LINK"];
+  const series = new Map(assets.map((asset, i) => [asset, linearSeries(120, 100 + i * 10, 1)]));
+
+  const short = runSealedMomentumPanelStudy(series, {
+    primaryUniverse: assets, primaryTransform: "raw", primaryLookback: 3, primaryHorizon: 3, minAssets: 8, recentHoldoutDates: 2, permutations: 10, bootstrapIterations: 10, seed: 11
+  });
+  const long = runSealedMomentumPanelStudy(series, {
+    primaryUniverse: assets, primaryTransform: "raw", primaryLookback: 30, primaryHorizon: 7, minAssets: 8, recentHoldoutDates: 2, permutations: 10, bootstrapIterations: 10, seed: 11
+  });
+
+  // A short L=3/H=3 rebalance walks the 120-bar calendar in much finer steps than L=30/H=7,
+  // so it must emit strictly more panel rows - if the override silently fell back to the
+  // L=30/H=7 default, this count would collapse to equal.
+  const shortRows = short.primary.train.nRows + short.primary.recentHoldout.nRows;
+  const longRows = long.primary.train.nRows + long.primary.recentHoldout.nRows;
+  assert.equal(shortRows > longRows, true);
+
+  const direct = buildMomentumPanel(series, { universe: assets, lookback: 3, horizon: 3, step: 3, minAssets: 8, tagRegime: true, transform: "raw" });
+  assert.equal(shortRows, direct.rows.length);
+});
+
+test("B5-REVERSAL fixture: a mean-reverting price path scores a negative short-lookback IC", () => {
+  // Construct an oscillating price path (alternating up/down blocks per asset, offset per asset
+  // so trailing 3d return sign predicts the OPPOSITE of the next 3d return) - the textbook
+  // reversal pattern this study is pre-registered to test for.
+  const assets = ["BTC", "ETH", "SOL", "XRP", "ADA", "DOGE", "AVAX", "LINK"];
+  const oscillate = (days, phase) => Array.from({ length: days }, (_, i) => {
+    const cyclePos = (i + phase) % 6;
+    const upLeg = cyclePos < 3;
+    const within = cyclePos % 3;
+    const base = 100 + Math.floor((i + phase) / 6) * 0; // flat base, no drift
+    return candle(i, upLeg ? base + within * 5 : base + 15 - within * 5);
+  });
+  const series = new Map(assets.map((asset, i) => [asset, oscillate(120, i)]));
+
+  const study = runSealedMomentumPanelStudy(series, {
+    primaryUniverse: assets, primaryTransform: "raw", primaryLookback: 3, primaryHorizon: 3, minAssets: 8, recentHoldoutDates: 2, permutations: 200, bootstrapIterations: 10, seed: 11
+  });
+
+  assert.equal(Number.isFinite(study.primary.train.meanIC), true);
+  assert.equal(study.primary.train.meanIC < 0, true);
+});
+
 test("buildMomentumPanel can model entry at close t+1 for forward returns", () => {
   const asset = [100, 110, 121, 133.1, 146.41].map((close, i) => candle(i, close));
   const { rows } = buildMomentumPanel(new Map([["BTC", asset]]), {
