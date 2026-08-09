@@ -3,14 +3,14 @@
  "control": {
   "status": "IDLE",
   "target_file": null,
-  "objective": "Re-reconciled main-eqhe6g against main (round 3, immediately pre-merge) - T4-COVERAGE-FIX landed and closed since round 2. Pure union again, zero ID collisions. Queue now 40 items, 10 pending: PARITY-BUYFILL-SEAM, PARITY-EXCHANGE-ERROR-POLICY, PARITY-STALE-QUOTE-CONTRACT, PARITY-POSITION-CAP-SEAM, PARITY-LIVE-EXIT-FIXTURES, DOCS-COMPACT-KILLED-RESEARCH-SPECS, DOCS-COMPACT-RESOLVED-ONEOFFS, ORCHESTRATOR-CLUSTER-CLEANUP, PWR5-MAKER-FILL-COST-REDUCTION, JUDGE-WALKFORWARD-SYMBOL-HOLDOUT. This branch is about to be merged into main via PR #1 to stop the recurring drift.",
+  "objective": "Added 3 items from an honest, evidence-based repo review (requested by the human owner): AGENT-TOOLS-SANDBOX-HARDENING (concrete string-concat bypass found in agent-tools.mjs static scan), STATE-QUEUE-RETENTION (unbounded .agent_state.json growth - work_queue never prunes done items unlike ledger), RISK-SURFACE-TEST-COVERAGE (commands.js/trader.js - the live-execution surface - are the least-tested files relative to the research/backtest files). Queue now 43 items, 13 pending.",
   "allow_live_edit": false,
   "test_command": "npm.cmd test",
   "iteration": 0,
   "max_iterations": 6,
-  "notes": "Third and final merge reconciliation before PR #1 merges into main. Same pure-union pattern held for all three rounds (zero item-ID collisions each time). Once this merges, main and this branch converge and the drift stops.",
-  "updated_by": "merge-reconciliation-3",
-  "updated_at": "2026-08-09T21:34:04.642Z"
+  "notes": "This review also surfaced non-actionable, non-queued observations worth the humans awareness rather than autonomous action: (1) after 21 TOURNAMENT_ROADMAP.md studies (momentum, breakout, vol-contraction, regime filters, 4 portfolio-momentum variants, 4 DCA variants, grid, trailing-stop, cross-sectional reversal, a funding classifier), zero have cleared every gate simultaneously - the honest bottom line is no validated edge yet, which is a strategic question for the human (keep searching the same single-asset technical-signal family vs. lean harder into the already-queued cost-reduction/portfolio angles) not something the loop should self-redirect on. (2) commands.js is a 1589-line/31-handler monolith and a frozen_path - a legitimate maintainability concern but refactoring a frozen, working, safety-critical file for style reasons alone is exactly the un-asked-for cleanup CLAUDE.md warns against; flagged for the human to decide, not queued. (3) the now-being-removed orchestrator/mcp-server cluster (already queued as ORCHESTRATOR-CLUSTER-CLEANUP) represents real sunk engineering effort on a role-based multi-agent architecture that was built out before being abandoned - a concrete example worth remembering next time a big process/infra investment is tempting before the underlying approach is validated. On the positive side, confirmed genuinely good practice: no hardcoded secrets anywhere in tracked files, clean npm audit (0 vulnerabilities), correct .gitignore for local runtime state (config.json/stats.json/level_cooldowns.json/*.bak are untracked, not a hygiene problem), trader.js has thoughtful confirm-before-track fill logic preventing phantom positions plus terminal-vs-retryable Kraken error classification, bot.js has a real fatal-error handler (halts entries, attempts state persistence, sanitizes the error before logging, exits non-zero for the host to restart), and the research methodology (VERDICTS.md/TOURNAMENT_ROADMAP.md) shows real rigor - sealed holdouts, realistic fee/slippage modeling that was caught and corrected upward twice this session (FEE-SCHEDULE-REBASE, FEE-BUFFER-REVIEW/UPDATE) rather than left optimistic, and the loop has caught its own past mistakes (the T4/DCA/GRID staggered-candle-coverage bug class) rather than assuming old results were correct.",
+  "updated_by": "human-requested-honest-review",
+  "updated_at": "2026-08-09T21:52:17.842Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -440,6 +440,33 @@
     "depends_on": [],
     "task": "Research infrastructure, not a new hypothesis. Pulled directly from ROADMAP.md's own \"Finding an edge\" list: \"Walk-forward + sealed holdout (time AND symbol) - the honest final validation; the last piece of the judge\". Every verdict to date has used a single chronological 70/30 split; this seals a SET of symbols out of every sweep entirely (never touched by any train/holdout cycle, not just the current one) in addition to the existing time-based holdout, and adds rolling walk-forward windows instead of one static split - a harness improvement to the judge itself, not another strategy to test. Build this before it is needed for a specific promoted candidate, since retrofitting a stricter judge onto an already-passed result would be exactly the data-snooping VERDICTS.md warns against.",
     "done_when": "A walk-forward-with-sealed-symbols split function exists, unit-tested, usable by any existing family/study without re-deriving it per-study; documented as the new standard judge in TOURNAMENT_ROADMAP.md or ROADMAP.md (whichever holds harness-level documentation per existing convention); npm.cmd test green. Does not require re-running any already-KILLED verdict."
+   },
+   {
+    "id": "AGENT-TOOLS-SANDBOX-HARDENING",
+    "state": "pending",
+    "owner": "executor",
+    "file": "agent-tools.mjs (harden FORBIDDEN_CODE_PATTERNS + assertSafeSource; agent-tools.test.mjs gets the new coverage)",
+    "depends_on": [],
+    "task": "Security hardening, not a new feature. agent-tools.mjs already documents its own honest limit: \"Static pattern scan ... not an OS-level sandbox ... cannot be airtight\". Verified the specific gap by reading the 10 FORBIDDEN_CODE_PATTERNS regexes directly: every one matches a literal syntactic form (e.g. from \"node:child_process\", \\baxios\\b, fetch(\\s*\\()). A hypothesis script that builds the same capability via string concatenation or property access trivially evades all ten without any adversarial intent - e.g. await import(\"node:child_\" + \"process\"), or globalThis[\"fe\" + \"tch\"](...), or process[\"bin\" + \"ding\"]. The threat model here is explicitly non-adversarial (CAJH's own LLM-generated research scripts, not a hostile actor), so the fix should match that: broaden the scan from exact syntactic patterns to bare substring/token presence (flag the mere appearance of child_process, axios, fetch, XMLHttpRequest, WebSocket, https, net, dns, tls, dgram, eval, Function( as identifiers anywhere in the source, not just inside specific call/import syntax) - false positives are an acceptable tradeoff given the tiny, already-narrow surface (hypothesis scripts only need backtest/analysis primitives, never networking). Do not weaken MIN_HYPOTHESIS_AGE_MS, the writable-subdir allowlist, FROZEN_SOURCE_BASENAMES, or the bot.js execution ban while doing this - those are separate controls and already sound.",
+    "done_when": "The broadened scan blocks the concrete string-concatenation/property-access bypasses demonstrated above (write failing-then-passing tests in agent-tools.test.mjs proving the bypass is now caught), does not break any currently-passing legitimate hypothesis-script pattern (research scripts that only import researchlab.mjs/fs/path/local project modules must still run), and the module docstring is updated to describe the new, still-honestly-scoped boundary (this remains a best-effort text scan, not a real sandbox - do not overclaim). npm.cmd test green."
+   },
+   {
+    "id": "STATE-QUEUE-RETENTION",
+    "state": "pending",
+    "owner": "executor",
+    "file": "AGENT_PROTOCOL.md (document the convention), .agent_state.json (apply it going forward)",
+    "depends_on": [],
+    "task": "Compaction of the loops own operating substrate, not a docs/code compaction like the DOCS-COMPACT-* items. .agent_state.json is 281KB and has been rewritten in full on 95+ commits so far; work_queue currently holds 40 items and only ever grows - done items are never pruned, unlike ledger which already caps itself at the last 100 entries (see the slice(-100) pattern used everywhere ledger is appended to). Every closed items full rationale already lives permanently in ROADMAP.md or TOURNAMENT_ROADMAP.md prose (that is the existing, standing convention per AGENT_PROTOCOL.md - the queue entry itself is a working-state pointer, not the historical record) - so trimming old done items out of work_queue loses no information, it removes a duplicate copy. Add a stated retention rule (mirror the ledger cap exactly in style): keep all pending/started items plus the most recent N done items (recommend N=15, but state the reasoning if you pick differently) in .agent_state.json, and document the rule once in AGENT_PROTOCOL.md so future firings apply it consistently rather than re-deriving it. Apply it now to the current 40-item queue as the first cut.",
+    "done_when": "AGENT_PROTOCOL.md states the retention rule in one place; .agent_state.json work_queue is trimmed to pending/started + most-recent-N done, applied via the same careful confirm-nothing-important-is-lost discipline already used for merge reconciliations this session (diff the removed items against ROADMAP.md/TOURNAMENT_ROADMAP.md first to confirm each has a prose record before dropping it from the queue); ledgers own cap is untouched. npm.cmd test green (state file is data-only, but re-run per existing convention)."
+   },
+   {
+    "id": "RISK-SURFACE-TEST-COVERAGE",
+    "state": "pending",
+    "owner": "executor",
+    "file": "commands.test.mjs, trader.test.mjs (add coverage; commands.js and trader.js themselves are frozen_paths and must not be touched)",
+    "depends_on": [],
+    "task": "Test-coverage gap, evidence-based not guessed: measured commands.js at 1589 lines (the single largest file in the repo, 31 exported command handlers, including the owner-only !research handler that can execute an arbitrary hypothesis script) against a 80-line commands.test.mjs, and trader.js (the only file that places real Kraken orders) at 446 lines against a thin trader.test.mjs - though trader.js also gets partial coverage via money-path.test.mjs/order-validation.test.mjs/api-resilience.test.mjs, so check those three first before assuming a gap exists rather than re-testing what they already cover. This is backwards for a system whose stated end-state is real-money automation: the research/backtest files (backtest.js, classifier.mjs, momentum.mjs) are the best-tested files in the repo, while the live-execution surface is the thinnest. commands.js and trader.js are frozen_paths (the loop cannot edit them), but their *.test.mjs files are not frozen - this item is pure test-writing against the existing public API, zero production-file changes.",
+    "done_when": "New tests added for currently-unexercised or thin paths on the live-execution surface - prioritize: commands.js owner-only gating (non-owner calling !research/!notes/other owner-only commands is rejected), !research/!notes end-to-end via the real agent-tools.mjs (not just unit-testing agent-tools.mjs in isolation, which agent-tools.test.mjs already does), and trader.js error paths not already covered by money-path.test.mjs/order-validation.test.mjs/api-resilience.test.mjs (check those three files worth of coverage first and only add what is genuinely missing, do not duplicate). No change to commands.js or trader.js themselves. npm.cmd test green with a materially higher pass count than before (not just line count - assert real behavior, not padding)."
    }
   ],
   "strategy_router": "strategy-registry.mjs decides HOW cajh trades, never whether. selectStrategy({asset,regime,timeframe}) ALWAYS returns a strategy; confidence is expressed as POSITION SIZE (validated 1.0x / relative 0.5x / uncovered 0.25x), so weak evidence shrinks exposure instead of blocking a trade. No PASS exists yet, so nothing sizes above 0.5x and expectedEdge reads negative - tests assert both, so a future edit claiming a positive edge without new sealed evidence FAILS the suite rather than quietly trading on it. Adding a PASS entry requires a genuine sealed verdict plus the D3 human gate.",
@@ -479,14 +506,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-05T19:08:46.682Z",
-   "agent": "architect",
-   "action": "stage",
-   "detail": "Staged Q2 (funding.mjs) per direct human instruction. Verified the prior handoff had dropped MR1-COV and PWR1-4 without completing them (MR1-COV: test file still 6/6, no new test present; PWR1: not attempted) - re-queued both behind Q2 rather than treating the drop as completion.",
-   "commit": "",
-   "tests": "149 passing"
-  },
   {
    "ts": "2026-08-05T19:09:44.511Z",
    "agent": "executor",
@@ -1270,6 +1289,14 @@
    "agent": "human-session-restock",
    "action": "restock-work-queue",
    "detail": "Added 5 items after the loop's own empty-queue notice: 3 compaction (dead docs/orchestrator cleanup, evidence-verified before queuing, not guessed) + 2 research (both sourced verbatim from ROADMAP.md's existing not-yet-done list - maker-fill cost model, walk-forward+sealed-symbol judge - deliberately not another technical-indicator guess given VERDICTS.md's standing conclusion on that whole class). This restock followed a correction earlier in the same session where a concurrent agent caught an over-broad 78-item first draft that failed to check VERDICTS.md's same-information-source duplicate standard; this one was deliberately kept small and verified.",
+   "commit": null,
+   "tests": "data-only change; npm.cmd test re-run independently before commit"
+  },
+  {
+   "ts": "2026-08-09T21:52:17.845Z",
+   "agent": "human-requested-honest-review",
+   "action": "restock-work-queue",
+   "detail": "Added 3 items from a first-hand professional repo review (human explicitly asked for honest constructive criticism fed to the loop): AGENT-TOOLS-SANDBOX-HARDENING, STATE-QUEUE-RETENTION, RISK-SURFACE-TEST-COVERAGE. Full review narrative (including non-queued strategic/maintainability observations) is in control.notes and was also given directly to the human in chat.",
    "commit": null,
    "tests": "data-only change; npm.cmd test re-run independently before commit"
   }
