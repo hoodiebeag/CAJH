@@ -13,7 +13,8 @@ import {
   handleSetChannel, handleStatus,
   handleScan, handleAnalyzeThat, handleChartRequest,
   handleGeneral, handleManualTrade, handleBacktest, handleOptimize, handleWhy, handleAlign, handleRoom, handleModes, handleProfile, handleValidate, handleDiscover, handleExits, handleExcursion, handleTournament,
-  handleStop, handleResume, handleSell, handlePort, handleReconcile, handleForget
+  handleStop, handleResume, handleSell, handlePort, handleReconcile, handleForget,
+  handleResearch, handleNotes
 } from "./commands.js";
 import * as logger from './logger.js';
 
@@ -232,6 +233,14 @@ client.on("messageCreate", async (message) => {
   if (lower === "!resume")   return safe(handleResume(message), message);
   if (lower === "!port" || lower === "!portfolio") return safe(handlePort(message), message);
   if (lower === "!reconcile") return safe(handleReconcile(message), message);
+
+  // Autonomous research loop — read-only over research data, never places an order
+  // or resumes trading, but still owner-gated since it burns compute/API budget.
+  if (lower === "!research" || lower === "!notes" || lower.startsWith("!notes ")) {
+    if (!isOwner(message.author.id)) return message.reply("🚫 This command is restricted to cajh's owner.");
+    if (lower === "!research") return safe(handleResearch(message), message);
+    return safe(handleNotes(message, raw.slice(6).trim().split(/\s+/)[0] || null), message);
+  }
 
   // !sell BTC  /  !sell BTC 50   (and aliases !cancel / !close)
   if (lower.startsWith("!sell ") || lower.startsWith("!cancel ") || lower.startsWith("!close ")) {
