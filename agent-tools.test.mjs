@@ -152,6 +152,40 @@ test("executeAgentInline blocks network and shell-out patterns before running", 
   });
 });
 
+test("executeAgentInline blocks bare forbidden identifiers, not just call/import syntax", () => {
+  const dir = tempDataDir();
+  withDataDir(dir, () => {
+    assert.throws(() => executeAgentInline("const mod = child_process"), /Blocked/);
+    assert.throws(() => executeAgentInline("const f = fetch"), /Blocked/);
+    assert.throws(() => executeAgentInline("const g = eval"), /Blocked/);
+    assert.throws(() => executeAgentInline("const F = Function('return 1')"), /Blocked/);
+    assert.throws(() => executeAgentInline("const h = net"), /Blocked/);
+  });
+});
+
+test("executeAgentInline blocks a forbidden identifier split across concatenated string literals", () => {
+  const dir = tempDataDir();
+  withDataDir(dir, () => {
+    // The two concrete bypasses named in AGENT-TOOLS-SANDBOX-HARDENING: neither
+    // "child_process" nor "fetch" appears contiguous in the raw source, only after
+    // the adjacent string literals are joined.
+    assert.throws(() => executeAgentInline('await import("node:child_" + "process")'), /Blocked/);
+    assert.throws(() => executeAgentInline('globalThis["fe" + "tch"]("http://x")'), /Blocked/);
+    assert.throws(() => executeAgentInline('const x = "ax" + "ios"'), /Blocked/);
+  });
+});
+
+test("broadened scan does not false-positive on identifiers that merely contain a forbidden token as a fragment", () => {
+  const dir = tempDataDir();
+  withDataDir(dir, () => {
+    const { stdout, status } = executeAgentInline(
+      "// evaluate the internet-facing netProfit metric\nconst netProfit = 12; console.log(netProfit)"
+    );
+    assert.equal(status, 0);
+    assert.match(stdout, /12/);
+  });
+});
+
 test("executeAgentInline and executeAgentScript reject --experimental-* flags", () => {
   const dir = tempDataDir();
   withDataDir(dir, () => {

@@ -6,10 +6,17 @@
  *      DATA_DIR/{research-runs,hypotheses,agent-notes} for writes. No delete is exported.
  *   2. Code execution: only tournament.mjs, portfolio.mjs, a hypothesis .mjs CAJH wrote
  *      itself, or an inline `node -e` script. Static pattern scan on anything CAJH wrote
- *      (network/shell-out modules, fetch/axios/WebSocket) before it's allowed to run —
- *      the same "grep the source, block on a hit" idiom as scripts/check-protected-logic.cjs,
- *      not an OS-level sandbox. 10-minute timeout, 100KB stdout/stderr cap, cwd pinned to
- *      the project root regardless of what the script does with process.chdir.
+ *      (network/shell-out identifiers: fetch, axios, WebSocket, XMLHttpRequest,
+ *      child_process, http(s)/net/dns/tls/dgram, eval, Function(, process spawn/exec)
+ *      before it's allowed to run — the same "grep the source, block on a hit" idiom as
+ *      scripts/check-protected-logic.cjs, not an OS-level sandbox. Flags a bare identifier
+ *      anywhere in the source, not just inside call/import syntax, and also scans a copy
+ *      of the source with adjacent quoted-string concatenation collapsed so splitting a
+ *      forbidden identifier across literals (e.g. "child_" + "process") doesn't evade it.
+ *      Still a best-effort text scan against CAJH's own non-adversarial research scripts,
+ *      not a real sandbox — it cannot be airtight. 10-minute timeout, 100KB stdout/stderr
+ *      cap, cwd pinned to the project root regardless of what the script does with
+ *      process.chdir.
  *   3. Hypothesis schema: a JSON record CAJH writes before running an experiment, with a
  *      mandatory 60s cooling-off period between creation and execution, and a required
  *      passed/killed resolution afterward.
@@ -46,16 +53,29 @@ const FROZEN_SOURCE_BASENAMES = ["bot.js", "backtest.js", "storage.js", "trader.
 // on a pattern match in the text, not a runtime sandbox (Node has no per-process network
 // ACL without OS support, so this cannot be airtight — it exists to stop CAJH's own
 // generated research scripts from reaching the network or shelling out, not a hostile actor).
+//
+// Bare identifiers, not scoped to require()/import/call syntax: the earlier syntax-scoped
+// patterns (e.g. requiring `fetch(` or `require("node:child_process")` verbatim) were
+// trivially evaded by any equivalent expression the regex didn't anticipate — property
+// access (globalThis["fetch"]), a stored reference (const f = fetch), etc. Flagging the
+// bare token anywhere in the source closes that whole class at once. Word-bounded to avoid
+// blocking ordinary words the tokens happen to be a substring of (e.g. "evaluate", "internet",
+// "netProfit") — false positives on the surviving cases (a hypothesis script that happens to
+// use "net" or "eval" as a standalone identifier) are an acceptable tradeoff given how small
+// and narrow this surface is (hypothesis scripts only need backtest/analysis primitives).
 const FORBIDDEN_CODE_PATTERNS = [
-  [/\bfetch\s*\(/, "fetch("],
+  [/\bfetch\b/, "fetch"],
   [/\baxios\b/, "axios"],
-  [/require\(\s*["']node:?(https?|net|dns|tls|dgram)["']\s*\)/, "network module require"],
-  [/from\s+["']node:?(https?|net|dns|tls|dgram)["']/, "network module import"],
+  [/\bchild_process\b/, "child_process"],
   [/\bXMLHttpRequest\b/, "XMLHttpRequest"],
   [/\bWebSocket\b/, "WebSocket"],
-  [/require\(\s*["']node:?child_process["']\s*\)/, "child_process require"],
-  [/from\s+["']node:?child_process["']/, "child_process import"],
-  [/import\(\s*["']node:?(https?|net|dns|tls|dgram|child_process)["']\s*\)/, "dynamic import of a network/process module"],
+  [/\bhttps?\b/, "http/https"],
+  [/\bnet\b/, "net"],
+  [/\bdns\b/, "dns"],
+  [/\btls\b/, "tls"],
+  [/\bdgram\b/, "dgram"],
+  [/\beval\b/, "eval"],
+  [/\bFunction\s*\(/, "Function("],
   [/\b(?:spawn|exec|execFile|fork)(?:Sync)?\s*\(/, "process spawn/exec"],
 ];
 
@@ -136,9 +156,27 @@ function assertSafeArgs(args) {
   }
 }
 
+// Collapse adjacent quoted-string concatenation ("node:child_" + "process" -> "node:child_process")
+// before scanning, so a forbidden identifier split across string literals — the simplest way to
+// defeat a text-based token scan like this one — is still visible to FORBIDDEN_CODE_PATTERNS.
+// Repeated until stable to also collapse 3+-literal chains ("a" + "b" + "c").
+function collapseStringConcat(source) {
+  let prev;
+  let collapsed = source;
+  do {
+    prev = collapsed;
+    collapsed = collapsed.replace(
+      /(["'`])((?:(?!\1)[^\\]|\\.)*)\1(\s*\+\s*)(["'`])((?:(?!\4)[^\\]|\\.)*)\4/g,
+      (_match, q1, s1, _op, _q2, s2) => `${q1}${s1}${s2}${q1}`
+    );
+  } while (collapsed !== prev);
+  return collapsed;
+}
+
 function assertSafeSource(source, label) {
+  const collapsed = collapseStringConcat(source);
   for (const [pattern, name] of FORBIDDEN_CODE_PATTERNS) {
-    if (pattern.test(source)) throw new Error(`Blocked: ${label} matches a disallowed pattern (${name}) — no outbound network or shell-out from agent-authored code.`);
+    if (pattern.test(source) || pattern.test(collapsed)) throw new Error(`Blocked: ${label} matches a disallowed pattern (${name}) — no outbound network or shell-out from agent-authored code.`);
   }
 }
 
