@@ -1,6 +1,6 @@
 /**
  * Pre-registered cross-sectional momentum study. Research only: it never submits orders.
- * See MOMENTUM_SPEC.md for the estimand and promotion/kill criteria.
+ * Verdict (KILLED, M7) and full methodology history: see VERDICTS.md.
  */
 import { loadWatchlist, symbolToKrakenId } from "./researchlib.mjs";
 import { dataManifest, loadDailyCandles, saveExperiment } from "./researchlab.mjs";
