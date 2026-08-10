@@ -213,6 +213,26 @@ export function isQuoteStale(asOf, now = Date.now(), maxAgeMs = MAX_ORDER_SNAPSH
   return !Number.isFinite(asOf) || now - asOf > maxAgeMs;
 }
 
+// Pure candidate-ranking seam for position-cap rotation: given the open positions and
+// a symbol -> price map of whichever ones could actually be priced, picks the position
+// with the highest R-multiple (most profitable) to rotate out. Callers decide what an
+// empty/unprofitable result means (no priceable candidate vs. none in profit) — this
+// function only ranks, it never closes a position or reads live prices itself.
+export function selectRotationCandidate(openPositions, currentPrices) {
+  const priceOf = currentPrices instanceof Map
+    ? (symbol) => currentPrices.get(symbol)
+    : (symbol) => currentPrices[symbol];
+  let best = null;
+  for (const t of openPositions) {
+    const p = priceOf(t.symbol);
+    if (p == null) continue;
+    const tRisk = t.risk ?? (t.entry - t.stopLoss);
+    const r = tRisk > 0 ? (p - t.entry) / tRisk : 0;
+    if (!best || r > best.r) best = { trade: t, price: p, r };
+  }
+  return best;
+}
+
 async function proposeBuy(symbol, buy, channel, regimeLabel = null) {
   if (pendingBuys.has(symbol)) {
     const result = { traded: false, reason: "a buy for this symbol is already in flight" };
@@ -247,16 +267,15 @@ async function proposeBuyLocked(symbol, buy, channel, regimeLabel = null) {
   // A position is only rotated out while it is IN PROFIT — closing a loser to chase a
   // fresh signal just pays two more fee legs to swap one drawdown for another.
   if (getOpenTrades().length >= MAX_OPEN_POSITIONS) {
-    let best = null;
-    for (const t of getOpenTrades()) {
+    const openTrades = getOpenTrades();
+    const currentPrices = new Map();
+    for (const t of openTrades) {
       try {
         const p = await getCurrentPrice(t.symbol);
-        if (!p) continue;
-        const tRisk = t.risk ?? (t.entry - t.stopLoss);
-        const r = tRisk > 0 ? (p - t.entry) / tRisk : 0;
-        if (!best || r > best.r) best = { trade: t, price: p, r };
+        if (p) currentPrices.set(t.symbol, p);
       } catch { /* skip unpriceable positions */ }
     }
+    const best = selectRotationCandidate(openTrades, currentPrices);
     if (!best) return { traded: false, reason: `max open positions (${MAX_OPEN_POSITIONS}) and no rotation candidate could be priced` };
     if (best.r <= 0) {
       return { traded: false, reason: `max open positions (${MAX_OPEN_POSITIONS}) — none are in profit, so nothing is rotated out` };

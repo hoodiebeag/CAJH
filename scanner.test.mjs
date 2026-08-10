@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
-import { isQuoteStale } from "./scanner.js";
+import { isQuoteStale, selectRotationCandidate } from "./scanner.js";
 import { MAX_ORDER_SNAPSHOT_AGE_MS } from "./trader.js";
 
 const root = process.cwd();
@@ -20,6 +20,81 @@ test("a quote is fresh at exactly the max age and stale one ms past it", () => {
   assert.equal(isQuoteStale(now - MAX_ORDER_SNAPSHOT_AGE_MS - 1, now), true, "one ms past the boundary is stale");
   assert.equal(isQuoteStale(undefined, now), true, "a missing timestamp is treated as stale");
   assert.equal(isQuoteStale(NaN, now), true, "a non-finite timestamp is treated as stale");
+});
+
+function trade(symbol, entry, stopLoss, risk) {
+  return risk === undefined ? { symbol, entry, stopLoss } : { symbol, entry, stopLoss, risk };
+}
+
+// Mirrors the pre-refactor inline rotation loop in proposeBuyLocked byte-for-byte
+// (minus the network fetch/try-catch, which the caller now owns) so the extraction
+// can be proven behavior-preserving rather than just plausible.
+function legacySelectRotationCandidate(openTrades, priceMap) {
+  let best = null;
+  for (const t of openTrades) {
+    const p = priceMap[t.symbol];
+    if (p == null) continue;
+    const tRisk = t.risk ?? (t.entry - t.stopLoss);
+    const r = tRisk > 0 ? (p - t.entry) / tRisk : 0;
+    if (!best || r > best.r) best = { trade: t, price: p, r };
+  }
+  return best;
+}
+
+test("selectRotationCandidate picks the highest R-multiple open position", () => {
+  const openTrades = [trade("BTC", 100, 90), trade("ETH", 50, 45), trade("SOL", 20, 18)];
+  const prices = { BTC: 105, ETH: 60, SOL: 19 }; // R: BTC 0.5, ETH 2.0, SOL 0.5
+  const best = selectRotationCandidate(openTrades, prices);
+  assert.equal(best.trade.symbol, "ETH");
+  assert.equal(best.price, 60);
+  assert.equal(best.r, 2);
+});
+
+test("selectRotationCandidate accepts a Map of prices as well as a plain object", () => {
+  const openTrades = [trade("BTC", 100, 90), trade("ETH", 50, 45)];
+  const prices = new Map([["BTC", 105], ["ETH", 60]]);
+  assert.equal(selectRotationCandidate(openTrades, prices).trade.symbol, "ETH");
+});
+
+test("selectRotationCandidate breaks ties by keeping the first-encountered candidate", () => {
+  const openTrades = [trade("BTC", 100, 90), trade("ETH", 50, 45)];
+  const prices = { BTC: 105, ETH: 52.5 }; // both R = 0.5
+  assert.equal(selectRotationCandidate(openTrades, prices).trade.symbol, "BTC");
+});
+
+test("selectRotationCandidate returns null when no open position could be priced", () => {
+  const openTrades = [trade("BTC", 100, 90), trade("ETH", 50, 45)];
+  assert.equal(selectRotationCandidate(openTrades, {}), null);
+  assert.equal(selectRotationCandidate(openTrades, new Map()), null);
+});
+
+test("selectRotationCandidate still ranks (least-bad) when every priced position is a loser", () => {
+  const openTrades = [trade("BTC", 100, 90), trade("ETH", 50, 45)];
+  const prices = { BTC: 95, ETH: 40 }; // R: BTC -0.5, ETH -2
+  const best = selectRotationCandidate(openTrades, prices);
+  assert.equal(best.trade.symbol, "BTC");
+  assert.ok(best.r <= 0, "caller's 'none are in profit' skip path relies on this staying <= 0");
+});
+
+test("selectRotationCandidate ranks the same at exactly MAX_OPEN_POSITIONS (6) and under it", () => {
+  const atCap = Array.from({ length: 6 }, (_, i) => trade(`SYM${i}`, 100, 90));
+  const underCap = atCap.slice(0, 3);
+  const prices = Object.fromEntries(atCap.map((t, i) => [t.symbol, 100 + i])); // increasing R
+  assert.equal(selectRotationCandidate(atCap, prices).trade.symbol, "SYM5");
+  assert.equal(selectRotationCandidate(underCap, prices).trade.symbol, "SYM2");
+});
+
+test("selectRotationCandidate matches the pre-refactor inline rotation loop byte-for-byte", () => {
+  const scenarios = [
+    { openTrades: [trade("BTC", 100, 90), trade("ETH", 50, 45), trade("SOL", 20, 18)], prices: { BTC: 105, ETH: 60, SOL: 19 } },
+    { openTrades: [trade("BTC", 100, 90), trade("ETH", 50, 45)], prices: { BTC: 105, ETH: 52.5 } },
+    { openTrades: [trade("BTC", 100, 90), trade("ETH", 50, 45)], prices: { BTC: 95, ETH: 40 } },
+    { openTrades: [trade("BTC", 100, 90)], prices: {} },
+    { openTrades: [trade("BTC", 100, 100, 0)], prices: { BTC: 110 } },
+  ];
+  for (const { openTrades, prices } of scenarios) {
+    assert.deepEqual(selectRotationCandidate(openTrades, prices), legacySelectRotationCandidate(openTrades, prices));
+  }
 });
 
 function tempDir() {
