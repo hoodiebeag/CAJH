@@ -72,7 +72,7 @@ then return to `EXECUTOR_PENDING`.
 | R-008 confirmed sell | No `QueryOrders` terminal execution confirmation means no tracked position is removed. |
 | R-009 durable halt | `LIVE_TRADING` unset/false plus any Discord command cannot enable orders. |
 | R-002/R-004 health | Failed hydration, persistence, reconciliation, or stale heartbeat blocks entries while exit monitoring stays best-effort. |
-| R-005/R-013 validation | NaN, Infinity, zero, stale, unsupported, or unknown values cannot reach `AddOrder`. |
+| R-005/R-013 validation | NaN, Infinity, zero, stale, unsupported, or unknown values cannot reach `AddOrder`; R-013's explicit retry policy (`trader.js`) gives order placement exactly one attempt so an ambiguous transport error can never trigger a duplicate order. |
 | R-010 concurrency | A second unresolved scan/tick is skipped, never run concurrently. |
 
 ## Research guardrails

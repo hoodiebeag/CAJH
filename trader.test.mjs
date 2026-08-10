@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  callKraken,
   isIgnoredReconciliationBalance,
   parseConfirmedSell,
   placeBuy,
@@ -167,4 +168,46 @@ test("buy fill confirmation recovers from a transient QueryOrders error and stil
   const trade = await placeBuy(buyArgs());
   assert.equal(trade.volume, 1);
   assert.equal(queryOrdersCalls, 2);
+});
+
+test("R-013: order placement is never auto-retried on an ambiguous transport error", async () => {
+  let calls = 0;
+  setKrakenApiForTests(async () => {
+    calls++;
+    throw Object.assign(new Error("socket timeout"), { code: "ETIMEDOUT" });
+  });
+
+  await assert.rejects(
+    () => callKraken("AddOrder", { pair: "XBTUSD", type: "buy", ordertype: "market", volume: "1" }),
+    (err) => err.krakenState === "unknown" && /state unknown after 1 attempt/.test(err.message)
+  );
+  assert.equal(calls, 1);
+});
+
+test("R-013: order placement surfaces a terminal error immediately without retrying", async () => {
+  let calls = 0;
+  setKrakenApiForTests(async () => {
+    calls++;
+    throw new Error("EOrder:Invalid permissions");
+  });
+
+  await assert.rejects(
+    () => callKraken("AddOrder", { pair: "XBTUSD", type: "buy", ordertype: "market", volume: "1" }),
+    (err) => err.krakenState === "terminal" && /terminal error/.test(err.message)
+  );
+  assert.equal(calls, 1);
+});
+
+test("R-013: idempotent read calls keep their prior bounded-retry behavior unchanged", async () => {
+  let calls = 0;
+  setKrakenApiForTests(async () => {
+    calls++;
+    throw Object.assign(new Error("network unavailable"), { code: "ECONNRESET" });
+  });
+
+  await assert.rejects(
+    () => callKraken("Balance", {}),
+    (err) => err.krakenState === "unknown" && /state unknown after 2 attempt/.test(err.message)
+  );
+  assert.equal(calls, 2);
 });

@@ -19,7 +19,7 @@ R-006 covers the money paths that have deterministic seams today and names the r
 | Reconciliation | Stablecoins and dust are ignored; untracked held assets are orphans; tracked-but-missing assets are ghosts; cleanup removes tracking only and never sells. | Backtests do not reconcile exchange holdings. | `money-path.test.mjs`; monitor reconciliation tests | COVERED |
 | Persistence failure | Failed writes mark monitor health unsafe and block new entries. | Not applicable to research. | `storage.test.mjs`; `monitor.test.mjs` health gating | COVERED |
 | Stale price / invalid balance | Scanner validates finite positive quote/balance-derived capital before consuming a cooldown or placing an order. | Backtests require finite candles. | `order-validation.test.mjs`; R-005 scanner validation path | PARTIAL: finite value boundary covered; BLOCKED/FOLLOW-ON for explicit quote-age contract |
-| Exchange errors / retries | Ambiguous remote state must never imply a fill. | Research excludes missing data rather than retrying an exchange. | Sell ambiguity covered by `money-path.test.mjs` and `trader.test.mjs`. | PARTIAL: sell side covered; BLOCKED/FOLLOW-ON R-013 owns timeout/exhaustion policy |
+| Exchange errors / retries | Ambiguous remote state must never imply a fill. Order placement is non-idempotent and gets exactly one attempt (no auto-retry, per R-013's explicit retry policy), so a lost response can never cause a duplicate order; idempotent reads keep their prior bounded-retry behavior. | Research excludes missing data rather than retrying an exchange. | Sell ambiguity covered by `money-path.test.mjs` and `trader.test.mjs`; R-013's retry policy covered by `trader.test.mjs`. | COVERED |
 
 ## Verifier note
 

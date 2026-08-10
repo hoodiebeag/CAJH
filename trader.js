@@ -19,6 +19,19 @@ let krakenApi = defaultKrakenApi;
 let orderConfirmDelayMs = 700;
 const DEFAULT_KRAKEN_ATTEMPTS = 2;
 
+// R-013: explicit exchange-error retry policy, keyed by Kraken method. AddOrder is NOT
+// idempotent — if a request times out after Kraken already accepted it, retrying would
+// place a second real order, so it gets exactly one attempt: any error (terminal or
+// ambiguous) surfaces immediately as "state unknown", never auto-retried and never
+// treated as an implicit success. Read-only/idempotent methods (Balance, Ticker,
+// AssetPairs, QueryOrders) keep the prior bounded-retry behavior unchanged. Backoff is
+// deliberately 0ms for both: these are user-facing lookups where added latency has no
+// correctness benefit (unlike AddOrder, retrying a read carries no duplication risk).
+const KRAKEN_RETRY_POLICY = {
+  AddOrder: { attempts: 1 },
+  default:  { attempts: DEFAULT_KRAKEN_ATTEMPTS }
+};
+
 export function setKrakenApiForTests(fn = null) {
   krakenApi = fn || defaultKrakenApi;
   pairInfoCache = null;
@@ -35,7 +48,8 @@ export function classifyKrakenError(err) {
   return "unknown";
 }
 
-async function callKraken(method, params, { attempts = DEFAULT_KRAKEN_ATTEMPTS } = {}) {
+export async function callKraken(method, params) {
+  const { attempts } = KRAKEN_RETRY_POLICY[method] ?? KRAKEN_RETRY_POLICY.default;
   let lastErr = null;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
