@@ -1,8 +1,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isIgnoredReconciliationBalance, parseConfirmedSell } from "./trader.js";
+import {
+  isIgnoredReconciliationBalance,
+  parseConfirmedSell,
+  placeBuy,
+  setKrakenApiForTests,
+  setOrderConfirmDelayForTests
+} from "./trader.js";
 import { applyConfirmedSellToTrade } from "./monitor.js";
+
+test.afterEach(() => {
+  setKrakenApiForTests();
+  setOrderConfirmDelayForTests();
+});
+
+function assetPairsResult() {
+  return { result: { XXBTZUSD: { altname: "XBTUSD", lot_decimals: 4, ordermin: "0.0001" } } };
+}
+
+function buyArgs() {
+  const now = Date.now();
+  return { symbol: "BTC", capital: 100, price: 100, priceAsOf: now, balance: 1000, balanceAsOf: now };
+}
 
 test("Kraken staked balance extensions are excluded from reconciliation", () => {
   assert.equal(isIgnoredReconciliationBalance("XTZ.S"), true);
@@ -47,4 +67,104 @@ test("unknown, canceled, expired, rejected, and zero-fill sells retain tracked s
   const trade = { symbol: "SOL", volume: 4 };
   assert.deepEqual(applyConfirmedSellToTrade(trade, { volume: 0, price: 50 }), { status: "invalid" });
   assert.equal(trade.volume, 4);
+});
+
+test("buy fill confirmation polls through pending QueryOrders responses before registering the position", async () => {
+  setOrderConfirmDelayForTests(0);
+  let queryOrdersCalls = 0;
+  setKrakenApiForTests(async (method) => {
+    if (method === "AssetPairs") return assetPairsResult();
+    if (method === "AddOrder") return { result: { txid: ["T1"] } };
+    if (method === "QueryOrders") {
+      queryOrdersCalls++;
+      if (queryOrdersCalls < 3) return { result: {} }; // not yet visible
+      if (queryOrdersCalls === 3) return { result: { T1: { status: "open" } } }; // pending, not terminal
+      return { result: { T1: { status: "closed", vol_exec: "1", price: "100", fee: "0.05" } } };
+    }
+    throw new Error(`unexpected method ${method}`);
+  });
+
+  const trade = await placeBuy(buyArgs());
+  assert.equal(queryOrdersCalls, 4);
+  assert.equal(trade.volume, 1);
+  assert.equal(trade.price, 100);
+});
+
+test("buy fill confirmation registers the exact confirmed volume and price on a terminal fill", async () => {
+  setOrderConfirmDelayForTests(0);
+  setKrakenApiForTests(async (method) => {
+    if (method === "AssetPairs") return assetPairsResult();
+    if (method === "AddOrder") return { result: { txid: ["T1"] } };
+    if (method === "QueryOrders") return { result: { T1: { status: "closed", vol_exec: "1", price: "101.5", fee: "0.06" } } };
+    throw new Error(`unexpected method ${method}`);
+  });
+
+  const trade = await placeBuy(buyArgs());
+  assert.equal(trade.volume, 1);
+  assert.equal(trade.price, 101.5);
+  assert.equal(trade.fee, 0.06);
+});
+
+test("buy fill confirmation registers a partial executed volume, never the requested amount", async () => {
+  setOrderConfirmDelayForTests(0);
+  setKrakenApiForTests(async (method) => {
+    if (method === "AssetPairs") return assetPairsResult();
+    if (method === "AddOrder") return { result: { txid: ["T1"] } };
+    if (method === "QueryOrders") return { result: { T1: { status: "closed", vol_exec: "0.4", price: "100", fee: "0.02" } } };
+    throw new Error(`unexpected method ${method}`);
+  });
+
+  const trade = await placeBuy(buyArgs());
+  assert.equal(trade.volume, 0.4);
+  assert.notEqual(trade.volume, 1); // requested volume was 1 (100 capital / 100 price)
+});
+
+test("buy fill confirmation throws and never registers a position when Kraken canceled the order", async () => {
+  setOrderConfirmDelayForTests(0);
+  setKrakenApiForTests(async (method) => {
+    if (method === "AssetPairs") return assetPairsResult();
+    if (method === "AddOrder") return { result: { txid: ["T1"] } };
+    if (method === "QueryOrders") return { result: { T1: { status: "canceled" } } };
+    throw new Error(`unexpected method ${method}`);
+  });
+
+  await assert.rejects(() => placeBuy(buyArgs()), /was canceled by Kraken — nothing filled, position not tracked/);
+});
+
+test("buy fill confirmation throws unconfirmed after exhausting retries on persistent QueryOrders errors", async () => {
+  setOrderConfirmDelayForTests(0);
+  let queryOrdersCalls = 0;
+  setKrakenApiForTests(async (method) => {
+    if (method === "AssetPairs") return assetPairsResult();
+    if (method === "AddOrder") return { result: { txid: ["T1"] } };
+    if (method === "QueryOrders") {
+      queryOrdersCalls++;
+      throw new Error("network unavailable");
+    }
+    throw new Error(`unexpected method ${method}`);
+  });
+
+  await assert.rejects(() => placeBuy(buyArgs()), /could not confirm buy T1 filled — NOT tracking it/);
+  // confirmBuyFill polls 10 times; each poll retries transport failures via callKraken's
+  // own DEFAULT_KRAKEN_ATTEMPTS=2, so the mock sees 20 raw QueryOrders invocations.
+  assert.equal(queryOrdersCalls, 20);
+});
+
+test("buy fill confirmation recovers from a transient QueryOrders error and still confirms the fill", async () => {
+  setOrderConfirmDelayForTests(0);
+  let queryOrdersCalls = 0;
+  setKrakenApiForTests(async (method) => {
+    if (method === "AssetPairs") return assetPairsResult();
+    if (method === "AddOrder") return { result: { txid: ["T1"] } };
+    if (method === "QueryOrders") {
+      queryOrdersCalls++;
+      if (queryOrdersCalls === 1) throw new Error("temporary network blip");
+      return { result: { T1: { status: "closed", vol_exec: "1", price: "100", fee: "0.05" } } };
+    }
+    throw new Error(`unexpected method ${method}`);
+  });
+
+  const trade = await placeBuy(buyArgs());
+  assert.equal(trade.volume, 1);
+  assert.equal(queryOrdersCalls, 2);
 });
