@@ -22,6 +22,7 @@ import {
   REQUIRE_HIGHER_LOW, MIN_STOP_PCT, MAX_STOP_PCT_BY_TF, RISK_PCT, MAX_POSITION_PCT
 } from "./strategy.js";
 import { placeBuy, getCurrentPrice, getCurrentPriceSnapshot, fetchOHLC, getAccountBalanceSnapshot, validateOrderRequest } from "./trader.js";
+import { MAX_ORDER_SNAPSHOT_AGE_MS } from "./trader.js";
 import {
   registerTrade, postTradeOpened, isTradingEnabled, getTrade, getOpenTrades, closeTradeAtMarket,
   requireMonitorHealthForEntry, createSingleFlight
@@ -199,6 +200,19 @@ export function resetLevelCooldownsForTests() {
   levelCooldownsUnsafe = false;
 }
 
+// A quote read long before it's actually used to size/place an order risks trading on
+// a stale price. Reuse trader.js's own order-transport-boundary threshold
+// (MAX_ORDER_SNAPSHOT_AGE_MS, already enforced right before the order goes out) instead
+// of inventing a second, possibly-conflicting contract here: a looser scanner-side
+// number would still let the order-transport check reject the trade after the
+// structural-level cooldown had already been consumed for nothing, and a tighter one
+// would just reject quotes the transport check would have accepted. Checking the same
+// threshold here, before the cooldown is consumed, turns that wasted-cooldown case into
+// a clean skip instead.
+export function isQuoteStale(asOf, now = Date.now(), maxAgeMs = MAX_ORDER_SNAPSHOT_AGE_MS) {
+  return !Number.isFinite(asOf) || now - asOf > maxAgeMs;
+}
+
 async function proposeBuy(symbol, buy, channel, regimeLabel = null) {
   if (pendingBuys.has(symbol)) {
     const result = { traded: false, reason: "a buy for this symbol is already in flight" };
@@ -252,6 +266,9 @@ async function proposeBuyLocked(symbol, buy, channel, regimeLabel = null) {
   }
 
   const quote    = await getCurrentPriceSnapshot(symbol);
+  if (isQuoteStale(quote.asOf)) {
+    return { traded: false, reason: `quote is stale (${Date.now() - quote.asOf}ms old, max ${MAX_ORDER_SNAPSHOT_AGE_MS}ms) — skipping until a fresh price is available` };
+  }
   const entry    = quote.price;
   const stopLoss = buy.pivotPrice;   // the candidate/confirmed swing low = structural invalidation
   const risk     = entry - stopLoss;

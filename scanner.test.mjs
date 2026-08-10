@@ -6,9 +6,21 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
+import { isQuoteStale } from "./scanner.js";
+import { MAX_ORDER_SNAPSHOT_AGE_MS } from "./trader.js";
+
 const root = process.cwd();
 const scannerUrl = pathToFileURL(path.join(root, "scanner.js")).href;
 const buy = { tf: "1h", pivotPrice: 100 };
+
+test("a quote is fresh at exactly the max age and stale one ms past it", () => {
+  const now = 1_000_000;
+  assert.equal(isQuoteStale(now, now), false, "age 0 is fresh");
+  assert.equal(isQuoteStale(now - MAX_ORDER_SNAPSHOT_AGE_MS, now), false, "exactly at the boundary is still fresh");
+  assert.equal(isQuoteStale(now - MAX_ORDER_SNAPSHOT_AGE_MS - 1, now), true, "one ms past the boundary is stale");
+  assert.equal(isQuoteStale(undefined, now), true, "a missing timestamp is treated as stale");
+  assert.equal(isQuoteStale(NaN, now), true, "a non-finite timestamp is treated as stale");
+});
 
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "cajh-levels-"));
