@@ -1317,6 +1317,12 @@
   "note": "Read by cajh-loop-check BEFORE anything else, every firing regardless of which role's turn it is. Set enabled:false to pause both without touching the scheduler UI - each check still fires on its cron but exits immediately, so pausing costs nothing and resuming is instant. No quota-based auto-pause exists: a scheduled run cannot see remaining usage from inside the prompt, so this is a manual switch, not a self-detecting one."
  },
  "notifications": {
+  "persistent-pull-blocker-2026-08-10": {
+   "lastSentAt": "2026-08-10T04:01:10.000Z",
+   "deliveryResult": "Mobile push requested (tool call succeeded; delivery to device not independently confirmed - see notification_policy.known_gap).",
+   "message": "cajh: pull blocked (staged trader.test.mjs/PARITY_MATRIX.md from blocked PARITY-BUYFILL-SEAM, awaiting your review). Loop will keep retrying, no new work until resolved.",
+   "note": "New reasonKey (dated) rather than overwriting the 2026-08-08 entry below, so this firing's edit does not touch that entry's message line (deleting it would re-trip the pre-commit scanner on a historical mention of the live-trading env-gate identifier, same false-positive class as notifications.protected-marker-consumed). Root cause here is the diff already covered by notifications.unresolvable-blocked (sent 2026-08-10T01:04:05.357Z) - staged on purpose by that firing for human review, not foreign/unexplained content. Did not stash/reset/checkout/commit trader.test.mjs/PARITY_MATRIX.md - not created by this firing. STEP 3 not attempted; blocked at STEP 0 pull check."
+  },
   "persistent-pull-blocker": {
    "lastSentAt": "2026-08-08T19:44:00.000Z",
    "deliveryResult": "Mobile push requested (tool call succeeded; delivery to device not independently confirmed - see notification_policy.known_gap).",
