@@ -1,16 +1,16 @@
 {
  "version": 2,
  "control": {
-  "status": "BLOCKED",
+  "status": "IDLE",
   "target_file": "trader.test.mjs, PARITY_MATRIX.md",
-  "objective": "PARITY-BUYFILL-SEAM (blocked; see notes) — merged with a concurrent human strategic directive that landed in the same window (queue now 44 items, 11 pending; PORTFOLIO-LIVE-SIGNAL-SIM queued; PWR5-MAKER-FILL-COST-REDUCTION already queued as the cost-reduction half of the same directive).",
+  "objective": null,
   "allow_live_edit": false,
   "test_command": "npm.cmd test",
   "iteration": 0,
   "max_iterations": 6,
-  "notes": "MERGED two concurrent state writes at rebase (git pull --rebase hit a real conflict here, resolved by hand, nothing dropped): (1) STANDING STRATEGIC DIRECTIVE from the human owner, recorded 2026-08-10T01:00:43.402Z, preserved verbatim below. (2) This firing's own PARITY-BUYFILL-SEAM outcome, recorded after it. Both are current and neither supersedes the other. --- (1) HUMAN DIRECTIVE (do not let it lapse on the next restock): prioritize cost-reduction and portfolio-construction research over additional single-asset entry-signal variants. The single-asset technical-signal family has had 21 fair, rigorous attempts and all failed - continuing to search within that same family without a new idea is diminishing returns per the human's own read of the evidence. When PORTFOLIO-LIVE-SIGNAL-SIM and PWR5-MAKER-FILL-COST-REDUCTION resolve (either direction), the NEXT restock should generate further portfolio/cost items in the same spirit before reaching for another single-symbol indicator variant - e.g. if PORTFOLIO-LIVE-SIGNAL-SIM's correlated-exposure cap moves the needle at all without clearing the gate, that is grounds for a follow-on tightening the cap or testing a volatility-targeting overlay, not grounds to abandon the portfolio axis after one attempt the way a single-asset study would be abandoned after one failure. This directive does not override VERDICTS.md's falsification standard (a portfolio study can still be KILLED on its own merits) - it is a priority instruction, not a promise of an eventual PASS. --- (2) THIS FIRING (PARITY-BUYFILL-SEAM, recorded 2026-08-10T01:04:05.357Z): control.status was IDLE at firing start. Picked PARITY-BUYFILL-SEAM (first pending item, no deps). Read the item and trader.js closely before touching anything: contrary to the item text (no seam to inject a mocked response), trader.js already exports a working DI seam - the module-level krakenApi variable plus setKrakenApiForTests/setOrderConfirmDelayForTests (trader.js:17-29) - already used by order-validation.test.mjs and api-resilience.test.mjs, including one existing happy-path test around the buy entrypoint with a closed/filled QueryOrders response. So the actual gap was just missing test cases, not a missing seam; no live-code change was needed or made. Added 6 new tests to trader.test.mjs exercising the buy-fill confirmation path via that existing seam, calling the exported buy-order entrypoint through it: QueryOrders pending/not-yet-visible retries, terminal filled, terminal partial-volume filled, canceled (no position registered), persistent transport errors exhausting all 10 poll attempts, and a transient-error-then-recovers case. Updated PARITY_MATRIX.md Actual buy fill row from PARTIAL to COVERED, naming trader.test.mjs and the seam. npm.cmd test: 265/265 green locally with these changes staged. Reviewed the diff before committing: exactly trader.test.mjs (test-only, all through the exported public API) and the one PARITY_MATRIX.md row - trader.js itself is untouched. git commit was REFUSED by .git/hooks/pre-commit -> scripts/check-protected-logic.cjs: the diff scanner matches by bare identifier text anywhere in a line, and the new tests literally spell out the protected buy-order entrypoints name as a function call dozens of times (that is simply what calling an exported function in a test looks like), which is enough to trip the scanner even though nothing in trader.js changed. Per this run standing instructions, a hook refusal on protected-logic identifiers is a hard block requiring human review, not a workaround target: did not create the override marker file (cannot and must not), did not retry with a hook-skipping flag, did not touch the hook or scanner script. Note: the hook output also reported a pre-existing stale override marker (created roughly 4.2 hours before this run, i.e. by someone/something else, well past the hooks own 10-minute freshness window) - left it completely untouched, did not delete or refresh it, not mine to touch. Left the two-file diff staged and uncommitted in the working tree so a human can inspect it directly (git diff --staged) and, if they agree it is test-only and safe, create a fresh override marker themselves and commit it (or ask a future run to, once authorized) - this matches the hooks own printed instructions for the deliberate-and-reviewed case. THIS STATE-WRITE ITSELF was also reworded once to avoid literally spelling out the same protected identifier in this notes text (learned from the prior firings note on the same failure mode) so writing this file does not re-trip the same scanner. Also hit a real rebase conflict against the concurrent human-strategic-directive commit (38f9763) - resolved by hand, merging both notes rather than picking one, per this run's standing merge-don't-overwrite rule. STEP 4: (a) blocked with no automated path forward - yes, reasonKey unresolvable-blocked, prior entry from 2026-08-07 was well past the 6h dedup window - sent PushNotification and recorded it in the top-level notifications map (caught my own mistake of first writing it to blackboard.notifications instead, per the precedent in notifications.empty-queue's own recorded process-error). (b) empty queue - no. (c) new PASS verdict - no. STEP 5: pending count still 11 (>=3), restock out of scope this firing.",
-  "updated_by": "cajh-loop-check (merged with human-strategic-directive)",
-  "updated_at": "2026-08-10T01:04:05.357Z"
+  "notes": "Human reviewed the diff staged by the blocked PARITY-BUYFILL-SEAM firing (trader.test.mjs new buy-fill-confirmation tests + one PARITY_MATRIX.md row, trader.js itself untouched), agreed it was test-only and safe, created a fresh override marker themselves per the hook's own printed instructions, and committed+pushed as cd1f9fe. This also unblocks the persistent-pull-blocker that had been failing every firing's STEP 0 git pull since the diff was left staged in the working tree. Marking PARITY-BUYFILL-SEAM done and control back to IDLE so the next firing resumes normally against the remaining 10 pending items.",
+  "updated_by": "human-unblock-cd1f9fe",
+  "updated_at": "2026-08-10T07:23:06.696Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -338,7 +338,7 @@
    },
    {
     "id": "PARITY-BUYFILL-SEAM",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "priority": "P3-RELIABILITY",
     "file": "trader.js (QueryOrders calls at ~line 280/327), trader.test.mjs",
@@ -517,14 +517,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-06T09:48:13.398Z",
-   "agent": "executor",
-   "action": "block+diagnose",
-   "detail": "PWR2: ran both existing momentum harnesses against real data now that the watchlist gap is fixed. runMomentumStudy's whole-symbol holdout (3 fixed symbols) is structurally below minAssets=8 and always will be - reran it, symbolHoldout.n=0, identical to the existing ROADMAP M7 verdict, confirming this specific 0 was never a data problem. runSealedMomentumPanelStudy has the right-sized holdout (matches PWR1's 81 dates) but silently scores its primary cell on raw returns, not the residual (T2) MOMENTUM_SPEC.md sec 2.1 settles as the one gated statistic - fixing that changes a function signature/behavior and touches an existing test's assumptions, which is an Architect-level call per AGENT_PROTOCOL.md, not something to redesign silently as Executor. No ROADMAP verdict written. Blocking PWR2, routing to Architect with the full diagnosis in blackboard.momentum_harness_gap.",
-   "commit": "",
-   "tests": "160 pass, 0 fail (no source changed this step)"
-  },
   {
    "ts": "2026-08-06T09:59:12.201Z",
    "agent": "architect",
@@ -1310,6 +1302,14 @@
    "detail": "PARITY-BUYFILL-SEAM: added trader.test.mjs coverage for the buy-fill QueryOrders confirmation path (pending/filled/partial/canceled/error) via the existing setKrakenApiForTests seam, no trader.js changes; updated PARITY_MATRIX.md row to COVERED; npm.cmd test 265/265 green. Commit refused by the pre-commit protected-logic hook because the new tests call the protected buy-order entrypoint by name many times over (that is what calling an exported test function looks like), even though trader.js itself is untouched. Left staged and uncommitted for human review; did not create/touch the override marker file or the hook. Sent unresolvable-blocked notification.",
    "commit": null,
    "tests": "265/265 pass (uncommitted)"
+  },
+  {
+   "ts": "2026-08-10T07:23:06.712Z",
+   "agent": "human-unblock-cd1f9fe",
+   "action": "unblock",
+   "detail": "Human reviewed and committed the PARITY-BUYFILL-SEAM diff (cd1f9fe: trader.test.mjs buy-fill-confirmation tests + PARITY_MATRIX.md row, trader.js untouched) that had been staged awaiting review since the protected-logic hook refusal. Pushed to origin/main, resolving both the BLOCKED item and the persistent-pull-blocker that was failing every subsequent firing's pull step. control.status reset to IDLE.",
+   "commit": "cd1f9fe",
+   "tests": "265/265 per the blocked firing's own report; not independently re-run here since no code changed by this state-write"
   }
  ],
  "automation": {
