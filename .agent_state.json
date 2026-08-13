@@ -457,7 +457,7 @@
       },
       {
         "id": "PHASE4-PORTFOLIO-SHARED-CAPITAL-SIM-COSTPLAN",
-        "state": "pending",
+        "state": "done",
         "owner": "executor",
         "file": "additive portfolio-simulation harness for whichever signal survives Phase 3 (may reuse machinery built for PORTFOLIO-LIVE-SIGNAL-SIM, a separate queued item testing a different signal - the live swing-fractal entry, not one of these four - share the shared-capital simulation code between both if practical, do not build it twice)",
         "depends_on": [
@@ -618,14 +618,6 @@
       "agent": "architect",
       "action": "unblock",
       "detail": "PULL DEADLOCK CLEARED BY HUMAN DIRECTION. The human, present in an interactive session, explicitly instructed committing the concurrent non-loop process's unstaged changes - which is the authorization the protocol was waiting on (the loop is forbidden from stashing/reverting/committing foreign work on its own, never from doing so when the human says to). Reviewed the full diff read-only BEFORE committing rather than committing blind, and split it into two scoped commits (never -A). (1) f00b5fa - the h3 higher-low-reclaim entry family: additive-only, new h3Entry() plus one else-if branch in FROZEN backtest.js with no existing family behavior altered, registered in tournament.mjs + strategy-search.mjs, tournament.test.mjs row count 10->11. Verified npm.cmd test 168/168 pass BEFORE committing. (2) 9142ad0 - agent-orchestrator.ps1, isolated in its own commit specifically so it is revertable with a single git revert. That file is a REGRESSION, committed to unblock but explicitly not endorsed: a wholesale replacement of the working automated coordinator with a manual Read-Host-driven script, losing the poll loop (no longer runs unattended), the .agent-orchestrator.lock single-instance guard, Get-AgentState (so control.status no longer drives role wake-up), and the shared safety preamble \"Keep LIVE_TRADING disabled; never call !resume or place orders...\". No live-trading gate in the trading code itself is weakened and the three scheduled tasks do not invoke this script, so the running loop is unaffected; flagged to the human with a revert recommendation. VERIFIED the actual objective: git pull --rebase now exits 0, tracked tree clean, 0 behind / 2 ahead of origin. T1-ZEROCOST is now startable by the next Executor run. control deliberately LEFT UNTOUCHED at EXECUTOR_PENDING (still another role's turn, and it now resumes on its own). Untracked .assistant_snapshots/ and scripts/*.mjs deliberately NOT committed - untracked files never blocked the rebase, so committing them was outside the ask; .assistant_snapshots/ looks like tooling scratch output that likely wants a .gitignore entry, flagged not fixed. NOT pushed - left for the human or the next Executor run."
-    },
-    {
-      "ts": "2026-08-06T20:52:00.000Z",
-      "agent": "executor",
-      "action": "handoff",
-      "detail": "T1-ZEROCOST executed. Added optional feeRate/slipPct pass-through to runTournament (byte-identical when omitted - confirmed via the existing tournament.test.mjs assertion, still 11 rows, still no promotion on empty watchlist) and a --zero-cost CLI flag on tournament.mjs, using backtest.js's already-overridable feeRate/slipPct options per the architect_note - no frozen-path edit, no allow_live_edit needed. Ran both net-of-cost and zero-cost tournaments across the full watchlist (28 assets; 27 for anticipate/bos). RESULT: breakout (one of the 8 pre-registered baseline families) reaches holdout avgR +0.045R/trade at zero cost vs -0.445R/trade net-of-cost, 3123 holdout trades, positive on 17/28 assets - triggers the pre-registered 'any family positive at zero cost' rule. Per that rule, stopped here rather than implementing Track 2 in this run; queued T1B-BREAKOUT-COSTFIX as the follow-up cost-reduction experiment on breakout only. The other 7 baseline families (anticipate, bos, trend_pullback, sweep_reclaim, rsi, rev, support) remain negative at zero cost - unchanged verdict, no edge. ma_dip (+0.101) and h3 (+0.030) holdout numbers reported in the roadmap doc for completeness but explicitly excluded from the decision rule (outside the 8-family baseline table; h3 additionally has no pre-registration anywhere and is not adopted or verdicted here, per the architect_note's explicit warning). TOURNAMENT_ROADMAP.md updated with a new appended 'Track 1 - RESULT' section (baseline table and everything else left intact, not overwritten). npm.cmd test: 168 passing, 0 failing throughout. Committed as f76c24e, pushed to origin/main.",
-      "commit": "f76c24e",
-      "tests": "168 pass, 0 fail"
     },
     {
       "ts": "2026-08-06T21:15:00.000Z",
@@ -1405,6 +1397,14 @@
       "action": "commit",
       "detail": "PHASE3-RERUN-REAL-SIGNALS-NEW-COSTS done. Re-ran B5-REVERSAL L=3 top-3/top-5 (PHASE2's only candidate) with a gate pre-registered before computing the holdout: futures-taker cost (0.10% round trip), real 16-symbol held-out universe (never computed before - original study's economics were train-only on STABLE_13). Result clears the pre-registered gate: top-3 train +0.0056/holdout +0.0048, top-5 train +0.0049/holdout +0.0058, both same-signed, 206 holdout obs (matches the original study's own IC-significance holdout count exactly). FIRST result in this project's history to clear a pre-registered PASS gate. Caveat found via a block-bootstrap CI (reused momentum.mjs's own existing blockBootstrapCI via a small additive perDateNet field, momentum.test.mjs 27/27 green): both widths' 95% CIs include zero - not statistically distinguishable from noise at this sample size. Recorded as VERDICTS.md's B5-REVERSAL-PHASE3-FUTURES-COST row, verdict WEAK PASS, explicitly not a D3/live candidate on its own. Full writeup in ROADMAP.md (not TOURNAMENT_ROADMAP.md - momentum.mjs-track signal). Commit e742eb3. npm.cmd test 299/299 green. PHASE4 next: run this candidate through a full portfolio-level Sharpe/Sortino/drawdown sim, CI caveat carried forward explicitly.",
       "commit": "e742eb3",
+      "tests": "299/299 pass"
+    },
+    {
+      "ts": "2026-08-13T20:15:00.000Z",
+      "agent": "cajh-loop-check",
+      "action": "commit",
+      "detail": "PHASE4-PORTFOLIO-SHARED-CAPITAL-SIM-COSTPLAN done - closes out the PWR5->PHASE2->PHASE3->PHASE4 chain. Ran B5-REVERSAL's PHASE3 WEAK PASS through a real shared-capital equity-curve simulation (reused portfolio.mjs's simulatePortfolio directly, one additive dailyReturns field for Sortino/profit-factor; portfolio.test.mjs 3/3 green). Decisive FAIL, reversing PHASE3's read: N=3 (the more selective primary) is actually negative (total return -23.5%, Sharpe -0.094); N=5's best case only reaches Sharpe 0.208, far under the 0.5 gate; fails the required +/-20% parameter-perturbation robustness check outright (N=3->N=4 flips the annual return's sign on a 1-position change, textbook overfitting); max drawdown -79% to -90% across every N, independently far outside this project's own -35% portfolio floor. Recorded as VERDICTS.md's B5-REVERSAL-PHASE4-PORTFOLIO-SIM row (supersedes the PHASE3 WEAK PASS) plus a bottom-line summary addendum. Full writeup in ROADMAP.md. Commit 6b66e87. npm.cmd test 299/299 green. Net result of the whole cost-reduction plan: none of the four originally cost-killed signals (Classifier P5, CLASSIFIER-FUNDING-FEATURE, B5-REVERSAL, T4-PORTFOLIO-MOMENTUM) survive rigorous testing at real, verified execution costs - an honest negative result on the plan's core thesis, not a partial one. All 4 work_queue items from this pass (PWR5/PHASE2/PHASE3/PHASE4) are now done.",
+      "commit": "6b66e87",
       "tests": "299/299 pass"
     }
   ],
