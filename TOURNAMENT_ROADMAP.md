@@ -784,3 +784,62 @@ not a temporary artifact — it will hold until trading volume genuinely increas
 `breakout` re-run and reported under corrected real cost; no existing verdict changes;
 defaults-update recommendation stated explicitly and left for the Architect to act on,
 not applied unilaterally.
+
+## H3-HIGHER-LOW-RECLAIM RESULT (2026-08-13)
+
+Ground-up audit finding (COMPLETE-H3-VERDICT): `h3` (`backtest.js`'s `h3Entry`) is a
+"selective higher-low reclaim" entry — requires at least two prior confirmed swing lows
+forming a genuine higher-low structure (`last.price > prev.price`) before taking a
+reclaim entry, a real trend-quality filter that `anticipate`/`bos` do not have (they take
+every confirmed swing-low signal regardless of higher-low structure). Per this document's
+own T6-TIMEFRAME-ISOLATION section above, `h3` was previously grouped into the closed
+swing-low/pivot-reclaim family **by the same-mechanism argument only** — "added
+separately by a concurrent process and... pre-registered nowhere" (Track 1 RESULT's own
+coverage note) — never independently run through a sealed holdout. This closes that gap
+with a real run rather than an inference. Not a re-opening of a KILLED verdict per
+VERDICTS.md's own re-opening rule: `h3` was never tested in the first place.
+
+`h3` was already present, unmodified, as a row in `tournament.mjs`'s `families` array
+(config: `entryMode: "h3", trendGate: false, alignMode: "none", minStopPct: 0,
+maxStopPct: .06, tpR: 5, lockBreakeven: true`) — it simply had never been read out and
+gated on its own. No code change was needed; this item is a verdict-writing exercise
+against an existing, already-correct harness.
+
+**Pre-registered gate (both required, holdout only, matching this project's standard for
+a narrow single-family follow-up — T5-DECAY-EXIT/TRAIL-STOP-EXIT's bar):**
+- Holdout `avgR/trade > -0.30`
+- Holdout trades >= 150
+
+Ran `node tournament.mjs` (default `runTournament()`, net-of-cost from the module
+defaults — `strategy.js`'s `FEE_RATE=0.008`/`SLIPPAGE_PCT=0.0005`, ~1.7% round trip, the
+corrected real Kraken Tier-1 basis per FEE-SCHEDULE-REBASE above, not the older ~0.9%
+figure), 70/30 chronological split, full watchlist (28 assets passing the `>=250`
+candle-per-TF filter).
+
+**Result:**
+
+| | Trades | avgR/trade (net) | Win rate | Assets traded | Positive assets |
+|---|---|---|---|---|---|
+| Train | 10911 | -1.526 | 29.7% | 28 | 0 (0%) |
+| Holdout | 4590 | -1.652 | 28.5% | 28 | 0 (0%) |
+
+Holdout trade count (4590) is well above the 150 floor, so this is a decisive result, not
+an insufficient-sample non-verdict. Train and holdout agree in sign and rough magnitude
+(-1.526 vs -1.652) — no train/holdout divergence to explain away. The higher-low
+structural filter did not rescue the underlying swing-low/pivot-reclaim mechanism; if
+anything the avgR here is markedly worse than `anticipate`/`bos`'s own net-of-cost holdout
+numbers (-0.506 / -0.535 at the time of the Track 1 table), consistent with `h3`'s tighter
+stop placement (`stop = min(low, pivot) - 0.001*entry`, essentially zero cushion) making
+each loss proportionally larger in R terms once cost is applied.
+
+**Gate check (pre-registered, not adjusted after seeing this):**
+- Holdout `avgR/trade > -0.30` → -1.652 → **FAIL**
+- Holdout `trades >= 150` → 4590 → PASS
+- Combined: **FAIL**
+
+**Verdict: H3-HIGHER-LOW-RECLAIM is closed as a FAIL**, now by a real sealed-holdout run
+rather than by analogy. This replaces the argument-based closure T6-TIMEFRAME-ISOLATION's
+own addendum note relied on for `h3` specifically. `range_sweep_reclaim` (the other family
+closed by the same same-mechanism argument in that note) remains open pending its own
+independent run — tracked separately as COMPLETE-RANGE-SWEEP-RECLAIM-VERDICT, not folded
+into this item. No gate constant was touched after seeing these numbers.
