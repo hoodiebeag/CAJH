@@ -1255,3 +1255,75 @@ edge is structural, not a cost artifact — going all the way to the cheapest ac
 execution (futures maker, ~6x cheaper than spot taker) barely moves either number. Where
 the thesis DOES hold (B5-REVERSAL, and directionally T4) is exactly where PHASE1's real
 cost model earns its keep.
+
+## 2026-08-13 — PHASE3-RERUN-REAL-SIGNALS-NEW-COSTS: B5-REVERSAL's real symbol-holdout economics, first-ever positive result, with a caveat
+
+`scripts/phase3-b5-reversal-rerun.mjs` (left in the repo, read-only, deletable after this
+finding is read). B5-REVERSAL was PHASE2's only surviving candidate (L=3, top-3/top-5). Not
+in `TOURNAMENT_ROADMAP.md` — this is a `momentum.mjs`-track signal, not part of that file's
+separately-scoped `tournament.mjs`/`backtest.js` entry-family program, matching where
+B5-REVERSAL's own original writeup already lives.
+
+**Pre-registered before any holdout number was computed (written into the script's own
+header comment first, reproduced here verbatim in spirit):** L=3 only (L=5 already failed
+train significance independent of cost — not re-tested, cost can't rescue that). Cost
+scenario: **futures taker (0.10% round trip)**, chosen over futures maker because this is
+a systematic per-rebalance strategy that must execute promptly at each 3-day boundary —
+a resting maker order risking a missed fill is not realistic for a signal whose edge
+depends on entering at the scheduled rebalance. Still a real ~17x reduction from the
+1.70% spot-taker basis every prior verdict in this project used. Universe: the actual
+held-out 16-symbol universe (`watchlist − STABLE_13`) for holdout, STABLE_13 for train, on
+the same recency split the original study used — apples-to-apples with the already-
+published train numbers. Gate: holdout positive, same sign as train, ≥150 observations.
+
+**A genuine methodology gap closed, not just a cost change.** The original B5-REVERSAL
+study (`momentum.mjs`'s `sealed-reversal` CLI path) only ever computed net-of-cost
+economics on `splitRecentRows(panel.rows, 4).train` over the **controlled** (STABLE_13)
+universe — it never computed economics on the actual held-out 16-symbol universe that its
+own IC-significance test already uses. This PHASE3 run is the first time B5-REVERSAL's
+economics have been checked on real out-of-sample symbols at all, independent of the cost
+question. (Small additive change made to enable this: `economicMomentumViews` in
+`momentum.mjs` now also returns `perDateNet` per topN width, mirroring the `perDate` field
+`scoreMomentumPanelRows` already returns — purely additive, `momentum.test.mjs` 27/27
+green before and after, no existing caller's output shape changed.)
+
+**Result — clears the pre-registered gate, but with an important caveat found along the
+way:**
+
+| | Train (STABLE_13, 361 obs) | Holdout (16-symbol, 206 obs) | Same sign? |
+|---|---|---|---|
+| tercile | net +0.0030 | net +0.0007 | yes |
+| top-3 | net **+0.0056** | net **+0.0048** | yes |
+| top-5 | net **+0.0049** | net **+0.0058** | yes |
+
+206 holdout observations is the exact same figure B5-REVERSAL's original IC-significance
+test already used ("206 dates/2553 rows" in VERDICTS.md) — a real consistency check that
+this run's universe construction matches the project's established convention, not a
+coincidence. Both top-3 and top-5 are holdout-positive, same-signed as train, well above
+the 150-observation floor: **this literally clears PHASE3's pre-registered gate.**
+
+**Not part of the pre-registered gate, but checked anyway before trusting the result:** a
+95% block-bootstrap CI (blockSize=4, this project's own established convention from
+`blockBootstrapCI`) on the holdout per-date net-return series. For top-3: **[−0.0064,
+0.0142]**. For top-5: **[−0.0055, 0.0156]**. **Both include zero.** The point estimate is
+positive and the sign is consistent across train and holdout, but at 206 observations the
+result is not statistically distinguishable from noise. This is reported because omitting
+it would overstate what was actually found — a positive mean with a CI that straddles zero
+is a real, honest, different thing from a confirmed edge.
+
+**VERDICT: WEAK PASS — clears the pre-registered PHASE3 gate as literally written; is
+the first result in this project's history to do so; is explicitly NOT a confident PASS
+and NOT a candidate for any live/D3 discussion on its own.** Recorded as its own
+VERDICTS.md row (`B5-REVERSAL-PHASE3-FUTURES-COST`) rather than overwriting the original
+B5-REVERSAL row, which remains accurate for what it actually tested (1.7% cost, train-only
+economics) — this is genuinely new evidence (new cost basis backed by PWR5's verified real
+fee data, first-ever real symbol-holdout economics), not a re-litigation of the same test,
+so it does not trip VERDICTS.md's re-opening rule. Funding-rate re-sourcing (the task's
+other instruction, for any futures-repriced candidate) does not apply here — B5-REVERSAL
+has no funding-rate feature; it is a pure price-reversal signal.
+
+**Passed to PHASE4 with the CI caveat carried forward explicitly, not silently dropped or
+silently promoted.** PHASE4's own portfolio-level Sharpe/Sortino/drawdown gates are a more
+informative test than a bare mean-return CI at this sample size, so the honest next step is
+to let PHASE4 run rather than deciding this is dead on a caveat that wasn't part of either
+item's own pre-registered decision rule.

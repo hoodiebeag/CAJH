@@ -546,7 +546,8 @@ export function economicMomentumViews(rows, { minAssets = 8, roundTripCost = 0.0
     topN: Object.fromEntries([...topViews].map(([n, view]) => [n, {
       avgTurnover: dates.length ? view.turnover / dates.length : 0,
       grossReturn: mean(view.gross),
-      netReturn: mean(view.net)
+      netReturn: mean(view.net),
+      perDateNet: view.net
     }]))
   };
 }
