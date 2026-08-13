@@ -1177,3 +1177,81 @@ any kind stays off — everything above is backtest/research infrastructure, `tr
 remains spot-only and untouched; no maker or futures result should be treated as validated
 until it goes through this fill/adverse-selection model rather than an assumed 100%-fill
 backtest.
+
+## 2026-08-13 — PHASE2-MAX-SURVIVABLE-COST: triage of the four cost-killed signals against PHASE1's real cost scenarios
+
+Screening only — this decides what's worth a full PHASE3 sealed re-backtest, not a
+profitability prediction by itself (per this item's own instruction). `scripts/phase2-triage.mjs`
+(left in the repo, read-only, deletable after this finding is read) re-derives each
+signal's post-cost result using each study's OWN real cost mechanism, verified rather than
+assumed wherever a second real data point existed to check it against:
+
+- **Classifier P5 / CLASSIFIER-FUNDING-FEATURE** (`classifier.mjs`'s `economicLiftNetOfCost`):
+  the function is `mean(row.netR) − roundTripCost`, provably affine in cost by construction
+  (a flat per-row subtraction). That means the population's mean netR is recoverable exactly
+  from one reported (cost, net) pair, and the model at any new cost is exact, not an
+  extrapolation guess. Verified against CLASSIFIER-FUNDING-FEATURE's own two independently-
+  reported points (0.009 and 0.017): predicted vs. actual drift was **2.8×10⁻¹⁷** (floating-
+  point noise) — the affine model isn't an assumption here, it's confirmed. **Classifier P5
+  has only one real reported cost point** (0.009 — it was never independently re-run at
+  0.017), so its table below carries that explicit caveat rather than a false cross-check.
+- **B5-REVERSAL** (`momentum.mjs`'s sealed-reversal cost model): the two reported points per
+  selection width are NOT consistent with a 1:1 flat subtraction (confirmed by checking), so
+  the true per-bucket slope was derived from those two real points instead of assumed — and
+  cross-validated: the derived slopes (148.7%, 77.5%, 58.7% for tercile/top-3/top-5) land
+  almost exactly on the independently-reported 59–78% turnover range, confirming the cost
+  model really is turnover-scaled and these derived slopes are real, not curve-fit noise.
+- **T4-PORTFOLIO-MOMENTUM** (`portfolio.mjs`'s `simulatePortfolio`): re-run directly — real
+  code, real candle panel, real `costRate` parameter already built for exactly this. Sanity-
+  checked first: re-running at the same `costRate=0.009` T4-COVERAGE-FIX used reproduced its
+  reported holdout figures exactly (Sharpe 0.360, +22.9%, −34.0%) before trusting any other
+  cost value from this script.
+
+**Results (best-scoring subset per signal; full 7-scenario table in the script's own output):**
+
+| Signal | Best case (venue) | Best-case result | Crosses positive / clears its own gate anywhere? |
+|---|---|---|---|
+| Classifier P5 | futures maker, fee-only | selected **−0.4530R** | No — never positive at any tested scenario |
+| CLASSIFIER-FUNDING-FEATURE | futures maker, fee-only | selected **−0.2326R** | No — never positive at any tested scenario |
+| B5-REVERSAL (top-3, train leg) | spot maker, fee-only and cheaper | **+0.0001R → +0.0060R** | **Yes** — positive from spot maker onward, clearly positive at every futures scenario |
+| B5-REVERSAL (top-5, train leg) | spot maker, fee-only and cheaper | **+0.0007R → +0.0052R** | **Yes** — same pattern, slightly smaller |
+| T4-PORTFOLIO-MOMENTUM (momentum_30d/30d) | futures maker, fee-only | Sharpe **0.493** (need >0.5) | No — closest of the four, but never clears its own 3-clause gate (Sharpe>0.5 AND return>0 AND maxDD>−35%) at any tested scenario |
+
+**One candidate proceeds to PHASE3: B5-REVERSAL's top-3/top-5 selection widths.** Important
+caveat carried over unchanged from the original KILLED verdict: the reported numbers above
+are the **train leg**, per VERDICTS.md's own §6 clause 3 methodology — a positive train-leg
+screening result is exactly what PHASE2 is supposed to surface, not proof of anything;
+PHASE3's job is the real sealed holdout re-run at these corrected costs, which has not
+happened yet. Tercile (the least selective bucket) does not cross positive until the
+futures scenarios and is a weaker candidate than top-3/top-5.
+
+**T4-PORTFOLIO-MOMENTUM does not formally proceed** under a strict reading of this item's
+own gate, but the finding is close enough, and separately significant enough, to flag
+explicitly rather than fold into a flat "KILLED, cost doesn't help" line: cost reduction
+closes most, not none, of its gap (Sharpe 0.244→0.493, drawdown −35.2%→−33.1%, comparing
+real spot-taker cost to futures-maker cost) — a genuinely different pattern from the two
+classifier signals, which barely move at all across the same cost range (P5: −0.4696R→
+−0.4530R, a 0.017R swing vs. T4's 0.25-Sharpe swing). Whether that's worth a dedicated
+PHASE3 portfolio re-run despite not clearing 0.5 Sharpe at any scenario tested is a
+judgment call for whoever restocks the queue next, not something this item's done_when
+authorizes deciding unilaterally.
+
+**Unplanned but load-bearing finding: T4-COVERAGE-FIX's recorded verdict (2026-08-09) used
+the stale 0.9% cost assumption, not this project's real 1.7% rate.** `simulatePortfolio`'s
+`costRate` parameter defaults to `.009` and was never updated when FEE-SCHEDULE-REBASE
+corrected the real rate elsewhere (2026-08-08, one day earlier) — `portfolio.mjs` was
+apparently missed by that pass. Re-run at the real 1.7% cost, `momentum_30d`/30d-rebalance's
+holdout numbers are measurably worse than what's on record: Sharpe 0.360→**0.244**, max
+drawdown −34.0%→**−35.2%** — which means the recorded verdict's one claimed passing clause
+(drawdown clears −35%) is **no longer actually true at this project's real cost basis**. The
+bottom-line verdict (FAIL, since Sharpe already failed either way) doesn't change, but the
+recorded supporting numbers in TOURNAMENT_ROADMAP.md's T4-COVERAGE-FIX section are now
+stale and should be corrected in a small follow-up item — not done here, since this item's
+scope is triage arithmetic, not amending a prior verdict's own write-up.
+
+Both R-multiple signals (P5, CLASSIFIER-FUNDING-FEATURE) confirm the strongest possible
+reading of this project's cost-reduction thesis where it fails to apply: their negative
+edge is structural, not a cost artifact — going all the way to the cheapest achievable
+execution (futures maker, ~6x cheaper than spot taker) barely moves either number. Where
+the thesis DOES hold (B5-REVERSAL, and directionally T4) is exactly where PHASE1's real
+cost model earns its keep.
