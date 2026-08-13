@@ -140,7 +140,7 @@ export function simulatePortfolio(data, strategy, { start = 200, end = data.date
     equity *= 1 + nextReturn; dailyReturns.push(nextReturn); peak = Math.max(peak, equity); maxDrawdown = Math.min(maxDrawdown, equity / peak - 1);
   }
   const totalReturn = equity - 1, volatility = stdev(dailyReturns) * Math.sqrt(365), annualReturn = dailyReturns.length ? equity ** (365 / dailyReturns.length) - 1 : 0;
-  return { days: dailyReturns.length, totalReturn, annualReturn, volatility, sharpe: volatility ? annualReturn / volatility : 0, maxDrawdown, turnover, averageDailyReturn: mean(dailyReturns) };
+  return { days: dailyReturns.length, totalReturn, annualReturn, volatility, sharpe: volatility ? annualReturn / volatility : 0, maxDrawdown, turnover, averageDailyReturn: mean(dailyReturns), dailyReturns };
 }
 
 export function runPortfolioStudy({ watchlist = loadWatchlist(), splitFraction = .70 } = {}) {

@@ -1327,3 +1327,82 @@ silently promoted.** PHASE4's own portfolio-level Sharpe/Sortino/drawdown gates 
 informative test than a bare mean-return CI at this sample size, so the honest next step is
 to let PHASE4 run rather than deciding this is dead on a caveat that wasn't part of either
 item's own pre-registered decision rule.
+
+## 2026-08-13 — PHASE4-PORTFOLIO-SHARED-CAPITAL-SIM-COSTPLAN: the WEAK PASS does not survive a real equity curve — FAIL
+
+`scripts/phase4-b5-portfolio-sim.mjs` (left in the repo, read-only, deletable after this
+finding is read). Reused `portfolio.mjs`'s `simulatePortfolio` directly rather than
+building a second engine, per this item's own instruction — added one small additive field
+(`dailyReturns` to `simulatePortfolio`'s return object, needed for Sortino/profit-factor;
+`portfolio.test.mjs` 3/3 green before and after, no existing caller's shape broken).
+
+**Scoping decision, stated rather than silently narrowed:** this item's task text lists a
+long menu (position-sizing variants, max-concurrent sweeps, correlation-aware multi-signal
+allocation, turnover suppression, no-trade bands, funding). Several don't apply to this
+specific candidate: correlation-aware allocation needs *multiple* competing signals (there
+is only one, B5-REVERSAL); funding doesn't apply (priced at futures-taker, not a
+funding-bearing feature — B5-REVERSAL is pure price reversal); position caps are already
+fixed by the selection width itself (top-3 ≈33%/position, top-5 ≈20%/position under equal
+weight). What's implemented fully: a real equity-curve simulation (not the per-rebalance
+average PHASE2/3 used) on the same 16-symbol held-out universe PHASE3 actually validated
+(not the full 29-symbol watchlist — 13 of those are the TRAIN symbols; using them here
+would silently launder in-sample-fitted symbols into a "portfolio" result), equal-weight
+sizing (the signal's own native definition, not a new assumption), and the required ±20%
+parameter-count robustness check. Volatility-targeted/risk-parity sizing wasn't built —
+low expected value spent refining sizing sophistication for a signal whose PHASE3
+evidence was already CI-inclusive-of-zero.
+
+**Result — decisive, and it reverses PHASE3's read:**
+
+| N | Total return | Annual return | Sharpe | Sortino | Calmar | Max DD | Profit factor |
+|---|---|---|---|---|---|---|---|
+| 2 (perturbation) | −57.0% | −23.0% | −0.255 | −0.267 | −0.256 | **−89.7%** | 1.039 |
+| **3 (primary)** | **−23.5%** | **−8.0%** | **−0.094** | −0.098 | −0.097 | **−82.7%** | 1.063 |
+| 4 (perturbation) | +16.7% | +4.9% | 0.058 | 0.061 | 0.062 | −78.7% | 1.083 |
+| **5 (primary)** | **+69.0%** | **+17.7%** | **0.208** | 0.225 | 0.217 | **−81.5%** | 1.103 |
+| 6 (perturbation) | +48.1% | +13.0% | 0.155 | 0.165 | 0.158 | −81.8% | 1.091 |
+
+392 rebalances, 2023-01-10 to 2026-03-31 (bounded by this held-out universe's real data —
+none of these 16 symbols are among the BTC/ETH/SOL trio still actively collected; see
+PWR5's data-freshness finding). Not a contradiction that profit factor stays >1 while total
+return goes negative at N=2/3: profit factor sums raw daily-return magnitudes without
+compounding, while total return compounds daily — a strategy with slightly more cumulative
+gain-days than loss-days by raw sum can still show a negative *compounded* return when
+losses cluster with higher variance (volatility drag), a real and correctly-modeled effect,
+not a bug in either number.
+
+**Two independent, decisive failures against PHASE6's gates:**
+1. **Sharpe never approaches 0.5.** Best case (N=5, the more selective primary is N=3, which
+   is actually NEGATIVE) reaches only 0.208 — well under half the required bar.
+2. **Fails the ±20% robustness check outright, the strongest possible form of failure.**
+   N=3→N=4 flips the ANNUAL RETURN'S SIGN (−8.0% → +4.9%) from a ±1-position change on a
+   discrete N — exactly the textbook overfitting signature this item's own done_when names
+   verbatim ("a strategy that flips from profitable to unprofitable under a 20% parameter
+   change is overfit and must not be treated as validated"). This isn't a borderline
+   robustness concern; it's the clearest possible instance of the failure mode the gate
+   exists to catch.
+
+Max drawdown (−79% to −90% across every N tested) independently fails any reasonable
+pre-registered floor (this project's other portfolio work, T4, uses −35%) by a wide margin
+regardless of the Sharpe/robustness findings above.
+
+**VERDICT: FAIL.** PHASE3's "WEAK PASS" — a positive mean per-rebalance net return, same
+sign train-to-holdout — does not survive contact with a real, compounding, drawdown-aware
+portfolio simulation. This is exactly why PHASE4 exists as a separate, later gate rather
+than treating PHASE3's screening result as sufficient on its own: a small positive mean
+return with a CI touching zero can still concentrate into a devastating realized equity
+path once actually deployed as a 3-5-position portfolio in a volatile 16-symbol
+altcoin universe, and that is precisely what happened here. Recorded as VERDICTS.md's
+`B5-REVERSAL-PHASE4-PORTFOLIO-SIM` row.
+
+**This closes out the human-supplied cost-reduction plan's entire signal thread
+(PWR5→PHASE2→PHASE3→PHASE4) with an honest negative result, not a partial one.** Of the
+four cost-killed signals PHASE2 screened, three (Classifier P5, CLASSIFIER-FUNDING-FEATURE,
+and — on this fully rigorous test — B5-REVERSAL) remain dead regardless of execution venue;
+T4-PORTFOLIO-MOMENTUM was flagged as "closer but not clearing" and left for a human
+judgment call, not run through PHASE4 (PHASE2's own scope did not authorize deciding that
+unilaterally). The core cost-reduction thesis — that these four signals were killed by
+execution cost rather than by a real absence of edge — does not hold for any of the three
+signals actually carried through to a final gate. This is the strongest possible answer
+this project could give to that thesis: not "inconclusive," but "tested rigorously,
+including the one candidate that initially looked promising, and it does not survive."
