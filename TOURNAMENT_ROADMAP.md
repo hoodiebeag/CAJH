@@ -843,3 +843,66 @@ own addendum note relied on for `h3` specifically. `range_sweep_reclaim` (the ot
 closed by the same same-mechanism argument in that note) remains open pending its own
 independent run — tracked separately as COMPLETE-RANGE-SWEEP-RECLAIM-VERDICT, not folded
 into this item. No gate constant was touched after seeing these numbers.
+
+## RANGE-SWEEP-RECLAIM RESULT (2026-08-13)
+
+Ground-up audit finding (COMPLETE-RANGE-SWEEP-RECLAIM-VERDICT), same class of gap as
+H3-HIGHER-LOW-RECLAIM above: `range_sweep_reclaim` (`backtest.js`'s
+`rangeSweepReclaimEntry`) is materially more selective than the plain `sweep_reclaim` that
+was actually tested (single touch of a 12-bar low, no MA-flatness or volume filter,
+-0.590 train / -0.711 holdout FAIL) — it requires 2+ touches of the SAME support level
+within the prior 24 bars (within 0.5% of the level), a flat 20/50 MA relationship
+(range-bound market, not trending), AND volume expansion (>=1.2x the 20-bar average) on
+the reclaim bar. `backtest.js`'s own code comment calls it "deliberately a separate
+hypothesis from the broad sweep rule above." Per T6-TIMEFRAME-ISOLATION's addendum note,
+it was previously closed by the same same-mechanism argument as `h3` — never
+independently run through a sealed holdout. Not a re-opening of a KILLED verdict per
+VERDICTS.md's own re-opening rule: `range_sweep_reclaim` was never tested in the first
+place.
+
+`range_sweep_reclaim` was already present, unmodified, as a row in `tournament.mjs`'s
+`families` array (config: `entryMode: "range_sweep_reclaim", trendGate: false, alignMode:
+"none", minStopPct: .01, maxStopPct: .06, tpR: 2, lockBreakeven: true`) — it simply had
+never been read out and gated on its own. No code change was needed; this item is a
+verdict-writing exercise against an existing, already-correct harness, identical in kind
+to H3-HIGHER-LOW-RECLAIM above.
+
+**Pre-registered gate (both required, holdout only, matching this project's standard for
+a narrow single-family follow-up — T5-DECAY-EXIT/TRAIL-STOP-EXIT/H3-HIGHER-LOW-RECLAIM's
+bar):**
+- Holdout `avgR/trade > -0.30`
+- Holdout trades >= 150
+
+Ran `node tournament.mjs` (default `runTournament()`, net-of-cost from the module
+defaults — `strategy.js`'s `FEE_RATE=0.008`/`SLIPPAGE_PCT=0.0005`, ~1.7% round trip, the
+corrected real Kraken Tier-1 basis per FEE-SCHEDULE-REBASE above), 70/30 chronological
+split, full watchlist (28 assets passing the `>=250` candle-per-TF filter).
+
+**Result:**
+
+| | Trades | avgR/trade (net) | Win rate | Assets traded | Positive assets |
+|---|---|---|---|---|---|
+| Train | 1055 | -1.090 | 31.7% | 28 | 0 (0%) |
+| Holdout | 511 | -1.120 | 31.5% | 28 | 1 (3.6%) |
+
+Holdout trade count (511) clears the 150 floor despite this family's own selectivity
+(range-bound + multi-touch + volume filter) — this is a decisive result, not an
+insufficient-sample non-verdict as the queued item flagged as a live possibility. Train
+and holdout agree in sign and closely in magnitude (-1.090 vs -1.120) — no train/holdout
+divergence to explain away. The support-retest and volume-expansion filters did not
+rescue the underlying sweep-reclaim mechanism any more than `h3`'s higher-low filter did:
+`range_sweep_reclaim`'s holdout avgR (-1.120) sits between plain `sweep_reclaim`'s
+-0.711 and `h3`'s -1.652, all three markedly worse than `anticipate`/`bos`'s net-of-cost
+holdout numbers (-0.506 / -0.535). Extra entry selectivity concentrated around swing-low
+liquidity sweeps does not change the sign or magnitude of the underlying cost problem.
+
+**Gate check (pre-registered, not adjusted after seeing this):**
+- Holdout `avgR/trade > -0.30` → -1.120 → **FAIL**
+- Holdout `trades >= 150` → 511 → PASS
+- Combined: **FAIL**
+
+**Verdict: RANGE-SWEEP-RECLAIM is closed as a FAIL**, now by a real sealed-holdout run
+rather than by analogy. This replaces the argument-based closure T6-TIMEFRAME-ISOLATION's
+own addendum note relied on for `range_sweep_reclaim` specifically, and together with
+H3-HIGHER-LOW-RECLAIM above closes out both families that note had grouped in by
+same-mechanism argument only. No gate constant was touched after seeing these numbers.
