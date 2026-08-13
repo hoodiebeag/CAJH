@@ -13,6 +13,7 @@ import {
 } from "./monitor.js";
 
 const monitorUrl = pathToFileURL(path.join(process.cwd(), "monitor.js")).href;
+const traderUrl  = pathToFileURL(path.join(process.cwd(), "trader.js")).href;
 
 function runMonitor(dir, body, env = {}) {
   const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
@@ -23,6 +24,33 @@ function runMonitor(dir, body, env = {}) {
   const line = result.stdout.split("\n").find(value => value.startsWith("__RESULT__"));
   assert.ok(line, result.stdout);
   return JSON.parse(line.slice("__RESULT__".length));
+}
+
+// Same as runMonitor, but also imports trader.js's existing setKrakenApiForTests seam so
+// the body can drive monitor.js's live exit path all the way through the exchange sell
+// call — the actual confirmed-fill call path, not the backtest model — without hitting
+// the network.
+function runMonitorWithKraken(dir, body, env = {}) {
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
+    import * as monitor from ${JSON.stringify(monitorUrl)};
+    import { setKrakenApiForTests, setOrderConfirmDelayForTests } from ${JSON.stringify(traderUrl)};
+    ${body}
+  `], { env: { ...process.env, DATA_DIR: dir, ...env }, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const line = result.stdout.split("\n").find(value => value.startsWith("__RESULT__"));
+  assert.ok(line, result.stdout);
+  return JSON.parse(line.slice("__RESULT__".length));
+}
+
+const KRAKEN_ASSET_PAIRS = { result: { XXBTZUSD: { altname: "XBTUSD", lot_decimals: 4, ordermin: "0.0001" } } };
+
+function btcTrade(overrides = {}) {
+  return {
+    symbol: "BTC", entry: 100, stopLoss: 90, takeProfit: 1000,
+    risk: 10, volume: 1, capital: 100, openedAt: Date.now(),
+    signal: "test", tf: "1h",
+    ...overrides
+  };
 }
 
 test.afterEach(() => resetMonitorHealthForTests());
@@ -186,4 +214,119 @@ test("invalid hydrated trade is rejected before entering monitor state", () => {
   assert.equal(result.hydrated, false);
   assert.equal(result.health.ok, false);
   assert.match(result.health.lastError, /invalid hydrated position/);
+});
+
+// ─── Live exit tick: stop / take-profit ─────────────────────────────────────────
+// checkExitsForTrades is monitor.js's shared price-feed seam (see its doc comment).
+// These drive it directly with a scripted price feed and a mocked Kraken transport
+// (trader.js's existing setKrakenApiForTests), so the assertions cover the actual
+// live call path up to confirmed-sell — not the backtest model.
+
+test("a stop-loss breach at the polled price produces a confirmed sell and closes the position", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-exit-sl-"));
+  const result = runMonitorWithKraken(dir, `
+    setOrderConfirmDelayForTests(0);
+    let addOrderParams = null;
+    setKrakenApiForTests(async (method, params) => {
+      if (method === "AssetPairs") return ${JSON.stringify(KRAKEN_ASSET_PAIRS)};
+      if (method === "AddOrder") { addOrderParams = params; return { result: { txid: ["T1"] } }; }
+      if (method === "QueryOrders") return { result: { T1: { status: "closed", vol_exec: "1", price: "89.5", fee: "0.05" } } };
+      throw new Error("unexpected " + method);
+    });
+
+    monitor.registerTrade(${JSON.stringify(btcTrade())});
+    await monitor.checkExitsForTrades(null, async (symbol) => (symbol === "BTC" ? 89.5 : null));
+
+    console.log("__RESULT__" + JSON.stringify({
+      open: monitor.getOpenTrades(),
+      addOrderParams
+    }));
+  `);
+  assert.deepEqual(result.open, []);
+  assert.equal(result.addOrderParams.type, "sell");
+  assert.equal(result.addOrderParams.pair, "XBTUSD");
+});
+
+test("a take-profit breach at the polled price produces a confirmed sell and closes the position", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-exit-tp-"));
+  const result = runMonitorWithKraken(dir, `
+    setOrderConfirmDelayForTests(0);
+    let addOrderParams = null;
+    setKrakenApiForTests(async (method, params) => {
+      if (method === "AssetPairs") return ${JSON.stringify(KRAKEN_ASSET_PAIRS)};
+      if (method === "AddOrder") { addOrderParams = params; return { result: { txid: ["T2"] } }; }
+      if (method === "QueryOrders") return { result: { T2: { status: "closed", vol_exec: "1", price: "1000", fee: "0.08" } } };
+      throw new Error("unexpected " + method);
+    });
+
+    monitor.registerTrade(${JSON.stringify(btcTrade())});
+    await monitor.checkExitsForTrades(null, async (symbol) => (symbol === "BTC" ? 1000 : null));
+
+    console.log("__RESULT__" + JSON.stringify({
+      open: monitor.getOpenTrades(),
+      addOrderParams
+    }));
+  `);
+  assert.deepEqual(result.open, []);
+  assert.equal(result.addOrderParams.type, "sell");
+  assert.equal(result.addOrderParams.pair, "XBTUSD");
+});
+
+test("a polled price strictly between stop and target triggers no sell and leaves the position open", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-exit-hold-"));
+  const result = runMonitorWithKraken(dir, `
+    setOrderConfirmDelayForTests(0);
+    let addOrderCalled = false;
+    setKrakenApiForTests(async (method) => {
+      if (method === "AddOrder") { addOrderCalled = true; return { result: { txid: ["T3"] } }; }
+      throw new Error("unexpected " + method);
+    });
+
+    monitor.registerTrade(${JSON.stringify(btcTrade({ stopLoss: 90, takeProfit: 1000 }))});
+    await monitor.checkExitsForTrades(null, async (symbol) => (symbol === "BTC" ? 105 : null));
+
+    console.log("__RESULT__" + JSON.stringify({
+      open: monitor.getOpenTrades(),
+      addOrderCalled
+    }));
+  `);
+  assert.equal(result.open.length, 1);
+  assert.equal(result.addOrderCalled, false);
+});
+
+// ─── Live exit tick: breakeven / trailing stop ──────────────────────────────────
+// BE_TRIGGER_R=2.0, BE_LOCK_R=0.2, FEE_BUFFER_PCT=0.018 (strategy.js). For entry=100,
+// stopLoss=90 (risk=10): lockOffset = max(0.2*10, 0.018*100) = 2; armOffset =
+// max(2.0*10, 2+5) = 20 → the stop must not move below price 119.99 and must move at
+// exactly 120.
+
+test("breakeven stop does not move one poll before the exact configured R threshold", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-be-early-"));
+  const result = runMonitorWithKraken(dir, `
+    setOrderConfirmDelayForTests(0);
+    setKrakenApiForTests(async (method) => { throw new Error("unexpected " + method); });
+
+    monitor.registerTrade(${JSON.stringify(btcTrade())});
+    await monitor.checkExitsForTrades(null, async (symbol) => (symbol === "BTC" ? 119.99 : null));
+
+    console.log("__RESULT__" + JSON.stringify(monitor.getOpenTrades()[0]));
+  `);
+  assert.equal(result.stopLoss, 90);
+  assert.equal(result.beMoved, undefined);
+});
+
+test("breakeven stop moves to the exact locked level at the configured R threshold, not one poll late", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-be-exact-"));
+  const result = runMonitorWithKraken(dir, `
+    setOrderConfirmDelayForTests(0);
+    setKrakenApiForTests(async (method) => { throw new Error("unexpected " + method); });
+
+    monitor.registerTrade(${JSON.stringify(btcTrade())});
+    await monitor.checkExitsForTrades(null, async (symbol) => (symbol === "BTC" ? 119.99 : null));
+    await monitor.checkExitsForTrades(null, async (symbol) => (symbol === "BTC" ? 120 : null));
+
+    console.log("__RESULT__" + JSON.stringify(monitor.getOpenTrades()[0]));
+  `);
+  assert.equal(result.stopLoss, 102);
+  assert.equal(result.beMoved, true);
 });

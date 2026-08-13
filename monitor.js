@@ -534,6 +534,82 @@ export async function closeTradeAtMarket(channel, symbol, price, reason = "manua
   return closePosition(channel, symbol, trade, price, reason);
 }
 
+/**
+ * Runs the live per-position exit checks (stop, take-profit, swing-high, breakeven-lock)
+ * for every currently tracked trade. `priceFeed` is a getCurrentPrice-style seam —
+ * `(symbol) => price|null` or a Promise of one — defaulting to the real trader.js
+ * getCurrentPrice so a bare call is a true no-op vs. the pre-seam behavior. The live
+ * tick above passes a closure over its already-fetched priceMap instead, so this stays
+ * a single fetch per symbol per tick, unchanged from before the extraction. Tests can
+ * inject a scripted feed and call this directly, once per simulated poll, to drive
+ * stop/target triggers and the breakeven mutation deterministically.
+ */
+export async function checkExitsForTrades(channel, priceFeed = getCurrentPrice) {
+  for (const [symbol, trade] of [...openTrades.entries()]) {
+    const price = await priceFeed(symbol);
+    if (!price) continue;
+
+    // Stop → close the position (only if the exchange sell actually goes through).
+    if (price <= trade.stopLoss) {
+      await closePosition(channel, symbol, trade, price, "sl");
+      continue;
+    }
+
+    // Take-profit → close the full position (only if the exchange sell goes through).
+    if (price >= trade.takeProfit) {
+      await closePosition(channel, symbol, trade, price, "tp");
+      continue;
+    }
+
+    // Structure-based take-profit: if a fresh swing high confirms on the entry
+    // timeframe while we're in profit, lock it in. Throttled to limit API calls.
+    if (EXIT_ON_SWING_HIGH && price > trade.entry) {
+      const now = Date.now();
+      if (now - (trade._swingCheckedAt || 0) > 90_000) {
+        trade._swingCheckedAt = now;
+        try {
+          const candles = await fetchOHLC(symbolToPair(symbol), trade.tfMinutes || 60);
+          const closed  = candles?.slice(0, -1) || [];
+          const pivots  = detectSwings(closed, SWING_WINDOW);
+          const last    = pivots[pivots.length - 1];
+          if (last?.type === "high" && parseInt(closed[last.index].time) * 1000 > trade.openedAt) {
+            await closePosition(channel, symbol, trade, price, "swing-high");
+            continue;
+          }
+        } catch (err) {
+          logger.error(`[MONITOR] swing-high check failed for ${symbol}:`, err.message);
+        }
+      }
+    }
+
+    // Breakeven-plus: once price has run far enough, lift the stop above entry to a
+    // level that clears round-trip fees, so the trade can no longer close net-red.
+    // Checked after stop/TP so those take priority.
+    if (LOCK_BREAKEVEN && !trade.beMoved) {
+      const risk = trade.risk ?? (trade.entry - trade.stopLoss);
+      if (risk > 0) {
+        // Lock at the larger of 0.2R or the fee buffer; arm high enough that the lock
+        // is always comfortably below price (matters when the stop is very tight).
+        const lockOffset = Math.max(BE_LOCK_R * risk, FEE_BUFFER_PCT * trade.entry);
+        const armOffset  = Math.max(BE_TRIGGER_R * risk, lockOffset + 0.5 * risk);
+        if (price >= trade.entry + armOffset) {
+          trade.stopLoss = trade.entry + lockOffset;
+          trade.beMoved  = true;
+          saveTradeState();
+          if (channel) {
+            const lockPct = (lockOffset / trade.entry) * 100;
+            await channel.send(
+              `🔒 **Stop Raised — ${symbol}**\n` +
+              `Stop moved up to ${usd(trade.stopLoss)} (+${lockPct.toFixed(2)}% above entry, net of fees). ` +
+              `This trade can no longer close at a loss.`
+            );
+          }
+        }
+      }
+    }
+  }
+}
+
 export function startMonitor(client, getChannelId, intervalMs = 30000) {
   logger.info("[MONITOR] Position monitor started");
   restoreHaltState();
@@ -608,70 +684,10 @@ export function startMonitor(client, getChannelId, intervalMs = 30000) {
 
       // Manage exits — fully self-managed by threshold. cajh polls each position's
       // price and sells itself when price crosses a target or the stop. (No resting
-      // orders on the exchange.)
-      for (const [symbol, trade] of [...openTrades.entries()]) {
-        const price = priceMap.get(symbol);
-        if (!price) continue;
-
-        // Stop → close the position (only if the exchange sell actually goes through).
-        if (price <= trade.stopLoss) {
-          await closePosition(channel, symbol, trade, price, "sl");
-          continue;
-        }
-
-        // Take-profit → close the full position (only if the exchange sell goes through).
-        if (price >= trade.takeProfit) {
-          await closePosition(channel, symbol, trade, price, "tp");
-          continue;
-        }
-
-        // Structure-based take-profit: if a fresh swing high confirms on the entry
-        // timeframe while we're in profit, lock it in. Throttled to limit API calls.
-        if (EXIT_ON_SWING_HIGH && price > trade.entry) {
-          const now = Date.now();
-          if (now - (trade._swingCheckedAt || 0) > 90_000) {
-            trade._swingCheckedAt = now;
-            try {
-              const candles = await fetchOHLC(symbolToPair(symbol), trade.tfMinutes || 60);
-              const closed  = candles?.slice(0, -1) || [];
-              const pivots  = detectSwings(closed, SWING_WINDOW);
-              const last    = pivots[pivots.length - 1];
-              if (last?.type === "high" && parseInt(closed[last.index].time) * 1000 > trade.openedAt) {
-                await closePosition(channel, symbol, trade, price, "swing-high");
-                continue;
-              }
-            } catch (err) {
-              logger.error(`[MONITOR] swing-high check failed for ${symbol}:`, err.message);
-            }
-          }
-        }
-
-        // Breakeven-plus: once price has run far enough, lift the stop above entry to a
-        // level that clears round-trip fees, so the trade can no longer close net-red.
-        // Checked after stop/TP so those take priority.
-        if (LOCK_BREAKEVEN && !trade.beMoved) {
-          const risk = trade.risk ?? (trade.entry - trade.stopLoss);
-          if (risk > 0) {
-            // Lock at the larger of 0.2R or the fee buffer; arm high enough that the lock
-            // is always comfortably below price (matters when the stop is very tight).
-            const lockOffset = Math.max(BE_LOCK_R * risk, FEE_BUFFER_PCT * trade.entry);
-            const armOffset  = Math.max(BE_TRIGGER_R * risk, lockOffset + 0.5 * risk);
-            if (price >= trade.entry + armOffset) {
-              trade.stopLoss = trade.entry + lockOffset;
-              trade.beMoved  = true;
-              saveTradeState();
-              if (channel) {
-                const lockPct = (lockOffset / trade.entry) * 100;
-                await channel.send(
-                  `🔒 **Stop Raised — ${symbol}**\n` +
-                  `Stop moved up to ${usd(trade.stopLoss)} (+${lockPct.toFixed(2)}% above entry, net of fees). ` +
-                  `This trade can no longer close at a loss.`
-                );
-              }
-            }
-          }
-        }
-      }
+      // orders on the exchange.) priceMap is already resolved above, so the feed here
+      // just reads from it rather than re-fetching; checkExitsForTrades is the shared,
+      // independently-testable seam (see its own doc comment).
+      await checkExitsForTrades(channel, (symbol) => priceMap.get(symbol));
 
       setMonitorHealth({ lastTickAt: Date.now(), persistenceOk: persistenceHealthy(), tickOk: true, lastError: null });
 
