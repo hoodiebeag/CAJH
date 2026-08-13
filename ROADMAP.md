@@ -1076,3 +1076,104 @@ not a backtest cost input), so nothing here changes any existing PASS/KILL resul
 
 Diagnostic script (`scripts/fee-buffer-diagnose.mjs`, read-only, no production file
 touched) is left in the repo for reproducibility of the n=162,690 figure above.
+
+## 2026-08-13 — PWR5-MAKER-FILL-COST-REDUCTION Phase 1: realistic cost model, empirical fill calibration, funding-endpoint finding
+
+Infrastructure for `PHASE2-MAX-SURVIVABLE-COST`/`PHASE3-RERUN-REAL-SIGNALS-NEW-COSTS`, not
+itself a strategy verdict — no VERDICTS.md row. New module `cost-model.mjs` (18 unit tests
+in `cost-model.test.mjs`, `npm.cmd test` green) replaces the flat taker-only assumption
+with real spot+futures fee tables, a funding-cost integrator, post-only rejection, and a
+touch-based limit-fill simulator grounded in real OHLC bars (one of its tests reads
+`candles/XBTUSD.csv` directly to guard against a stale/copied fixture). Every number below
+was independently verified live on 2026-08-13, not trusted from the source PDF — several
+of the PDF's cited figures turned out to be off, consistent with this project's existing
+"verify, don't trust a cited figure" discipline (FEE-SCHEDULE-REBASE, TEST1-4 relay
+corrections).
+
+**Asset coverage (real, via Kraken Futures' public `/instruments` endpoint, 276 tradeable
+`PF_*` perpetuals as of today):** 28 of this project's 29 watchlist assets have a live
+perpetual future. Only **EOS** does not — the reverse of the source plan's assumption
+("typically only a handful of majors"; the real number is nearly the whole watchlist).
+
+**Fee schedules (verified live against kraken.com, all Tier 1 / lowest-volume-tier
+figures):**
+
+| Venue | Maker | Taker | Notes |
+|---|---|---|---|
+| Spot | 0.40%/side | 0.80%/side | Matches `strategy.js`'s existing `FEE_RATE=0.008` exactly — no drift since FEE-SCHEDULE-REBASE. |
+| Spot (maker-rebate pairs) | 0.38%/side | 0.80%/side | Kraken's rebate program is for *select* lower-liquidity pairs, not the ~0.23% the source PDF cited — verify per-pair eligibility before assuming it applies to a given watchlist asset. |
+| Futures | 0.02%/side | 0.05%/side | Confirmed via `support.kraken.com`'s derivatives fee table; matches the source PDF's estimate closely (unlike the spot maker-rebate figure). Full tier ladder up to $5B+/30d volume is in `FUTURES_FEE_SCHEDULE`, irrelevant at this project's real trading volume. |
+
+**Funding-rate endpoint — corrected finding.** The task text asked whether futures access
+"resolves the HTTP-451 geo-block." It doesn't need to: H11's 2026-08-08 diagnosis already
+established that the geo-block is specific to **Binance's** funding API — Kraken's
+`historical-funding-rates` endpoint was already known to work (it's what `derivatives.mjs`/
+`funding.mjs` already fetch from) but was noted to have only "~367 of the required 730
+days" of history. Re-checked live today: `PF_XBTUSD` returns exactly **8,763 hourly rows
+spanning 365.5 days** (2025-08-13 to 2026-08-13) — a hard rolling 1-year window, not a
+growing archive. This is consistent with the 2026-08-08 figure almost to the day, which
+confirms it's a fixed API ceiling rather than something that resolves by waiting: **H11's
+730-day pre-registered threshold cannot be cleared via this endpoint, ever, regardless of
+futures access.** H11 remains correctly DATA-GATED. `TEST3-FUNDING-MEANREV`, if it wants
+real funding data, needs to be scoped to a holdout window that fits inside the 365-day
+ceiling rather than assuming futures access removes this constraint.
+
+**Fill-probability / adverse-selection calibration — real, not assumed.**
+`scripts/calibrate-fill-model.mjs` (left in the repo, read-only, deletable after this
+finding is read) places a hypothetical resting limit order at `close × (1 ± offset)` at
+every 15th bar of a 30-day, 1-minute-bar window and asks `cost-model.mjs`'s touch-based
+simulator whether real subsequent price action would have filled it within 60 minutes,
+and how far price kept moving in the 10 bars after the fill (buy and sell probed
+symmetrically — fill probability is a property of offset and local volatility, not trade
+direction). Three liquidity tiers, each using **its own most recent available window**
+(candles/ collection has narrowed to BTC/ETH/SOL only — every other watchlist asset's data
+is frozen at 2026-03-27, an unrelated data-collection gap noted here rather than hidden;
+TAO's window is real historical data, just ~4.5 months older than BTC's):
+
+| Tier | Window | Offset | Buy fill% | Buy adverse% | Sell fill% | Sell adverse% |
+|---|---|---|---|---|---|---|
+| BTC (high-liq) | 2026-06-30–07-30 | 0.00% | 98.6% | −0.095% | 98.3% | −0.102% |
+| BTC | | 0.05% | 78.9% | −0.118% | 80.3% | −0.124% |
+| BTC | | 0.20% | 41.7% | −0.144% | 43.4% | −0.158% |
+| SOL (mid-liq) | 2026-06-29–07-29 | 0.05% | 87.4% | −0.166% | 87.5% | −0.169% |
+| SOL | | 0.20% | 60.5% | −0.193% | 58.6% | −0.200% |
+| TAO (low-liq) | 2026-02-25–03-31 | 0.05% | 92.4% | −0.499% | 92.8% | −0.508% |
+| TAO | | 0.20% | 83.6% | −0.505% | 84.2% | −0.520% |
+
+(Full table incl. 0.10%/0.50% offsets in the script's own output.) Two real patterns, not
+assumed: fill probability drops off much faster with offset for BTC than for TAO (TAO's
+larger natural volatility touches wider offsets more often), but TAO's adverse-selection
+cost stays roughly flat (~0.50%) regardless of offset — its volatility dominates the
+outcome either way, while BTC's adverse cost genuinely grows with offset depth (patient
+orders catch bigger continuation moves against them). A specific offset is a PHASE2/3
+strategy-design decision, not this item's — the table above is calibration data for that
+decision, not a recommendation.
+
+**Illustrative 5-column cost scenario matrix** (round trip = one entry + one exit;
+"effective" adds the BTC-tier 0.05%-offset calibration above as a stand-in for adverse
+selection on maker fills — spot-calibrated, used as a futures proxy since this repo has no
+futures-native 1-minute history and Kraken Futures marks closely to its spot index,
+~0.01% basis observed live today; taker rows use fee only, since a taker order executes
+immediately and isn't subject to a fill-probability question):
+
+| Scenario | Fee (round trip) | Effective incl. calibrated adverse selection |
+|---|---|---|
+| Spot taker | 1.60% + 0.10% slippage = **1.70%** | (n/a — matches existing `FEE_RATE`+`SLIPPAGE_PCT`) |
+| Spot maker | 0.80% | **≈1.04%** (0.80% + 0.118%+0.124% adverse) |
+| Spot maker-rebate | 0.76% | **≈1.00%** |
+| Futures taker | 0.10% | **≈0.10%** (real BTC perp spread observed live: 0.0016%/side — the flat 0.05%/side slippage default barely matters here) |
+| Futures maker | 0.04% | **≈0.28%** (0.04% + same spot-calibrated adverse selection as a proxy) |
+
+Headline, stated plainly: at a realistic 0.05% maker offset on majors, **futures maker
+cost (~0.28%) is roughly 6x cheaper than spot taker (1.70%)**, and even spot maker alone
+(~1.04%) roughly halves it — before PHASE2 asks whether any of the four cost-killed
+signals (B5-REVERSAL, Classifier P5, CLASSIFIER-FUNDING-FEATURE, and whichever T4 variant)
+actually clears breakeven at any of these bases. This module makes that a computable
+question; it does not answer it.
+
+**Standing directives restated (apply to PHASE2 onward, not just this item):** 1x notional
+/ no leverage regardless of what a futures account technically permits; live trading of
+any kind stays off — everything above is backtest/research infrastructure, `trader.js`
+remains spot-only and untouched; no maker or futures result should be treated as validated
+until it goes through this fill/adverse-selection model rather than an assumed 100%-fill
+backtest.
