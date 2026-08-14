@@ -197,6 +197,36 @@ no longer describe current enforcement for the live scheduled task. Current beha
   decision (moving a validated strategy from paper to `LIVE_TRADING`) that was never
   automatable in the first place.
 
+## Work-queue retention (added 2026-08-14 — done items are historical record, not working state)
+
+`blackboard.work_queue` grows monotonically if done items are never pruned — 59 items and
+climbing after 95+ commits rewriting `.agent_state.json` in full, each done item still
+carrying its complete `task`/`done_when` text even though the same rationale already lives
+permanently elsewhere, per this project's standing convention that a queue entry is a
+working-state pointer, not the historical record. `ledger` already caps itself at the most
+recent 100 entries (`slice(-100)`, drop from the front) for exactly this reason; work_queue
+gets the same treatment:
+
+**Retention rule.** Keep every `pending`/`started` item — queue depth is what matters for
+"the Executor never runs dry" — plus the most recent **15** `done` items, in original order.
+Drop older `done` items from `work_queue` only; `ledger` is untouched by this rule. N=15 was
+chosen to keep roughly the visible tail of recent work at this project's cadence (a firing
+every few hours) without the state file re-carrying months of already-published prose.
+
+**Before dropping a done item**, confirm its rationale survives elsewhere — usually
+ROADMAP.md or TOURNAMENT_ROADMAP.md prose, but VERDICTS.md rows, PARITY_MATRIX.md `COVERED`
+rows, or the confirmed absence of a file it was scoped to remove (e.g. a DOCS-COMPACT-* item)
+all count. Infra-only items with no verdict row of their own (e.g.
+JUDGE-WALKFORWARD-SYMBOL-HOLDOUT, DCA-SIZING-HARNESS, AGENT-TOOLS-SANDBOX-HARDENING) are
+recorded via the dated section/commit that added them, the code and tests themselves, and the
+follow-on work they enabled — that is sufficient, matching how this project already treats
+harness-only additions. If a done item's record can't be confirmed, don't drop it yet; leave
+it for the next retention pass rather than guessing.
+
+Apply this rule whenever work_queue is touched at scale — a dedicated retention pass, or
+STEP 5 restock once the done count has grown past the cap again — not just as a one-time
+cleanup.
+
 ## Scheduling (updated 2026-08-07 — one task, not three)
 
 The loop originally ran as three independent scheduled tasks (`cajh-executor-check`,
