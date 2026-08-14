@@ -433,8 +433,10 @@ export function backtestMultiTF({ series } = {}, {
         }
       }
     } else if (!pos) {
-      // Long dip-buy modes — no trend/alignment gate (the whole point), tight structural
-      // stop + ambitious target. Only the stop-size sanity caps apply.
+      // Long dip-buy modes — no trend/alignment gate BY DEFAULT (the whole point), tight
+      // structural stop + ambitious target. `trendGate` is opt-in here (off by default for
+      // every family in tournament.mjs's `families` table), so passing it explicitly is the
+      // only way to reach the check below — existing callers that never set it are unaffected.
       let cand = null;
        if (entryMode === "support") cand = supportEntry(k);
        else if (entryMode === "ma_dip") cand = maDipEntry(k);
@@ -453,6 +455,7 @@ export function backtestMultiTF({ series } = {}, {
         if (risk <= 0)                                          reason = "priceBelowStop";
         else if (maxStopPct && risk / cand.entry > maxStopPct)  reason = "stopTooFar";
         else if (minStopPct && risk / cand.entry < minStopPct)  reason = "stopTooTight";
+        else if (trendGate && !(trendGateMode === "structure" ? trendAsOf(tClose) : aboveMaAsOf(tClose))) reason = "trendGate";
         else if (entryGate && !entryGate(tClose))               reason = "externalGate";
         reasons[reason] = (reasons[reason] || 0) + 1;
         if (reason === "taken") pos = { entry: cand.entry, stop: cand.stop, risk, tp: cand.tp, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: cand.entry, trailing: false };

@@ -906,3 +906,78 @@ rather than by analogy. This replaces the argument-based closure T6-TIMEFRAME-IS
 own addendum note relied on for `range_sweep_reclaim` specifically, and together with
 H3-HIGHER-LOW-RECLAIM above closes out both families that note had grouped in by
 same-mechanism argument only. No gate constant was touched after seeing these numbers.
+
+## TEST-TREND-GATE-FILTER RESULT (2026-08-13)
+
+Ground-up audit finding: `strategy.js` exports a fully-implemented, currently-unused
+per-asset trend-quality gate (`TREND_GATE=true`, `TREND_GATE_MODE="ma"|"structure"`,
+`TREND_MA=20`), docstringed explicitly as "research-only... live scanner does not import
+it." Per an exhaustive search of this file, `ROADMAP.md`, and `VERDICTS.md`, it had never
+been tested. Not a duplicate of the already-tested Track 3 (`runBreakoutRegimeFilter`):
+Track 3 gated only `breakout` on **BTC's own 200d SMA**, one market-wide regime signal
+shared by every asset; `TREND_GATE` gates **any family on each asset's own trend
+state** — "ma" mode asks whether that asset's 4h close is above its own trailing
+TREND_MA(20) average, "structure" mode asks whether that asset's 4h is making higher
+highs AND higher lows. It can pass entries Track 3 never touched and reject entries
+Track 3 never saw.
+
+Applied to the two most-tested, best-understood baselines — `anticipate` and `breakout`
+— both modes, four combinations, via a new `tournament.mjs` function
+(`runTrendGateFilter`, `--trend-gate-filter` CLI flag), full 28-asset watchlist,
+corrected real cost basis (`FEE_RATE=0.008`/`SLIPPAGE_PCT=0.0005`, ~1.7% round trip).
+
+**Wiring correction found and fixed before trusting any breakout number:** `backtest.js`'s
+`trendGate` check only existed inside the `bos`/`anticipate` entry branches
+(lines ~353-434). The `breakout` branch (and every other dip/breakout-style mode) lived
+in a separate block whose own comment said "no trend/alignment gate (the whole point)" —
+passing `trendGate: true` into that branch was silently ignored. The first run of this
+test produced byte-identical `breakout` numbers for `trendGateMode: "ma"` and
+`trendGateMode: "structure"`, which is what exposed it (a real gate cannot produce
+identical output under two different modes). Added an opt-in `trendGate` check to that
+branch, reusing the exact same `trendAsOf`/`aboveMaAsOf` "as-of" cursors the
+`bos`/`anticipate` branches already use — active only when a config explicitly sets
+`trendGate: true` (every existing default in `tournament.mjs`'s `families` table still
+passes `false` for every dip/breakout-style family, so no other study's numbers change;
+301/301 tests green after the change, including the two new `runTrendGateFilter` tests).
+Re-ran after the fix; `breakout`'s "ma" vs "structure" numbers now genuinely differ.
+
+**Pre-registered gate (both required, holdout only, scored per combination — same bar as
+T5-DECAY-EXIT/TRAIL-STOP-EXIT/H3-HIGHER-LOW-RECLAIM/RANGE-SWEEP-RECLAIM):**
+- Holdout `avgR/trade > -0.30`
+- Holdout trades >= 150
+
+A below-150-trades result was pre-registered as a legitimate, honest non-verdict (the
+gate is expected to cut trade count substantially — it excludes any asset not currently
+trending) rather than something to route around. In the event, every combination cleared
+the trade floor by a wide margin, so no non-verdict applies here.
+
+**Result:**
+
+| Family | Mode | Train trades | Train avgR | Holdout trades | Holdout avgR | Holdout positive assets |
+|---|---|---|---|---|---|---|
+| anticipate | ma | 4759 | -0.738 | 1451 | -0.963 | 0/27 |
+| anticipate | structure | 2916 | -0.741 | 641 | -1.062 | 0/24 |
+| breakout | ma | 3662 | -0.851 | 1123 | -0.797 | 1/28 |
+| breakout | structure | 2077 | -0.865 | 490 | -0.965 | 1/26 |
+
+All four holdout trade counts (490-1451) clear the 150 floor decisively — none of these
+are sample-starved non-verdicts. All four holdout avgR figures (-0.797 to -1.062) are
+markedly worse than -0.30, and every train figure agrees in sign and rough magnitude with
+its own holdout — no train/holdout divergence to explain away. Gating on trend state,
+per-asset, in either mode, does not rescue either family: if anything, `anticipate` (whose
+ungated holdout avgR is around -0.51 per T6-TIMEFRAME-ISOLATION's own baseline context)
+gets **worse** under either trend-gate mode, and `breakout`'s trend-gated numbers stay in
+the same deeply-negative range as every other tested variant of that family.
+
+**Gate check (pre-registered, not adjusted after seeing these numbers):**
+- anticipate/ma: avgR -0.963 → FAIL; trades 1451 → PASS; combined **FAIL**
+- anticipate/structure: avgR -1.062 → FAIL; trades 641 → PASS; combined **FAIL**
+- breakout/ma: avgR -0.797 → FAIL; trades 1123 → PASS; combined **FAIL**
+- breakout/structure: avgR -0.965 → FAIL; trades 490 → PASS; combined **FAIL**
+
+**Verdict: TEST-TREND-GATE-FILTER is closed as a FAIL across all four combinations.**
+Recorded as VERDICTS.md's TREND-GATE-MA and TREND-GATE-STRUCTURE rows. The per-asset
+trend-quality filter this repo had built but never tested does not change the standing
+conclusion: every price-structure entry family and every filter applied to one, tested to
+date, remains net-negative after real costs. No gate constant was touched after seeing
+these numbers.

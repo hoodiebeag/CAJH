@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix, runBreakoutDecayExit, runTimeframeIsolation, runBreakoutTrailingTpExit } from "./tournament.mjs";
+import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix, runBreakoutDecayExit, runTimeframeIsolation, runBreakoutTrailingTpExit, runTrendGateFilter } from "./tournament.mjs";
 
 test("tournament reports no promotion when its data gate cannot be met", () => {
   const report = runTournament({ watchlist: [] });
@@ -117,4 +117,23 @@ test("runBreakoutTrailingTpExit: variant configs only override trailingTpPct, no
   const report = runBreakoutTrailingTpExit({ watchlist: [] });
   assert.deepEqual(report.input.variants, [{ trailingTpPct: 0.05 }, { trailingTpPct: 0.10 }]);
   assert.equal(report.input.family, "breakout");
+});
+
+// ── TEST-TREND-GATE-FILTER — per-asset TREND_GATE ("ma"/"structure") on anticipate/breakout ──
+test("runTrendGateFilter: empty watchlist yields zero trades on all four combinations and fails their gates honestly", () => {
+  const report = runTrendGateFilter({ watchlist: [] });
+  assert.equal(report.result.combinations.length, 4);
+  assert.deepEqual(report.result.combinations.map((c) => `${c.family}/${c.trendGateMode}`),
+    ["anticipate/ma", "anticipate/structure", "breakout/ma", "breakout/structure"]);
+  for (const c of report.result.combinations) {
+    assert.equal(c.holdout.trades, 0, "0 trades must never read as a passing gate");
+    assert.equal(c.gate.passed, false);
+    assert.equal(c.gate.tradesPass, false);
+  }
+});
+
+test("runTrendGateFilter: targets both families and both modes, nothing else", () => {
+  const report = runTrendGateFilter({ watchlist: [] });
+  assert.deepEqual(report.input.families, ["anticipate", "breakout"]);
+  assert.deepEqual(report.input.modes, ["ma", "structure"]);
 });

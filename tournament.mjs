@@ -279,6 +279,58 @@ export function runBreakoutTrailingTpExit({ watchlist = loadWatchlist(), split =
   return { input, result };
 }
 
+/**
+ * TEST-TREND-GATE-FILTER (ground-up audit finding, pre-registered): strategy.js exports a
+ * fully-implemented, currently-unused per-asset trend-quality gate (TREND_GATE, mode "ma" or
+ * "structure") explicitly marked research-only — the live scanner does not import it, and per
+ * an exhaustive search of TOURNAMENT_ROADMAP.md/ROADMAP.md/VERDICTS.md it has never been
+ * tested. Distinct from the already-tested T3-REGIMEFILTER: T3 gated only `breakout` on BTC's
+ * own 200d SMA as one market-wide regime signal; TREND_GATE filters ANY family on each asset's
+ * OWN trend state (either "ma" = 4h close above its TREND_MA-period average, or "structure" =
+ * 4h making higher highs AND higher lows), so it can pass entries T3 never touched and reject
+ * entries T3 never saw. Applied here to the two most-tested, best-understood baselines
+ * (anticipate, breakout), both modes, four combinations total — no other family or config
+ * field touched.
+ *
+ * PRE-REGISTERED GATE (both required, holdout only, net-of-cost from the start, scored PER
+ * COMBINATION, same bar as T5-DECAY-EXIT/TRAIL-STOP-EXIT for direct comparability): holdout
+ * avgR/trade > -0.30 AND holdout trades >= 150. This filter is expected to cut trade count
+ * substantially (it excludes any asset not currently trending) — a below-150-trades result is
+ * a legitimate, honest non-verdict to record, not something to route around.
+ */
+export function runTrendGateFilter({ watchlist = loadWatchlist(), split = .70 } = {}) {
+  const targets = ["anticipate", "breakout"];
+  const modes = ["ma", "structure"];
+  const datasets = normalize(watchlist).map((asset) => ({ symbol: asset.symbol, series: seriesFor(asset.id) }))
+    .filter((d) => d.series.every((tf) => tf.candles.length >= 250))
+    .map((d) => ({ symbol: d.symbol, train: splitSeries(d.series, split, false), holdout: splitSeries(d.series, split, true) }));
+
+  const combinations = targets.flatMap((id) => {
+    const [, , baseConfig] = families.find(([fid]) => fid === id);
+    return modes.map((trendGateMode) => {
+      const config = { ...baseConfig, trendGate: true, trendGateMode };
+      const score = (part) => summarize(datasets.map((d) => backtestMultiTF({ series: d[part] }, { ...config, entryTf: "1h" })));
+      const train = score("train"), holdout = score("holdout");
+      const avgRPass = holdout.avgR > -0.30;
+      const tradesPass = holdout.trades >= 150;
+      return { family: id, trendGateMode, train, holdout, gate: { avgRPass, tradesPass, passed: avgRPass && tradesPass } };
+    });
+  });
+
+  const input = {
+    specification: "strategy-tournament-trend-gate-filter/v1", split, assets: datasets.map((d) => d.symbol),
+    families: targets, modes,
+  };
+  const passed = combinations.filter((c) => c.gate.passed).map((c) => `${c.family}/${c.trendGateMode}`);
+  const result = {
+    combinations,
+    verdict: passed.length
+      ? `TREND_GATE clears the pre-registered gate for: ${passed.join(", ")} (holdout avgR>-0.30 AND trades>=150)`
+      : "TEST-TREND-GATE-FILTER FAIL: no family/mode combination clears the pre-registered gate (holdout avgR>-0.30 AND trades>=150)",
+  };
+  return { input, result };
+}
+
 /** Chronological 70/30 test. Parameters are fixed before examining the holdout. */
 export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRate, slipPct, entryTf = "1h" } = {}) {
   const costOverride = {};
@@ -318,6 +370,10 @@ if (process.argv[1]?.endsWith("tournament.mjs")) {
   } else if (process.argv.includes("--trailing-tp-exit")) {
     const report = runBreakoutTrailingTpExit();
     const saved = saveExperiment("tournament-trailing-tp-exit", report.input, report.result);
+    console.log(JSON.stringify({ ...report.result, saved }, null, 2));
+  } else if (process.argv.includes("--trend-gate-filter")) {
+    const report = runTrendGateFilter();
+    const saved = saveExperiment("tournament-trend-gate-filter", report.input, report.result);
     console.log(JSON.stringify({ ...report.result, saved }, null, 2));
   } else {
     const zeroCost = process.argv.includes("--zero-cost");
