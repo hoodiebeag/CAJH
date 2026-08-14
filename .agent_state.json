@@ -1153,8 +1153,8 @@
     },
     "unresolvable-blocked": {
       "lastSentAt": "2026-08-14T15:20:00.000Z",
-      "deliveryResult": "PLACEHOLDER -- set after PushNotification call",
-      "message": "PLACEHOLDER -- set after PushNotification call",
+      "deliveryResult": "Mobile push requested (tool call succeeded; delivery to device not independently confirmed - see notification_policy.known_gap).",
+      "message": "cajh: STATE-QUEUE-RETENTION done, but 6 old queue items (FEE-SCHEDULE-REBASE/PARITY-*) can't be pruned -- their coverage-notes text trips the protected-logic hook. Needs your call, see QUEUE-RETENTION-HOOK-PRUNE-EXCEPTION.",
       "note": "Supersedes the 2026-08-14T02:02:14.906Z entry (RISK-SURFACE-TEST-COVERAGE, since resolved/done). Current issue: STATE-QUEUE-RETENTION pruning of 6 old PARITY-*/FEE-SCHEDULE-REBASE queue items blocked by the same hook false-positive class -- see control.notes and QUEUE-RETENTION-HOOK-PRUNE-EXCEPTION."
     },
     "empty-queue": {
