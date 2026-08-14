@@ -2,15 +2,15 @@
   "version": 2,
   "control": {
     "status": "IDLE",
-    "target_file": "onchain-flow-gate.mjs, onchain-flow-gate.test.mjs",
-    "objective": "Completed TEST4-ONCHAIN-FLOW-GATE: breakout entries gated on 7-day net exchange outflow (BTC/ETH, 1d). Data-availability gate checked first per pre-registered done_when: this repo has no prior on-chain ingestion code; Glassnode transactions/transfers_volume_exchanges_net (closest free-tier net-exchange-flow metric) returns HTTP 401 for both BTC and ETH (no GLASSNODE_API_KEY/CRYPTOQUANT_API_KEY in .env, confirmed directly); CryptoQuant equivalent also checked directly, same HTTP 401. 0/2 required assets clear data availability -> ONCHAIN-DATA-INSUFFICIENT, a complete valid non-verdict per this item spec. Entry-gate/backtest logic intentionally not built out (would be untested dead code with no real data path). Recorded in VERDICTS.md, TOURNAMENT_ROADMAP.md, and an onchain-flow-gate saveExperiment decision journal entry. npm.cmd test 333/333 green. Pushed as 077455b. One unit of work this firing per HYGIENE; stopping here.",
+    "target_file": "backtest.js, backtest.test.mjs, tournament.mjs, tournament.test.mjs",
+    "objective": "Completed TEST1-FIB-PULLBACK: fib_pullback entry mode (backtest.js) reuses bos mode's own confirmed break-of-structure event (a swing low's close breaking back above its own high) as the trigger, rests a limit order at a 50%/61.8% Fibonacci retracement of the leg that produced it, stop below the originating swing low, TP at 3R. breakoutEntry has no swing-leg low endpoint so it cannot supply the retracement this hypothesis needs -- breakout used only as the stop-size-cap template (Track 2 precedent), documented explicitly as a pre-registered interpretation of the task text's underspecified \"confirmed BOS candle\"/\"swing leg\" terms. 4 new unit tests (fill/no-fill/cancel/one-order-at-a-time) against hand-verified synthetic candles. runFibPullback() in tournament.mjs: both levels run as independent backtests, train-gate-first (train must pass before holdout examined), fixed calendar-date split (train: earliest-2025-06-01, holdout: 2025-06-01-present) per the literal spec -- no external data source needed so no data-availability gate. Result: BOTH levels TRAIN-GATE-FAIL on avgR (50%: -0.907, 61.8%: -0.770, both worse than -0.50 floor; trade counts 362/225 both clear >=200). Holdout never examined for either level. Recorded in VERDICTS.md, TOURNAMENT_ROADMAP.md, and two decision-journal entries (fib-pullback-50, fib-pullback-618). npm.cmd test 339/339 green. Pushed as 1e75217. One unit of work this firing per HYGIENE; stopping here.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "No blocker. Next pending items (deps clear): TEST1-FIB-PULLBACK, TEST2-VOL-CONFIRMED-BREAKOUT, JUDGE-WALKFORWARD-SYMBOL-HOLDOUT, STATE-QUEUE-RETENTION, ORCHESTRATOR-CLUSTER-CLEANUP, WIDE-STOP-HIGH-TARGET-ASYMMETRY, FUNDING-CARRY-DECAY-CHECK, ATR-ADAPTIVE-STOP-CONFIRMATORY, SCALED-EXIT-LADDER-CONFIRMATORY, MOMENTUM-SHORT-HORIZON-RECHECK.",
+    "notes": "No blocker. Next pending items (deps clear): TEST2-VOL-CONFIRMED-BREAKOUT, JUDGE-WALKFORWARD-SYMBOL-HOLDOUT, STATE-QUEUE-RETENTION, ORCHESTRATOR-CLUSTER-CLEANUP, WIDE-STOP-HIGH-TARGET-ASYMMETRY, FUNDING-CARRY-DECAY-CHECK, ATR-ADAPTIVE-STOP-CONFIRMATORY, SCALED-EXIT-LADDER-CONFIRMATORY, MOMENTUM-SHORT-HORIZON-RECHECK.",
     "updated_by": "cajh-loop-check",
-    "updated_at": "2026-08-14T11:10:00.000Z",
+    "updated_at": "2026-08-14T12:18:11.365Z",
     "block_detail": null
   },
   "blackboard": {
@@ -533,7 +533,7 @@
       },
       {
         "id": "TEST1-FIB-PULLBACK",
-        "state": "pending",
+        "state": "done",
         "owner": "executor",
         "file": "new: Fibonacci pullback entry study (backtest.js entryMode addition or standalone, additive), decision journal entries labeled FIB-PULLBACK-50 and FIB-PULLBACK-618",
         "depends_on": [],
@@ -660,14 +660,6 @@
     "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
   },
   "ledger": [
-    {
-      "ts": "2026-08-07T23:16:00.000Z",
-      "agent": "loop",
-      "action": "block",
-      "detail": "STEP 0 found genuine uncommitted PWR4 progress inherited from an interrupted prior firing: a real chooseLambdaByCv fix (non-converging lambda=0 candidate no longer aborts CV for other candidates - only throws if every candidate fails every fold) plus buildClassifierUniverseRows + a `node classifier.mjs sealed` CLI path. Verified the diff against SIGNAL3_CLASSIFIER_SPEC.md and the PWR2/PWR3 STABLE_13-holdout convention, ran full suite (178/178 green including 2 new tests), committed+pushed as 496f8cb. Then tried to execute the actual sealed production run and discovered why it was never finished: direct process inspection (PowerShell Get-CimInstance) found 7 concurrent 'node classifier.mjs sealed' processes already running (PIDs 26200/25092/33268/33876/23528/46868/35968, started ~17:38 through ~19:02 local, ~15min apart matching this scheduled task's own cadence) - one per prior firing since the fix was written, each launched in the background and abandoned when that firing's session ended, none ever completing. The one saved research-runs/*classifier-sealed.json result predates the fix (codeRevision 8d44200) and shows the exact bug this commit fixes ('did not converge for lambda 0' on both arms), so it's stale and unusable for a verdict. Did not kill any process (HYGIENE forbids it) and did not launch an 8th duplicate. Set control.status=BLOCKED (SOFT - retryable once a human clears the stray processes, not a hard/permanent stop) and sent one PushNotification (not previously deduped for this reasonKey) describing the pile-up and asking for manual process cleanup.",
-      "commit": "496f8cb",
-      "tests": "178 pass, 0 fail"
-    },
     {
       "ts": "2026-08-07T23:27:00.000Z",
       "agent": "loop",
@@ -1459,6 +1451,14 @@
       "detail": "Data-availability gate failed immediately: Glassnode free-tier net-exchange-flow endpoint returns HTTP 401 for BTC and ETH, no on-chain API key configured in this environment. 0/2 required assets clear coverage. Per pre-registered done_when this is a complete, valid non-verdict; entry-gate/backtest logic not built out (no real data path to exercise it). Recorded in VERDICTS.md/TOURNAMENT_ROADMAP.md and research-runs/2026-08-14T11-05-22-370Z-onchain-flow-gate.json.",
       "commit": "077455b",
       "tests": "333/333 green"
+    },
+    {
+      "ts": "2026-08-14T12:18:11.366Z",
+      "agent": "cajh-loop-check",
+      "action": "TEST1-FIB-PULLBACK done (TRAIN-GATE-FAIL, both levels)",
+      "detail": "New fib_pullback entryMode (backtest.js): rests a limit order at a 50%/61.8% Fib retracement of the leg completed by bos mode's own confirmed-BOS event (swing low close breaking its own high), stop below the originating low, TP 3R. Pre-registered interpretation of underspecified task terms documented in TOURNAMENT_ROADMAP.md. Fixed calendar-date split (to 2025-06-01 / from 2025-06-01), full 28-asset watchlist. Both levels TRAIN-GATE-FAIL on avgR (50%: -0.907, 61.8%: -0.770; gate >-0.50), trade counts cleared (362/225 >= 200). Holdout not examined either level. VERDICTS.md/TOURNAMENT_ROADMAP.md updated, two decision journal entries saved.",
+      "commit": "1e75217",
+      "tests": "339/339 green"
     }
   ],
   "automation": {
