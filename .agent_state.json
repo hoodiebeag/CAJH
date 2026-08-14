@@ -2,16 +2,9 @@
   "version": 2,
   "control": {
     "status": "IDLE",
-    "target_file": "backtest.js, backtest.test.mjs, tournament.mjs, tournament.test.mjs",
-    "objective": "Completed TEST1-FIB-PULLBACK: fib_pullback entry mode (backtest.js) reuses bos mode's own confirmed break-of-structure event (a swing low's close breaking back above its own high) as the trigger, rests a limit order at a 50%/61.8% Fibonacci retracement of the leg that produced it, stop below the originating swing low, TP at 3R. breakoutEntry has no swing-leg low endpoint so it cannot supply the retracement this hypothesis needs -- breakout used only as the stop-size-cap template (Track 2 precedent), documented explicitly as a pre-registered interpretation of the task text's underspecified \"confirmed BOS candle\"/\"swing leg\" terms. 4 new unit tests (fill/no-fill/cancel/one-order-at-a-time) against hand-verified synthetic candles. runFibPullback() in tournament.mjs: both levels run as independent backtests, train-gate-first (train must pass before holdout examined), fixed calendar-date split (train: earliest-2025-06-01, holdout: 2025-06-01-present) per the literal spec -- no external data source needed so no data-availability gate. Result: BOTH levels TRAIN-GATE-FAIL on avgR (50%: -0.907, 61.8%: -0.770, both worse than -0.50 floor; trade counts 362/225 both clear >=200). Holdout never examined for either level. Recorded in VERDICTS.md, TOURNAMENT_ROADMAP.md, and two decision-journal entries (fib-pullback-50, fib-pullback-618). npm.cmd test 339/339 green. Pushed as 1e75217. One unit of work this firing per HYGIENE; stopping here.",
-    "allow_live_edit": false,
-    "test_command": "npm.cmd test",
-    "iteration": 0,
-    "max_iterations": 6,
-    "notes": "No blocker. Next pending items (deps clear): TEST2-VOL-CONFIRMED-BREAKOUT, JUDGE-WALKFORWARD-SYMBOL-HOLDOUT, STATE-QUEUE-RETENTION, ORCHESTRATOR-CLUSTER-CLEANUP, WIDE-STOP-HIGH-TARGET-ASYMMETRY, FUNDING-CARRY-DECAY-CHECK, ATR-ADAPTIVE-STOP-CONFIRMATORY, SCALED-EXIT-LADDER-CONFIRMATORY, MOMENTUM-SHORT-HORIZON-RECHECK.",
-    "updated_by": "cajh-loop-check",
-    "updated_at": "2026-08-14T12:18:11.365Z",
-    "block_detail": null
+    "target_file": "tournament.mjs, tournament.test.mjs, VERDICTS.md, TOURNAMENT_ROADMAP.md",
+    "objective": "Completed TEST2-VOL-CONFIRMED-BREAKOUT: relative-volume entry gate on breakout family (relVol = entry-bar volume / mean volume of the prior 20 bars, current bar excluded from its own average), wired purely via backtest.js existing entryGate hook (no backtest.js changes) -- same technique funding-meanrev.mjs/buildBtcAboveMa200At already use. tournament.mjs new exports: relVolTimeline, makeRelVolAboveAt, runVolConfirmedBreakout. Three thresholds tested (1.5x/2.0x/3.0x). Pre-registered selection process followed literally: rank all three on TRAIN avgR/trade only, then examine ONLY the best-on-train threshold holdout exactly once -- the other two thresholds holdout is never computed, avoiding the exact look-ahead the task text calls out (a genuinely different selection discipline from TEST1-FIB-PULLBACKs two independently-gated levels). Fixed calendar-date split (train: earliest-2025-06-01, holdout: 2025-06-01-present) per the literal spec -- volume is already inside every OHLCV candle so no data-availability gate was needed. Result: all three thresholds TRAIN-GATE-FAIL on avgR (1.5x: -0.854, 2.0x: -0.857, 3.0x: -0.794, all worse than the -0.50 floor AND worse than unfiltered breakouts own -0.454 train baseline; trade counts 5224/4578/3427, all clear >=200 easily). No threshold selected on train; holdout never examined for any. Recorded in VERDICTS.md, TOURNAMENT_ROADMAP.md, and three decision-journal entries (vol-confirm-15/20/30). 6 new unit tests (relVolTimeline no-look-ahead behavior against hand-verified synthetic candles, makeRelVolAboveAt forward-cursor/inclusive-threshold semantics, empty-watchlist honesty, input defaults). npm.cmd test 343/343 green. Pushed as 3e348c5. This closes the fourth and final item in the human-authored TEST1-4 queue -- all four now FAIL/abandoned or a data-availability non-verdict (TEST1-FIB-PULLBACK TRAIN-GATE-FAIL, TEST2-VOL-CONFIRMED-BREAKOUT TRAIN-GATE-FAIL, TEST3-FUNDING-MEANREV TRAIN-GATE-FAIL, TEST4-ONCHAIN-FLOW-GATE ONCHAIN-DATA-INSUFFICIENT). Per the queues own execution rule, none should be re-tuned further on the same axis -- next step is a new hypothesis queue, not continued search within this exhausted set. One unit of work this firing per HYGIENE; stopping here.",
+    "notes": ""
   },
   "blackboard": {
     "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -542,7 +535,7 @@
       },
       {
         "id": "TEST2-VOL-CONFIRMED-BREAKOUT",
-        "state": "pending",
+        "state": "done",
         "owner": "executor",
         "file": "new: volume-confirmed breakout study (backtest.js addition or standalone, additive), decision journal entries labeled VOL-CONFIRM-1.5/2.0/3.0",
         "depends_on": [],
@@ -660,14 +653,6 @@
     "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
   },
   "ledger": [
-    {
-      "ts": "2026-08-07T23:27:00.000Z",
-      "agent": "loop",
-      "action": "complete",
-      "detail": "T1B-BREAKOUT-COSTFIX: picked instead of retrying PWR4 (still SOFT-BLOCKED on 7 stray unfinished classifier.mjs processes, reconfirmed still running and untouched this firing - never killed, no 8th launched, per HYGIENE). Implemented the pre-registered Track 1 follow-up: breakoutLookback option added to backtestMultiTF (default 20, byte-identical/no-op when omitted, mirrors stopMode/atrStopK precedent), with fixture tests for both the no-op default and a longer lookback correctly rejecting a candidate the default 20-bar window takes. Added runBreakoutCostFix to tournament.mjs testing ONE pre-registered variant (tpR 3->5, breakoutLookback 20->55, the classic Donchian window - not a post-hoc sweep) against a three-clause gate (holdout avgR>0 AND trades>=150 AND positiveAssets/assets>=0.5, chosen to match runTournament promoted/T5 sample-floor conventions already in this codebase) plus a --breakout-costfix CLI path and data-independent gate tests (empty-watchlist honesty, variant-config-only-overrides-tpR/breakoutLookback). Ran the sealed experiment against the full 28-asset watchlist: variant nearly halves holdout trade count (3123->1569) and improves holdout avgR by ~0.064R (-0.445->-0.381), a real and meaningful move in the predicted direction that confirms Track 1s cost-drag diagnosis - but 2 of 3 gate clauses still FAIL (avgR remains negative; only 2/28 assets net positive, well under the 50% bar). Recorded as a new Track 1 - T1B-BREAKOUT-COSTFIX RESULT section in TOURNAMENT_ROADMAP.md, closing the cost-reduction path for breakout. npm.cmd test: 182/182 green both before implementation and after (up from 178 at the start of this firing). Read the diff line-by-line against T1B done_when before committing: pre-registered gate stated before running (yes, in code comments + roadmap doc before the CLI was ever executed), holdout avgR/trade net of full cost reported (yes), explicit pass/fail verdict (yes, FAIL), tests green (yes) - matches. git status confirmed only the 5 intended files staged, research-runs/ output correctly gitignored and not committed. Committed+pushed as 859bd86; pre-commit hook raised no objection (no bot.js/monitor.js/trader.js/protected-identifier touch). STEP 4: no notification - control no longer BLOCKED (IDLE), queue not empty (PWR4/T5-DECAY-EXIT/T6-TIMEFRAME-ISOLATION pending+ready, 3 items), no ROADMAP verdict newly reaching PASS (this is a FAIL). unresolvable-blocked (PWR4) already sent 23:16:00Z, within 6h dedup, not resent. STEP 5: exactly 3 pending+ready items - at the >=3 threshold, one-line check only, no restock needed.",
-      "commit": "859bd86",
-      "tests": "182 pass, 0 fail"
-    },
     {
       "ts": "2026-08-07T23:36:30.000Z",
       "agent": "loop",
@@ -1459,6 +1444,14 @@
       "detail": "New fib_pullback entryMode (backtest.js): rests a limit order at a 50%/61.8% Fib retracement of the leg completed by bos mode's own confirmed-BOS event (swing low close breaking its own high), stop below the originating low, TP 3R. Pre-registered interpretation of underspecified task terms documented in TOURNAMENT_ROADMAP.md. Fixed calendar-date split (to 2025-06-01 / from 2025-06-01), full 28-asset watchlist. Both levels TRAIN-GATE-FAIL on avgR (50%: -0.907, 61.8%: -0.770; gate >-0.50), trade counts cleared (362/225 >= 200). Holdout not examined either level. VERDICTS.md/TOURNAMENT_ROADMAP.md updated, two decision journal entries saved.",
       "commit": "1e75217",
       "tests": "339/339 green"
+    },
+    {
+      "ts": "2026-08-14T13:12:12.040Z",
+      "agent": "scheduled-loop",
+      "action": "TEST2-VOL-CONFIRMED-BREAKOUT completed",
+      "detail": "Volume-confirmed breakout study (3 thresholds, entryGate-based, fixed calendar split): all TRAIN-GATE-FAIL on avgR clause, no threshold selected, holdout never examined. Fourth and final item in human-authored TEST1-4 queue now closed (all FAIL/abandoned or non-verdict). Control back to IDLE.",
+      "commit": "3e348c5",
+      "tests": "343/343 green"
     }
   ],
   "automation": {
