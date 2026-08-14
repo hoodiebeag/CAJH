@@ -2,8 +2,8 @@
  "version": 2,
  "control": {
   "status": "IDLE",
-  "target_file": "AGENT_PROTOCOL.md (done, commit 082718f), .agent_state.json (partially done -- see notes)",
-  "objective": null,
+  "target_file": "tournament.mjs, tournament.test.mjs, TOURNAMENT_ROADMAP.md, VERDICTS.md (ATR-ADAPTIVE-STOP-CONFIRMATORY, commit ccb166e)",
+  "objective": "Completed ATR-ADAPTIVE-STOP-CONFIRMATORY as this firing's single work_queue item (see the 2026-08-14T16:20:00.000Z ledger entry for full detail; control.notes above is stale, left from a concurrent session's separate item, untouched here because overwriting it would delete a protected-logic-hook-tripping line).",
   "notes": "Human directly authorized resolving QUEUE-RETENTION-HOOK-PRUNE-EXCEPTION in this live interactive session (\"no preference, up to you\") rather than the unattended-loop path the hook's own guidance warns against self-authorizing. Reviewed the diff before creating the marker: pruning FEE-SCHEDULE-REBASE and the 5 PARITY-* items removes only their stored task/done_when prose from work_queue (identical to the 32 items STATE-QUEUE-RETENTION already pruned cleanly) - their findings survive permanently in PARITY_MATRIX.md's COVERED rows and ROADMAP.md/VERDICTS.md/TOURNAMENT_ROADMAP.md prose, per the same retention rule. Confirmed the hook's PROTECTED_PATTERNS scan checks both added and removed diff lines (scripts/check-protected-logic.cjs:63), so no rewording of the stored text could have avoided the marker either - deleting text that mentions placeBuy/placeSell trips it exactly like adding such text would. Created a fresh .git/ALLOW_PROTECTED_EDIT marker immediately before this commit. Marked QUEUE-RETENTION-HOOK-PRUNE-EXCEPTION done. control.status back to IDLE.",
   "block_detail": null,
   "updated_by": "human-authorized-hook-prune",
@@ -195,7 +195,7 @@
    },
    {
     "id": "ATR-ADAPTIVE-STOP-CONFIRMATORY",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "tournament.mjs (wire stopMode='atr'/atrStopK through, already-built backtest.js options - zero new backtest.js code needed), TOURNAMENT_ROADMAP.md, VERDICTS.md",
     "depends_on": [],
@@ -267,14 +267,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-08T02:55:00Z",
-   "agent": "loop",
-   "action": "C1 verified already-implemented (commit b92235d, predates this queue item); closed with no code change",
-   "detail": "Traced scanner.js/logger.js/storage.js decision-logging call graph against C1 done_when; both required guarantees (trade behavior unaffected by logging, persistence readable back) already proven by existing decision-log.test.mjs cases and structural design (log call discards return, sink failures caught). Ran npm.cmd test clean, no changes needed, so no code commit this firing. Flagged C2/C3 as likely also already substantially implemented in context.js (commits a477c7d/83518e0) for the next firing to verify-before-implementing. Queue restock checked (pending 3->2) but skipped adding a new item: FOLLOWON_SPECS Part A/B stay gated on an ungranted momentum PASS.",
-   "commit": null,
-   "tests": "189/189"
-  },
   {
    "ts": "2026-08-08T03:15:00Z",
    "agent": "loop",
@@ -1066,6 +1058,14 @@
    "detail": "Pruned the 6 done items (FEE-SCHEDULE-REBASE, PARITY-BUYFILL-SEAM, PARITY-EXCHANGE-ERROR-POLICY, PARITY-STALE-QUOTE-CONTRACT, PARITY-POSITION-CAP-SEAM, PARITY-LIVE-EXIT-FIXTURES) that were pinned past STATE-QUEUE-RETENTION's cap because their stored prose tripped the protected-logic hook. Human directly authorized this in a live session; created a fresh override marker immediately before committing, reviewed as prose-only (no commands.js/trader.js touched). Marked QUEUE-RETENTION-HOOK-PRUNE-EXCEPTION done.",
    "commit": null,
    "tests": "data-only change; npm.cmd test re-run independently before commit"
+  },
+  {
+   "ts": "2026-08-14T16:20:00.000Z",
+   "agent": "scheduled-task-cajh-loop-check",
+   "action": "ATR-ADAPTIVE-STOP-CONFIRMATORY done, FAIL (0/20 grid cells); control back to IDLE",
+   "detail": "Ran the pre-registered atrStopK{1.5,2,2.5,3,4} x atrPeriod{14,20} grid (backtest.js stopMode=\"atr\") against breakout and anticipate, full 28-asset watchlist, standard 70/30 split, corrected real cost basis. Mid-run discovery disclosed in TOURNAMENT_ROADMAP.md/VERDICTS.md: backtest.js breakoutEntry() hardcodes its stop at a fixed 2x-ATR and never reads stopMode/atrStopK, so the breakout half of the grid only varies atrPeriod, not the pre-registered hypothesis (verified by exact match vs. the plain no-override baseline). anticipate arm is a real test, still fails the gate (avgR>0, trades>=150, positiveAssets/assets>=0.50) despite improving on its structural-stop baseline. tournament.mjs: new runAtrAdaptiveStop + --atr-adaptive-stop CLI (20 decision-journal entries in research-runs/). tournament.test.mjs: 2 new tests. Pulled commit 89d859d (a concurrent interactive session's human-authorized QUEUE-RETENTION-HOOK-PRUNE-EXCEPTION resolution) fresh before this write, clean fast-forward, no conflict; that item's own work_queue entry and control.notes text were left untouched here.",
+   "commit": "ccb166e",
+   "tests": "353/353 green"
   }
  ],
  "automation": {
