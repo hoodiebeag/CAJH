@@ -771,6 +771,44 @@ if (main && process.argv[2] === "sealed") {
     primaryTransform: "raw"
   }, byLookback);
   console.log(JSON.stringify({ byLookback, saved: file }, null, 2));
+} else if (main && process.argv[2] === "sealed-short-horizon") {
+  // MOMENTUM-SHORT-HORIZON-RECHECK: same sealed harness as M7 (runSealedMomentumPanelStudy),
+  // parameterized to a short lookback (L=7d primary, L=14d secondary) per external evidence
+  // that crypto cross-sectional momentum is real specifically at short (1-4 week) formation
+  // windows, with reversal beyond one month - M7's own 30d primary sat at/past that edge, not
+  // squarely inside it. transform=btcResidual90 (the spec-settled gated statistic per PWR2's
+  // own reasoning), horizon=lookback (step=horizon, this project's existing per-cell
+  // convention), expected sign POSITIVE (momentum, not B5-REVERSAL's negative-signed territory).
+  const watchlist = loadWatchlist().map((asset) => typeof asset === "string" ? { symbol: asset, id: symbolToKrakenId(asset) } : asset);
+  const series = dailySeries(watchlist);
+  const permutations = Number(process.env.PERMUTATIONS) || 1000;
+  const byLookback = {};
+  for (const L of [7, 14]) {
+    const study = runSealedMomentumPanelStudy(series, {
+      primaryTransform: "btcResidual90",
+      primaryLookback: L,
+      primaryHorizon: L,
+      rankModes: [],
+      // FEE-SCHEDULE-REBASE's corrected real Kraken Tier-1 round-trip cost (~1.7%), not this
+      // file's stale 0.9% default - this item's pre-registration calls for the corrected figure.
+      roundTripCost: 0.017,
+      permutations
+    });
+    byLookback[L] = {
+      controlledUniverse: study.controlledUniverse,
+      symbolHoldoutUniverse: study.symbolHoldoutUniverse,
+      primary: study.primary,
+      primaryRaw: study.primaryRaw,
+      primaryEconomics: study.primaryEconomics
+    };
+  }
+  const file = saveExperiment("momentum-sealed-short-horizon", {
+    specification: "MOMENTUM-SHORT-HORIZON-RECHECK",
+    lookbacks: [7, 14],
+    primaryTransform: "btcResidual90",
+    roundTripCost: 0.017
+  }, byLookback);
+  console.log(JSON.stringify({ byLookback, saved: file }, null, 2));
 } else if (main) {
   const study = runMomentumStudy({ permutations: Number(process.env.PERMUTATIONS) || 1000 });
   const file = saveExperiment("momentum", study.input, study.result);

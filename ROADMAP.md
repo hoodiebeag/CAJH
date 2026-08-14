@@ -1481,3 +1481,88 @@ aside** — the portfolio-level return is negative and getting more negative, no
 lead under decay-reversal. Recorded as VERDICTS.md's `FUNDING-CARRY-DECAY-CHECK` row,
 explicitly flagged research-only / not live-eligible per the pre-registered account
 constraint, not as a candidate awaiting short-position infrastructure.
+
+## 2026-08-14 — MOMENTUM-SHORT-HORIZON-RECHECK: a new pre-registered short-lookback primary, KILLED on train significance at both horizons
+
+**Not a re-run of the old exploratory grid, and not B5-REVERSAL.** Momentum M7's confirmatory
+(primary, gate-determining) test used `primaryLookback=30d` (`momentum.mjs`'s default) and was
+KILLED on train significance (residual IC=0.0280, p=0.7013 — see "Momentum M7 — UPDATE"
+above). External academic evidence (multiple sources, cross-checked) reports crypto
+cross-sectional momentum as real specifically at **short** formation windows — "positive
+momentum on horizons up to two to four weeks" with "return persistence limited to one week"
+and "significant reversal on longer horizons beyond one month," unlike equities where
+momentum persists 1-3 months. M7's own 30-day primary therefore sat right at or past the edge
+of the window where the effect is reported to exist, not squarely inside it. This is a new
+pre-registered PRIMARY hypothesis at a specific horizon chosen from that external evidence, not
+the old L=[14,30,60,90] exploratory grid (already correctly declined by a second-pass
+spec-rescan agent — those cells were never confirmatory and BH-FDR-corrected to nothing). It is
+also distinct from B5-REVERSAL (L=3d/5d, `transform=raw`, a priori **negative** expected sign,
+already KILLED): this tests the **momentum** sign (recent winners keep winning) at a longer but
+still short window, under the residual transform, not reversal.
+
+**A real harness reuse, no new statistical machinery.** `runSealedMomentumPanelStudy`'s
+`primaryLookback`/`primaryHorizon` override (added for B5-REVERSAL, byte-identical to the old
+30/7 default when omitted, regression-tested) is exactly the mechanism this hypothesis needs —
+parameterized here to L=7/H=7 (primary) and L=14/H=14 (secondary) instead of B5's L=3/L=5.
+Added one CLI path, `node momentum.mjs sealed-short-horizon` (`momentum.mjs`), that calls the
+existing function twice (no new scoring code) and reports both lookbacks.
+
+**Pre-registration (frozen before this run):** primary lookback=7 (1 week, the window with
+reported "persistence"), secondary lookback=14 (2 weeks) reported alongside; horizon=lookback
+(step=horizon, this project's existing per-cell convention); transform=**btcResidual90** (the
+spec-settled gated statistic per PWR2-HARNESS's own reasoning — raw reported as companion, per
+that same precedent, as `primaryRaw`); expected sign **POSITIVE** (momentum, not reversal — a
+negative/reversal-signed result here would not confirm this hypothesis and is noted as such
+rather than silently reframed as a B5-REVERSAL-style finding). Universe stable-13 (train) /
+PWR1-backfilled watchlist-minus-stable-13 (whole-symbol sealed holdout, same split M7/B5 used).
+Two-stage gate, same discipline as M7/B4/B5: train block-permutation p<0.05 with the
+pre-registered positive sign required before the holdout counts at all. Net-of-cost economics
+computed at FEE-SCHEDULE-REBASE's corrected real round-trip cost (~1.7%, not the file's stale
+0.9% default M7 used), reported regardless of significance.
+
+**Result (`node momentum.mjs sealed-short-horizon`, live watchlist, stable-13 train / 16-symbol
+whole-symbol holdout):**
+
+| L | cell | D dates | rows | mean IC | block-perm p | 95% CI |
+|---|---|---:|---:|---:|---:|---|
+| 7 | train (residual) | 140 | 1604 | **-0.0218** | 0.6024 | [-0.0901, 0.0366] |
+| 7 | train (raw, companion) | 152 | 1760 | -0.0020 | 0.9630 | [-0.0719, 0.0514] |
+| 7 | recent holdout (4wk) | 4 | 52 | 0.0357 | 0.9491 | [0.0357, 0.0357] |
+| 7 | sealed whole-symbol holdout | 76 | 899 | 0.0039 | 0.9341 | [-0.0705, 0.0755] |
+| 14 | train (residual) | 68 | 776 | **0.0573** | 0.4266 | [-0.0193, 0.1351] |
+| 14 | train (raw, companion) | 74 | 854 | 0.0334 | 0.6523 | [-0.0584, 0.0915] |
+| 14 | recent holdout (4wk) | 4 | 52 | -0.0824 | 0.8661 | [-0.0824, -0.0824] |
+| 14 | sealed whole-symbol holdout | 36 | 433 | 0.0660 | 0.3237 | [-0.0120, 0.1856] |
+
+**Neither lookback clears the pre-registered train significance gate.** L=7's train residual IC
+is **negative** (-0.0218) — the wrong sign for a momentum hypothesis, falsifying rather than
+supporting it at this horizon, and its p=0.6024 is nowhere close to significant regardless.
+L=14's train residual IC is correctly signed (+0.0573, directionally consistent with the
+external-evidence thesis) but p=0.4266 fails the p<0.05 clause. Per the same two-stage
+discipline M7/B4/B5-REVERSAL(L=5) already established, the whole-symbol holdout does not get to
+count for either lookback once train fails — reported above for completeness/due-diligence
+only, not as confirmation. (For the record: L=14's holdout IC=0.0660, p=0.3237 is same-signed
+and larger than train, an interesting but non-gating pattern — one more data point that the
+7-30 day window may be worth revisiting with more data, not evidence this run can act on.)
+Per-regime train ICs at L=7 are inconsistent in sign (bull +0.016, bear -0.079, flat -0.160,
+unknown -0.100); at L=14 mostly positive but weak (bull +0.094, bear +0.007, flat +0.096,
+unknown -0.119) — neither shows the clean cross-regime positive pattern B5-REVERSAL's negative
+signal did.
+
+**Economics (train leg, corrected real ~1.7% round-trip cost, reported regardless of
+significance per pre-registration):** L=7 tercile net -2.40%, top-3 net -0.21%, top-5 net
++0.08% (essentially breakeven-to-negative). L=14 tercile net -0.57%, top-3 net +1.26%, top-5
+net +2.06% (net-positive at both top-N widths) — but this is a train-leg-only observation on a
+signal that already failed the train significance gate, not a tradeable finding; reported per
+this item's own "regardless of significance" instruction, not elevated above the gate result.
+
+**VERDICT: KILLED (both lookbacks), train-significance gate fails at L=7 (wrong sign) and L=14
+(right sign, p=0.4266).** The external-evidence thesis (short-window persistence, longer-window
+reversal) is not confirmed by this project's own stable-13 data at either of the two horizons
+it specifically motivated. Recorded as VERDICTS.md's `MOMENTUM-SHORT-HORIZON-RECHECK` row, a
+new tracked entry distinct from Momentum M7's existing 30-day entry (different, separately-
+gated horizons, not an overwrite).
+
+**Survivorship caveat (mandatory, applies here too):** the universe is survivors-only; this
+weakens any positive result and makes the present nulls, if anything, conservative evidence
+against a robust short-horizon edge rather than for one.
