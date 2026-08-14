@@ -1040,3 +1040,63 @@ capital-allocation angle for the existing swing-fractal signal specifically; it 
 speak to whether a *different* entry signal would fare better under the same
 shared-capital/correlated-exposure-cap machinery, which this item's own scope never
 claimed to test.
+
+## FUNDING-MEANREV RESULT (2026-08-14)
+
+Human-authored pre-registered test (TEST3-FUNDING-MEANREV). Hypothesis: spot longs
+gated on negative perpetual funding (shorts paying longs — a structural mean-reversion
+tailwind) produce positive expected value, on top of the existing `breakout` trigger —
+a genuinely different information source from every price-structure-only family above.
+Distinct from H11 (funding <=0.01% as a low-funding *inclusion* gate on `anticipate`):
+this uses a signed, strictly-negative funding threshold as an entry veto on `breakout`.
+
+**Data-availability gate, run first.** Binance USD-M funding (`fundinglib.mjs`) is
+confirmed HTTP 451 geo-blocked from this environment — same finding H11 already made.
+Kraken's public historical-funding-rates endpoint (`derivatives.mjs`) is reachable and
+was checked directly against all 29 watchlist assets: 28/29 have ~366.1 days of funding
+history (EOS has a single broken data point and was excluded), comfortably clearing the
+>=365-day / >=8-asset gate this item pre-registered. This is *not* a repeat of H11's own
+data-gated non-verdict — H11 needed 730 days for its gate and never got any assets past
+data availability; this item's own gate only needed 365 days and 28/29 assets clear it.
+
+**Split-boundary deviation, disclosed before any result was read.** The task's own
+literal train/holdout boundary ("earliest available funding data to 2025-06-01" for
+train, "2025-06-01 to present" for holdout) predates Kraken funding data existing at all
+— funding history starts 2025-08-13, after the specified train cutoff, which would leave
+the train split empty as literally written. Instead of forcing that broken boundary, the
+70/30 chronological split was applied within the funding-covered window itself, per
+asset (see `funding-meanrev.mjs`'s `windowedSplit`) — the same fraction-split convention
+this project already uses in `funding-gate-h11.mjs` and `funding-study.mjs`. This changes
+*where* the split falls, not any of the three pass/fail gate numbers below, which were
+fixed before this run per the pre-registered spec.
+
+Config: exact `breakout` baseline from `tournament.mjs`'s `families` table (tpR=3,
+minStopPct=.01, maxStopPct=.06, lockBreakeven=true, alignMode="none"), entryTf 1h, full
+watchlist, real cost basis (FEE_RATE=0.008/side, SLIPPAGE_PCT=0.0005/side, ~1.7% round
+trip — `strategy.js`'s live-verified constants, not a lower figure). Entry gate: funding
+rate at the entry bar's close < -0.005% AND `breakout`'s own trigger fires (both required,
+same AND semantics `entryGate` already enforces for every other family in this project).
+
+**Pre-registered train gate (must pass before holdout is even examined):** avgR/trade
+> -0.50 AND trades >= 150.
+
+**Result — train gate FAILS on both clauses, holdout never examined:**
+
+| | avgR/trade | trades | assets w/ >=1 trade | positive assets |
+|---|---|---|---|---|
+| Train | -0.891 | 131 | 19 / 28 | 3 / 19 |
+
+Gate check: avgR>-0.50 FAIL (-0.891), trades>=150 FAIL (131) — both clauses fail, and
+per this item's own pre-registered discipline ("Gates are immutable once the test
+begins") the holdout window was not examined at all.
+
+**Verdict: TRAIN-GATE-FAIL.** The funding+breakout combination is highly selective (9 of
+28 assets never fired a single trade in the train window; the whole watchlist ends
+~366 days of usable funding history 131 trades total) and, where it does fire, the train
+sample is decisively negative — this is not a sample-size non-verdict the way H11's own
+data-gated result was. Negative funding as a mean-reversion entry filter, layered on the
+`breakout` trigger, does not clear this project's own train significance bar and joins
+the standing conclusion in VERDICTS.md: every price-structure entry family and every
+filter/gate applied to one, tested to date, remains net-negative or worse after real
+costs. Recorded as VERDICTS.md's `FUNDING-MEANREV` row and as a `funding-meanrev` decision
+journal entry (`research-runs/2026-08-14T10-09-51-900Z-funding-meanrev.json`).
