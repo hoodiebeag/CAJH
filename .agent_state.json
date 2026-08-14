@@ -2,15 +2,15 @@
   "version": 2,
   "control": {
     "status": "IDLE",
-    "target_file": "commands.test.mjs, trader.test.mjs",
-    "objective": "Completed PORTFOLIO-LIVE-SIGNAL-SIM: swing-fractal signal run across the full watchlist with shared-capital risk sizing and a new correlated-exposure cap, through runPortfolioStudy()'s existing sealed 70/30 split. FAIL on both rebalance variants, all three gate clauses each (see VERDICTS.md/TOURNAMENT_ROADMAP.md). Also reconciled two other sessions' concurrent writes found mid-firing (WIDE-STOP-HIGH-TARGET-ASYMMETRY already pushed as a65ad00; FUNDING-CARRY-DECAY-CHECK landed from an uncommitted working-tree write) - both preserved, nothing lost. Queue now 56 items, 9 pending. One unit of work this firing per HYGIENE; stopping here.",
+    "target_file": "funding-meanrev.mjs, funding-meanrev.test.mjs",
+    "objective": "Completed TEST3-FUNDING-MEANREV: spot longs gated on negative perpetual funding (<-0.005%) AND breakout trigger, exact tournament.mjs breakout baseline config, full watchlist, real ~1.7% round-trip cost basis. Data-availability gate checked first: Binance funding HTTP 451 geo-blocked (confirmed live), Kraken historical-funding-rates works, 28/29 assets clear >=365-day/>=8-asset gate (EOS excluded). Disclosed a split-boundary deviation: task literal train cutoff (to 2025-06-01) predates Kraken funding data existing at all (starts 2025-08-13); split 70/30 within the funding-covered window per-asset instead, same convention as funding-gate-h11.mjs/funding-study.mjs - did not touch any pass/fail gate number. Result: TRAIN-GATE-FAIL (avgR -0.891 vs gate >-0.50; 131 trades vs gate >=150), holdout never examined per immutable-gate rule. Recorded in VERDICTS.md, TOURNAMENT_ROADMAP.md, and a funding-meanrev saveExperiment decision journal entry. npm.cmd test 330/330 green. Pushed as cd202d7. One unit of work this firing per HYGIENE; stopping here.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "Human reviewed the diff a blocked firing had left stashed (commit 33269e4, message 'ck passed' - truncated by a Vim editing mishap, content verified correct: exactly commands.test.mjs +166/trader.test.mjs +226, no changes to commands.js or trader.js themselves), created a fresh override marker per the hook's own instructions, and pushed. 22 new tests (14 trader.test.mjs, 8 commands.test.mjs): 301->323 passing. Verified locally: 318/323 green, the 5 failures are all pre-existing environmental gaps in this particular sandbox clone (4 known network-blocked funding-gate tests, plus cost-model.test.mjs's REAL_BTC_WINDOW fixture check needing a gitignored local candles/XBTUSD.csv cache that doesn't exist here) - none are regressions from this commit. Marking RISK-SURFACE-TEST-COVERAGE done, control back to IDLE.",
+    "notes": "No blocker. Next pending items (deps clear): TEST4-ONCHAIN-FLOW-GATE, TEST1-FIB-PULLBACK, TEST2-VOL-CONFIRMED-BREAKOUT, JUDGE-WALKFORWARD-SYMBOL-HOLDOUT, STATE-QUEUE-RETENTION, ORCHESTRATOR-CLUSTER-CLEANUP, WIDE-STOP-HIGH-TARGET-ASYMMETRY, FUNDING-CARRY-DECAY-CHECK, ATR-ADAPTIVE-STOP-CONFIRMATORY, SCALED-EXIT-LADDER-CONFIRMATORY, MOMENTUM-SHORT-HORIZON-RECHECK.",
     "updated_by": "cajh-loop-check",
-    "updated_at": "2026-08-14T08:20:00.000Z",
+    "updated_at": "2026-08-14T10:20:00.000Z",
     "block_detail": null
   },
   "blackboard": {
@@ -515,7 +515,7 @@
       },
       {
         "id": "TEST3-FUNDING-MEANREV",
-        "state": "pending",
+        "state": "done",
         "owner": "executor",
         "file": "new: funding mean-reversion study (research.js / backtest.js style, additive), decision journal entry labeled FUNDING-MEANREV",
         "depends_on": [],
@@ -660,22 +660,6 @@
     "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
   },
   "ledger": [
-    {
-      "ts": "2026-08-07T21:05:00.000Z",
-      "agent": "loop",
-      "action": "reconcile",
-      "detail": "STEP 0/1 found the state file well-formed (control/blackboard.work_queue/ledger all present, no corruption) but stale: control pointed at T3-REGIMEFILTER as the most recently completed item and work_queue still listed T4-PORTFOLIO-MOMENTUM as pending, while git log showed commit 3e82137 ('research: T4-PORTFOLIO-MOMENTUM - sealed holdout, both strategies FAIL') already on main, with TOURNAMENT_ROADMAP.md's 'Track 4 - RESULT' section fully written. Concluded a prior firing completed STEP 3 (research + doc + commit) but was interrupted before STEP 6 (state handoff), leaving code and state out of sync - not a case of state-file corruption (STEP 1's shape check passed) and not a case of finding BLOCKED/idle work to pick up fresh. Verified rather than trusted: read the full Track 4 RESULT section against the item's own done_when (both rebalance variants x both strategies, all three gate clauses each, explicit FAIL verdict, roadmap-conclusion statement about needing a new hypothesis) - matches. Independently re-ran npm.cmd test: 175/175 green, matching the commit's claim. No source or doc changes made this firing (3e82137 already covers the work); this firing's only output is reconciling work_queue (T4-PORTFOLIO-MOMENTUM -> done, result recorded), control (status IDLE, objective/notes updated to describe the FAIL result and that Tracks 1-4 are now all closed), and this ledger entry. Treated as this firing's one unit of work per HYGIENE - did not also pull a new pending item. STEP 4: no notification - not BLOCKED, queue not empty (PWR3/PWR4/T1B-BREAKOUT-COSTFIX/T5-DECAY-EXIT/T6-TIMEFRAME-ISOLATION all pending+ready, 5 items), no ROADMAP verdict newly reaching PASS (Track 4 is a FAIL, and it closes the tournament track rather than opening a live-promotion question). STEP 5: 5 pending+ready items (>=3), no restock needed - one-line check only.",
-      "commit": "3e82137 (pre-existing; this firing added no new source commit)",
-      "tests": "175 pass, 0 fail"
-    },
-    {
-      "ts": "2026-08-07T21:10:42.396Z",
-      "agent": "architect",
-      "action": "cleanup",
-      "detail": "Blackboard rot cleanup per a 3-way audit workflow (2026-08-07): deleted active_study/in_flight/next_queue (fully superseded - MR1 finished 3 days ago, the collision they described resolved 2 days ago, work_queue moved past T1 5+ commits ago). Rewrote known_findings to point at the new VERDICTS.md index instead of a hardcoded summary that will drift again. Rewrote test_command to stop hardcoding a pass count (was '166 total', real count is 175 - a hardcoded count in this file will always eventually be wrong, so it now just names the command). Added frozen_paths_note clarifying the frozen_paths list no longer gates anything (superseded by the pre-commit hook, per AGENT_PROTOCOL.md's Full control section) - left frozen_paths itself in place as historical reference. Fixed roadmap_v2_review's 'not yet staged' claim (T6-TIMEFRAME-ISOLATION was staged same day). Fixed notification_policy.known_gap in both this file and AGENT_PROTOCOL.md - PushNotification has fired once (2026-08-06 pull deadlock), the real gap is delivery (Remote Control inactive), not approval. Created VERDICTS.md (repo root) as the single verdict index the audit found didn't exist - the direct cause of the Roadmap v2 duplicate-proposal incident. Also corrected a real data inconsistency in TOURNAMENT_ROADMAP.md (breakout unfiltered holdout cited as both -0.437 and -0.445 net-of-cost in the same document, from two different runs; -0.445/3123-trades is the correct current figure) and added a forward-pointer at ROADMAP.md's original M7 entry to its own UPDATE section. Did not touch T4's reconciliation (3e2e3b7) or control - that was the loop's own correct, independently-verified work, not stale.",
-      "commit": "pending",
-      "tests": "no source changed this step"
-    },
     {
       "ts": "2026-08-07T21:30:00.000Z",
       "agent": "loop",
@@ -1467,6 +1451,14 @@
       "detail": "Staged 3 genuinely different axes per direct human request ('find more ideas like the wide stop high target test... leave no stone unturned'). Investigated backtest.js's full option surface directly rather than guessing: found TWO already-built capabilities (stopMode='atr'/atrStopK - volatility-relative stop distance; partialAtR/partialFrac/trailR - scaled exit banking early profit then trailing a runner) that have existed in the codebase this whole project, are cited elsewhere ONLY as precedent for other options' no-op pattern or used in an informal Discord diagnostic, and have literally zero VERDICTS.md presence - the same 'built but never properly verdicted' gap class as h3/range_sweep_reclaim/TREND_GATE, just discovered via direct code investigation this time rather than a prior audit. Staged ATR-ADAPTIVE-STOP-CONFIRMATORY and SCALED-EXIT-LADDER-CONFIRMATORY to close both, each isolating its own variable (stop definition vs. exit structure) to keep results interpretable, explicitly noting that combining them is a natural but separate follow-up if both look promising independently. Third item (MOMENTUM-SHORT-HORIZON-RECHECK) came from external research: academic literature specifically reports crypto cross-sectional momentum as real at 1-4 week formation periods with persistence limited to 1 week, while M7's own confirmatory primary test used a 30-day lookback - sitting at/past the edge of the reported window, not inside it. Pre-registered as a genuinely new primary hypothesis (not a re-run of the old, already-correctly-declined exploratory grid) at lookback=7/14 with the same two-stage train-significance-first discipline as every other momentum-family study in this project. All three use net-of-cost economics at the corrected ~1.7% real round-trip figure (FEE-SCHEDULE-REBASE), not the stale original assumption.",
       "commit": "pending",
       "tests": "no source changed this step"
+    },
+    {
+      "ts": "2026-08-14T10:20:00.000Z",
+      "agent": "cajh-loop-check",
+      "action": "TEST3-FUNDING-MEANREV done (FAIL)",
+      "detail": "Negative-funding entry gate (<-0.005%) layered on breakout baseline, full watchlist, Kraken funding source (Binance 451-blocked, confirmed), 28/29 assets cleared data-availability gate. TRAIN-GATE-FAIL: avgR -0.891 (gate >-0.50), 131 trades (gate >=150) - holdout never examined. Disclosed split-boundary deviation (funding-covered window, not literal 2025-06-01 cutoff which predates funding data). VERDICTS.md/TOURNAMENT_ROADMAP.md updated, decision journal saved.",
+      "commit": "cd202d7",
+      "tests": "330/330"
     }
   ],
   "automation": {
