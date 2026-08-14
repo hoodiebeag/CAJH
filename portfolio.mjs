@@ -1,6 +1,7 @@
 /** Research-only daily portfolio simulator: targets, cash, turnover, and walk-forward splits. */
 import { loadResearchCandles, saveExperiment } from "./researchlab.mjs";
 import { loadWatchlist, symbolToKrakenId } from "./researchlib.mjs";
+import { detectSwings, RECENT_BARS, MIN_STOP_PCT, MAX_STOP_PCT_BY_TF, RISK_PCT, MAX_POSITION_PCT } from "./strategy.js";
 
 const DAY = 86400;
 const mean = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
@@ -11,7 +12,7 @@ function panel(watchlist) {
   const series = new Map(normalize(watchlist).map(({ symbol, id }) => [symbol, loadResearchCandles(id, 1440)]));
   const dates = [...new Set([...series.values()].flatMap((xs) => xs.map((x) => x.time)))].sort((a, b) => a - b);
   const prices = new Map([...series].map(([symbol, xs]) => [symbol, new Map(xs.map((x) => [x.time, x.close]))]));
-  return { symbols: [...series.keys()].filter((s) => s !== "BTC"), dates, prices };
+  return { symbols: [...series.keys()].filter((s) => s !== "BTC"), dates, prices, candles: series };
 }
 function returns(prices, dateIndex, dates, symbol, days) {
   const now = prices.get(symbol)?.get(dates[dateIndex]), then = prices.get(symbol)?.get(dates[dateIndex - days]);
@@ -25,6 +26,30 @@ function normalizeWeights(scores, topN, inverseVol = false) {
 function normalizeShortWeights(scores, topN) {
   const chosen = [...scores].sort((a, b) => a.score - b.score).slice(0, topN).filter((x) => Number.isFinite(x.score));
   return new Map(chosen.map((x) => [x.symbol, -1 / chosen.length]));
+}
+
+// This portfolio's whole universe is correlated crypto longs (ROADMAP.md's "Risk-based
+// sizing + correlated-exposure cap" item): summing independently-computed per-symbol
+// risk-based sizes without a ceiling would let a broad simultaneous signal (everything
+// swinging low together, which is exactly when correlation is highest) deploy far more
+// capital than any single-name risk budget was ever meant to authorize. 60% caps
+// aggregate deployed capital while leaving a genuine cash buffer, distinct from and below
+// what N=5 positions at the individual MAX_POSITION_PCT ceiling (20% each, 100% total)
+// would otherwise allow.
+export const MAX_PORTFOLIO_EXPOSURE_PCT = 0.60;
+
+// detectSwings() is a causal left-to-right scan (no look-ahead), so the pivot list up to
+// any index is a prefix of the pivot list computed on the full series - safe to compute
+// once per symbol's candle array and reuse across every rebalance call in a run, instead
+// of re-scanning history from scratch at each step.
+const swingSignalCache = new WeakMap();
+function swingSignalFor(candlesArr) {
+  let cached = swingSignalCache.get(candlesArr);
+  if (!cached) {
+    cached = { pivots: detectSwings(candlesArr), indexByTime: new Map(candlesArr.map((c, i) => [c.time, i])) };
+    swingSignalCache.set(candlesArr, cached);
+  }
+  return cached;
 }
 
 export const portfolioStrategies = {
@@ -110,6 +135,42 @@ export const portfolioStrategies = {
     label: "7d relative reversal top 5",
     target: normalizeWeights(symbols.map((symbol) => ({ symbol, score: -returns(prices, index, dates, symbol, 7), vol: 1 })), 5),
   }),
+  // Runs the real live entry signal (strategy.js's detectSwings/entrySignal, imported
+  // unchanged - no re-derived approximation) across the full watchlist simultaneously,
+  // sized per strategy.js's own risk formula (RISK_PCT / stop distance, capped at
+  // MAX_POSITION_PCT per symbol), then scaled down if the aggregate would exceed
+  // MAX_PORTFOLIO_EXPOSURE_PCT. A capital-allocation/diversification test, not a new
+  // signal: every prior study measured this same signal one symbol at a time.
+  swing_fractal_portfolio: ({ symbols, prices, dates, index, candles }) => {
+    const t = dates[index], maxStop = MAX_STOP_PCT_BY_TF["1d"];
+    const rows = symbols.map((symbol) => {
+      const candlesArr = candles.get(symbol);
+      if (!candlesArr) return null;
+      const { pivots, indexByTime } = swingSignalFor(candlesArr);
+      const localIndex = indexByTime.get(t);
+      if (localIndex == null) return null; // no candle for this symbol on this date
+      let last = null;
+      for (let i = pivots.length - 1; i >= 0; i--) {
+        if (pivots[i].confirmIndex <= localIndex) { last = pivots[i]; break; }
+      }
+      // Mirrors entrySignal(): structure must currently be bullish (most recent
+      // confirmed pivot is a low) and recently confirmed (within RECENT_BARS).
+      if (!last || last.type !== "low" || localIndex - last.confirmIndex > RECENT_BARS) return null;
+      const entry = prices.get(symbol)?.get(t);
+      if (!(entry > 0)) return null;
+      const risk = entry - last.price;
+      if (risk <= 0) return null;
+      const stopFrac = risk / entry;
+      if (stopFrac < MIN_STOP_PCT || stopFrac > maxStop) return null; // same stop-band gate scanner.js applies live
+      return { symbol, weight: Math.min(MAX_POSITION_PCT, RISK_PCT / stopFrac) };
+    }).filter(Boolean);
+    const gross = rows.reduce((sum, r) => sum + r.weight, 0);
+    const scale = gross > MAX_PORTFOLIO_EXPOSURE_PCT ? MAX_PORTFOLIO_EXPOSURE_PCT / gross : 1;
+    return {
+      label: "live swing-fractal signal, risk-sized, correlated-exposure capped",
+      target: new Map(rows.map((r) => [r.symbol, r.weight * scale])),
+    };
+  },
 };
 
 /** Simulate one strategy without look-ahead: target at close t, returns begin t→t+1. */

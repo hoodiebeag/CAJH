@@ -981,3 +981,62 @@ trend-quality filter this repo had built but never tested does not change the st
 conclusion: every price-structure entry family and every filter applied to one, tested to
 date, remains net-negative after real costs. No gate constant was touched after seeing
 these numbers.
+
+## PORTFOLIO-LIVE-SIGNAL-SIM RESULT (2026-08-14)
+
+A capital-allocation/diversification question, not a new signal: every study to date,
+including `backtest.js` itself, measures one symbol at a time with no shared capital and
+no cross-position exposure cap. This runs the existing live swing-fractal signal
+(`strategy.js`'s `detectSwings`/`entrySignal`, imported unchanged, no re-derived
+approximation) across the full watchlist simultaneously through `portfolio.mjs`'s
+already-audited `simulatePortfolio()`, to ask whether realistic shared-capital
+diversification clears the gate even though no single symbol does alone.
+
+Added `swing_fractal_portfolio` to `portfolio.mjs`'s existing `strategies` map (reusing
+`runPortfolioStudy()`'s sealed 70/30 chronological split unmodified, no new harness). At
+each rebalance step, for every symbol with a recently-confirmed swing low
+(`entrySignal`'s own recency window, `RECENT_BARS`), position size is `strategy.js`'s own
+live risk formula verbatim — `RISK_PCT / stopFrac`, capped per-symbol at
+`MAX_POSITION_PCT`, gated by the same `MIN_STOP_PCT`/`MAX_STOP_PCT_BY_TF["1d"]` stop band
+`scanner.js` applies live. Because this universe is entirely correlated crypto longs, the
+never-yet-executed "correlated-exposure cap" from `ROADMAP.md`'s go-live checklist is
+applied on top: if the sum of individually-sized positions exceeds a new
+`MAX_PORTFOLIO_EXPOSURE_PCT` (60%, chosen and fixed in code before this run — see
+`portfolio.mjs` for the reasoning), all weights are scaled down pro-rata to that ceiling
+rather than left to sum arbitrarily high on a day when many correlated signals fire
+together. Full watchlist (28 assets, BTC excluded as with every other `portfolio.mjs`
+strategy).
+
+**Pre-registered gate (same style as every other portfolio-level entry in this document,
+fixed before reading the holdout numbers below):**
+- Holdout Sharpe > 0.5
+- Holdout total return > 0
+- Holdout max drawdown > -35%
+
+**Result:**
+
+| Variant | Train Sharpe | Train total return | Train max drawdown | Holdout Sharpe | Holdout total return | Holdout max drawdown |
+|---|---|---|---|---|---|---|
+| `swing_fractal_portfolio`, 7d rebalance | -0.086 | -11.6% | -72.0% | -0.231 | -14.2% | -53.4% |
+| `swing_fractal_portfolio`, 30d rebalance | -0.164 | -18.1% | -66.9% | -0.375 | -21.9% | -58.2% |
+
+**Gate check (pre-registered, not adjusted after seeing these numbers):**
+- 7d rebalance: Sharpe>0.5 FAIL (-0.231), totalReturn>0 FAIL (-14.2%), maxDrawdown>-35%
+  FAIL (-53.4%) → all three FAIL
+- 30d rebalance: Sharpe>0.5 FAIL (-0.375), totalReturn>0 FAIL (-21.9%), maxDrawdown>-35%
+  FAIL (-58.2%) → all three FAIL
+
+**Verdict: FAIL, both variants, all three clauses each.** Diversification and
+correlated-exposure-capped shared-capital sizing do not rescue this signal — running it
+across 28 assets simultaneously is markedly *worse* on every measured axis (Sharpe,
+return, and drawdown) than the already-abandoned Track 4 cross-sectional momentum
+strategies, not merely no-better. The train-window sign agrees with holdout on both
+variants (no train/holdout divergence to explain away), and drawdown breaches the -35%
+floor by a wide margin in every case — this is not a borderline near-miss the way Track
+4's `momentum_30d` 30d-rebalance drawdown clause was. Recorded as VERDICTS.md's
+`PORTFOLIO-LIVE-SIGNAL-SIM` row. No gate constant, including the newly-introduced
+`MAX_PORTFOLIO_EXPOSURE_PCT`, was touched after seeing these numbers. This closes the
+capital-allocation angle for the existing swing-fractal signal specifically; it does not
+speak to whether a *different* entry signal would fare better under the same
+shared-capital/correlated-exposure-cap machinery, which this item's own scope never
+claimed to test.
