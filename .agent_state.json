@@ -2,8 +2,8 @@
  "version": 2,
  "control": {
   "status": "IDLE",
-  "target_file": "tournament.mjs, tournament.test.mjs, TOURNAMENT_ROADMAP.md, VERDICTS.md (ATR-ADAPTIVE-STOP-CONFIRMATORY, commit ccb166e)",
-  "objective": "Completed ATR-ADAPTIVE-STOP-CONFIRMATORY as this firing's single work_queue item (see the 2026-08-14T16:20:00.000Z ledger entry for full detail; control.notes above is stale, left from a concurrent session's separate item, untouched here because overwriting it would delete a protected-logic-hook-tripping line).",
+  "target_file": "tournament.mjs, tournament.test.mjs, TOURNAMENT_ROADMAP.md, VERDICTS.md (WIDE-STOP-HIGH-TARGET-ASYMMETRY, commit b3a1e87)",
+  "objective": "Completed WIDE-STOP-HIGH-TARGET-ASYMMETRY as the next work_queue item (interactively directed, not a scheduled firing): ran the pre-registered maxStopPct{6,7,8,9,10%} x tpR{6,8,10,15,20} grid on breakout and anticipate with lockBreakeven off, full 28-asset watchlist, standard 70/30 split, real cost basis. FAIL, 0/50 cells clear the gate (holdout avgR>-0.30, trades>=150, positiveAssets/assets>=0.40). Ran the item's own pre-registered MAX_HOLD-censoring prerequisite check first: default maxHold=100 censored 9-21% of trades across the whole grid, not just its widest corner; extended to maxHold=4320 (180 days, smallest value clearing censoring everywhere) for the full grid. Extending did NOT rescue the thesis - avgR got MORE negative at every sampled cell once censoring was removed (previously-censored trades mostly resolve to stop, not to the distant target). tournament.mjs gained runWideStopHighTargetAsymmetry + summarizeWithCensoring helper + --wide-stop-high-target CLI branch (50 decision-journal entries in research-runs/); tournament.test.mjs gained 2 tests; TOURNAMENT_ROADMAP.md/VERDICTS.md given the full 50-cell grid + before/after censoring comparison + verdict. npm.cmd test 355/355 green before and after. Only tournament.mjs/tournament.test.mjs/TOURNAMENT_ROADMAP.md/VERDICTS.md touched; no protected-logic files in the diff; pre-commit hook passed clean on first try (learned the 1-space-indent lesson from the prior firing).",
   "notes": "Human directly authorized resolving QUEUE-RETENTION-HOOK-PRUNE-EXCEPTION in this live interactive session (\"no preference, up to you\") rather than the unattended-loop path the hook's own guidance warns against self-authorizing. Reviewed the diff before creating the marker: pruning FEE-SCHEDULE-REBASE and the 5 PARITY-* items removes only their stored task/done_when prose from work_queue (identical to the 32 items STATE-QUEUE-RETENTION already pruned cleanly) - their findings survive permanently in PARITY_MATRIX.md's COVERED rows and ROADMAP.md/VERDICTS.md/TOURNAMENT_ROADMAP.md prose, per the same retention rule. Confirmed the hook's PROTECTED_PATTERNS scan checks both added and removed diff lines (scripts/check-protected-logic.cjs:63), so no rewording of the stored text could have avoided the marker either - deleting text that mentions placeBuy/placeSell trips it exactly like adding such text would. Created a fresh .git/ALLOW_PROTECTED_EDIT marker immediately before this commit. Marked QUEUE-RETENTION-HOOK-PRUNE-EXCEPTION done. control.status back to IDLE.",
   "block_detail": null,
   "updated_by": "human-authorized-hook-prune",
@@ -177,7 +177,7 @@
    },
    {
     "id": "WIDE-STOP-HIGH-TARGET-ASYMMETRY",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: stop x target grid-sweep study (additive, reuses backtest.js's existing overridable maxStopPct/tpR/lockBreakeven params), decision journal label WIDE-STOP-HIGH-TARGET",
     "depends_on": [],
@@ -267,14 +267,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-08T03:15:00Z",
-   "agent": "loop",
-   "action": "C2 done (live-context: open-position R/reason + halt-cause heuristic, both non-protected additions); C3 unblocked",
-   "detail": "Verified buildLiveContext against C2 task text before writing code (prior firing flagged this as likely mostly-done). Two real gaps found and fixed narrowly: positions lacked R/reason (trade.risk/strategyReason already recorded by scanner.js, just not surfaced); halt reason=\"manual\" is identical for boot-default and an operator !stop, so added a pure describeHaltCause() timing heuristic (injectable bootedAt, no monitor.js/bot.js edits, confirmed zero overlap with check-protected-logic.cjs PROTECTED_PATTERNS in the actual diff before committing). 6 new tests, all via either plain-object calls to the new pure function or the temp-DATA_DIR subprocess pattern already used elsewhere in this repo (monitor.hydrateTrades is not a protected identifier). npm.cmd test 195/195 green.",
-   "commit": "ddd86d1",
-   "tests": "195/195"
-  },
   {
    "ts": "2026-08-08T03:25:00Z",
    "agent": "loop",
@@ -1066,6 +1058,14 @@
    "detail": "Ran the pre-registered atrStopK{1.5,2,2.5,3,4} x atrPeriod{14,20} grid (backtest.js stopMode=\"atr\") against breakout and anticipate, full 28-asset watchlist, standard 70/30 split, corrected real cost basis. Mid-run discovery disclosed in TOURNAMENT_ROADMAP.md/VERDICTS.md: backtest.js breakoutEntry() hardcodes its stop at a fixed 2x-ATR and never reads stopMode/atrStopK, so the breakout half of the grid only varies atrPeriod, not the pre-registered hypothesis (verified by exact match vs. the plain no-override baseline). anticipate arm is a real test, still fails the gate (avgR>0, trades>=150, positiveAssets/assets>=0.50) despite improving on its structural-stop baseline. tournament.mjs: new runAtrAdaptiveStop + --atr-adaptive-stop CLI (20 decision-journal entries in research-runs/). tournament.test.mjs: 2 new tests. Pulled commit 89d859d (a concurrent interactive session's human-authorized QUEUE-RETENTION-HOOK-PRUNE-EXCEPTION resolution) fresh before this write, clean fast-forward, no conflict; that item's own work_queue entry and control.notes text were left untouched here.",
    "commit": "ccb166e",
    "tests": "353/353 green"
+  },
+  {
+   "ts": "2026-08-14T17:00:00.000Z",
+   "agent": "interactive-session",
+   "action": "WIDE-STOP-HIGH-TARGET-ASYMMETRY done, FAIL (0/50 grid cells); control back to IDLE",
+   "detail": "Ran the pre-registered maxStopPct{6,7,8,9,10%} x tpR{6,8,10,15,20} grid on breakout and anticipate with lockBreakeven off, full 28-asset watchlist, standard 70/30 split, real cost basis. Ran the item's own pre-registered MAX_HOLD-censoring prerequisite check first: default maxHold=100 censored 9-21% of trades across the whole grid, not just its widest corner (mildest cell 9.1%/12.2%, widest 17.0%/21.3%). Extended to maxHold=4320 (180 days), the smallest value clearing censoring at every sampled cell. Extending did not rescue the thesis: target-hit rate rose (e.g. widest cell 0.6%->3.5% breakout) but stayed rare, and avgR got MORE negative at every sampled cell (mildest -0.94->-0.96/-0.89->-0.94, widest -1.00->-1.17/-0.88->-1.16) - removing censoring ambiguity revealed a worse picture, not a better one hidden by premature timeouts. Full 50-cell grid: every cell fails decisively on avgR (-0.91 to -1.22, gate >-0.30) and positive-asset fraction (breakout max 2/28, anticipate always 0/27); trade-count floor cleared everywhere (1222-2883). Best cell: anticipate maxStopPct=9%/tpR=6, holdout avgR -0.9066. tournament.mjs: new runWideStopHighTargetAsymmetry + summarizeWithCensoring + --wide-stop-high-target CLI (50 decision-journal entries in research-runs/). tournament.test.mjs: 2 new tests.",
+   "commit": "b3a1e87",
+   "tests": "355/355 green"
   }
  ],
  "automation": {
