@@ -347,6 +347,10 @@ export function backtestMultiTF({ series } = {}, {
   const trades = [];
   const reasons = {};   // tally of why each candidate swing low was taken / rejected
   const exits   = {};   // tally of HOW each trade ended (stop / target / trail-be / partial / timeout)
+  // Net R banked specifically by the partialAtR leg vs. every other leg (the runner, or a
+  // full-size close when partialAtR is off) — lets a caller see how much of totalR came from
+  // banking early vs. letting the remainder run, not just the blended per-trade average.
+  let partialR = 0, runnerR = 0;
   let pos = null, prevLowPrice = null;
   let antCand = null, antHi = null;   // anticipate mode: running unconfirmed candidate low / high
   let antTradedIdx = null;            // candidate index already traded (one trade per level, mirrors live)
@@ -512,7 +516,9 @@ export function backtestMultiTF({ series } = {}, {
       // Close `frac` of what's left at `px`; bank the trade once nothing remains.
       const closeLeg = (px, frac, why) => {
         const f = Math.min(frac, pos.open);
-        pos.realized += f * netAt(px);
+        const legR = f * netAt(px);
+        pos.realized += legR;
+        if (why === "partial+runner") partialR += legR; else runnerR += legR;
         pos.open -= f;
         if (pos.open <= 1e-9) {
           trades.push(pos.realized);
@@ -596,7 +602,9 @@ export function backtestMultiTF({ series } = {}, {
     maxDrawdownR: maxDD,
     results: trades,  // raw per-trade R values, for pooling across pairs
     exits,            // { stop, target, "trail/be", "partial+runner", swingHigh, timeout }
-    reasons           // { taken, stopTooTight, stopTooFar, trendGate, notAligned, notHigherLow, priceBelowStop }
+    reasons,          // { taken, stopTooTight, stopTooFar, trendGate, notAligned, notHigherLow, priceBelowStop }
+    partialR,         // net R banked by partialAtR legs specifically (0 when partialAtR is off)
+    runnerR           // net R banked by every other leg (the remainder/runner, or a full close)
   };
 }
 

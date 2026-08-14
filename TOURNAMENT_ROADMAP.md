@@ -1563,3 +1563,138 @@ makes the measured result WORSE, not better, because the rare trades that do rea
 target are vastly outnumbered by trades that eventually revert all the way to a wide stop
 instead. Recorded as VERDICTS.md's `WIDE-STOP-HIGH-TARGET-ASYMMETRY` row and as 50 decision
 journal entries (`research-runs/2026-08-14T16-55-*-wide-stop-high-target-*.json`).
+
+## SCALED-EXIT-LADDER-CONFIRMATORY RESULT (2026-08-14)
+
+Human-directed research: `backtest.js`'s `partialAtR`/`partialFrac` (bank a fraction of the
+position at an early R-multiple) combined with `trailR`/`trailStartR` (trail a stop below the
+running peak once price has run far enough) implements a genuinely different exit STRUCTURE
+from anything verdicted before — bank real profit early, then let the remainder run with a
+trailing stop instead of a fixed target. Distinct from the single-fixed-TP baseline, from
+WIDE-STOP-HIGH-TARGET-ASYMMETRY (a single all-or-nothing extreme target, no partial banking),
+and from TRAIL-STOP-EXIT (`trailingTpPct`, a percentage-pullback exit with no partial banking,
+already FAIL). Grep-confirmed: `partialAtR`/`partialFrac`/`trailR` appear only in
+`commands.js`'s informal `!exits` Discord diagnostic — an exploration tool for a human to
+eyeball three example configs, never run as a sealed confirmatory study with a pre-registered
+gate, zero prior VERDICTS.md presence.
+
+Pre-registered grid: `partialAtR` in {1, 2, 3} x `partialFrac` in {0.33, 0.5, 0.67} x `trailR`
+in {1, 2} = 18 cells per family, 36 total, `trailStartR = partialAtR` (trailing starts exactly
+when the partial banks). Stop definition (structural, current default) held fixed — isolates
+the exit-STRUCTURE variable alone, per the task's own instruction to keep this separate from
+ATR-ADAPTIVE-STOP-CONFIRMATORY's stop-definition change. Applied to `breakout` and
+`anticipate` (same two families as the sibling ATR item, for comparability), full 28-asset
+watchlist, standard 70/30 split, net-of-cost from the start (`backtest.js`'s own
+`FEE_RATE=0.008`/`SLIPPAGE_PCT=0.0005` defaults, the corrected real basis per
+FEE-SCHEDULE-REBASE). Implemented as `tournament.mjs`'s new `runScaledExitLadder`, gated
+behind `--scaled-exit-ladder`. One small, tightly-scoped `backtest.js` addition beyond the
+task's "zero new backtest.js code" expectation: two accumulators (`partialR`, `runnerR`)
+inside `backtestMultiTF`'s existing `closeLeg` — tallying net R banked by the `partialAtR` leg
+specifically vs. every other leg — were required to satisfy this item's own done_when
+("realized-vs-unrealized split... so the mechanism's actual behavior is visible"), which no
+existing return field could answer; the grid/gate wiring itself needed no other `backtest.js`
+changes. 26/26 pre-existing `backtest.test.mjs` tests stayed green after the addition.
+
+**Mid-run discovery #1, disclosed rather than absorbed silently: `breakout`'s `partialAtR=3`
+cells are degenerate — identical to the plain fixed-TP baseline, regardless of `partialFrac`
+or `trailR`.** `breakout`'s own family config (`families` in `tournament.mjs`) uses `tpR: 3`.
+When `partialAtR` equals that same value, the partial-banking price and the fixed take-profit
+price are identical, and `backtestMultiTF`'s exit checks run the fixed-TP check (`hi >=
+pos.tp`) BEFORE the partial-banking check in the same candle — so the fixed TP closes the
+FULL position first, and the partial leg (checked immediately after, but only `if (pos && ...)`)
+never fires because `pos` is already null. Verified directly: all 6 `breakout`/`partialAtR=3`
+cells report holdout avgR=-0.8640/3156 trades/0.00 `partialR`, an exact match to the freshly
+re-run `breakout` fixed-TP baseline below — the partial+trail structure silently degrades to
+"a bog-standard fixed-TP exit" at this one grid coordinate rather than testing what it was
+built to test. The other 12 `breakout` cells (`partialAtR` in {1, 2}, genuinely below `tpR=3`)
+are real tests of the mechanism.
+
+**Mid-run discovery #2, disclosed rather than absorbed silently: `partialR + runnerR` does not
+reconcile exactly to `totalR` for `anticipate`, by a consistent ~12-14%; for `breakout` it
+reconciles to the penny.** Root cause, traced to `backtest.js`'s `anticipate`-entry branch: a
+same-candle "the entry bar's low also touches the stop" fast path (`if (L[k] <= stop) {
+trades.push(...); pos = null; }`, distinct from the shared `closeLeg` helper every other exit
+routes through) books an immediate full-size stop-loss directly into `totalR` without ever
+touching `partialR`/`runnerR` or the `exits` tally — these trades close on their own entry
+candle, before the multi-bar loop where partial/trail logic lives, so they are structurally
+never partial-eligible (always 100% loss, never a partial-bank candidate). `breakout`'s entry
+path has no equivalent same-candle fast path, so its reconciliation is exact (gap <$0.50 on
+totals in the thousands, pure floating-point noise). This does not change any `anticipate`
+avgR/trades/gate number (`totalR`/`trades[]` were already correct and unaffected by this
+item's additions) — it only means the partial-vs-runner split under-covers `anticipate`'s
+same-bar instant stop-outs by construction, which is disclosed here as an interpretive caveat
+on the split, not a defect in the reported gate results.
+
+**Full grid — holdout avgR/trade, trade count, positive assets, train avgR, train trades,
+partial-leg R / runner-leg R (holdout, net-of-cost, summed across the watchlist — see the
+reconciliation caveat above for `anticipate`), per cell:**
+
+| Family | partialAtR | partialFrac | trailR | Holdout avgR | Holdout n | Pos assets | Train avgR | Train n | Partial R | Runner R | Gate |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| breakout | 1 | 0.33 | 1 | -0.8845 | 3606 | 0/28 | -0.8743 | 8384 | 30.1 | -3219.6 | FAIL |
+| breakout | 1 | 0.33 | 2 | -0.8851 | 3231 | 0/28 | -0.8787 | 7562 | 26.9 | -2886.7 | FAIL |
+| breakout | 1 | 0.5 | 1 | -0.8914 | 3606 | 0/28 | -0.8796 | 8384 | 45.7 | -3259.7 | FAIL |
+| breakout | 1 | 0.5 | 2 | -0.8905 | 3231 | 0/28 | -0.8833 | 7562 | 40.8 | -2917.7 | FAIL |
+| breakout | 1 | 0.67 | 1 | -0.8982 | 3606 | 0/28 | -0.8850 | 8384 | 61.2 | -3299.8 | FAIL |
+| breakout | 1 | 0.67 | 2 | -0.8958 | 3231 | 0/28 | -0.8880 | 7562 | 54.7 | -2948.7 | FAIL |
+| breakout | 2 | 0.33 | 1 | -0.8588 | 3208 | 0/28 | -0.8629 | 7527 | 327.4 | -3082.4 | FAIL |
+| breakout | 2 | 0.33 | 2 | -0.8632 | 3158 | 0/28 | -0.8687 | 7393 | 319.1 | -3045.2 | FAIL |
+| breakout | 2 | 0.5 | 1 | -0.8573 | 3208 | 0/28 | -0.8595 | 7527 | 496.1 | -3246.2 | FAIL |
+| breakout | 2 | 0.5 | 2 | -0.8614 | 3158 | 0/28 | -0.8647 | 7393 | 483.4 | -3203.8 | FAIL |
+| breakout | 2 | 0.67 | 1 | -0.8558 | 3208 | 0/28 | -0.8561 | 7527 | 664.7 | -3410.1 | FAIL |
+| breakout | 2 | 0.67 | 2 | -0.8596 | 3158 | 0/28 | -0.8607 | 7393 | 647.8 | -3362.5 | FAIL |
+| breakout | 3 | 0.33 | 1 | -0.8640 | 3156 | 0/28 | -0.8772 | 7386 | 0.0 | -2726.7 | FAIL (degenerate, see disclosure) |
+| breakout | 3 | 0.33 | 2 | -0.8640 | 3156 | 0/28 | -0.8772 | 7386 | 0.0 | -2726.7 | FAIL (degenerate, see disclosure) |
+| breakout | 3 | 0.5 | 1 | -0.8640 | 3156 | 0/28 | -0.8772 | 7386 | 0.0 | -2726.7 | FAIL (degenerate, see disclosure) |
+| breakout | 3 | 0.5 | 2 | -0.8640 | 3156 | 0/28 | -0.8772 | 7386 | 0.0 | -2726.7 | FAIL (degenerate, see disclosure) |
+| breakout | 3 | 0.67 | 1 | -0.8640 | 3156 | 0/28 | -0.8772 | 7386 | 0.0 | -2726.7 | FAIL (degenerate, see disclosure) |
+| breakout | 3 | 0.67 | 2 | -0.8640 | 3156 | 0/28 | -0.8772 | 7386 | 0.0 | -2726.7 | FAIL (degenerate, see disclosure) |
+| anticipate | 1 | 0.33 | 1 | -0.8547 | 4693 | 0/27 | -0.7237 | 11785 | 126.0 | -3583.0 | FAIL |
+| anticipate | 1 | 0.33 | 2 | -0.8724 | 4203 | 0/27 | -0.7286 | 10386 | 113.0 | -3323.0 | FAIL |
+| anticipate | 1 | 0.5 | 1 | -0.8585 | 4693 | 0/27 | -0.7345 | 11785 | 190.9 | -3665.8 | FAIL |
+| anticipate | 1 | 0.5 | 2 | -0.8723 | 4203 | 0/27 | -0.7359 | 10386 | 171.2 | -3380.5 | FAIL |
+| anticipate | 1 | 0.67 | 1 | -0.8623 | 4693 | 0/27 | -0.7453 | 11785 | 255.8 | -3748.6 | FAIL |
+| anticipate | 1 | 0.67 | 2 | -0.8722 | 4203 | 0/27 | -0.7431 | 10386 | 229.4 | -3438.1 | FAIL |
+| anticipate | 2 | 0.33 | 1 | -0.8701 | 4158 | 0/27 | -0.7223 | 10361 | 464.1 | -3624.3 | FAIL |
+| anticipate | 2 | 0.33 | 2 | -0.8782 | 4013 | 0/27 | -0.7242 | 9899 | 445.4 | -3543.2 | FAIL |
+| anticipate | 2 | 0.5 | 1 | -0.8718 | 4158 | 0/27 | -0.7261 | 10361 | 703.2 | -3870.5 | FAIL |
+| anticipate | 2 | 0.5 | 2 | -0.8784 | 4013 | 0/27 | -0.7255 | 9899 | 674.8 | -3773.4 | FAIL |
+| anticipate | 2 | 0.67 | 1 | -0.8735 | 4158 | 0/27 | -0.7299 | 10361 | 942.3 | -4116.7 | FAIL |
+| anticipate | 2 | 0.67 | 2 | -0.8786 | 4013 | 0/27 | -0.7268 | 9899 | 904.3 | -4003.7 | FAIL |
+| anticipate | 3 | 0.33 | 1 | -0.8672 | 4067 | 0/27 | -0.7148 | 10079 | 391.7 | -3482.6 | FAIL |
+| anticipate | 3 | 0.33 | 2 | -0.8729 | 4009 | 0/27 | -0.7178 | 9874 | 384.5 | -3457.5 | FAIL |
+| anticipate | 3 | 0.5 | 1 | -0.8657 | 4067 | 0/27 | -0.7129 | 10079 | 593.6 | -3678.4 | FAIL |
+| anticipate | 3 | 0.5 | 2 | -0.8703 | 4009 | 0/27 | -0.7145 | 9874 | 582.6 | -3645.2 | FAIL |
+| anticipate | 3 | 0.67 | 1 | -0.8643 | 4067 | 0/27 | -0.7111 | 10079 | 795.4 | -3874.2 | FAIL |
+| anticipate | 3 | 0.67 | 2 | -0.8677 | 4009 | 0/27 | -0.7112 | 9874 | 780.6 | -3832.9 | FAIL |
+
+**Gate (per cell, holdout only, no train-gate stage): avgR/trade > 0 AND trades >= 150 AND
+positiveAssets/assets >= 0.50 — the same bar ATR-ADAPTIVE-STOP-CONFIRMATORY used. 0/36 cells
+pass; 0/28 holdout assets are ever net-positive at any grid cell for either family.**
+
+**Fixed-TP baseline comparison (both re-run fresh, same split/watchlist/cost basis, for an
+apples-to-apples reading rather than citing this document's stale ~0.9%-cost "Honest Baseline
+First" table).** `breakout` fixed-TP baseline: holdout avgR=-0.8640, 3156 trades, 0/28
+positive — an exact match to every `partialAtR=3` cell above, consistent with discovery #1.
+Best genuinely-tested `breakout` cell (`partialAtR=2, partialFrac=0.67, trailR=1`): holdout
+avgR=-0.8558, 3208 trades — a marginal +0.0082R improvement over baseline, not a meaningful
+one. `anticipate` fixed-TP baseline: holdout avgR=-0.8842, 3966 trades, 0/27 positive. Best
+`anticipate` cell (`partialAtR=1, partialFrac=0.33, trailR=1`, also the best cell across the
+entire 36-cell grid): holdout avgR=-0.8547, 4693 trades — a +0.0295R improvement over
+baseline, still nowhere near the gate's `avgR>0` requirement. Every cell in the grid, for both
+families, stays within a narrow band (-0.855 to -0.898) around its own family's fixed-TP
+baseline — banking a partial early and trailing the remainder shifts the result by hundredths
+of an R, not the order of magnitude that would be needed to flip the sign.
+
+**Verdict: SCALED-EXIT-LADDER-CONFIRMATORY FAIL.** No cell in the pre-registered 36-cell grid
+clears the gate. Banking a partial at 1-3R and trailing the remainder produces at most a small
+(+0.01 to +0.03R), not decision-relevant, improvement over each family's already-failing
+fixed-TP baseline — the exit STRUCTURE genuinely varies across the grid (confirmed by the
+partial-leg-R column moving with `partialAtR`/`partialFrac` as expected, except at the
+disclosed `breakout`/`partialAtR=3` degeneracy), but the underlying entries are still not
+predictive enough for any exit shape built on top of them to turn net-of-cost negative into
+positive. Consistent with every other exit-mechanism item tested on these two entry families
+(WIDE-STOP-HIGH-TARGET-ASYMMETRY, TRAIL-STOP-EXIT, T5-DECAY-EXIT) — this project's entries,
+not its exits, remain the open problem. Recorded as VERDICTS.md's `SCALED-EXIT-LADDER-CONFIRMATORY`
+row and as 36 decision journal entries
+(`research-runs/2026-08-14T*-scaled-exit-ladder-*.json`).

@@ -676,6 +676,88 @@ export function runWideStopHighTargetAsymmetry({ watchlist = loadWatchlist(), sp
   return { input, result };
 }
 
+/**
+ * SCALED-EXIT-LADDER-CONFIRMATORY (human-directed research, pre-registered 2026-08-14):
+ * backtest.js's `partialAtR`/`partialFrac` (bank a fraction of the position at an early
+ * R-multiple) combined with `trailR`/`trailStartR` (trail a stop below the running peak once
+ * price has run far enough) implements a genuinely different exit STRUCTURE from anything
+ * verdicted: bank real profit early (reducing variance/downside from a reversal), then let
+ * the remainder run with a trailing stop instead of a fixed target — distinct from the
+ * single-fixed-TP baseline, from WIDE-STOP-HIGH-TARGET-ASYMMETRY (a single all-or-nothing
+ * extreme target), and from TRAIL-STOP-EXIT (`trailingTpPct`, a percentage-pullback-from-peak
+ * exit with no partial banking, already tested and FAILED). Grep-confirmed:
+ * partialAtR/partialFrac/trailR appear only in commands.js's informal `!exits` Discord
+ * diagnostic (three example configs a human eyeballs) — never run as a sealed confirmatory
+ * study with a pre-registered gate, zero prior VERDICTS.md presence.
+ *
+ * PRE-REGISTERED GRID (report every cell, do not cherry-pick): partialAtR in {1, 2, 3} (bank
+ * at 1R/2R/3R) x partialFrac in {0.33, 0.5, 0.67} x trailR in {1, 2} (trail distance once
+ * running) = 18 cells per family, 36 total. trailStartR = partialAtR (start trailing right
+ * when the partial banks). Stop definition (structural, current default) stays unchanged for
+ * this item — isolates the exit-STRUCTURE variable alone; combining with
+ * ATR-ADAPTIVE-STOP-CONFIRMATORY's own stop-definition change is a natural but separate
+ * follow-up, not this one. Applied to `breakout` and `anticipate` (same two families as the
+ * sibling ATR-ADAPTIVE-STOP-CONFIRMATORY item, for comparability), full watchlist, standard
+ * 70/30 split, net-of-cost from the start (backtest.js's own FEE_RATE/SLIPPAGE_PCT defaults).
+ *
+ * PRE-REGISTERED GATE (per cell, holdout only, no train-gate stage): avgR/trade > 0 AND
+ * trades >= 150 AND positiveAssets/assets >= 0.50 — the same bar ATR-ADAPTIVE-STOP-CONFIRMATORY
+ * used.
+ */
+function summarizeWithPartialSplit(perAsset) {
+  const s = summarize(perAsset);
+  const partialR = perAsset.reduce((a, x) => a + (x.partialR || 0), 0);
+  const runnerR = perAsset.reduce((a, x) => a + (x.runnerR || 0), 0);
+  return { ...s, partialR, runnerR };
+}
+export function runScaledExitLadder({ watchlist = loadWatchlist(), split = .70 } = {}) {
+  const targets = ["breakout", "anticipate"];
+  const partialAtRs = [1, 2, 3];
+  const partialFracs = [0.33, 0.5, 0.67];
+  const trailRs = [1, 2];
+
+  const datasets = normalize(watchlist).map((asset) => ({ symbol: asset.symbol, series: seriesFor(asset.id) }))
+    .filter((d) => d.series.every((tf) => tf.candles.length >= 250))
+    .map((d) => ({ symbol: d.symbol, train: splitSeries(d.series, split, false), holdout: splitSeries(d.series, split, true) }));
+
+  const cells = targets.flatMap((id) => {
+    const [, , baseConfig] = families.find(([fid]) => fid === id);
+    return partialAtRs.flatMap((partialAtR) => partialFracs.flatMap((partialFrac) => trailRs.map((trailR) => {
+      const config = { ...baseConfig, partialAtR, partialFrac, trailR, trailStartR: partialAtR };
+      const score = (part) => summarizeWithPartialSplit(datasets.map((d) => backtestMultiTF({ series: d[part] }, { ...config, entryTf: "1h" })));
+      const train = score("train"), holdout = score("holdout");
+      const avgRPass = holdout.avgR > 0;
+      const tradesPass = holdout.trades >= 150;
+      const positiveFracPass = holdout.positiveAssets / Math.max(1, holdout.assets) >= 0.50;
+      return { family: id, partialAtR, partialFrac, trailR, train, holdout, gate: { avgRPass, tradesPass, positiveFracPass, passed: avgRPass && tradesPass && positiveFracPass } };
+    })));
+  });
+
+  // Fixed-TP baseline, re-run fresh under the same split/watchlist/cost basis (apples-to-apples
+  // rather than citing TOURNAMENT_ROADMAP.md's stale ~0.9%-cost "Honest Baseline First" table).
+  const baselines = Object.fromEntries(targets.map((id) => {
+    const [, , baseConfig] = families.find(([fid]) => fid === id);
+    const holdout = summarize(datasets.map((d) => backtestMultiTF({ series: d.holdout }, { ...baseConfig, entryTf: "1h" })));
+    return [id, holdout];
+  }));
+
+  const input = {
+    specification: "strategy-tournament-scaled-exit-ladder/v1", split, assets: datasets.map((d) => d.symbol),
+    families: targets, partialAtRs, partialFracs, trailRs,
+  };
+  const passed = cells.filter((c) => c.gate.passed).map((c) => `${c.family}/atR=${c.partialAtR}/frac=${c.partialFrac}/trail=${c.trailR}`);
+  const best = cells.reduce((a, b) => (b.holdout.avgR > a.holdout.avgR ? b : a));
+  const result = {
+    cells,
+    baselines,
+    best: { family: best.family, partialAtR: best.partialAtR, partialFrac: best.partialFrac, trailR: best.trailR, holdoutAvgR: best.holdout.avgR },
+    verdict: passed.length
+      ? `SCALED-EXIT-LADDER clears the pre-registered gate for: ${passed.join(", ")} (holdout avgR>0 AND trades>=150 AND positiveAssets/assets>=0.50)`
+      : "SCALED-EXIT-LADDER-CONFIRMATORY FAIL: no family/grid-cell combination clears the pre-registered gate",
+  };
+  return { input, result };
+}
+
 /** Chronological 70/30 test. Parameters are fixed before examining the holdout. */
 export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRate, slipPct, entryTf = "1h" } = {}) {
   const costOverride = {};
@@ -749,6 +831,13 @@ if (process.argv[1]?.endsWith("tournament.mjs")) {
     // tpR), preserving the full pre-registered grid regardless of outcome.
     const saved = report.result.cells.map((c) =>
       saveExperiment(`wide-stop-high-target-${c.family}-s${(c.maxStopPct * 100).toFixed(0)}-tp${c.tpR}`, { ...report.input, family: c.family, maxStopPct: c.maxStopPct, tpR: c.tpR }, c));
+    console.log(JSON.stringify({ ...report.result, saved }, null, 2));
+  } else if (process.argv.includes("--scaled-exit-ladder")) {
+    const report = runScaledExitLadder();
+    // One decision-journal entry per grid cell (36 total: 2 families x 3 partialAtR x 3
+    // partialFrac x 2 trailR), preserving the full pre-registered grid regardless of outcome.
+    const saved = report.result.cells.map((c) =>
+      saveExperiment(`scaled-exit-ladder-${c.family}-atR${c.partialAtR}-frac${c.partialFrac.toString().replace(".", "")}-trail${c.trailR}`, { ...report.input, family: c.family, partialAtR: c.partialAtR, partialFrac: c.partialFrac, trailR: c.trailR }, c));
     console.log(JSON.stringify({ ...report.result, saved }, null, 2));
   } else {
     const zeroCost = process.argv.includes("--zero-cost");

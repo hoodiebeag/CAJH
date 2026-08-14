@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix, runBreakoutDecayExit, runTimeframeIsolation, runBreakoutTrailingTpExit, runTrendGateFilter, runFibPullback, relVolTimeline, makeRelVolAboveAt, runVolConfirmedBreakout, runAtrAdaptiveStop, runWideStopHighTargetAsymmetry } from "./tournament.mjs";
+import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix, runBreakoutDecayExit, runTimeframeIsolation, runBreakoutTrailingTpExit, runTrendGateFilter, runFibPullback, relVolTimeline, makeRelVolAboveAt, runVolConfirmedBreakout, runAtrAdaptiveStop, runWideStopHighTargetAsymmetry, runScaledExitLadder } from "./tournament.mjs";
 
 test("tournament reports no promotion when its data gate cannot be met", () => {
   const report = runTournament({ watchlist: [] });
@@ -206,6 +206,39 @@ test("runWideStopHighTargetAsymmetry: targets both families across the full pre-
   assert.equal(report.input.maxHold, 4320);
   assert.equal(report.result.cells.filter((c) => c.family === "breakout").length, 25);
   assert.equal(report.result.cells.filter((c) => c.family === "anticipate").length, 25);
+});
+
+// ── SCALED-EXIT-LADDER-CONFIRMATORY — runScaledExitLadder ──────────────────────
+test("runScaledExitLadder: empty watchlist yields zero trades on all 36 grid cells and fails their gates honestly", () => {
+  const report = runScaledExitLadder({ watchlist: [] });
+  assert.equal(report.result.cells.length, 36);
+  for (const c of report.result.cells) {
+    assert.equal(c.holdout.trades, 0, "0 trades must never read as a passing gate");
+    assert.equal(c.gate.passed, false);
+    assert.equal(c.gate.tradesPass, false);
+    assert.equal(c.holdout.partialR, 0);
+    assert.equal(c.holdout.runnerR, 0);
+  }
+  assert.match(report.result.verdict, /^SCALED-EXIT-LADDER-CONFIRMATORY FAIL/);
+});
+
+test("runScaledExitLadder: targets both families across the full pre-registered grid, trailStartR pinned to partialAtR, nothing else", () => {
+  const report = runScaledExitLadder({ watchlist: [] });
+  assert.deepEqual(report.input.families, ["breakout", "anticipate"]);
+  assert.deepEqual(report.input.partialAtRs, [1, 2, 3]);
+  assert.deepEqual(report.input.partialFracs, [0.33, 0.5, 0.67]);
+  assert.deepEqual(report.input.trailRs, [1, 2]);
+  assert.equal(report.result.cells.filter((c) => c.family === "breakout").length, 18);
+  assert.equal(report.result.cells.filter((c) => c.family === "anticipate").length, 18);
+  assert.deepEqual(report.result.cells.map((c) => `${c.family}/${c.partialAtR}/${c.partialFrac}/${c.trailR}`), [
+    "breakout/1/0.33/1", "breakout/1/0.33/2", "breakout/1/0.5/1", "breakout/1/0.5/2", "breakout/1/0.67/1", "breakout/1/0.67/2",
+    "breakout/2/0.33/1", "breakout/2/0.33/2", "breakout/2/0.5/1", "breakout/2/0.5/2", "breakout/2/0.67/1", "breakout/2/0.67/2",
+    "breakout/3/0.33/1", "breakout/3/0.33/2", "breakout/3/0.5/1", "breakout/3/0.5/2", "breakout/3/0.67/1", "breakout/3/0.67/2",
+    "anticipate/1/0.33/1", "anticipate/1/0.33/2", "anticipate/1/0.5/1", "anticipate/1/0.5/2", "anticipate/1/0.67/1", "anticipate/1/0.67/2",
+    "anticipate/2/0.33/1", "anticipate/2/0.33/2", "anticipate/2/0.5/1", "anticipate/2/0.5/2", "anticipate/2/0.67/1", "anticipate/2/0.67/2",
+    "anticipate/3/0.33/1", "anticipate/3/0.33/2", "anticipate/3/0.5/1", "anticipate/3/0.5/2", "anticipate/3/0.67/1", "anticipate/3/0.67/2",
+  ]);
+  assert.ok("breakout" in report.result.baselines && "anticipate" in report.result.baselines);
 });
 
 // ── TEST2-VOL-CONFIRMED-BREAKOUT — relVolTimeline / makeRelVolAboveAt / runVolConfirmedBreakout ──
