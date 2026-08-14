@@ -10,18 +10,17 @@
  * versa. See threat model item 3 in the accompanying spec response.
  *
  * TRANSPORT: stdio, not HTTP+SSE.
- * VS Code (and the cron-invoked orchestrator, see orchestrator.sh) spawn this
- * as a short-lived child process per session rather than connecting to one
- * long-running network listener. Reasons:
+ * VS Code spawns this as a short-lived child process per session rather than
+ * connecting to one long-running network listener. Reasons:
  *   1. No standing network port means no remote attack surface for a process
  *      that can read Kraken-adjacent source and (if approved) trigger a deploy.
  *   2. It matches the pattern already proven safe elsewhere in this repo's
  *      automation: every scheduled Architect/Executor/Verifier check is a
  *      fresh, independent process, not a long-lived server accumulating state
  *      or connections across turns.
- *   3. Auth is then "whoever can spawn the process" (VS Code locally, or the
- *      orchestrator script under the operator's own OS user) rather than a
- *      token-over-HTTP scheme this server would have to defend on its own.
+ *   3. Auth is then "whoever can spawn the process" (VS Code locally, under
+ *      the operator's own OS user) rather than a token-over-HTTP scheme this
+ *      server would have to defend on its own.
  * If a future need arises for multiple simultaneous clients, revisit this -
  * but do not add HTTP+SSE only to make the cron path "more automatic"; that
  * directly trades away the property above.
@@ -43,7 +42,7 @@ import * as path from "node:path";
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 // The cajh repo root. This server's cwd is expected to be the repo root when
-// launched (see .vscode/mcp.json and orchestrator.sh) - resolved explicitly
+// launched (see .vscode/mcp.json) - resolved explicitly
 // rather than trusted implicitly, so a misconfigured launcher fails loudly
 // instead of silently operating on the wrong directory.
 const CAJH_ROOT = process.env.CAJH_ROOT
