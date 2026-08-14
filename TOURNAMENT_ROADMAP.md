@@ -1135,3 +1135,70 @@ data-availability gate doing exactly the job this item's own task text pre-regis
 for. Recorded as VERDICTS.md's `ONCHAIN-FLOW-GATE` row and as an `onchain-flow-gate`
 decision journal entry
 (`research-runs/2026-08-14T11-05-22-370Z-onchain-flow-gate.json`).
+
+## FIB-PULLBACK RESULT (2026-08-14)
+
+Human-authored pre-registered test (TEST1-FIB-PULLBACK). Hypothesis: entering at a
+50-61.8% Fibonacci retracement of a confirmed break-of-structure swing leg reduces
+adverse selection vs. the `anticipate`/`bos` families' own entries (which buy the
+break itself), producing holdout avgR/trade > -0.30.
+
+**Implementation, pre-registered before any run.** The task's own text names "a
+confirmed BOS candle close" and "the swing leg (low to high of that move)" without
+defining either in terms of this codebase's actual primitives — resolved as follows,
+before examining any result: this codebase already has one concrete, unambiguous
+definition of a confirmed break-of-structure — `bos` mode's own entry trigger
+(`lowAt`/`pivE` in backtest.js: a candidate swing low's close breaking back above
+its own high). Reusing that event verbatim (rather than inventing a second,
+competing BOS definition) makes the swing leg well-defined too: the originating low
+through the highest high reached by the confirming bar, both already known at that
+bar with no look-ahead. `breakoutEntry`'s own N-bar-high trigger has no low endpoint
+and so cannot supply a "swing leg" at all — it is used here only as the stop-size-cap
+template (`minStopPct .01`, `maxStopPct .06`, matching `breakout`'s own family
+config), the same apples-to-apples convention Track 2 used for `vol_contraction`.
+Added as backtest.js's new `fib_pullback` entryMode: a resting limit order armed the
+bar a swing low confirms, at `legHigh - fibLevel*(legHigh-legLow)`, stop
+`legLow - 0.001*legLow`, TP at `tpR`; one order at a time, cancelled (not filled) if
+price reaches the stop before ever touching the limit level. `lockBreakeven` left
+off — the spec is a fixed stop/TP structure, not a managed exit. 4 new unit tests in
+backtest.test.mjs cover the fill/no-fill/cancel/one-order-at-a-time mechanics against
+hand-computed synthetic candles.
+
+**Split-boundary note.** Unlike FUNDING-MEANREV/ONCHAIN-FLOW-GATE, this hypothesis
+needs no external data source (pure price action, already fully covered by local
+candle history) — no data-availability gate was needed, and the task's literal fixed
+calendar-date split (train: earliest available to 2025-06-01; holdout: 2025-06-01 to
+present) was used exactly as specified, no substitution required.
+
+Config: `entryMode: "fib_pullback"`, `trendGate: false`, `alignMode: "none"`,
+`minStopPct: .01`, `maxStopPct: .06`, `tpR: 3`, `lockBreakeven: false`, entryTf 1h,
+full 28-asset watchlist, real cost basis (FEE_RATE=0.008/side, SLIPPAGE_PCT=0.0005/
+side, ~1.7% round trip). Levels 0.5 and 0.618 tested as two fully independent runs
+(`tournament.mjs --fib-pullback`, `runFibPullback`).
+
+**Pre-registered train gate (must pass before holdout is even examined), per level:**
+avgR/trade > -0.50 AND trades >= 200.
+
+**Result — train gate fails on the avgR clause for BOTH levels, holdout never
+examined for either:**
+
+| Level | avgR/trade | trades | assets w/ >=1 trade | positive assets |
+|---|---|---|---|---|
+| 50% | -0.907 | 362 | 23 / 28 | 2 / 23 |
+| 61.8% | -0.770 | 225 | 21 / 28 | 2 / 21 |
+
+Gate check (both levels): avgR>-0.50 FAIL, trades>=200 PASS. Per this item's own
+pre-registered discipline ("Gates are immutable once the test begins"), the holdout
+window was not examined for either level.
+
+**Verdict: TRAIN-GATE-FAIL (both levels).** The deeper 61.8% retracement is less
+negative than the shallower 50% level (-0.770 vs -0.907) and fires fewer trades (225
+vs 362, consistent with requiring a bigger pullback) — a real but small effect, not
+close to clearing the train bar. Retracing into the leg instead of buying the
+breakout itself does not produce a better entry than `bos`/`anticipate` already
+tested (-0.425/-0.361 train avgR respectively, this document's "Honest Baseline
+First" table) — if anything it is meaningfully worse, consistent with the fill
+requiring price to give back part of the very move that was the entry signal.
+Recorded as VERDICTS.md's `FIB-PULLBACK` row and as two decision journal entries, one
+per level (`research-runs/2026-08-14T12-16-45-894Z-fib-pullback-50.json`,
+`research-runs/2026-08-14T12-16-45-940Z-fib-pullback-618.json`).

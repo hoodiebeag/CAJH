@@ -326,6 +326,71 @@ test("vol_contraction mode: breaking to a new high WITHOUT a preceding compresse
   assert.equal(r.trades, 0, "no compressed run precedes the breakout, so vol_contraction must not fire");
 });
 
+// ── fib_pullback mode (TEST1-FIB-PULLBACK) ──────────────────────────────────────
+// 5 flat baseline bars (low 100, clears isLeftLow's lookback), a candidate low bar
+// (low 90, high 95 = the BOS trigger), a drift-up run that stays under the trigger, then a
+// confirm bar (close 99 > trigger 95) that also pushes the bar high to 100 — legLow=90,
+// legHigh=100 (running max H[5..10]), so fib50 level=95, fib618 level=93.82, stop=90-0.09=89.91.
+function buildFibSeries({ pullbackLow = 94.5, breakStopFirst = false } = {}) {
+  const c = [];
+  let t = 1_700_000_000;
+  for (let i = 0; i < 5; i++) { c.push(mk(t, 100, 101, 100, 100.5)); t += HOUR; }
+  c.push(mk(t, 95, 95, 90, 91)); t += HOUR;                      // candidate low: L=90, H=95 (trigger)
+  c.push(mk(t, 91, 92, 91, 91.5)); t += HOUR;
+  c.push(mk(t, 91.5, 93, 91.5, 92)); t += HOUR;
+  c.push(mk(t, 92, 94, 92, 93)); t += HOUR;
+  c.push(mk(t, 93, 94.5, 93, 94)); t += HOUR;
+  c.push(mk(t, 94, 100, 94, 99)); t += HOUR;                     // confirm: close 99 > 95; H=100 sets legHigh
+  if (breakStopFirst) {
+    c.push(mk(t, 99, 99.5, 85, 86)); t += HOUR;                  // gaps straight through the stop, never touches a level
+    let p = 86;
+    for (let i = 0; i < 20; i++) { c.push(mk(t, p, p + 0.5, p - 0.1, p + 0.4)); p += 0.3; t += HOUR; }
+    return c;
+  }
+  c.push(mk(t, 99, 99.5, 96, 97)); t += HOUR;                    // pulls back, but not to either fib level yet
+  c.push(mk(t, 97, 97.5, pullbackLow, 95.2)); t += HOUR;         // pullback low — fills whichever level it reaches
+  let p = 95.2;
+  for (let i = 0; i < 40; i++) { c.push(mk(t, p, p + 0.5, p - 0.1, p + 0.4)); p += 0.6; t += HOUR; } // grind to TP
+  return c;
+}
+
+const FIB_CFG = {
+  entryTf: "1h", entryMode: "fib_pullback", alignMode: "none", trendGate: false, chopFilter: false,
+  requireHigherLow: false, maxStopPct: null, minStopPct: null, lockBreakeven: false, tpR: 3,
+  feeRate: 0.004, slipPct: 0.0005,
+};
+
+test("fib_pullback mode: a pullback into the 50% retracement fills at the level, stop below the originating low, TP at 3R", () => {
+  const series = [{ label: "1h", mins: 60, candles: buildFibSeries({ pullbackLow: 94.5 }) }];
+  const r = backtestMultiTF({ series }, { ...FIB_CFG, fibLevel: 0.5 });
+  assert.equal(r.trades, 1);
+  const entry = 95, stop = 90 - 0.001 * 90, risk = entry - stop;   // level = 100 - 0.5*(100-90) = 95
+  const tp = entry + 3 * risk;
+  const netWinR3 = 3 - (FEE * (entry + tp)) / risk;
+  assert.ok(Math.abs(r.results[0] - netWinR3) < 1e-6,
+    `winner R ${r.results[0]} != expected ${netWinR3}`);
+});
+
+test("fib_pullback mode: a pullback that stops short of the level (61.8%) never fills", () => {
+  // Same series — its pullback low (94.5) clears the 50% level (95) but not the deeper
+  // 61.8% level (93.82).
+  const series = [{ label: "1h", mins: 60, candles: buildFibSeries({ pullbackLow: 94.5 }) }];
+  const r = backtestMultiTF({ series }, { ...FIB_CFG, fibLevel: 0.618 });
+  assert.equal(r.trades, 0, "pullback low 94.5 never reaches the deeper 93.82 level");
+});
+
+test("fib_pullback mode: price gapping straight through the stop before ever touching the limit level cancels the order", () => {
+  const series = [{ label: "1h", mins: 60, candles: buildFibSeries({ breakStopFirst: true }) }];
+  const r = backtestMultiTF({ series }, { ...FIB_CFG, fibLevel: 0.5 });
+  assert.equal(r.trades, 0, "the resting order must be cancelled, not filled, once price closes the thesis out");
+});
+
+test("fib_pullback mode: only one resting order at a time — a fresh confirmed low while an order is pending does not open a second trade", () => {
+  const series = [{ label: "1h", mins: 60, candles: buildFibSeries({ pullbackLow: 94.5 }) }];
+  const r = backtestMultiTF({ series }, { ...FIB_CFG, fibLevel: 0.5 });
+  assert.equal(r.trades, 1, "the long post-fill grind-up phase may itself contain new left-side lows; still exactly one trade");
+});
+
 // ── entryGate wiring in the generic dip-buy branch (TOURNAMENT_ROADMAP.md Track 3) ──
 // entryGate was already wired into "anticipate" (backtest.js:415); this proves the
 // identical check now also gates the generic branch breakout/support/etc. share, and

@@ -117,6 +117,9 @@ export function backtestMultiTF({ series } = {}, {
   // Bars of prior-high lookback for "breakout" mode's N-bar high trigger. Default 20
   // reproduces the original hardcoded behaviour byte-for-byte when omitted.
   breakoutLookback = 20,
+  // "fib_pullback" mode's retracement fraction of the triggering swing leg (0.5 = 50%,
+  // 0.618 = 61.8%). No-op for every other entryMode.
+  fibLevel = 0.5,
   // Research-only entry veto. It receives only the completed entry bar's close time.
   // Live scanning never supplies this callback.
   entryGate = null
@@ -347,6 +350,7 @@ export function backtestMultiTF({ series } = {}, {
   let pos = null, prevLowPrice = null;
   let antCand = null, antHi = null;   // anticipate mode: running unconfirmed candidate low / high
   let antTradedIdx = null;            // candidate index already traded (one trade per level, mirrors live)
+  let fibOrder = null;                // fib_pullback mode: resting limit order awaiting fill/cancel
 
   for (let k = n; k < entryCandles.length; k++) {
     const lowHere = lowAt.get(k); // a swing low confirmed at this candle on the entry TF?
@@ -430,6 +434,41 @@ export function backtestMultiTF({ series } = {}, {
             trades.push((stop - entry) / risk - ((feeRate + slipPct) * (entry + stop)) / risk);
             pos = null;
           }
+        }
+      }
+    } else if (!pos && entryMode === "fib_pullback") {
+      // ── fib_pullback mode ── TEST1-FIB-PULLBACK: reuses "bos" mode's own confirmation
+      // event verbatim (lowHere — a swing low's close breaking back above its own high, this
+      // codebase's definition of a confirmed break-of-structure) as the "confirmed BOS
+      // candle." Instead of entering at that close like "bos" does, the leg it just
+      // completed (the swing low through the highest high reached by the confirming bar —
+      // both already known, no look-ahead) sets a resting limit order at a Fibonacci
+      // retracement of that leg, stop below the originating low, TP at tpR. One resting
+      // order at a time; a fresh confirmation while an order is already resting is ignored,
+      // mirroring anticipate mode's one-trade-per-level convention. If price reaches the
+      // stop before ever touching the limit level, the order is cancelled rather than filled
+      // — the thesis (this was a genuine swing low) is already wrong by then.
+      if (fibOrder) {
+        if (L[k] <= fibOrder.stop) {
+          fibOrder = null;
+        } else if (L[k] <= fibOrder.level) {
+          const entry = Math.min(O[k], fibOrder.level);   // a gap through the level fills at the open
+          const stop = fibOrder.stop, risk = entry - stop;
+          let reason = "taken";
+          if (!(risk > 0))                                    reason = "priceBelowStop";
+          else if (maxStopPct && risk / entry > maxStopPct)   reason = "stopTooFar";
+          else if (minStopPct && risk / entry < minStopPct)   reason = "stopTooTight";
+          reasons[reason] = (reasons[reason] || 0) + 1;
+          if (reason === "taken") pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: entry, trailing: false };
+          fibOrder = null;   // one attempt per broken level, filled or not
+        }
+      } else if (lowHere) {
+        let legHigh = -Infinity;
+        for (let j = lowHere.index; j <= k; j++) legHigh = Math.max(legHigh, H[j]);
+        const legLow = lowHere.price;
+        if (legHigh > legLow) {
+          const level = legHigh - fibLevel * (legHigh - legLow);
+          fibOrder = { level, stop: legLow - 0.001 * legLow };
         }
       }
     } else if (!pos) {

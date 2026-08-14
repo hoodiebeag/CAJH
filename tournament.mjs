@@ -331,6 +331,81 @@ export function runTrendGateFilter({ watchlist = loadWatchlist(), split = .70 } 
   return { input, result };
 }
 
+/**
+ * TEST1-FIB-PULLBACK (pre-registered, human-authored research plan queued 2026-08-13):
+ * after "bos" mode's own confirmed break-of-structure event (a swing low's close breaking
+ * back above its own high — this codebase's existing definition of a confirmed BOS, per
+ * `lowAt`/`pivE` in backtest.js), rest a limit order at a Fibonacci retracement (50% and
+ * 61.8%, tested SEPARATELY — two independent variants below, not combined) of the leg that
+ * produced it (the originating swing low through the highest high reached by the confirming
+ * bar), stop below the originating low, TP at 3R. Implemented as backtest.js's new
+ * "fib_pullback" entryMode (see its inline comment there for the exact no-look-ahead
+ * mechanics) — no separate detection primitive; it replays the identical confirmed-pivot
+ * sequence "bos" already validates. `breakoutEntry`'s own N-bar-high trigger has no defined
+ * "swing leg" (no low endpoint) so it cannot supply the retracement this hypothesis needs;
+ * "breakout" is used here only as the stop-size-cap template (minStopPct/maxStopPct below),
+ * the same apples-to-apples convention TOURNAMENT_ROADMAP.md Track 2 used for
+ * `vol_contraction`. `lockBreakeven` is deliberately OFF — the pre-registered spec is a
+ * fixed stop/TP structure ("stop below the originating swing low; TP at 3R"), not a managed
+ * exit; adding one would not be testing the hypothesis as specified.
+ *
+ * Split: a FIXED CALENDAR DATE (2025-06-01), not the usual 70/30 fraction, per the
+ * pre-registered spec — train = earliest available candles to 2025-06-01, holdout =
+ * 2025-06-01 to present. Full watchlist, entryTf "1h" with the standard 1h/4h/1d series
+ * stack (matches every other family's series convention in this file).
+ *
+ * PRE-REGISTERED GATE (immutable once the test begins, evaluated SEPARATELY per level):
+ *  - Train gate MUST pass before holdout is examined at all: train avgR/trade > -0.50 AND
+ *    train trades >= 200.
+ *  - Holdout gate (only reached if train passes): ALL three required — holdout avgR/trade
+ *    > -0.30, holdout trades >= 150, holdout positiveAssets/assets >= 0.40.
+ *  - Abandon (do not tune) if holdout avgR/trade <= -0.30 for both levels, or both levels
+ *    produce fewer than 150 holdout trades.
+ */
+export function runFibPullback({ watchlist = loadWatchlist(), cutoffSec = Math.floor(Date.UTC(2025, 5, 1) / 1000) } = {}) {
+  const baseConfig = { entryMode: "fib_pullback", trendGate: false, alignMode: "none", minStopPct: .01, maxStopPct: .06, tpR: 3, lockBreakeven: false };
+  const levels = [0.5, 0.618];
+
+  const datasets = normalize(watchlist).map((asset) => ({ symbol: asset.symbol, series: seriesFor(asset.id) }))
+    .filter((d) => d.series.every((tf) => tf.candles.length >= 250));
+  const splitAt = (series, holdout) => series.map((tf) => ({ ...tf, candles: tf.candles.filter((c) => holdout ? +c.time >= cutoffSec : +c.time < cutoffSec) }));
+  const scored = datasets.map((d) => ({ symbol: d.symbol, train: splitAt(d.series, false), holdout: splitAt(d.series, true) }));
+
+  const variants = levels.map((fibLevel) => {
+    const config = { ...baseConfig, fibLevel };
+    const score = (part) => summarize(scored.map((d) => backtestMultiTF({ series: d[part] }, { ...config, entryTf: "1h" })));
+    const train = score("train");
+    const trainGate = { avgRMin: -0.50, tradesMin: 200, avgRPass: train.avgR > -0.50, tradesPass: train.trades >= 200 };
+    trainGate.passed = trainGate.avgRPass && trainGate.tradesPass;
+    if (!trainGate.passed) {
+      return { fibLevel, train, trainGate, holdout: null, holdoutGate: null, verdict: "TRAIN-GATE-FAIL: holdout not examined (pre-registered gate is immutable once the test begins)" };
+    }
+    const holdout = score("holdout");
+    const holdoutGate = {
+      avgRMin: -0.30, tradesMin: 150, positiveFracMin: 0.40,
+      avgRPass: holdout.avgR > -0.30, tradesPass: holdout.trades >= 150,
+      positiveFracPass: holdout.positiveAssets / Math.max(1, holdout.assets) >= 0.40,
+    };
+    holdoutGate.passed = holdoutGate.avgRPass && holdoutGate.tradesPass && holdoutGate.positiveFracPass;
+    return {
+      fibLevel, train, trainGate, holdout, holdoutGate,
+      verdict: holdoutGate.passed
+        ? `fib_pullback ${fibLevel} clears the pre-registered holdout gate; paper trading only`
+        : `fib_pullback ${fibLevel} FAIL: holdout did not clear the pre-registered gate`,
+    };
+  });
+
+  const input = { specification: "fib-pullback/v1", cutoffSec, assets: datasets.map((d) => d.symbol), levels };
+  const passed = variants.filter((v) => v.holdoutGate?.passed).map((v) => v.fibLevel);
+  const result = {
+    variants,
+    verdict: passed.length
+      ? `FIB-PULLBACK clears the pre-registered gate for level(s): ${passed.join(", ")}`
+      : "TEST1-FIB-PULLBACK: no retracement level clears the pre-registered gate",
+  };
+  return { input, result };
+}
+
 /** Chronological 70/30 test. Parameters are fixed before examining the holdout. */
 export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRate, slipPct, entryTf = "1h" } = {}) {
   const costOverride = {};
@@ -374,6 +449,14 @@ if (process.argv[1]?.endsWith("tournament.mjs")) {
   } else if (process.argv.includes("--trend-gate-filter")) {
     const report = runTrendGateFilter();
     const saved = saveExperiment("tournament-trend-gate-filter", report.input, report.result);
+    console.log(JSON.stringify({ ...report.result, saved }, null, 2));
+  } else if (process.argv.includes("--fib-pullback")) {
+    const report = runFibPullback();
+    // Saved as two separately labeled decision-journal entries (FIB-PULLBACK-50 /
+    // FIB-PULLBACK-618, per the pre-registered task text), not one combined entry —
+    // each variant is a fully independent backtest run with its own gate outcome.
+    const saved = report.result.variants.map((v) =>
+      saveExperiment(`fib-pullback-${v.fibLevel === 0.5 ? "50" : "618"}`, { ...report.input, fibLevel: v.fibLevel }, v));
     console.log(JSON.stringify({ ...report.result, saved }, null, 2));
   } else {
     const zeroCost = process.argv.includes("--zero-cost");

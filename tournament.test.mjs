@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix, runBreakoutDecayExit, runTimeframeIsolation, runBreakoutTrailingTpExit, runTrendGateFilter } from "./tournament.mjs";
+import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix, runBreakoutDecayExit, runTimeframeIsolation, runBreakoutTrailingTpExit, runTrendGateFilter, runFibPullback } from "./tournament.mjs";
 
 test("tournament reports no promotion when its data gate cannot be met", () => {
   const report = runTournament({ watchlist: [] });
@@ -136,4 +136,25 @@ test("runTrendGateFilter: targets both families and both modes, nothing else", (
   const report = runTrendGateFilter({ watchlist: [] });
   assert.deepEqual(report.input.families, ["anticipate", "breakout"]);
   assert.deepEqual(report.input.modes, ["ma", "structure"]);
+});
+
+// ── TEST1-FIB-PULLBACK — fib_pullback entryMode, fixed calendar-date split ─────
+test("runFibPullback: empty watchlist fails the train gate honestly for both levels and never examines holdout", () => {
+  const report = runFibPullback({ watchlist: [] });
+  assert.equal(report.result.variants.length, 2);
+  assert.deepEqual(report.result.variants.map((v) => v.fibLevel), [0.5, 0.618]);
+  for (const v of report.result.variants) {
+    assert.equal(v.train.trades, 0, "0 trades must never read as a passing gate");
+    assert.equal(v.trainGate.passed, false);
+    assert.equal(v.holdout, null, "holdout must not be examined once the train gate fails");
+    assert.equal(v.holdoutGate, null);
+    assert.match(v.verdict, /^TRAIN-GATE-FAIL/);
+  }
+  assert.match(report.result.verdict, /^TEST1-FIB-PULLBACK: no retracement level clears/);
+});
+
+test("runFibPullback: both pre-registered levels present, cutoff defaults to 2025-06-01 UTC", () => {
+  const report = runFibPullback({ watchlist: [] });
+  assert.deepEqual(report.input.levels, [0.5, 0.618]);
+  assert.equal(report.input.cutoffSec, Math.floor(Date.UTC(2025, 5, 1) / 1000));
 });
