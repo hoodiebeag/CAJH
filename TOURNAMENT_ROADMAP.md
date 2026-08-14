@@ -1339,3 +1339,87 @@ green (full suite, not just the new file).
 
 **Does not require re-running any already-KILLED verdict** — nothing above changes; this is
 additive infrastructure for whatever the next hypothesis queue promotes.
+
+## ATR-ADAPTIVE-STOP-CONFIRMATORY RESULT (2026-08-14)
+
+Human-directed research: `backtest.js`'s `stopMode="atr"`/`atrStopK`/`atrPeriod` options
+place a volatility-scaled stop (`atrStopK` ATRs below entry) instead of the structural
+swing-low stop — grep-confirmed to have zero prior VERDICTS.md presence, every earlier
+mention citing it only as precedent for another option's no-op-when-omitted pattern.
+Pre-registered grid: `atrStopK` in {1.5, 2, 2.5, 3, 4} x `atrPeriod` in {14, 20}, applied to
+`breakout` and `anticipate`, full 28-asset watchlist, standard 70/30 split, net-of-cost from
+the start (`backtest.js`'s own `FEE_RATE=0.008`/`SLIPPAGE_PCT=0.0005` defaults, the corrected
+real basis per FEE-SCHEDULE-REBASE). Implemented as `tournament.mjs`'s new
+`runAtrAdaptiveStop`, gated behind `--atr-adaptive-stop`; zero `backtest.js` changes, exactly
+as the task predicted.
+
+**Mid-run discovery, disclosed rather than absorbed silently: `stopMode`/`atrStopK` have NO
+effect on the `breakout` family.** `backtest.js`'s `breakoutEntry()` (its own dedicated
+trigger function for `entryMode:"breakout"`) hardcodes its stop as `entry - 2 * atr(k-1,
+atrPeriod)` — it reads `atrPeriod` but never reads `stopMode` or `atrStopK` at all. Verified
+directly: running `breakout` with no `stopMode` override whatsoever produces holdout
+avgR=-0.8640/3156 trades, train avgR=-0.8772/7386 trades — an exact match, to the decimal, of
+every `atrStopK in {1.5,2,2.5,3,4}` cell at `atrPeriod=14` below. In other words, `breakout`'s
+"structural" stop was never structural in the first place — it has always been a fixed 2x-ATR
+stop, just not exposed as configurable the way `stopMode="atr"` implies. This means the
+`breakout` half of the pre-registered grid does not actually test the hypothesis it was
+built to test (varying `atrStopK`); it only incidentally varies `atrPeriod` (14 vs 20), a
+different and much narrower question. This is a genuine scope-narrowing finding about the
+codebase, not a result to paper over — reported here in full rather than either silently
+re-scoping the item after the fact or misreporting the 10 breakout cells as if the multiplier
+had actually varied. Fixing `breakoutEntry` to honor `atrStopK` is out of scope for this item
+(a real `backtest.js` code change, not the "zero new backtest.js code" grid sweep this item
+was pre-registered as) and is not attempted here.
+
+**Full grid — holdout avgR/trade, trade count, % positive assets, per cell:**
+
+| Family | atrStopK | atrPeriod | Holdout avgR | Holdout trades | Positive assets | Train avgR | Train trades | Gate |
+|---|---|---|---|---|---|---|---|---|
+| breakout | 1.5 | 14 | -0.8640 | 3156 | 0/28 | -0.8772 | 7386 | FAIL |
+| breakout | 1.5 | 20 | -0.8425 | 3148 | 0/28 | -0.8574 | 7327 | FAIL |
+| breakout | 2 | 14 | -0.8640 | 3156 | 0/28 | -0.8772 | 7386 | FAIL |
+| breakout | 2 | 20 | -0.8425 | 3148 | 0/28 | -0.8574 | 7327 | FAIL |
+| breakout | 2.5 | 14 | -0.8640 | 3156 | 0/28 | -0.8772 | 7386 | FAIL |
+| breakout | 2.5 | 20 | -0.8425 | 3148 | 0/28 | -0.8574 | 7327 | FAIL |
+| breakout | 3 | 14 | -0.8640 | 3156 | 0/28 | -0.8772 | 7386 | FAIL |
+| breakout | 3 | 20 | -0.8425 | 3148 | 0/28 | -0.8574 | 7327 | FAIL |
+| breakout | 4 | 14 | -0.8640 | 3156 | 0/28 | -0.8772 | 7386 | FAIL |
+| breakout | 4 | 20 | -0.8425 | 3148 | 0/28 | -0.8574 | 7327 | FAIL |
+| anticipate | 1.5 | 14 | -0.8972 | 4971 | 0/27 | -0.7518 | 11176 | FAIL |
+| anticipate | 1.5 | 20 | -0.9085 | 5014 | 0/28 | -0.7635 | 11235 | FAIL |
+| anticipate | 2 | 14 | -0.7582 | 4781 | 0/27 | -0.6709 | 10381 | FAIL |
+| anticipate | 2 | 20 | -0.7578 | 4898 | 0/28 | -0.6880 | 10506 | FAIL |
+| anticipate | 2.5 | 14 | -0.6640 | 4010 | 0/28 | -0.5848 | 8874 | FAIL |
+| anticipate | 2.5 | 20 | -0.6543 | 4064 | 0/28 | -0.5968 | 9009 | FAIL |
+| anticipate | 3 | 14 | -0.5809 | 3396 | 0/28 | -0.5214 | 7620 | FAIL |
+| anticipate | 3 | 20 | -0.5646 | 3415 | 0/28 | -0.5324 | 7593 | FAIL |
+| anticipate | 4 | 14 | -0.4745 | 2567 | 0/28 | -0.4648 | 5879 | FAIL |
+| anticipate | 4 | 20 | -0.4873 | 2542 | 0/28 | -0.4462 | 5663 | FAIL |
+
+**Gate (per cell, holdout only, no train-gate stage): avgR/trade > 0 AND trades >= 150 AND
+positiveAssets/assets >= 0.50 — the same bar T2-VOLCONTRACTION used. 0/20 cells pass; 0/28
+holdout assets are ever net-positive at any grid cell for either family.**
+
+**Structural-stop baseline comparison (both baselines re-run fresh, same split/watchlist/cost
+basis, for an apples-to-apples reading rather than citing this document's stale ~0.9%-cost
+"Honest Baseline First" table above).** `anticipate` structural stop: holdout avgR=-0.8842,
+3966 trades, 0/27 positive. Best ATR cell (k=4, p=14): holdout avgR=-0.4745, 2567 trades —
+materially less negative (roughly half the loss per trade) and a real, valid test since
+`atrStopK` genuinely varies the anticipate stop. Still a decisive gate FAIL (needs >0, not
+merely "less negative"), and the pattern across the grid is monotonic and mechanical: a wider
+stop (higher `atrStopK`) shrinks position size proportionally, which shrinks realized R-loss
+per trade toward zero from below without ever crossing it — not evidence of a real edge
+emerging, just less risk taken per trade. `breakout` structural stop (re-verified: identical
+across all `atrStopK` for the reason above): holdout avgR=-0.8640 at atrPeriod=14, -0.8425 at
+atrPeriod=20 — both far outside the gate, and the ~0.02R atrPeriod-only difference is noise
+relative to the -0.86R baseline, not a signal.
+
+**Verdict: ATR-ADAPTIVE-STOP-CONFIRMATORY FAIL.** No family/grid-cell combination clears the
+pre-registered gate. `anticipate`'s ATR-stop arm is a real, valid test of the hypothesis and
+fails decisively despite a real (if mechanical) improvement over its structural-stop
+baseline. `breakout`'s ATR-stop arm is not actually a test of `atrStopK` at all — a
+scope-narrowing discovery about `breakoutEntry`'s hardcoded stop, disclosed above, not a
+grid result to trust at face value. Both closed. This closes the "built but never verdicted"
+gap `stopMode="atr"` represented, regardless of outcome. Recorded as VERDICTS.md's
+`ATR-ADAPTIVE-STOP-CONFIRMATORY` row and as 20 decision journal entries
+(`research-runs/2026-08-14T16-08-5*-atr-adaptive-stop-*.json`).

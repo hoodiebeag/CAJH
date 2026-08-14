@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix, runBreakoutDecayExit, runTimeframeIsolation, runBreakoutTrailingTpExit, runTrendGateFilter, runFibPullback, relVolTimeline, makeRelVolAboveAt, runVolConfirmedBreakout } from "./tournament.mjs";
+import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix, runBreakoutDecayExit, runTimeframeIsolation, runBreakoutTrailingTpExit, runTrendGateFilter, runFibPullback, relVolTimeline, makeRelVolAboveAt, runVolConfirmedBreakout, runAtrAdaptiveStop } from "./tournament.mjs";
 
 test("tournament reports no promotion when its data gate cannot be met", () => {
   const report = runTournament({ watchlist: [] });
@@ -157,6 +157,33 @@ test("runFibPullback: both pre-registered levels present, cutoff defaults to 202
   const report = runFibPullback({ watchlist: [] });
   assert.deepEqual(report.input.levels, [0.5, 0.618]);
   assert.equal(report.input.cutoffSec, Math.floor(Date.UTC(2025, 5, 1) / 1000));
+});
+
+// ── ATR-ADAPTIVE-STOP-CONFIRMATORY — runAtrAdaptiveStop ─────────────────────────
+test("runAtrAdaptiveStop: empty watchlist yields zero trades on all 20 grid cells and fails their gates honestly", () => {
+  const report = runAtrAdaptiveStop({ watchlist: [] });
+  assert.equal(report.result.cells.length, 20);
+  for (const c of report.result.cells) {
+    assert.equal(c.holdout.trades, 0, "0 trades must never read as a passing gate");
+    assert.equal(c.gate.passed, false);
+    assert.equal(c.gate.tradesPass, false);
+  }
+  assert.match(report.result.verdict, /^ATR-ADAPTIVE-STOP-CONFIRMATORY FAIL/);
+});
+
+test("runAtrAdaptiveStop: targets both families across the full pre-registered grid, nothing else", () => {
+  const report = runAtrAdaptiveStop({ watchlist: [] });
+  assert.deepEqual(report.input.families, ["breakout", "anticipate"]);
+  assert.deepEqual(report.input.atrStopKs, [1.5, 2, 2.5, 3, 4]);
+  assert.deepEqual(report.input.atrPeriods, [14, 20]);
+  assert.deepEqual(report.result.cells.map((c) => `${c.family}/${c.atrStopK}/${c.atrPeriod}`), [
+    "breakout/1.5/14", "breakout/1.5/20", "breakout/2/14", "breakout/2/20",
+    "breakout/2.5/14", "breakout/2.5/20", "breakout/3/14", "breakout/3/20",
+    "breakout/4/14", "breakout/4/20",
+    "anticipate/1.5/14", "anticipate/1.5/20", "anticipate/2/14", "anticipate/2/20",
+    "anticipate/2.5/14", "anticipate/2.5/20", "anticipate/3/14", "anticipate/3/20",
+    "anticipate/4/14", "anticipate/4/20",
+  ]);
 });
 
 // ── TEST2-VOL-CONFIRMED-BREAKOUT — relVolTimeline / makeRelVolAboveAt / runVolConfirmedBreakout ──

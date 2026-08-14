@@ -534,6 +534,65 @@ export function runVolConfirmedBreakout({ watchlist = loadWatchlist(), cutoffSec
   return { input, result };
 }
 
+/**
+ * ATR-ADAPTIVE-STOP-CONFIRMATORY (human-directed research, pre-registered 2026-08-14):
+ * backtest.js's `stopMode="atr"` places the stop `atrStopK` ATRs below entry instead of the
+ * structural swing-low — a volatility-RELATIVE risk definition, fully built but never run
+ * through a sealed confirmatory study (grep-confirmed: every prior TOURNAMENT_ROADMAP.md
+ * mention of atrStopK/stopMode is cited only as precedent for another option's
+ * no-op-when-omitted pattern). Applied to `breakout` (the one baseline family with a
+ * positive zero-cost holdout edge) and `anticipate` (the live default signal), full
+ * watchlist, standard 70/30 split, net-of-cost from the start (backtest.js's own
+ * FEE_RATE/SLIPPAGE_PCT defaults, already the corrected real basis per FEE-SCHEDULE-REBASE).
+ *
+ * PRE-REGISTERED GRID (report every cell, do not cherry-pick): atrStopK in
+ * {1.5, 2, 2.5, 3, 4} x atrPeriod in {14, 20} = 10 cells per family, 20 total. tpR/
+ * lockBreakeven stay at each family's current live default from `families` above — only the
+ * stop DEFINITION is the variable under test here; combining with
+ * WIDE-STOP-HIGH-TARGET-ASYMMETRY's own separate target exploration is a natural but
+ * distinct follow-up, not this item.
+ *
+ * PRE-REGISTERED GATE (per cell, holdout only, no train-gate stage): avgR/trade > 0 AND
+ * trades >= 150 AND positiveAssets/assets >= 0.50 — the same bar T2-VOLCONTRACTION used.
+ */
+export function runAtrAdaptiveStop({ watchlist = loadWatchlist(), split = .70 } = {}) {
+  const targets = ["breakout", "anticipate"];
+  const atrStopKs = [1.5, 2, 2.5, 3, 4];
+  const atrPeriods = [14, 20];
+
+  const datasets = normalize(watchlist).map((asset) => ({ symbol: asset.symbol, series: seriesFor(asset.id) }))
+    .filter((d) => d.series.every((tf) => tf.candles.length >= 250))
+    .map((d) => ({ symbol: d.symbol, train: splitSeries(d.series, split, false), holdout: splitSeries(d.series, split, true) }));
+
+  const cells = targets.flatMap((id) => {
+    const [, , baseConfig] = families.find(([fid]) => fid === id);
+    return atrStopKs.flatMap((atrStopK) => atrPeriods.map((atrPeriod) => {
+      const config = { ...baseConfig, stopMode: "atr", atrStopK, atrPeriod };
+      const score = (part) => summarize(datasets.map((d) => backtestMultiTF({ series: d[part] }, { ...config, entryTf: "1h" })));
+      const train = score("train"), holdout = score("holdout");
+      const avgRPass = holdout.avgR > 0;
+      const tradesPass = holdout.trades >= 150;
+      const positiveFracPass = holdout.positiveAssets / Math.max(1, holdout.assets) >= 0.50;
+      return { family: id, atrStopK, atrPeriod, train, holdout, gate: { avgRPass, tradesPass, positiveFracPass, passed: avgRPass && tradesPass && positiveFracPass } };
+    }));
+  });
+
+  const input = {
+    specification: "strategy-tournament-atr-adaptive-stop/v1", split, assets: datasets.map((d) => d.symbol),
+    families: targets, atrStopKs, atrPeriods,
+  };
+  const passed = cells.filter((c) => c.gate.passed).map((c) => `${c.family}/k=${c.atrStopK}/p=${c.atrPeriod}`);
+  const best = cells.reduce((a, b) => (b.holdout.avgR > a.holdout.avgR ? b : a));
+  const result = {
+    cells,
+    best: { family: best.family, atrStopK: best.atrStopK, atrPeriod: best.atrPeriod, holdoutAvgR: best.holdout.avgR },
+    verdict: passed.length
+      ? `ATR-ADAPTIVE-STOP clears the pre-registered gate for: ${passed.join(", ")} (holdout avgR>0 AND trades>=150 AND positiveAssets/assets>=0.50)`
+      : "ATR-ADAPTIVE-STOP-CONFIRMATORY FAIL: no family/grid-cell combination clears the pre-registered gate",
+  };
+  return { input, result };
+}
+
 /** Chronological 70/30 test. Parameters are fixed before examining the holdout. */
 export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRate, slipPct, entryTf = "1h" } = {}) {
   const costOverride = {};
@@ -593,6 +652,13 @@ if (process.argv[1]?.endsWith("tournament.mjs")) {
     // regardless of which one (if any) had its holdout examined.
     const saved = report.result.variants.map((v) =>
       saveExperiment(`vol-confirm-${v.threshold.toFixed(1).replace(".", "")}`, { ...report.input, threshold: v.threshold }, v));
+    console.log(JSON.stringify({ ...report.result, saved }, null, 2));
+  } else if (process.argv.includes("--atr-adaptive-stop")) {
+    const report = runAtrAdaptiveStop();
+    // One decision-journal entry per grid cell (20 total: 2 families x 5 atrStopK x 2
+    // atrPeriod), preserving the full pre-registered grid regardless of outcome.
+    const saved = report.result.cells.map((c) =>
+      saveExperiment(`atr-adaptive-stop-${c.family}-k${c.atrStopK.toString().replace(".", "")}-p${c.atrPeriod}`, { ...report.input, family: c.family, atrStopK: c.atrStopK, atrPeriod: c.atrPeriod }, c));
     console.log(JSON.stringify({ ...report.result, saved }, null, 2));
   } else {
     const zeroCost = process.argv.includes("--zero-cost");
