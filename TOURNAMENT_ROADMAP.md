@@ -1274,3 +1274,68 @@ non-verdict. Per the human's own execution rule for this queue, none of these fo
 should be re-tuned further on the same axis (funding threshold, retracement level,
 on-chain data source, volume multiple) — the next step is a new hypothesis queue, not
 continued search within this exhausted set.
+
+## JUDGE-WALKFORWARD-SYMBOL-HOLDOUT RESULT (2026-08-14): new standard judge, harness only
+
+Research infrastructure, pulled directly from ROADMAP.md's "Finding an edge" list:
+"Walk-forward + sealed holdout (time AND symbol) — the honest final validation; the last
+piece of the judge." Not a hypothesis test — no strategy family was run through this, no
+VERDICTS.md row is added, and no already-decided verdict above is reopened or re-run.
+
+**What every verdict above actually used.** Every TEST/T*/Track result in this document
+scored a single chronological split (usually a fixed 70/30 fraction, sometimes a fixed
+calendar date) over the full watchlist — one static cut on the time axis, and no symbol
+was ever held out of every sweep entirely. That is a weaker judge than the project's own
+stated bar: a strategy that happens to work on one particular split, or that was only ever
+tested on symbols that also appeared in some earlier train run, hasn't been checked against
+genuinely unseen time *or* genuinely unseen symbols.
+
+**What was built, in `researchlib.mjs` (the shared-helpers module `tournament.mjs` and
+`momentum.mjs` already both import from — the natural home so any study can pull this in
+the same way it already pulls in `loadWatchlist`/`stat`, instead of hand-deriving its own
+`STABLE_13`-style list or its own `splitSeries` fraction cut):**
+
+- **`SEALED_SYMBOLS`** — a frozen, five-symbol list (`AVAX`, `LINK`, `NEAR`, `SUI`, `UNI`)
+  chosen once, before any study has used this harness, and never to be edited afterward
+  (editing it later would retroactively un-seal or re-seal data a prior run already
+  touched). Deliberately excludes BTC/ETH/SOL/XRP, the majors most existing verdicts are
+  already anchored to, so the active pool a study trains on stays representative. Distinct
+  from `momentum.mjs`'s `STABLE_13`/`PRIMARY_SYMBOL_HOLDOUT`, which is that study's own
+  cross-sectional train/holdout split, not this project-wide seal.
+- **`splitSealedSymbols(watchlist)`** — partitions any watchlist (both of `loadWatchlist()`'s
+  output shapes) into `{ active, sealed }`. `active` is what a study's normal train/holdout
+  sweep should run over; `sealed` is reserved for the one-time final validation of a
+  candidate that has already cleared its normal holdout gate — not for use in any
+  train/holdout cycle before that point.
+- **`walkForwardWindows(candles, { folds, trainFraction })`** — replaces one static
+  train/holdout cut with `folds` anchored/expanding walk-forward folds: fold *i*'s train is
+  always a prefix of the series (candles[0, cut_i)), its holdout is the next unseen slice,
+  and the holdouts across all folds tile the remainder of the series with no gap or overlap.
+  A study that wants a genuinely rolling validation (rather than one draw from one split)
+  now has one call instead of writing its own loop.
+- **`walkForwardSeriesWindows(series, opts)`** — the same fold logic applied to this
+  project's standard multi-timeframe `series` shape (`[{label, mins, candles}, ...]`, as
+  `tournament.mjs`'s `seriesFor` and every `loadResearchCandles` consumer already produce).
+  Cuts are computed on the anchor timeframe and applied to every other timeframe by candle
+  `.time` boundary rather than by index, mirroring `splitSeries`'s existing convention —
+  necessary because different timeframes have different candle counts over the same
+  wall-clock span.
+
+**Usage pattern for a future study** (not run here — this item is infrastructure only, per
+its own `done_when`): call `splitSealedSymbols(loadWatchlist())` and run the normal
+train/holdout sweep over `active` exactly as every study above already does; call
+`walkForwardSeriesWindows` in place of a single `splitSeries` cut when a rolling validation
+across multiple time folds is wanted instead of one static split; reserve `sealed` for the
+literal final check on a candidate that has already cleared every gate above, run once, not
+tuned against.
+
+**Tests.** 8 new unit tests in `researchlib.test.mjs`: `splitSealedSymbols` partitions both
+watchlist shapes correctly and never drops/duplicates an entry; `walkForwardWindows`'s folds
+have strictly-growing train windows, holdouts that tile the remainder with no gap/overlap
+and no lookahead, reject invalid `folds`/`trainFraction`, and skip folds too small to hold a
+candle rather than emit an empty one; `walkForwardSeriesWindows` cuts a second timeframe at
+the same wall-clock boundary as the anchor despite a different bar count. `npm.cmd test`
+green (full suite, not just the new file).
+
+**Does not require re-running any already-KILLED verdict** — nothing above changes; this is
+additive infrastructure for whatever the next hypothesis queue promotes.
