@@ -60,6 +60,21 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. Output Style
+
+**Terse by default. Lead with the answer.**
+
+- No preamble or pleasantries ("Sure, I'd be happy to help", "Great question", "Here is the code:"). Start with the diff, the answer, or the result.
+- Explanations capped at 2 sentences unless the user asks for detail, or the change is genuinely non-obvious and needs the reasoning stated.
+- Skip "I did X, then Y, then Z" recaps when the diff or output already shows it.
+- This applies to conversational replies, not to research/audit artifacts (VERDICTS.md, ROADMAP.md, work_queue task text, commit messages) — those stay as detailed as the finding requires. Terseness is for chat, not for the record.
+
+**Route trivial, mechanical subagent work to a lighter model.**
+
+- File renames, basic formatting, boilerplate test scaffolding, plain text extraction: use a lighter tier (e.g. Haiku) when spawning a subagent for it.
+- Reserve the frontier tier for architecture, refactoring, research synthesis, and anything requiring real judgment.
+- No routing to non-Claude, local, or third-party models — not a capability available in this environment.
+
 ---
 
-**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, clarifying questions come before implementation rather than after mistakes, and replies lead with the answer instead of a preamble.
