@@ -477,7 +477,7 @@
       },
       {
         "id": "COMPLETE-RANGE-SWEEP-RECLAIM-VERDICT",
-        "state": "pending",
+        "state": "done",
         "owner": "executor",
         "file": "TOURNAMENT_ROADMAP.md (new section), VERDICTS.md (new row), decision journal label RANGE-SWEEP-RECLAIM",
         "depends_on": [],
@@ -1413,6 +1413,14 @@
       "action": "commit",
       "detail": "COMPLETE-H3-VERDICT done. h3 entry mode (backtest.js h3Entry, selective higher-low reclaim, 2+ prior confirmed swing lows forming a higher-low structure before a reclaim entry) was previously closed only by same-mechanism argument in T6-TIMEFRAME-ISOLATION (grouped with anticipate/bos/sweep_reclaim/range_sweep_reclaim, never independently sealed-holdout tested). h3 was already an unmodified row in tournament.mjs families, just never read out and gated on its own - no code change needed. Ran node tournament.mjs (default net-of-cost, FEE_RATE=0.008/SLIPPAGE_PCT=0.0005, ~1.7% round trip, full 28-asset watchlist, 70/30 chronological split). Result: train avgR -1.526 (10911 trades), holdout avgR -1.652 (4590 trades, 0/28 positive assets). Gate (holdout avgR>-0.30 AND trades>=150): trades pass, avgR fails by a wide margin on a large sample - decisive FAIL, not a borderline or insufficient-sample call. Recorded as VERDICTS.md H3-HIGHER-LOW-RECLAIM row and a new TOURNAMENT_ROADMAP.md H3-HIGHER-LOW-RECLAIM RESULT section. range_sweep_reclaim (same audit, sibling item COMPLETE-RANGE-SWEEP-RECLAIM-VERDICT) intentionally left for a future firing per one-item-per-firing hygiene, even though the same run also produced its holdout numbers (-1.120R/trade, 511 trades, 1/28 positive - also FAIL against the same gate, not yet written up). NOTE ON THIS ENTRY: the normal cap-100/drop-oldest step is skipped this one firing (ledger now 101, not 100) because the oldest entry due for eviction contains a plain-prose mention of a protected-code identifier the pre-commit safety scanner matches on any diff line (added OR removed) anywhere in the repo, including harmless JSON housekeeping text; evicting it would have blocked this commit even though nothing protected was touched. The entry itself is unharmed either way (permanently in git history regardless of live-file presence) - the next firing that appends should just resume normal cap enforcement, which will then evict two entries at once to get back to 100, once whichever entry is oldest at that point does not collide.",
       "commit": "eb93b58",
+      "tests": "299/299 pass"
+    },
+    {
+      "ts": "2026-08-13T21:10:00.000Z",
+      "agent": "cajh-loop-check",
+      "action": "commit",
+      "detail": "COMPLETE-RANGE-SWEEP-RECLAIM-VERDICT done. range_sweep_reclaim entry mode (backtest.js rangeSweepReclaimEntry, 2+ same-support-level touches within 24 bars, flat 20/50 MA, volume-expansion >=1.2x on the reclaim bar) was previously closed only by the same same-mechanism argument as h3 in T6-TIMEFRAME-ISOLATION, never independently sealed-holdout tested. Already an unmodified row in tournament.mjs families (reused the same run as the prior firing's h3 verdict would have, but re-ran node tournament.mjs fresh this firing) - no code change needed. Result: train avgR -1.090 (1055 trades), holdout avgR -1.120 (511 trades, 1/28 positive assets). Gate (holdout avgR>-0.30 AND trades>=150): trades pass (511>=150, decisive despite this family's selectivity), avgR fails by a wide margin - FAIL, not a borderline or insufficient-sample call. Recorded as VERDICTS.md RANGE-SWEEP-RECLAIM row and a new TOURNAMENT_ROADMAP.md RANGE-SWEEP-RECLAIM RESULT section. This closes out both families T6-TIMEFRAME-ISOLATION's addendum had grouped in by argument only (h3 in the prior firing, range_sweep_reclaim here) - no more argument-only closures remain from that note. LEDGER CAP NOTE: normal cap-100/drop-oldest is skipped again this firing (ledger now 102, not 100) - entry index 0 (2026-08-06T20:40:47.501Z, action 'unblock') still names the live-trading kill-switch env flag and evicting it would show as a removed line matching the pre-commit safety scanner's protected-pattern check on any diff line anywhere in the repo, blocking this commit. This entry cannot be evicted by an unattended firing at all (only a human with the override marker can remove it) - flagging this as a real, not transient, constraint for whichever firing next works STATE-QUEUE-RETENTION or reviews ledger hygiene. Non-colliding entries after it could in principle be evicted out of turn, but that breaks FIFO/append-order semantics, so none were touched this firing either.",
+      "commit": "f57e03e",
       "tests": "299/299 pass"
     }
   ],
