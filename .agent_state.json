@@ -2,8 +2,8 @@
   "version": 2,
   "control": {
     "status": "IDLE",
-    "target_file": "tournament.mjs, tournament.test.mjs, VERDICTS.md, TOURNAMENT_ROADMAP.md",
-    "objective": "Completed TEST2-VOL-CONFIRMED-BREAKOUT: relative-volume entry gate on breakout family (relVol = entry-bar volume / mean volume of the prior 20 bars, current bar excluded from its own average), wired purely via backtest.js existing entryGate hook (no backtest.js changes) -- same technique funding-meanrev.mjs/buildBtcAboveMa200At already use. tournament.mjs new exports: relVolTimeline, makeRelVolAboveAt, runVolConfirmedBreakout. Three thresholds tested (1.5x/2.0x/3.0x). Pre-registered selection process followed literally: rank all three on TRAIN avgR/trade only, then examine ONLY the best-on-train threshold holdout exactly once -- the other two thresholds holdout is never computed, avoiding the exact look-ahead the task text calls out (a genuinely different selection discipline from TEST1-FIB-PULLBACKs two independently-gated levels). Fixed calendar-date split (train: earliest-2025-06-01, holdout: 2025-06-01-present) per the literal spec -- volume is already inside every OHLCV candle so no data-availability gate was needed. Result: all three thresholds TRAIN-GATE-FAIL on avgR (1.5x: -0.854, 2.0x: -0.857, 3.0x: -0.794, all worse than the -0.50 floor AND worse than unfiltered breakouts own -0.454 train baseline; trade counts 5224/4578/3427, all clear >=200 easily). No threshold selected on train; holdout never examined for any. Recorded in VERDICTS.md, TOURNAMENT_ROADMAP.md, and three decision-journal entries (vol-confirm-15/20/30). 6 new unit tests (relVolTimeline no-look-ahead behavior against hand-verified synthetic candles, makeRelVolAboveAt forward-cursor/inclusive-threshold semantics, empty-watchlist honesty, input defaults). npm.cmd test 343/343 green. Pushed as 3e348c5. This closes the fourth and final item in the human-authored TEST1-4 queue -- all four now FAIL/abandoned or a data-availability non-verdict (TEST1-FIB-PULLBACK TRAIN-GATE-FAIL, TEST2-VOL-CONFIRMED-BREAKOUT TRAIN-GATE-FAIL, TEST3-FUNDING-MEANREV TRAIN-GATE-FAIL, TEST4-ONCHAIN-FLOW-GATE ONCHAIN-DATA-INSUFFICIENT). Per the queues own execution rule, none should be re-tuned further on the same axis -- next step is a new hypothesis queue, not continued search within this exhausted set. One unit of work this firing per HYGIENE; stopping here.",
+    "target_file": "researchlib.mjs, researchlib.test.mjs, TOURNAMENT_ROADMAP.md",
+    "objective": "Completed JUDGE-WALKFORWARD-SYMBOL-HOLDOUT: built a reusable walk-forward + sealed-symbol split harness in researchlib.mjs (already imported by tournament.mjs and momentum.mjs, so any future study can pull it in the same way it already pulls loadWatchlist/stat instead of hand-deriving its own STABLE_13-style constant or splitSeries fraction cut). Symbol axis: SEALED_SYMBOLS (frozen, five symbols -- AVAX, LINK, NEAR, SUI, UNI -- chosen once 2026-08-14 before any study has used this harness, deliberately excluding BTC/ETH/SOL/XRP so the active pool stays representative; must never be edited afterward since that would retroactively un-seal/re-seal data a prior run already touched) plus splitSealedSymbols(watchlist) which partitions either of loadWatchlist()'s two output shapes into {active, sealed}. Time axis: walkForwardWindows(candles, {folds, trainFraction}) produces anchored/expanding walk-forward folds (each fold's train is a strict prefix, holdouts tile the remainder with no gap/overlap/lookahead) replacing a single static 70/30-style cut, plus walkForwardSeriesWindows(series, opts) applying the same fold boundaries across this project's multi-timeframe series shape by wall-clock time rather than by index (mirrors splitSeries's existing anchor-then-filter-by-time convention, needed because different timeframes have different candle counts over the same span). This is infrastructure only, per the item's own done_when -- no strategy family was run through it, no VERDICTS.md row was added, no already-decided verdict was reopened or re-run; nothing in TOURNAMENT_ROADMAP.md/VERDICTS.md above this entry changed. Documented as the new standard judge in a dated TOURNAMENT_ROADMAP.md section (harness-level documentation per this project's existing convention -- prior RESULT sections are where every other harness addition/finding lives). 8 new unit tests in researchlib.test.mjs: splitSealedSymbols correctness on both watchlist shapes and no drop/duplicate; walkForwardWindows fold-growth/tiling/no-lookahead invariants, invalid-input rejection (non-integer/zero folds, out-of-range trainFraction), and skip-too-small-fold behavior; walkForwardSeriesWindows cross-timeframe wall-clock cut alignment. npm.cmd test 351/351 green (full suite, not just the new file). Only researchlib.mjs/researchlib.test.mjs/TOURNAMENT_ROADMAP.md touched -- no protected-logic files (bot.js/monitor.js/trader.js) in the diff, pre-commit hook passed cleanly. Pushed as 35ddad4. One unit of work this firing per HYGIENE; stopping here.",
     "notes": ""
   },
   "blackboard": {
@@ -544,7 +544,7 @@
       },
       {
         "id": "JUDGE-WALKFORWARD-SYMBOL-HOLDOUT",
-        "state": "pending",
+        "state": "done",
         "owner": "executor",
         "file": "new: walk-forward harness (research.js / tournament.mjs, additive)",
         "depends_on": [],
@@ -653,14 +653,6 @@
     "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
   },
   "ledger": [
-    {
-      "ts": "2026-08-07T23:36:30.000Z",
-      "agent": "loop",
-      "action": "handoff",
-      "detail": "T5-DECAY-EXIT: reused backtest.js's pre-existing maxHold option (true no-op default, MAX_HOLD=100) as the decay-exit mechanism rather than duplicating it - added fixture tests proving exact-bar-threshold firing, plus runBreakoutDecayExit/--decay-exit in tournament.mjs. Ran against the full watchlist: holdout avgR -0.445 -> -0.437 (negligible), FAILS the pre-registered avgR>-0.30 gate (trades>=150 clause passes). Recorded in TOURNAMENT_ROADMAP.md, closing the decay-exit path for breakout. backtest.js itself was never touched. npm.cmd test: 186/186 green.",
-      "commit": "3e93bfe",
-      "tests": "186 pass, 0 fail"
-    },
     {
       "ts": "2026-08-08T02:02:46Z",
       "agent": "loop",
@@ -1452,6 +1444,14 @@
       "detail": "Volume-confirmed breakout study (3 thresholds, entryGate-based, fixed calendar split): all TRAIN-GATE-FAIL on avgR clause, no threshold selected, holdout never examined. Fourth and final item in human-authored TEST1-4 queue now closed (all FAIL/abandoned or non-verdict). Control back to IDLE.",
       "commit": "3e348c5",
       "tests": "343/343 green"
+    },
+    {
+      "ts": "2026-08-14T14:10:00.000Z",
+      "agent": "scheduled-task-cajh-loop-check",
+      "action": "JUDGE-WALKFORWARD-SYMBOL-HOLDOUT: built reusable walk-forward + sealed-symbol split harness",
+      "detail": "Added SEALED_SYMBOLS/splitSealedSymbols (symbol axis) and walkForwardWindows/walkForwardSeriesWindows (time axis) to researchlib.mjs, additive, usable by any future family/study in place of per-study hand-derived splits. 8 new unit tests. Documented as the new standard judge in TOURNAMENT_ROADMAP.md. Infrastructure only -- no strategy run, no VERDICTS.md row, no existing verdict touched.",
+      "commit": "35ddad4",
+      "tests": "351/351 green"
     }
   ],
   "automation": {
