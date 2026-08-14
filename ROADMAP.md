@@ -1406,3 +1406,78 @@ execution cost rather than by a real absence of edge — does not hold for any o
 signals actually carried through to a final gate. This is the strongest possible answer
 this project could give to that thesis: not "inconclusive," but "tested rigorously,
 including the one candidate that initially looked promising, and it does not survive."
+
+## 2026-08-14 — FUNDING-CARRY-DECAY-CHECK: a genuinely different mechanism (harvest the
+funding payment itself via a market-neutral position), and it does not clear either
+
+**Mechanism, distinct from every other funding-rate use in this project.** H11's threshold
+gate and CLASSIFIER-FUNDING-FEATURE's covariate both use funding as a signal for
+*directional* price prediction on the spot leg alone. This tests the source paper's own
+thesis (Schmeling/Schrimpf/Todorov 2023 "Crypto carry," SSRN 4268371, reproduced in
+Borri/Liu/Tsyvinski/Wu arXiv 2510.14435 §3.6): short the perp + long the spot, delta-neutral,
+and harvest the funding-rate payment itself as the return source. **Hard constraint, stated
+before any run and unchanged by the result below:** this Kraken account has no
+short-position or margin access, so this mechanism is definitionally impossible to trade
+live on this account as constructed — every number below is research arithmetic, not a
+live-eligible candidate, regardless of sign.
+
+**Reproduction period (2020-2025, the paper's own sample) — not available, confirmed again.**
+`carrystudy.mjs` requested every watchlist symbol's Kraken `historical-funding-rates` window
+back to 2020-01-01; every single symbol returned **zero** points before the window PWR5
+already diagnosed on 2026-08-13 (a hard rolling ~365-day ceiling, not a growing archive —
+see this file's 2026-08-13 PWR5 section). This is not a new finding, it's the same ceiling
+re-confirmed from the demand side: there is no path to a direct sanity-check reproduction of
+the paper's 2020-2025 Sharpe-6.45 headline number using this project's real data access, full
+stop, not just "not yet fetched."
+
+**Recent period (2025-08-13 to 2026-08-14, matching/extending the paper's own 2025 cutoff) —
+computed for real, decisively negative-to-flat.** 28 of 29 watchlist symbols cleared the
+20-day minimum-coverage floor (EOS had exactly 1 hourly point in the window and was
+correctly excluded, not zero-filled). Equal-weighted pooled portfolio across all 28,
+9,187 hourly funding intervals:
+
+| Period | Annualized return | Annualized vol | Sharpe (naive) |
+|---|---|---|---|
+| Full window (2025-08-13 to 2026-08-14) | **−3.26%** | 0.26% | −12.5 |
+| First half (2025-08-01 to 2026-02-13) | −1.28% | 0.35% | −3.7 |
+| Second half (2026-02-13 to 2026-08-14) | **−5.85%** | 0.09% | −62.2 |
+
+Per-asset spread: only 8 of 28 assets (BTC, ETH, DOGE, LINK, SUI, TIA, XMR, XRP) show a
+positive annualized carry return over the full window; the other 20 are negative, several
+sharply so (XTZ −21.6%/yr, ATOM −18.9%/yr, APT −17.7%/yr). Full per-asset table in
+`carrystudy.mjs`'s output — not reproduced here since it doesn't change the portfolio
+verdict.
+
+**Decay verdict, stated honestly against what this data can and can't show:** this project's
+data covers only ~1 year (Kraken's hard ceiling), so it cannot independently measure a
+multi-year decay *trend* the way the paper does — there is no earlier in-project baseline to
+compare against. What it *can* do is check whether the CURRENT state matches the paper's own
+"when the funding dries up" 2025 account (Sharpe falling to 4.06 in 2024, negative in 2025):
+**it does.** The pooled portfolio is negative across the full available window, and the
+within-window half-split shows the negative result getting *worse*, not better, in the more
+recent six months (−1.28%/yr → −5.85%/yr). That is a "continued, not stabilized or
+reversed" reading, on the only window this project can actually observe. It is not proof the
+multi-year decay trend itself continued (that requires data this project doesn't have and
+can't get from Kraken's endpoint) — it is proof that the trade is still a net-negative
+proposition today, consistent with continued decay rather than a rebound.
+
+**Known simplification, disclosed not absorbed:** returns are computed from the funding-rate
+accrual only. Spot-vs-perp basis convergence at entry/exit is not separately modeled — no
+matched-timestamp perp price series was fetched alongside the funding series. For a
+perpetual (no expiry) held continuously across the window, funding is specifically the
+mechanism that keeps basis anchored to spot, so this is a secondary effect against the
+accumulated accrual rather than the primary return driver the paper attributes to the
+strategy — but it is a real omission, not a zero-impact one, and is named here rather than
+silently assumed away. Separately, the naive Sharpe figures above (using `sqrt(intervals per
+year)` annualization on hourly, strongly serially-correlated funding-rate data) are almost
+certainly overstated in magnitude — hourly funding does not move independently hour to hour,
+so the true annualized volatility is understated by this method and the Sharpe values should
+be read as directionally indicative only, not literal risk-adjusted figures; the annualized
+*return* numbers (a simple sum-scaled mean, not vol-dependent) are the reliable part of this
+table.
+
+**VERDICT: does not clear a live-eligibility bar even setting the short-access constraint
+aside** — the portfolio-level return is negative and getting more negative, not a promising
+lead under decay-reversal. Recorded as VERDICTS.md's `FUNDING-CARRY-DECAY-CHECK` row,
+explicitly flagged research-only / not live-eligible per the pre-registered account
+constraint, not as a candidate awaiting short-position infrastructure.
