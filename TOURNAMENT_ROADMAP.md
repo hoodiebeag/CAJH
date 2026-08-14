@@ -1423,3 +1423,143 @@ grid result to trust at face value. Both closed. This closes the "built but neve
 gap `stopMode="atr"` represented, regardless of outcome. Recorded as VERDICTS.md's
 `ATR-ADAPTIVE-STOP-CONFIRMATORY` row and as 20 decision journal entries
 (`research-runs/2026-08-14T16-08-5*-atr-adaptive-stop-*.json`).
+
+## WIDE-STOP-HIGH-TARGET-ASYMMETRY RESULT (2026-08-14)
+
+Human-directed research: tests the classic trend-following "cut losses short, let profits
+run" shape — an asymmetric R-distribution (few large winners funding many small losers) that
+can be net-positive even at a low win rate if the winner/loser MAGNITUDE ratio is large
+enough. Not directly tested before: T1B-BREAKOUT-COSTFIX only widened `tpR` 3->5 as a single
+value while `lockBreakeven` stayed active; TRAIL-STOP-EXIT replaced the fixed target with a
+different mechanism entirely, also with breakeven in the picture. Pre-registered grid:
+`maxStopPct` (ceiling on the accepted structural stop, each family's own `minStopPct` floor
+unchanged) in {6%,7%,8%,9%,10%} x `tpR` in {6,8,10,15,20}, applied to `breakout` and
+`anticipate`, `lockBreakeven: false` throughout — 5x5=25 cells per family, 50 total. Full
+28-asset watchlist, standard 70/30 split, net-of-cost from the start. Implemented as
+`tournament.mjs`'s new `runWideStopHighTargetAsymmetry`, gated behind
+`--wide-stop-high-target`; zero `backtest.js` changes (every knob used —
+`maxStopPct`/`tpR`/`lockBreakeven`/`maxHold` — was already an overridable param).
+
+**Pre-registered prerequisite check: MAX_HOLD censoring.** At the default `maxHold=100`
+(backtest.js's `MAX_HOLD`, ~4 days on 1h candles), a stale position is force-closed at market
+before genuinely reaching a distant target — the task's own explicit warning that this could
+understate the "let it run" thesis. Measured directly (not assumed): timeout-censoring is
+material EVERYWHERE in this grid, not only its widest corner — even the mildest cell sampled
+(`maxStopPct=6%, tpR=6`) censored 9.1% (breakout) / 12.2% (anticipate) of trades, rising to
+17.0% / 21.3% at the widest (`maxStopPct=10%, tpR=20`). `maxHold=4320` (180 days) is the
+smallest value tested at which censoring reaches ~0% at every sampled cell (100 -> 500 -> 1000
+-> 2160 -> 4320 bars swept at the extreme cell first), so it is used for the FULL 50-cell grid
+below, applied uniformly (not selectively) so every cell stays comparable.
+
+**What extending maxHold actually changes (the full exits breakdown, not just the aggregate
+avgR)** — measured at both the mildest and widest sampled cells, `maxHold=100` vs `=4320`:
+
+| Cell | Family | maxHold | Trades | avgR | Target-hit rate | Stop rate | Timeout rate |
+|---|---|---|---|---|---|---|---|
+| stop6%/tp6R | breakout | 100 | 2516 | -0.9388 | 10.5% (265) | 80.4% | 9.1% (230) |
+| stop6%/tp6R | breakout | 4320 | 2228 | -0.9572 | 13.6% (304) | 86.4% | 0.0% |
+| stop6%/tp6R | anticipate | 100 | 3250 | -0.8944 | 7.8% (254) | 74.9% | 12.2% (395) |
+| stop6%/tp6R | anticipate | 4320 | 2722 | -0.9351 | 12.0% (328) | 82.3% | 0.0% |
+| stop10%/tp20R | breakout | 100 | 2330 | -0.9971 | 0.6% (14) | 82.4% | 17.0% (397) |
+| stop10%/tp20R | breakout | 4320 | 1322 | -1.1685 | 3.5% (46) | 96.5% | 0.0% |
+| stop10%/tp20R | anticipate | 100 | 2883 | -0.8827 | 0.3% (8) | 73.6% | 21.3% (614) |
+| stop10%/tp20R | anticipate | 4320 | 1222 | -1.1591 | 2.7% (33) | 91.2% | 0.0% |
+
+Giving trades real time to resolve does let more of them actually reach target — at the
+widest cell, target-hit rate roughly quintuples once censoring is removed (breakout
+0.6%->3.5%, anticipate 0.3%->2.7%) — but target remains rare throughout, even at the mildest
+cell (breakout 10.5%->13.6%, anticipate 7.8%->12.0%), and **avgR/trade gets MORE negative
+after extending, not less, at every sampled cell.** Removing the censoring ambiguity reveals a
+worse picture than the default `maxHold` showed, not a better one obscured by premature
+timeouts — the previously-censored trades resolve mostly to stop, not to the distant target
+the "let it run" thesis needed them to reach. Checked against this item's own done_when
+requirement that the extension "does not silently change results for the lower-R cells": it
+shifts them in the same worsening direction as everywhere else in the grid (mildest cell avgR
+moves -0.02 to -0.04R more negative; widest moves -0.17 to -0.28R more negative) — a
+consistent de-biasing, not a distortion localized to one region.
+
+**Full grid — holdout avgR/trade, trade count, timeout rate (0.0% everywhere at
+`maxHold=4320`, confirming the extension did its job), positive-asset fraction, train avgR,
+train trades, per cell:**
+
+| Family | Stop | tpR | Holdout avgR | Holdout n | Timeout% | Pos assets | Train avgR | Train n |
+|---|---|---|---|---|---|---|---|---|
+| breakout | 6% | 6R | -0.9572 | 2228 | 0.0% | 1/28 | -0.8598 | 5157 |
+| breakout | 6% | 8R | -1.0938 | 1928 | 0.0% | 1/28 | -0.8546 | 4612 |
+| breakout | 6% | 10R | -1.1418 | 1789 | 0.0% | 2/28 | -0.8124 | 4211 |
+| breakout | 6% | 15R | -1.0898 | 1525 | 0.0% | 2/28 | -0.7662 | 3498 |
+| breakout | 6% | 20R | -1.1560 | 1326 | 0.0% | 2/28 | -0.6556 | 3100 |
+| breakout | 7% | 6R | -0.9595 | 2231 | 0.0% | 1/28 | -0.8561 | 5160 |
+| breakout | 7% | 8R | -1.0970 | 1927 | 0.0% | 1/28 | -0.8453 | 4598 |
+| breakout | 7% | 10R | -1.1466 | 1789 | 0.0% | 2/28 | -0.8057 | 4189 |
+| breakout | 7% | 15R | -1.0891 | 1528 | 0.0% | 2/28 | -0.7624 | 3468 |
+| breakout | 7% | 20R | -1.1550 | 1328 | 0.0% | 2/28 | -0.6547 | 3046 |
+| breakout | 8% | 6R | -0.9637 | 2224 | 0.0% | 1/28 | -0.8543 | 5137 |
+| breakout | 8% | 8R | -1.0998 | 1920 | 0.0% | 1/28 | -0.8452 | 4564 |
+| breakout | 8% | 10R | -1.1510 | 1783 | 0.0% | 2/28 | -0.7990 | 4167 |
+| breakout | 8% | 15R | -1.0974 | 1523 | 0.0% | 2/28 | -0.7527 | 3426 |
+| breakout | 8% | 20R | -1.1685 | 1322 | 0.0% | 2/28 | -0.6471 | 3014 |
+| breakout | 9% | 6R | -0.9637 | 2224 | 0.0% | 1/28 | -0.8558 | 5143 |
+| breakout | 9% | 8R | -1.0998 | 1920 | 0.0% | 1/28 | -0.8456 | 4573 |
+| breakout | 9% | 10R | -1.1510 | 1783 | 0.0% | 2/28 | -0.8015 | 4170 |
+| breakout | 9% | 15R | -1.0975 | 1524 | 0.0% | 2/28 | -0.7537 | 3435 |
+| breakout | 9% | 20R | -1.1685 | 1322 | 0.0% | 2/28 | -0.6481 | 3022 |
+| breakout | 10% | 6R | -0.9638 | 2225 | 0.0% | 1/28 | -0.8556 | 5148 |
+| breakout | 10% | 8R | -1.0998 | 1920 | 0.0% | 1/28 | -0.8453 | 4575 |
+| breakout | 10% | 10R | -1.1510 | 1783 | 0.0% | 2/28 | -0.8011 | 4171 |
+| breakout | 10% | 15R | -1.0975 | 1524 | 0.0% | 2/28 | -0.7531 | 3436 |
+| breakout | 10% | 20R | -1.1685 | 1322 | 0.0% | 2/28 | -0.6474 | 3022 |
+| anticipate | 6% | 6R | -0.9351 | 2722 | 0.0% | 0/27 | -0.6585 | 6151 |
+| anticipate | 6% | 8R | -0.9972 | 2274 | 0.0% | 0/27 | -0.5973 | 4999 |
+| anticipate | 6% | 10R | -1.0294 | 2005 | 0.0% | 0/27 | -0.5642 | 4283 |
+| anticipate | 6% | 15R | -1.1453 | 1665 | 0.0% | 0/27 | -0.4455 | 3221 |
+| anticipate | 6% | 20R | -1.2157 | 1358 | 0.0% | 0/27 | -0.3462 | 2581 |
+| anticipate | 7% | 6R | -0.9218 | 2663 | 0.0% | 0/27 | -0.6424 | 5873 |
+| anticipate | 7% | 8R | -0.9826 | 2227 | 0.0% | 0/27 | -0.5797 | 4769 |
+| anticipate | 7% | 10R | -1.0147 | 1970 | 0.0% | 0/27 | -0.5402 | 4047 |
+| anticipate | 7% | 15R | -1.1274 | 1624 | 0.0% | 0/27 | -0.4129 | 2972 |
+| anticipate | 7% | 20R | -1.1958 | 1317 | 0.0% | 0/27 | -0.2866 | 2406 |
+| anticipate | 8% | 6R | -0.9117 | 2599 | 0.0% | 0/27 | -0.6194 | 5481 |
+| anticipate | 8% | 8R | -0.9696 | 2175 | 0.0% | 0/27 | -0.5588 | 4427 |
+| anticipate | 8% | 10R | -1.0047 | 1921 | 0.0% | 0/27 | -0.5083 | 3674 |
+| anticipate | 8% | 15R | -1.1165 | 1578 | 0.0% | 0/27 | -0.3634 | 2660 |
+| anticipate | 8% | 20R | -1.1797 | 1285 | 0.0% | 0/27 | -0.2168 | 2178 |
+| anticipate | 9% | 6R | -0.9066 | 2575 | 0.0% | 0/27 | -0.6034 | 5270 |
+| anticipate | 9% | 8R | -0.9590 | 2153 | 0.0% | 0/27 | -0.5414 | 4200 |
+| anticipate | 9% | 10R | -0.9926 | 1898 | 0.0% | 0/27 | -0.5094 | 3486 |
+| anticipate | 9% | 15R | -1.1050 | 1558 | 0.0% | 0/27 | -0.3592 | 2583 |
+| anticipate | 9% | 20R | -1.1678 | 1266 | 0.0% | 0/27 | -0.2464 | 2026 |
+| anticipate | 10% | 6R | -0.9076 | 2501 | 0.0% | 0/27 | -0.6079 | 5105 |
+| anticipate | 10% | 8R | -0.9581 | 2085 | 0.0% | 0/27 | -0.5503 | 4074 |
+| anticipate | 10% | 10R | -0.9961 | 1833 | 0.0% | 0/27 | -0.5087 | 3350 |
+| anticipate | 10% | 15R | -1.0960 | 1501 | 0.0% | 0/27 | -0.3701 | 2501 |
+| anticipate | 10% | 20R | -1.1591 | 1222 | 0.0% | 0/27 | -0.2484 | 1961 |
+
+**Gate (per cell, holdout only, no train-gate stage, this item's own pre-registered bar):
+avgR/trade > -0.30 AND trades >= 150 AND positiveAssets/assets >= 0.40. 0/50 cells pass.**
+Every cell clears the trade-count floor by a wide margin (1222-2883 holdout trades); every
+cell fails decisively on both avgR (-0.91 to -1.22, nowhere near the -0.30 bar — win rate was
+deliberately not used as a selection criterion per the task's own instruction, avgR/trade
+already magnitude-weights the "few big winners" shape correctly) and positive-asset fraction
+(breakout tops out at 2/28 = 7%; anticipate never exceeds 0/27). Best single cell:
+`anticipate`, `maxStopPct=9%`, `tpR=6` — holdout avgR -0.9066, still nowhere close to passing.
+
+**Notable pattern, not part of the gate but worth flagging honestly:** holdout avgR gets
+monotonically WORSE as `tpR` rises within every stop width for BOTH families (e.g. anticipate
+at `maxStopPct=6%`: -0.9351 at tpR=6 down to -1.2157 at tpR=20) — the opposite of what the
+"let profits run" thesis predicts. TRAIN avgR shows a different shape: it improves (gets less
+negative) as `tpR` rises for `anticipate` (-0.6585 at tpR=6 up to -0.3462 at tpR=20 at
+`maxStopPct=6%`) — a train/holdout sign-of-trend divergence, the kind of thing that would
+matter if any cell were close to the gate. None are, so this is recorded as a data point for
+future studies to watch for (a `tpR`-driven train improvement that doesn't generalize), not
+grounds for revisiting this verdict.
+
+**Verdict: WIDE-STOP-HIGH-TARGET-ASYMMETRY FAIL.** No cell in the pre-registered 50-cell grid
+clears the gate. The asymmetric "cut losses short, let profits run" shape does not rescue
+either `breakout` or `anticipate` at any tested stop/target combination — wide stops with
+distant targets mostly just mean a longer losing hold, confirmed directly (not inferred) via
+the MAX_HOLD prerequisite check: giving trades genuinely unlimited time to reach their target
+makes the measured result WORSE, not better, because the rare trades that do reach a distant
+target are vastly outnumbered by trades that eventually revert all the way to a wide stop
+instead. Recorded as VERDICTS.md's `WIDE-STOP-HIGH-TARGET-ASYMMETRY` row and as 50 decision
+journal entries (`research-runs/2026-08-14T16-55-*-wide-stop-high-target-*.json`).

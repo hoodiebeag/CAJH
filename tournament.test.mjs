@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix, runBreakoutDecayExit, runTimeframeIsolation, runBreakoutTrailingTpExit, runTrendGateFilter, runFibPullback, relVolTimeline, makeRelVolAboveAt, runVolConfirmedBreakout, runAtrAdaptiveStop } from "./tournament.mjs";
+import { runTournament, buildBtcAboveMa200At, scoreRegimeGate, runBreakoutCostFix, runBreakoutDecayExit, runTimeframeIsolation, runBreakoutTrailingTpExit, runTrendGateFilter, runFibPullback, relVolTimeline, makeRelVolAboveAt, runVolConfirmedBreakout, runAtrAdaptiveStop, runWideStopHighTargetAsymmetry } from "./tournament.mjs";
 
 test("tournament reports no promotion when its data gate cannot be met", () => {
   const report = runTournament({ watchlist: [] });
@@ -184,6 +184,28 @@ test("runAtrAdaptiveStop: targets both families across the full pre-registered g
     "anticipate/2.5/14", "anticipate/2.5/20", "anticipate/3/14", "anticipate/3/20",
     "anticipate/4/14", "anticipate/4/20",
   ]);
+});
+
+// ── WIDE-STOP-HIGH-TARGET-ASYMMETRY — runWideStopHighTargetAsymmetry ───────────
+test("runWideStopHighTargetAsymmetry: empty watchlist yields zero trades on all 50 grid cells and fails their gates honestly", () => {
+  const report = runWideStopHighTargetAsymmetry({ watchlist: [] });
+  assert.equal(report.result.cells.length, 50);
+  for (const c of report.result.cells) {
+    assert.equal(c.holdout.trades, 0, "0 trades must never read as a passing gate");
+    assert.equal(c.gate.passed, false);
+    assert.equal(c.gate.tradesPass, false);
+  }
+  assert.match(report.result.verdict, /^WIDE-STOP-HIGH-TARGET-ASYMMETRY FAIL/);
+});
+
+test("runWideStopHighTargetAsymmetry: targets both families across the full pre-registered grid with the extended maxHold, nothing else", () => {
+  const report = runWideStopHighTargetAsymmetry({ watchlist: [] });
+  assert.deepEqual(report.input.families, ["breakout", "anticipate"]);
+  assert.deepEqual(report.input.maxStopPcts, [0.06, 0.07, 0.08, 0.09, 0.10]);
+  assert.deepEqual(report.input.tpRs, [6, 8, 10, 15, 20]);
+  assert.equal(report.input.maxHold, 4320);
+  assert.equal(report.result.cells.filter((c) => c.family === "breakout").length, 25);
+  assert.equal(report.result.cells.filter((c) => c.family === "anticipate").length, 25);
 });
 
 // ── TEST2-VOL-CONFIRMED-BREAKOUT — relVolTimeline / makeRelVolAboveAt / runVolConfirmedBreakout ──

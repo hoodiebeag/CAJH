@@ -29,6 +29,12 @@ function summarize(perAsset) {
   const results = perAsset.flatMap((x) => x.results || []), assets = perAsset.filter((x) => x.trades > 0), avgR = average(results);
   return { trades: results.length, avgR, totalR: results.reduce((a, b) => a + b, 0), winRate: results.length ? results.filter((x) => x > 0).length / results.length : 0, assets: assets.length, positiveAssets: assets.filter((x) => x.avgR > 0).length };
 }
+/** Same as summarize, plus the MAX_HOLD timeout-censoring rate (backtestMultiTF's `exits.timeout`). */
+function summarizeWithCensoring(perAsset) {
+  const timeoutCount = perAsset.reduce((a, x) => a + (x.exits?.timeout || 0), 0);
+  const s = summarize(perAsset);
+  return { ...s, timeoutRate: s.trades ? timeoutCount / s.trades : 0 };
+}
 
 /**
  * BTC-above-200d-SMA "as-of" gate, built locally rather than exported from backtest.js
@@ -593,6 +599,83 @@ export function runAtrAdaptiveStop({ watchlist = loadWatchlist(), split = .70 } 
   return { input, result };
 }
 
+/**
+ * WIDE-STOP-HIGH-TARGET-ASYMMETRY (human-directed research, pre-registered 2026-08-14):
+ * tests the classic trend-following "cut losses short, let profits run" shape — a few large
+ * winners funding many small losers, net-positive even at a low win rate if the winner/loser
+ * MAGNITUDE ratio is large enough. Nobody has swept a full stop x target grid at the wide/
+ * high extreme with `lockBreakeven` removed entirely (T1B-BREAKOUT-COSTFIX only widened
+ * `tpR` 3->5 as a single value while keeping breakeven active; TRAIL-STOP-EXIT replaced the
+ * fixed target with a different mechanism, also with breakeven in the picture).
+ *
+ * PRE-REGISTERED GRID: `maxStopPct` (ceiling on the accepted structural stop, each family's
+ * own `minStopPct` floor unchanged) in {6%,7%,8%,9%,10%} x `tpR` in {6,8,10,15,20}, applied
+ * to `breakout` and `anticipate`, `lockBreakeven: false` throughout. 5x5=25 cells per family,
+ * 50 total. Full watchlist, standard 70/30 split, net-of-cost from the start.
+ *
+ * MAX_HOLD CENSORING (the item's own pre-registered prerequisite check, run before trusting
+ * any cell): at the default `maxHold=100` (backtest.js's `MAX_HOLD`, ~4 days on 1h candles),
+ * timeout-censoring is material EVERYWHERE in this grid, not just its widest corner — even
+ * the mildest cell sampled (`maxStopPct=6%, tpR=6`) censored 9.1% (breakout) / 12.2%
+ * (anticipate) of trades, rising to 17-21% at the widest (`maxStopPct=10%, tpR=20`).
+ * `maxHold=4320` (180 days) is the smallest value tested at which timeout-censoring reaches
+ * ~0% at every sampled cell, so it is used for the FULL grid below, applied uniformly to
+ * every cell (not selectively) so cells stay comparable within the grid. Extending maxHold
+ * does let more of the previously-censored trades actually reach target — at the widest cell,
+ * target-hit rate roughly quintuples (breakout 0.6%->3.5%, anticipate 0.3%->2.7%) — but target
+ * remains rare throughout (single digits % even at the mildest cell: breakout 10.5%->13.6%,
+ * anticipate 7.8%->12.0%), and avgR/trade gets MORE negative after extending, not less, at
+ * every sampled cell (mildest: -0.94->-0.96 / -0.89->-0.94; widest: -1.00->-1.17 /
+ * -0.88->-1.16) — removing the censoring ambiguity reveals a WORSE picture than the default
+ * maxHold showed, not a better one obscured by premature timeouts. Checked per this item's own
+ * done_when requirement that the extension "does not silently change results for the lower-R
+ * cells": it does shift them, in the same worsening direction as everywhere else in the grid,
+ * not a distortion specific to one region. Full comparison table in TOURNAMENT_ROADMAP.md.
+ *
+ * PRE-REGISTERED GATE (per cell, holdout only, no train-gate stage): avgR/trade > -0.30 AND
+ * trades >= 150 AND positiveAssets/assets >= 0.40 — this item's own stated bar, distinct from
+ * ATR-ADAPTIVE-STOP-CONFIRMATORY's stricter avgR>0/>=0.50 gate (this hypothesis explicitly
+ * expects a low win rate, so its own gate is calibrated looser on the trade-quality axis).
+ * Do NOT select/report on win rate — avgR/trade already magnitude-weights correctly.
+ */
+export function runWideStopHighTargetAsymmetry({ watchlist = loadWatchlist(), split = .70, maxHold = 4320 } = {}) {
+  const targets = ["breakout", "anticipate"];
+  const maxStopPcts = [0.06, 0.07, 0.08, 0.09, 0.10];
+  const tpRs = [6, 8, 10, 15, 20];
+
+  const datasets = normalize(watchlist).map((asset) => ({ symbol: asset.symbol, series: seriesFor(asset.id) }))
+    .filter((d) => d.series.every((tf) => tf.candles.length >= 250))
+    .map((d) => ({ symbol: d.symbol, train: splitSeries(d.series, split, false), holdout: splitSeries(d.series, split, true) }));
+
+  const cells = targets.flatMap((id) => {
+    const [, , baseConfig] = families.find(([fid]) => fid === id);
+    return maxStopPcts.flatMap((maxStopPct) => tpRs.map((tpR) => {
+      const config = { ...baseConfig, maxStopPct, tpR, lockBreakeven: false, maxHold };
+      const score = (part) => summarizeWithCensoring(datasets.map((d) => backtestMultiTF({ series: d[part] }, { ...config, entryTf: "1h" })));
+      const train = score("train"), holdout = score("holdout");
+      const avgRPass = holdout.avgR > -0.30;
+      const tradesPass = holdout.trades >= 150;
+      const positiveFracPass = holdout.positiveAssets / Math.max(1, holdout.assets) >= 0.40;
+      return { family: id, maxStopPct, tpR, train, holdout, gate: { avgRPass, tradesPass, positiveFracPass, passed: avgRPass && tradesPass && positiveFracPass } };
+    }));
+  });
+
+  const input = {
+    specification: "strategy-tournament-wide-stop-high-target/v1", split, maxHold, assets: datasets.map((d) => d.symbol),
+    families: targets, maxStopPcts, tpRs,
+  };
+  const passed = cells.filter((c) => c.gate.passed).map((c) => `${c.family}/stop${(c.maxStopPct * 100).toFixed(0)}/tp${c.tpR}`);
+  const best = cells.reduce((a, b) => (b.holdout.avgR > a.holdout.avgR ? b : a));
+  const result = {
+    cells,
+    best: { family: best.family, maxStopPct: best.maxStopPct, tpR: best.tpR, holdoutAvgR: best.holdout.avgR },
+    verdict: passed.length
+      ? `WIDE-STOP-HIGH-TARGET clears the pre-registered gate for: ${passed.join(", ")} (holdout avgR>-0.30 AND trades>=150 AND positiveAssets/assets>=0.40)`
+      : "WIDE-STOP-HIGH-TARGET-ASYMMETRY FAIL: no family/grid-cell combination clears the pre-registered gate",
+  };
+  return { input, result };
+}
+
 /** Chronological 70/30 test. Parameters are fixed before examining the holdout. */
 export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRate, slipPct, entryTf = "1h" } = {}) {
   const costOverride = {};
@@ -659,6 +742,13 @@ if (process.argv[1]?.endsWith("tournament.mjs")) {
     // atrPeriod), preserving the full pre-registered grid regardless of outcome.
     const saved = report.result.cells.map((c) =>
       saveExperiment(`atr-adaptive-stop-${c.family}-k${c.atrStopK.toString().replace(".", "")}-p${c.atrPeriod}`, { ...report.input, family: c.family, atrStopK: c.atrStopK, atrPeriod: c.atrPeriod }, c));
+    console.log(JSON.stringify({ ...report.result, saved }, null, 2));
+  } else if (process.argv.includes("--wide-stop-high-target")) {
+    const report = runWideStopHighTargetAsymmetry();
+    // One decision-journal entry per grid cell (50 total: 2 families x 5 maxStopPct x 5
+    // tpR), preserving the full pre-registered grid regardless of outcome.
+    const saved = report.result.cells.map((c) =>
+      saveExperiment(`wide-stop-high-target-${c.family}-s${(c.maxStopPct * 100).toFixed(0)}-tp${c.tpR}`, { ...report.input, family: c.family, maxStopPct: c.maxStopPct, tpR: c.tpR }, c));
     console.log(JSON.stringify({ ...report.result, saved }, null, 2));
   } else {
     const zeroCost = process.argv.includes("--zero-cost");
