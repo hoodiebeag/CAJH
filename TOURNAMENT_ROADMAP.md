@@ -1202,3 +1202,75 @@ requiring price to give back part of the very move that was the entry signal.
 Recorded as VERDICTS.md's `FIB-PULLBACK` row and as two decision journal entries, one
 per level (`research-runs/2026-08-14T12-16-45-894Z-fib-pullback-50.json`,
 `research-runs/2026-08-14T12-16-45-940Z-fib-pullback-618.json`).
+
+## VOL-CONFIRM-BREAKOUT RESULT (2026-08-14)
+
+Human-authored pre-registered test (TEST2-VOL-CONFIRMED-BREAKOUT), queued alongside
+TEST1/TEST3/TEST4 with no inter-dependencies. Hypothesis: gating `breakout` entries on
+relative volume at the entry bar filters adverse selection, producing holdout
+avgR/trade > -0.30.
+
+**Implementation.** relVol at bar `k` = `volume[k] / mean(volume[k-20..k-1])` — the
+entry bar's own volume is excluded from its own average, the same no-look-ahead
+convention `breakoutEntry`'s N-bar-high trigger and `backtest.js`'s `maTimeline` already
+use (`tournament.mjs`'s new `relVolTimeline`/`makeRelVolAboveAt`). Wired purely through
+`backtest.js`'s existing `entryGate` hook — no backtest.js change — same technique
+`funding-meanrev.mjs` and Track 3's `buildBtcAboveMa200At` already use. `breakout`'s
+exact `tournament.mjs` baseline config (`minStopPct .01`, `maxStopPct .06`, `tpR 3`,
+`lockBreakeven true`) reused unmodified, so this result is comparable to every other
+breakout-family verdict already in VERDICTS.md. Three thresholds tested: 1.5x, 2.0x,
+3.0x.
+
+**Selection process (pre-registered, immutable once begun).** Per the task's own text
+("fix the best threshold ON THE TRAIN SPLIT ONLY, then evaluate holdout exactly once"),
+all three thresholds were scored on TRAIN first; the best-on-train threshold (highest
+train avgR/trade among those clearing the train gate) is the only one whose holdout is
+ever computed — the other two never touch the holdout window, avoiding exactly the
+look-ahead the task text calls out. This is a genuinely different selection discipline
+from FIB-PULLBACK's two independently-gated levels above: here only one variant's
+holdout is ever examined, not both/all three.
+
+**Split-boundary note.** Volume is already inside every OHLCV candle (no external data
+source), so no data-availability gate was needed — the task's literal fixed
+calendar-date split (train: earliest available to 2025-06-01; holdout: 2025-06-01 to
+present) was used exactly as specified, no substitution required.
+
+**Pre-registered train gate (must pass before a threshold is even selected):**
+avgR/trade > -0.50 AND trades >= 200.
+
+**Result — all three thresholds fail the train gate on the avgR clause, no threshold
+selected, holdout never examined for any of them:**
+
+| Threshold | avgR/trade | trades | assets w/ >=1 trade | positive assets |
+|---|---|---|---|---|
+| 1.5x | -0.854 | 5224 | 28 / 28 | 0 / 28 |
+| 2.0x | -0.857 | 4578 | 28 / 28 | 0 / 28 |
+| 3.0x | -0.794 | 3427 | 28 / 28 | 0 / 28 |
+
+Gate check (all three): avgR>-0.50 FAIL, trades>=200 PASS (by a wide margin — the
+volume filter did not meaningfully restrict which bars fired, unlike FIB-PULLBACK's
+50%/61.8% levels which cut trade count roughly in half vs. baseline). Per this item's
+own pre-registered discipline, the holdout window was not examined for any threshold.
+
+**Verdict: TRAIN-GATE-FAIL (all three thresholds).** The tightest threshold (3.0x, the
+fewest trades) is the least negative (-0.794), a monotonic direction consistent with
+selectivity mattering somewhat — but all three remain far worse than unfiltered
+`breakout`'s own train avgR (-0.454, this document's "Honest Baseline First" table).
+Gating entries on HIGH relative volume made this family's entries meaningfully worse,
+not better: a plausible read is that a volume spike at a breakout bar is itself evidence
+of a crowded/exhausted move (the kind of bar the fee-and-slippage-inclusive R math
+already punishes hardest), not confirmation of a durable continuation. Recorded as
+VERDICTS.md's `VOL-CONFIRM-BREAKOUT` row and as three decision journal entries, one per
+threshold (`research-runs/2026-08-14T13-09-09-926Z-vol-confirm-15.json`,
+`research-runs/2026-08-14T13-09-09-974Z-vol-confirm-20.json`,
+`research-runs/2026-08-14T13-09-10-022Z-vol-confirm-30.json`).
+
+**Human-authored TEST1-4 queue status.** TEST1-FIB-PULLBACK (TRAIN-GATE-FAIL, both
+levels), TEST2-VOL-CONFIRMED-BREAKOUT (TRAIN-GATE-FAIL, all three thresholds), and
+TEST4-ONCHAIN-FLOW-GATE (ONCHAIN-DATA-INSUFFICIENT, a data-availability non-verdict) are
+now closed; TEST3-FUNDING-MEANREV is also closed (TRAIN-GATE-FAIL). All four items in
+this human-authored queue have now ended FAIL/abandoned or a data-availability
+non-verdict. Per the human's own execution rule for this queue, none of these four
+should be re-tuned further on the same axis (funding threshold, retracement level,
+on-chain data source, volume multiple) — the next step is a new hypothesis queue, not
+continued search within this exhausted set.

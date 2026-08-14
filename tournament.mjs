@@ -406,6 +406,134 @@ export function runFibPullback({ watchlist = loadWatchlist(), cutoffSec = Math.f
   return { input, result };
 }
 
+/**
+ * Per-asset "relative volume as of this bar's close" timeline: relVol at bar i is
+ * volume[i] divided by the mean volume of the PRIOR `lookback` bars (i.e. bars
+ * [i-lookback, i-1] — i itself is excluded from its own average). Mirrors backtest.js's
+ * own `maTimeline` rolling-sum technique and `breakoutEntry`'s no-look-ahead convention
+ * (its N-bar-high lookback likewise excludes the trigger bar itself). null before the
+ * `lookback`-bar warmup.
+ */
+export function relVolTimeline(candles, intervalMin, lookback = 20) {
+  const vols = candles.map((c) => parseFloat(c.volume) || 0);
+  const tl = []; let sum = 0;
+  for (let i = 0; i < candles.length; i++) {
+    const priorAvg = i >= lookback ? sum / lookback : null;
+    const relVol = priorAvg ? vols[i] / priorAvg : null;
+    tl.push({ t: parseInt(candles[i].time) + intervalMin * 60, relVol });
+    sum += vols[i];
+    if (i >= lookback) sum -= vols[i - lookback];
+  }
+  return tl;
+}
+
+/** Forward-walking "relVol >= threshold as of time t" cursor — a fresh one per call, same convention as buildBtcAboveMa200At/fundingAsOf. */
+export function makeRelVolAboveAt(timeline, thresholdMultiple) {
+  let i = 0, v = null;
+  return (t) => {
+    while (i < timeline.length && timeline[i].t <= t) { v = timeline[i].relVol; i++; }
+    return Number.isFinite(v) && v >= thresholdMultiple;
+  };
+}
+
+/**
+ * TEST2-VOL-CONFIRMED-BREAKOUT (pre-registered, human-authored, queued alongside
+ * TEST1/TEST3/TEST4 with no inter-dependencies). Hypothesis: gating `breakout` entries
+ * on relative volume at the entry bar (entry-bar volume / prior-20-bar average volume,
+ * see `relVolTimeline`) filters adverse selection. Implemented purely via backtest.js's
+ * existing `entryGate` hook (no backtest.js changes) — same technique as
+ * funding-meanrev.mjs / buildBtcAboveMa200At. `breakout`'s exact tournament.mjs baseline
+ * config is reused unmodified, matching every other breakout-family verdict in
+ * VERDICTS.md.
+ *
+ * Split: FIXED CALENDAR DATE (2025-06-01), matching TEST1/TEST3/TEST4's convention —
+ * train = earliest available to 2025-06-01, holdout = 2025-06-01 to present. Volume is
+ * already inside every OHLCV candle (no external data source), so no data-availability
+ * gate is needed.
+ *
+ * PROCESS (pre-registered, immutable once begun — this is the actual anti-look-ahead
+ * discipline the task text calls out): compute TRAIN results for all three thresholds
+ * (1.5, 2.0, 3.0) first. Only thresholds whose train gate passes (avgR/trade > -0.50 AND
+ * trades >= 200) are eligible; the BEST eligible threshold is the one with the highest
+ * train avgR/trade (this project's standard train-side ranking metric — see
+ * runTournament's avgR-anchored `robustness`). That ONE threshold's holdout is then
+ * examined EXACTLY ONCE. The other two thresholds' holdout is never computed — peeking
+ * at their holdout after a winner is already picked would be the exact look-ahead this
+ * item's own task text forbids. If no threshold passes the train gate, holdout is not
+ * examined for any of them.
+ *
+ * PRE-REGISTERED HOLDOUT GATE (selected threshold only): avgR/trade > -0.30 AND trades
+ * >= 150 AND positiveAssets/assets >= 0.40 (same three-clause gate as TEST1/TEST3).
+ */
+export function runVolConfirmedBreakout({ watchlist = loadWatchlist(), cutoffSec = Math.floor(Date.UTC(2025, 5, 1) / 1000), lookback = 20 } = {}) {
+  const [, , breakoutConfig] = families.find(([id]) => id === "breakout");
+  const thresholds = [1.5, 2.0, 3.0];
+
+  const datasets = normalize(watchlist).map((asset) => ({ symbol: asset.symbol, series: seriesFor(asset.id) }))
+    .filter((d) => d.series.every((tf) => tf.candles.length >= 250))
+    .map((d) => ({
+      symbol: d.symbol,
+      entryCandles: d.series.find((tf) => tf.label === "1h").candles,
+      train: d.series.map((tf) => ({ ...tf, candles: tf.candles.filter((c) => +c.time < cutoffSec) })),
+      holdout: d.series.map((tf) => ({ ...tf, candles: tf.candles.filter((c) => +c.time >= cutoffSec) })),
+    }));
+
+  // A fresh entryGate cursor per (dataset, call) — built from the FULL (unsplit) 1h
+  // candles so relVol at any bar always sees only its own true history, then filtered
+  // to the requested part by backtestMultiTF's own candle set (same fresh-cursor
+  // convention as runBreakoutRegimeFilter's buildBtcAboveMa200At usage above).
+  const scoreThreshold = (threshold, part) => summarize(datasets.map((d) => {
+    const entryGate = makeRelVolAboveAt(relVolTimeline(d.entryCandles, 60, lookback), threshold);
+    return backtestMultiTF({ series: d[part] }, { ...breakoutConfig, entryTf: "1h", entryGate });
+  }));
+
+  const trainByThreshold = thresholds.map((threshold) => {
+    const train = scoreThreshold(threshold, "train");
+    const trainGate = { avgRMin: -0.50, tradesMin: 200, avgRPass: train.avgR > -0.50, tradesPass: train.trades >= 200 };
+    trainGate.passed = trainGate.avgRPass && trainGate.tradesPass;
+    return { threshold, train, trainGate };
+  });
+
+  const candidates = trainByThreshold.filter((t) => t.trainGate.passed);
+  const best = candidates.length ? candidates.reduce((a, b) => (b.train.avgR > a.train.avgR ? b : a)) : null;
+
+  const variants = trainByThreshold.map((t) => {
+    if (!best || t.threshold !== best.threshold) {
+      return {
+        ...t, holdout: null, holdoutGate: null,
+        verdict: t.trainGate.passed
+          ? `VOL-CONFIRM ${t.threshold}: train gate passed but not selected as best on train (avgR ${t.train.avgR.toFixed(4)} < selected ${best.train.avgR.toFixed(4)}); holdout not examined (only the best-on-train threshold's holdout is ever evaluated)`
+          : "TRAIN-GATE-FAIL: holdout not examined (pre-registered gate is immutable once the test begins)",
+      };
+    }
+    const holdout = scoreThreshold(t.threshold, "holdout");
+    const holdoutGate = {
+      avgRMin: -0.30, tradesMin: 150, positiveFracMin: 0.40,
+      avgRPass: holdout.avgR > -0.30, tradesPass: holdout.trades >= 150,
+      positiveFracPass: holdout.positiveAssets / Math.max(1, holdout.assets) >= 0.40,
+    };
+    holdoutGate.passed = holdoutGate.avgRPass && holdoutGate.tradesPass && holdoutGate.positiveFracPass;
+    return {
+      ...t, holdout, holdoutGate,
+      verdict: holdoutGate.passed
+        ? `VOL-CONFIRM ${t.threshold} (selected on train) clears the pre-registered holdout gate; paper trading only`
+        : `VOL-CONFIRM ${t.threshold} (selected on train) FAIL: holdout did not clear the pre-registered gate`,
+    };
+  });
+
+  const input = { specification: "vol-confirmed-breakout/v1", cutoffSec, lookback, assets: datasets.map((d) => d.symbol), thresholds, selected: best?.threshold ?? null };
+  const selectedVariant = best ? variants.find((v) => v.threshold === best.threshold) : null;
+  const result = {
+    variants,
+    verdict: !best
+      ? "TEST2-VOL-CONFIRMED-BREAKOUT: no threshold clears the train gate; holdout not examined for any threshold"
+      : selectedVariant.holdoutGate.passed
+        ? `VOL-CONFIRMED-BREAKOUT clears the pre-registered gate at threshold ${best.threshold}`
+        : `TEST2-VOL-CONFIRMED-BREAKOUT: threshold ${best.threshold} (selected on train) does not clear the pre-registered holdout gate`,
+  };
+  return { input, result };
+}
+
 /** Chronological 70/30 test. Parameters are fixed before examining the holdout. */
 export function runTournament({ watchlist = loadWatchlist(), split = .70, feeRate, slipPct, entryTf = "1h" } = {}) {
   const costOverride = {};
@@ -457,6 +585,14 @@ if (process.argv[1]?.endsWith("tournament.mjs")) {
     // each variant is a fully independent backtest run with its own gate outcome.
     const saved = report.result.variants.map((v) =>
       saveExperiment(`fib-pullback-${v.fibLevel === 0.5 ? "50" : "618"}`, { ...report.input, fibLevel: v.fibLevel }, v));
+    console.log(JSON.stringify({ ...report.result, saved }, null, 2));
+  } else if (process.argv.includes("--vol-confirmed-breakout")) {
+    const report = runVolConfirmedBreakout();
+    // Saved as three separately labeled decision-journal entries (VOL-CONFIRM-1.5/2.0/
+    // 3.0, per the pre-registered task text), preserving all three thresholds' results
+    // regardless of which one (if any) had its holdout examined.
+    const saved = report.result.variants.map((v) =>
+      saveExperiment(`vol-confirm-${v.threshold.toFixed(1).replace(".", "")}`, { ...report.input, threshold: v.threshold }, v));
     console.log(JSON.stringify({ ...report.result, saved }, null, 2));
   } else {
     const zeroCost = process.argv.includes("--zero-cost");
