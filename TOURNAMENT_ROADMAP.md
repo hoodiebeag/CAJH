@@ -1100,3 +1100,38 @@ the standing conclusion in VERDICTS.md: every price-structure entry family and e
 filter/gate applied to one, tested to date, remains net-negative or worse after real
 costs. Recorded as VERDICTS.md's `FUNDING-MEANREV` row and as a `funding-meanrev` decision
 journal entry (`research-runs/2026-08-14T10-09-51-900Z-funding-meanrev.json`).
+
+## ONCHAIN-FLOW-GATE RESULT (2026-08-14)
+
+Human-authored pre-registered test (TEST4-ONCHAIN-FLOW-GATE). Hypothesis: breakout
+entries gated on 7-day rolling net exchange outflow (coins leaving exchanges = reduced
+sell pressure, BTC/ETH, 1d timeframe only) produce holdout avgR/trade > -0.30, because
+on-chain flow is a leading demand indicator unavailable to every price-structure-only
+family tested to date.
+
+**Data-availability gate, run first — exactly as this item's own task text anticipated.**
+This repo has never done on-chain data ingestion before this item: no Glassnode/
+CryptoQuant client, no cached flow series, nothing (confirmed directly — no matching
+source file anywhere in the tree). Checked Glassnode's public
+`transactions/transfers_volume_exchanges_net` endpoint directly (the closest free-tier
+metric to "net exchange flow"): it returns **HTTP 401** for both BTC and ETH. `.env` was
+checked directly and has no `GLASSNODE_API_KEY` or `CRYPTOQUANT_API_KEY` — the only two
+providers this item's task text named — and this project's unattended automation has no
+path to register one (account creation is outside its scope). CryptoQuant's equivalent
+free-tier flow endpoint was also checked directly and returns the same HTTP 401.
+
+Per this item's own pre-registered `done_when`: "if fewer than 24 months of daily
+on-chain flow data are available for both BTC and ETH, record ONCHAIN-DATA-INSUFFICIENT
+in the decision journal and stop — a complete, valid result." 0 of the 2 required assets
+clear data availability (both fail before any history-length check is even reachable),
+so the gate fails immediately.
+
+**Verdict: ONCHAIN-DATA-INSUFFICIENT.** The entry-gate/backtest logic described in the
+hypothesis above was not built out — with zero real data ever reachable in this
+environment, it would be untested, unexercised code with no way to verify it does what it
+claims, which this project's simplicity convention avoids (see `onchain-flow-gate.mjs`'s
+module doc comment). This is not a failure to execute the item; it is the
+data-availability gate doing exactly the job this item's own task text pre-registered it
+for. Recorded as VERDICTS.md's `ONCHAIN-FLOW-GATE` row and as an `onchain-flow-gate`
+decision journal entry
+(`research-runs/2026-08-14T11-05-22-370Z-onchain-flow-gate.json`).
