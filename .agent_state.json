@@ -2,15 +2,15 @@
   "version": 2,
   "control": {
     "status": "IDLE",
-    "target_file": "funding-meanrev.mjs, funding-meanrev.test.mjs",
-    "objective": "Completed TEST3-FUNDING-MEANREV: spot longs gated on negative perpetual funding (<-0.005%) AND breakout trigger, exact tournament.mjs breakout baseline config, full watchlist, real ~1.7% round-trip cost basis. Data-availability gate checked first: Binance funding HTTP 451 geo-blocked (confirmed live), Kraken historical-funding-rates works, 28/29 assets clear >=365-day/>=8-asset gate (EOS excluded). Disclosed a split-boundary deviation: task literal train cutoff (to 2025-06-01) predates Kraken funding data existing at all (starts 2025-08-13); split 70/30 within the funding-covered window per-asset instead, same convention as funding-gate-h11.mjs/funding-study.mjs - did not touch any pass/fail gate number. Result: TRAIN-GATE-FAIL (avgR -0.891 vs gate >-0.50; 131 trades vs gate >=150), holdout never examined per immutable-gate rule. Recorded in VERDICTS.md, TOURNAMENT_ROADMAP.md, and a funding-meanrev saveExperiment decision journal entry. npm.cmd test 330/330 green. Pushed as cd202d7. One unit of work this firing per HYGIENE; stopping here.",
+    "target_file": "onchain-flow-gate.mjs, onchain-flow-gate.test.mjs",
+    "objective": "Completed TEST4-ONCHAIN-FLOW-GATE: breakout entries gated on 7-day net exchange outflow (BTC/ETH, 1d). Data-availability gate checked first per pre-registered done_when: this repo has no prior on-chain ingestion code; Glassnode transactions/transfers_volume_exchanges_net (closest free-tier net-exchange-flow metric) returns HTTP 401 for both BTC and ETH (no GLASSNODE_API_KEY/CRYPTOQUANT_API_KEY in .env, confirmed directly); CryptoQuant equivalent also checked directly, same HTTP 401. 0/2 required assets clear data availability -> ONCHAIN-DATA-INSUFFICIENT, a complete valid non-verdict per this item spec. Entry-gate/backtest logic intentionally not built out (would be untested dead code with no real data path). Recorded in VERDICTS.md, TOURNAMENT_ROADMAP.md, and an onchain-flow-gate saveExperiment decision journal entry. npm.cmd test 333/333 green. Pushed as 077455b. One unit of work this firing per HYGIENE; stopping here.",
     "allow_live_edit": false,
     "test_command": "npm.cmd test",
     "iteration": 0,
     "max_iterations": 6,
-    "notes": "No blocker. Next pending items (deps clear): TEST4-ONCHAIN-FLOW-GATE, TEST1-FIB-PULLBACK, TEST2-VOL-CONFIRMED-BREAKOUT, JUDGE-WALKFORWARD-SYMBOL-HOLDOUT, STATE-QUEUE-RETENTION, ORCHESTRATOR-CLUSTER-CLEANUP, WIDE-STOP-HIGH-TARGET-ASYMMETRY, FUNDING-CARRY-DECAY-CHECK, ATR-ADAPTIVE-STOP-CONFIRMATORY, SCALED-EXIT-LADDER-CONFIRMATORY, MOMENTUM-SHORT-HORIZON-RECHECK.",
+    "notes": "No blocker. Next pending items (deps clear): TEST1-FIB-PULLBACK, TEST2-VOL-CONFIRMED-BREAKOUT, JUDGE-WALKFORWARD-SYMBOL-HOLDOUT, STATE-QUEUE-RETENTION, ORCHESTRATOR-CLUSTER-CLEANUP, WIDE-STOP-HIGH-TARGET-ASYMMETRY, FUNDING-CARRY-DECAY-CHECK, ATR-ADAPTIVE-STOP-CONFIRMATORY, SCALED-EXIT-LADDER-CONFIRMATORY, MOMENTUM-SHORT-HORIZON-RECHECK.",
     "updated_by": "cajh-loop-check",
-    "updated_at": "2026-08-14T10:20:00.000Z",
+    "updated_at": "2026-08-14T11:10:00.000Z",
     "block_detail": null
   },
   "blackboard": {
@@ -524,7 +524,7 @@
       },
       {
         "id": "TEST4-ONCHAIN-FLOW-GATE",
-        "state": "pending",
+        "state": "done",
         "owner": "executor",
         "file": "new: on-chain flow gate study (additive), decision journal entry labeled ONCHAIN-FLOW-GATE",
         "depends_on": [],
@@ -660,14 +660,6 @@
     "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
   },
   "ledger": [
-    {
-      "ts": "2026-08-07T21:30:00.000Z",
-      "agent": "loop",
-      "action": "complete",
-      "detail": "PWR3: caught a real harness gap before trusting the result (per the items own warning to check for it) - runSealedMomentumPanelStudy byRank loop had no symbolHoldout scoring at all for rank modes negVol/negBeta, so the low-vol whole-symbol arm had never been computed, distinct from PWR2-HARNESSs earlier transform-default gap on the primary cell. Fixed additively (byRank[rank].symbolHoldout + symbolHoldoutRiskAdjusted, same gating as the primary cell), added a cross-check test proving the count matches a direct buildMomentumPanel call and that an empty holdout universe reports an honest zero (matching the existing B3 fixture which sets symbolHoldoutUniverse:[]). Added node momentum.mjs sealed-lowrisk CLI path. Ran against the live watchlist: whole-symbol holdout non-zero for the first time - negVol 78 dates/982 rows (train p=0.228), negBeta 71 dates/865 rows (train p=0.058). Both fail MOMENTUM_SPEC.md sec 6s train significance gate (p<0.05), so both KILLED on complete evidence - supersedes the original 0-eligible-dates data-gate caveat in ROADMAP.mds Low-vol/low-beta B4 entry. Recorded as a new UPDATE section (forward-pointer added to the original entry, same pattern as Momentum M7s UPDATE), VERDICTS.md index updated (Low-vol B4 row + PWR3 row). Size/liquidity control intentionally not run this pass - no dollar-volume/market-cap data source exists in this workspace to feed applySizeLiquidityControl real inputs; noted as a separate open question in the ROADMAP update, same scope discipline PWR2 used. npm.cmd test: 176/176 green. One work_queue item this firing per HYGIENE; PWR4/T1B-BREAKOUT-COSTFIX/T5-DECAY-EXIT/T6-TIMEFRAME-ISOLATION left pending+ready for the next firing. STEP 4: no notification - not BLOCKED, queue not empty (4 pending+ready items), no ROADMAP verdict newly reaching PASS (this is a KILLED/FAIL). STEP 5: 4 pending+ready items (>=3), no restock needed.",
-      "commit": "9837597",
-      "tests": "176 pass, 0 fail"
-    },
     {
       "ts": "2026-08-07T23:16:00.000Z",
       "agent": "loop",
@@ -1459,6 +1451,14 @@
       "detail": "Negative-funding entry gate (<-0.005%) layered on breakout baseline, full watchlist, Kraken funding source (Binance 451-blocked, confirmed), 28/29 assets cleared data-availability gate. TRAIN-GATE-FAIL: avgR -0.891 (gate >-0.50), 131 trades (gate >=150) - holdout never examined. Disclosed split-boundary deviation (funding-covered window, not literal 2025-06-01 cutoff which predates funding data). VERDICTS.md/TOURNAMENT_ROADMAP.md updated, decision journal saved.",
       "commit": "cd202d7",
       "tests": "330/330"
+    },
+    {
+      "ts": "2026-08-14T11:10:00.000Z",
+      "agent": "cajh-loop-check",
+      "action": "TEST4-ONCHAIN-FLOW-GATE done (ONCHAIN-DATA-INSUFFICIENT)",
+      "detail": "Data-availability gate failed immediately: Glassnode free-tier net-exchange-flow endpoint returns HTTP 401 for BTC and ETH, no on-chain API key configured in this environment. 0/2 required assets clear coverage. Per pre-registered done_when this is a complete, valid non-verdict; entry-gate/backtest logic not built out (no real data path to exercise it). Recorded in VERDICTS.md/TOURNAMENT_ROADMAP.md and research-runs/2026-08-14T11-05-22-370Z-onchain-flow-gate.json.",
+      "commit": "077455b",
+      "tests": "333/333 green"
     }
   ],
   "automation": {
