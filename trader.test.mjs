@@ -1,13 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import axios from "axios";
 
 import {
   callKraken,
+  fetchOHLC,
+  getAccountBalance,
+  getCurrentPrice,
+  getHoldings,
   isIgnoredReconciliationBalance,
   parseConfirmedSell,
   placeBuy,
+  placeSell,
   setKrakenApiForTests,
-  setOrderConfirmDelayForTests
+  setOrderConfirmDelayForTests,
+  symbolToPair,
+  validateFreshPositiveSnapshot
 } from "./trader.js";
 import { applyConfirmedSellToTrade } from "./monitor.js";
 
@@ -210,4 +218,220 @@ test("R-013: idempotent read calls keep their prior bounded-retry behavior uncha
     (err) => err.krakenState === "unknown" && /state unknown after 2 attempt/.test(err.message)
   );
   assert.equal(calls, 2);
+});
+
+// ─── placeSell / confirmSellFill (previously zero direct coverage) ────────────────
+
+test("placeSell places a market sell and returns the confirmed executed volume/price", async () => {
+  setOrderConfirmDelayForTests(0);
+  const calls = [];
+  setKrakenApiForTests(async (method, params) => {
+    calls.push(method);
+    if (method === "AssetPairs") return assetPairsResult();
+    if (method === "AddOrder") {
+      assert.deepEqual(params, { pair: "XBTUSD", type: "sell", ordertype: "market", volume: "1.5000" });
+      return { result: { txid: ["S1"] } };
+    }
+    if (method === "QueryOrders") return { result: { S1: { status: "closed", vol_exec: "1.5", price: "102", fee: "0.09" } } };
+    throw new Error(`unexpected method ${method}`);
+  });
+
+  const result = await placeSell({ symbol: "BTC", volume: 1.5, price: 100, priceAsOf: Date.now() });
+  assert.deepEqual(result, { txid: "S1", symbol: "BTC", pair: "XBTUSD", side: "sell", volume: 1.5, price: 102, fee: 0.09 });
+  assert.deepEqual(calls, ["AssetPairs", "AddOrder", "QueryOrders"]);
+});
+
+test("placeSell surfaces the executed volume even when Kraken only partially fills it", async () => {
+  setOrderConfirmDelayForTests(0);
+  setKrakenApiForTests(async (method) => {
+    if (method === "AssetPairs") return assetPairsResult();
+    if (method === "AddOrder") return { result: { txid: ["S1"] } };
+    if (method === "QueryOrders") return { result: { S1: { status: "closed", vol_exec: "0.6", price: "100", fee: "0.03" } } };
+    throw new Error(`unexpected method ${method}`);
+  });
+
+  const result = await placeSell({ symbol: "BTC", volume: 1, price: 100, priceAsOf: Date.now() });
+  assert.equal(result.volume, 0.6);
+});
+
+test("placeSell rejects with no confirmed close when Kraken canceled/expired/rejected the sell", async () => {
+  setOrderConfirmDelayForTests(0);
+  for (const status of ["canceled", "expired", "rejected"]) {
+    setKrakenApiForTests(async (method) => {
+      if (method === "AssetPairs") return assetPairsResult();
+      if (method === "AddOrder") return { result: { txid: ["S1"] } };
+      if (method === "QueryOrders") return { result: { S1: { status } } };
+      throw new Error(`unexpected method ${method}`);
+    });
+    await assert.rejects(
+      () => placeSell({ symbol: "BTC", volume: 1, price: 100, priceAsOf: Date.now() }),
+      new RegExp(`was ${status}; no confirmed close`)
+    );
+  }
+});
+
+test("placeSell exhausts polling and reports the position as retained, not lost, on persistent QueryOrders errors", async () => {
+  setOrderConfirmDelayForTests(0);
+  let queryOrdersCalls = 0;
+  setKrakenApiForTests(async (method) => {
+    if (method === "AssetPairs") return assetPairsResult();
+    if (method === "AddOrder") return { result: { txid: ["S1"] } };
+    if (method === "QueryOrders") {
+      queryOrdersCalls++;
+      throw new Error("network unavailable");
+    }
+    throw new Error(`unexpected method ${method}`);
+  });
+
+  await assert.rejects(
+    () => placeSell({ symbol: "BTC", volume: 1, price: 100, priceAsOf: Date.now() }),
+    /could not confirm sell S1 terminal execution; tracked position retained/
+  );
+  assert.equal(queryOrdersCalls, 20); // 10 polls x DEFAULT_KRAKEN_ATTEMPTS=2 transport retries each
+});
+
+test("placeSell recovers from a transient QueryOrders error and still confirms the fill", async () => {
+  setOrderConfirmDelayForTests(0);
+  let queryOrdersCalls = 0;
+  setKrakenApiForTests(async (method) => {
+    if (method === "AssetPairs") return assetPairsResult();
+    if (method === "AddOrder") return { result: { txid: ["S1"] } };
+    if (method === "QueryOrders") {
+      queryOrdersCalls++;
+      if (queryOrdersCalls === 1) throw new Error("temporary network blip");
+      return { result: { S1: { status: "closed", vol_exec: "1", price: "100", fee: "0.05" } } };
+    }
+    throw new Error(`unexpected method ${method}`);
+  });
+
+  const result = await placeSell({ symbol: "BTC", volume: 1, price: 100, priceAsOf: Date.now() });
+  assert.equal(result.volume, 1);
+  assert.equal(queryOrdersCalls, 2);
+});
+
+test("placeSell never calls AddOrder for a stale price quote", async () => {
+  const calls = [];
+  setKrakenApiForTests(async (method) => {
+    calls.push(method);
+    if (method === "AssetPairs") return assetPairsResult();
+    if (method === "AddOrder") throw new Error("AddOrder should not be called");
+    return { result: {} };
+  });
+
+  await assert.rejects(
+    () => placeSell({ symbol: "BTC", volume: 1, price: 100, priceAsOf: Date.now() - 20_000 }),
+    /price snapshot is stale/
+  );
+  assert.equal(calls.includes("AddOrder"), false);
+});
+
+// ─── normalizeVolume boundaries (reached only through placeBuy/placeSell) ─────────
+
+test("placeBuy rejects a computed volume below the pair's Kraken minimum before placing the order", async () => {
+  const calls = [];
+  setKrakenApiForTests(async (method) => {
+    calls.push(method);
+    if (method === "AssetPairs") return { result: { XXBTZUSD: { altname: "XBTUSD", lot_decimals: 4, ordermin: "0.01" } } };
+    if (method === "AddOrder") throw new Error("AddOrder should not be called");
+    return { result: {} };
+  });
+
+  await assert.rejects(
+    () => placeBuy({ symbol: "BTC", capital: 1, price: 1000, priceAsOf: Date.now(), balance: 1000, balanceAsOf: Date.now() }),
+    /is below Kraken's minimum of 0.01/
+  );
+  assert.equal(calls.includes("AddOrder"), false);
+});
+
+test("placeBuy rejects a computed volume that rounds to zero at the pair's lot precision", async () => {
+  setKrakenApiForTests(async (method) => {
+    if (method === "AssetPairs") return { result: { XXBTZUSD: { altname: "XBTUSD", lot_decimals: 2, ordermin: "0" } } };
+    if (method === "AddOrder") throw new Error("AddOrder should not be called");
+    return { result: {} };
+  });
+
+  await assert.rejects(
+    () => placeBuy({ symbol: "BTC", capital: 0.001, price: 100000, priceAsOf: Date.now(), balance: 1000, balanceAsOf: Date.now() }),
+    /is zero/
+  );
+});
+
+// ─── validateFreshPositiveSnapshot future-timestamp guard ─────────────────────────
+
+test("validateFreshPositiveSnapshot rejects a snapshot timestamped implausibly far in the future", () => {
+  const now = 1_000_000;
+  assert.throws(
+    () => validateFreshPositiveSnapshot({ value: 100, asOf: now + 1_001 }, "price", now),
+    /price snapshot timestamp is in the future/
+  );
+  // Within the 1s clock-skew allowance is fine.
+  assert.doesNotThrow(() => validateFreshPositiveSnapshot({ value: 100, asOf: now + 500 }, "price", now));
+});
+
+// ─── getHoldings happy path (previously only the failure path was covered) ────────
+
+test("getHoldings filters dust and ignored staking balances, values stables at $1, and sorts by value descending", async () => {
+  setKrakenApiForTests(async (method, params) => {
+    if (method === "Balance") {
+      return { result: { ZUSD: "50", XXBT: "0.001", DUST: "0.000000001", "INJ.B": "12" } };
+    }
+    if (method === "Ticker" && params.pair === "XBTUSD") {
+      return { result: { XXBTZUSD: { c: ["100000"] } } };
+    }
+    throw new Error(`unexpected ${method} ${JSON.stringify(params)}`);
+  });
+
+  const { holdings, totalUsd } = await getHoldings();
+  assert.deepEqual(holdings.map((h) => h.asset), ["BTC", "USD"]);
+  assert.equal(holdings[0].value, 100); // 0.001 BTC @ 100000
+  assert.equal(holdings[1].value, 50);  // stable valued at $1
+  assert.equal(totalUsd, 150);
+});
+
+// ─── fetchOHLC (previously zero coverage) ──────────────────────────────────────────
+
+test("fetchOHLC maps Kraken's public OHLC response into candle objects", async (t) => {
+  t.mock.method(axios, "get", async () => ({
+    data: {
+      result: {
+        XXBTZUSD: [[1700000000, "100", "105", "99", "104", "102", "12.5", 8]],
+        last: 1700000000
+      }
+    }
+  }));
+
+  const candles = await fetchOHLC("XBTUSD", 60);
+  assert.equal(candles.length, 1);
+  assert.deepEqual(candles[0], { time: 1700000000, open: "100", high: "105", low: "99", close: "104", volume: "12.5" });
+});
+
+test("fetchOHLC returns null immediately on a Kraken-reported error, without retrying", async (t) => {
+  let calls = 0;
+  t.mock.method(axios, "get", async () => {
+    calls++;
+    return { data: { error: ["EQuery:Unknown asset pair"] } };
+  });
+
+  assert.equal(await fetchOHLC("NOPEUSD", 60), null);
+  assert.equal(calls, 1);
+});
+
+// ─── Thin wrappers around the *Snapshot functions (previously untested directly) ──
+
+test("getAccountBalance and getCurrentPrice return the bare value from their snapshot counterparts", async () => {
+  setKrakenApiForTests(async (method, params) => {
+    if (method === "Balance") return { result: { ZUSD: "250.5" } };
+    if (method === "Ticker") return { result: { XXBTZUSD: { c: ["99999.5"] } } };
+    throw new Error(`unexpected ${method}`);
+  });
+
+  assert.equal(await getAccountBalance(), 250.5);
+  assert.equal(await getCurrentPrice("BTC"), 99999.5);
+});
+
+// ─── symbolToPair fallback for symbols outside the curated PAIR_MAP ───────────────
+
+test("symbolToPair falls back to SYMBOLUSD for a symbol outside the curated map", () => {
+  assert.equal(symbolToPair("btc"), "XBTUSD");
+  assert.equal(symbolToPair("newcoin"), "NEWCOINUSD");
 });
