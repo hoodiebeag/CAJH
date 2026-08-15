@@ -1698,3 +1698,89 @@ positive. Consistent with every other exit-mechanism item tested on these two en
 not its exits, remain the open problem. Recorded as VERDICTS.md's `SCALED-EXIT-LADDER-CONFIRMATORY`
 row and as 36 decision journal entries
 (`research-runs/2026-08-14T*-scaled-exit-ladder-*.json`).
+
+---
+
+## 2026-08-15 — T4-PORTFOLIO-MOMENTUM-PHASE4: closing the explicitly-flagged PHASE4 gap
+
+Closes the gap ROADMAP.md's PHASE2-MAX-SURVIVABLE-COST finding (2026-08-13) explicitly left
+open: "T4-PORTFOLIO-MOMENTUM does not formally proceed under a strict reading of this item's
+own gate... whether that's worth a dedicated PHASE3/PHASE4 re-run despite not clearing 0.5
+Sharpe at any scenario tested is a judgment call for whoever restocks the queue next." Every
+other PHASE2 survivor (B5-REVERSAL) already went through a full PHASE4 shared-capital
+equity-curve simulation (see VERDICTS.md's `B5-REVERSAL-PHASE4-PORTFOLIO-SIM` row, FAIL);
+this runs the same methodology on T4's own flagged near-miss variant so the cost-reduction
+plan's four candidates all reach the same depth of testing rather than leaving one half-done.
+
+`scripts/phase4-t4-momentum-portfolio-sim.mjs` (left in the repo, read-only, deletable after
+this finding is read) reuses `portfolio.mjs`'s real `simulatePortfolio` engine directly, same
+as B5-REVERSAL's own `scripts/phase4-b5-portfolio-sim.mjs`.
+
+**Scope, disclosed rather than silently narrowed:** PHASE2's own triage
+(`scripts/phase2-triage.mjs`) only ever tested `momentum_30d` at 30d rebalance — the one
+variant with real reported numbers ("closest of the four", holdout Sharpe 0.493 at its
+flagged best-case scenario). That is the sole candidate carried into this PHASE4 run,
+matching B5-REVERSAL's own precedent of only carrying forward its actual PHASE2/PHASE3
+survivor rather than reopening the full strategy menu. `momentum_vol` was never triaged in
+PHASE2 and stays out of scope here for the same reason. Split methodology is T4's own
+standing convention (`portfolio.mjs`'s standard chronological 70/30 time split on the full
+28-asset watchlist, not B5-REVERSAL's symbol-holdout universe) — unchanged from
+`runPortfolioStudy`/T4-COVERAGE-FIX/PHASE2.
+
+**Cost-scenario decision, disclosed:** PHASE2 flagged "futures maker (fee-only)" as T4's best
+case. But B5-REVERSAL's own PHASE3 (ROADMAP.md, 2026-08-13) explicitly rejected a maker
+assumption for this exact strategy shape — "a resting maker order risking a missed fill is
+not realistic for a signal whose edge depends on entering at the scheduled rebalance" — and
+used futures TAKER instead, despite it scoring worse. T4-PORTFOLIO-MOMENTUM is the same shape
+(systematic, scheduled 30d rebalance), so the same execution-realism argument applies. Both
+scenarios are reported in full below; futures TAKER (0.10% round trip) is the primary
+gate-evaluation scenario, futures MAKER fee-only (0.04%) is a secondary, disclosed-optimistic
+reference matching PHASE2's original flag. Sanity check (mirroring PWR5/PHASE2's own
+discipline): a local N=5 replica of `momentum_30d`, run through the exact same
+`simulatePortfolio` call, was checked bit-for-bit against the real `portfolioStrategies.momentum_30d`
+before its N=4/N=6 perturbation siblings were trusted — first attempt drifted (1.23e-1,
+because `portfolio.mjs`'s `normalizeWeights` sorts *before* filtering non-finite scores, so a
+null-score symbol can occupy a top-N slot before being dropped — a real, pre-existing quirk in
+production code, reproduced deliberately rather than "corrected" away); the fixed replica
+matches exactly (drift 0.00e+0), and reproduces PHASE2's reported maker-scenario Sharpe 0.493
+precisely at N=5, confirming fidelity to the original flagged finding.
+
+**Holdout window:** 2025-07-03 to 2026-07-30 (392 days, the same 70/30 split point every T4
+variant has used), 28-asset full watchlist.
+
+| Scenario | N | Total return | Annual return | Sharpe | Sortino | Calmar | Max DD | Profit factor |
+|---|---|---|---|---|---|---|---|---|
+| futures taker (0.10%) | 4 (pert.) | +2.5% | +2.3% | 0.039 | 0.037 | 0.059 | -39.5% | 1.056 |
+| futures taker (0.10%) | **5 (primary)** | **+30.8%** | +28.4% | **0.483** | 0.462 | 0.858 | **-33.1%** | 1.121 |
+| futures taker (0.10%) | 6 (pert.) | +14.5% | +13.5% | 0.233 | 0.216 | 0.383 | -35.1% | 1.084 |
+| futures maker fee-only (0.04%) | 4 (pert.) | +3.0% | +2.8% | 0.048 | 0.045 | 0.072 | -39.4% | 1.056 |
+| futures maker fee-only (0.04%) | **5 (primary)** | **+31.4%** | +29.0% | **0.493** | 0.471 | 0.877 | **-33.1%** | 1.121 |
+| futures maker fee-only (0.04%) | 6 (pert.) | +15.1% | +14.0% | 0.242 | 0.224 | 0.399 | -35.0% | 1.084 |
+
+**Gate outcome (primary scenario, futures taker, N=5): 3 of 4 clauses pass, 1 fails.**
+Total return positive (+30.8%, PASS). Max drawdown clears the -35% floor (-33.1%, PASS).
+No sign flip across N=4/5/6 (all three stay Sharpe-positive, literal-wording PASS). Sharpe
+0.483 falls short of the >=0.5 gate (FAIL) — narrowly, and closer than either the maker
+scenario (0.493, also short) or PHASE2's own flagged best case. All four clauses are required
+(per this item's own `done_when`); one failing clause fails the whole variant.
+
+**Disclosed beyond the literal gate wording: the "no sign flip" pass is fragile, not
+robust.** N=4 collapses Sharpe from 0.483 to 0.039 (a 92% reduction on a one-position change);
+N=6 collapses it to 0.233 (a 52% reduction). Neither flips sign, so the literal
+"+/-20% parameter perturbation, no sign flip" clause is satisfied — but a strategy whose
+risk-adjusted return swings by an order of magnitude on a +/-1 position-count change is
+exhibiting the same overfitting shape the sign-flip check exists to catch, just without
+crossing zero. This is reported as a due-diligence finding beyond what the gate literally
+requires, the same standard PORTFOLIO-LIVE-SIGNAL-SIM and B5-REVERSAL-PHASE4-PORTFOLIO-SIM
+applied to their own results.
+
+**Verdict: T4-PORTFOLIO-MOMENTUM-PHASE4 FAIL** — on the Sharpe clause specifically, at both
+tested cost scenarios, consistent with PHASE2's own finding that this signal "never clears
+0.5 Sharpe at any tested scenario." Genuinely closer to passing than B5-REVERSAL-PHASE4 (which
+failed on Sharpe, drawdown, AND a literal sign flip) or PORTFOLIO-LIVE-SIGNAL-SIM (failed all
+three clauses on both variants) — but still fails the required all-clauses gate, and the
+N-perturbation fragility is an independent red flag on top of the narrow Sharpe miss. This
+closes the explicitly-flagged PHASE4 gap: all four PWR5-era cost-reduction candidates
+(Classifier P5, CLASSIFIER-FUNDING-FEATURE, B5-REVERSAL, T4-PORTFOLIO-MOMENTUM) have now been
+tested to the same depth, and none clears a full shared-capital PHASE4 simulation. Recorded as
+VERDICTS.md's `T4-PORTFOLIO-MOMENTUM-PHASE4` row.
