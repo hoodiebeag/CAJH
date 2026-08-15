@@ -1858,3 +1858,96 @@ appear to carry the "fresh leveraged conviction" signal the hypothesis predicted
 at the daily/7-day-trailing granularity tested here. Recorded as VERDICTS.md's
 `OPEN-INTEREST-TREND-CONFIRMATION` row and as a decision-journal entry
 (`research-runs/2026-08-15T*-oi-trend-gate.json`).
+
+## 2026-08-15 — LIQUIDATION-CASCADE-REVERSAL: forced-liquidation spike as a reversal-entry gate
+
+Genuinely untested information source and mechanism, picked from the same derivatives-infra
+work_queue batch as OPEN-INTEREST-TREND-CONFIRMATION above: `derivatives.mjs`'s
+`fetchAnalytics({type:'liquidation-volume'})` is real, tested Kraken Futures infra (same
+endpoint family as `open-interest`) built during PWR5-era work but never wired into a sealed
+holdout study, only ever exercised via `research.js`'s `derivatives` CLI diagnostic (point
+counts only). Hypothesis: a spike in liquidation volume represents FORCED selling/buying
+(leveraged positions closed involuntarily), not voluntary price action — a real, distinct
+market-microstructure event. Entering contrarian to price direction immediately after such a
+spike (the forced flow exhausting itself) was hypothesized to have positive expected value.
+Distinct from every prior study: not a re-skin of B5-REVERSAL (cross-sectional return ranking
+across assets, not event-triggered), and mechanically different from
+OPEN-INTEREST-TREND-CONFIRMATION directly above — that item gates a *trend* signal (rising/
+falling OI) onto *trend-following* families (breakout/anticipate); this item gates a single-bar
+*spike* signal onto the codebase's own existing *reversal* family (`sweep_reclaim`).
+
+**Design choice: which family expresses "contrarian to price direction."** `backtest.js` has no
+generic custom-entry-function hook, only a fixed set of `entryMode`s plus the `entryGate` veto
+hook every prior new-data-source study in this project already uses (OI-trend-gate on
+breakout/anticipate, FUNDING-MEANREV on breakout). `sweep_reclaim` (price sweeps a prior 12-bar
+low, then closes back above it — a literal "forced-flow-down, then reclaim" shape) is the
+closest existing mechanism to "contrarian reversal after a violent move," and its own plain
+baseline already FAILED independently on this project's real cost basis — so this item asks
+whether confirmed genuine forced-liquidation origin rescues an already-failed price pattern,
+the same shape as the OI-trend-gate/FUNDING-MEANREV precedent.
+
+**Data-availability check, run first, against the real API.** `fetchAnalytics` for
+`liquidation-volume` (same underlying Kraken analytics endpoint family as `open-interest`) was
+called directly for PF_XBTUSD over a 900-day window before writing any backtest code: 899 days
+of daily history (2024-02-28 to present), matching OI's own depth exactly — no separate
+rolling-window ceiling for this data source either. The series is heavily right-skewed
+(p50 ~8.5, p75 ~28.8, p90 ~76.1, p95 ~135.3, p99 ~313.0, max ~685.6 over that window),
+consistent with genuine spike events rather than a smooth series — the shape a "forced
+liquidation" mechanism predicts. 28/29 watchlist assets clear the same 500-day coverage floor
+used by OI-trend-gate (EOS excluded on the same pre-existing candle-history shortfall, not a
+liquidation-data problem).
+
+**Spike mechanism and threshold selection (`liquidation-cascade-reversal.mjs`, new module).**
+Kraken's liquidation-volume analytics value is a single daily scalar. Each daily point only
+becomes visible once its own day has closed (+1 day) — the same no-lookahead offset
+`oi-trend-gate.mjs` uses. The gate fires when the latest revealed day's volume exceeds a
+multiplier times the average of the N=7 days immediately before it (current point excluded from
+its own trailing average, matching OI-trend-gate's N=7 window and self-exclusion). The task's
+own text specified the mechanism ("liquidation volume > Nx its trailing average") without
+fixing N, so three candidate multipliers — 2x, 3x, 5x — were scored on the TRAIN split only;
+the single best-on-train multiplier (highest train avgR/trade among those producing at least
+one train trade) is the only one whose holdout is ever computed, evaluated exactly once — the
+same selection discipline TEST2-VOL-CONFIRMED-BREAKOUT already used ("fix the best threshold ON
+THE TRAIN SPLIT ONLY, then evaluate holdout exactly once"). Applied via `backtest.js`'s existing
+`entryGate` hook — no `backtest.js` changes — to `sweep_reclaim`'s exact `tournament.mjs`
+baseline config, unmodified, full 28-asset (of 29) watchlist, corrected real cost basis
+(FEE_RATE=0.008/side, SLIPPAGE_PCT=0.0005/side, ~1.7% round trip). Sealed 70/30 chronological
+split within each asset's liquidation-data-covered window (same `windowedSplit` technique
+OI-trend-gate/FUNDING-MEANREV use).
+
+**Gate scope, disclosed:** this item's own pre-registered `done_when` specifies exactly two
+holdout clauses (avgR/trade > -0.30, trades >= 100) — a deliberately lower trade floor than the
+usual >=150, stated up front because this intersects two already-selective conditions (a
+liquidation spike AND a sweep_reclaim trigger on the same bar) and was expected to produce
+materially fewer trades than a single-condition family. No positiveAssets clause is part of
+this item's gate (unlike OI-trend-gate's three-clause gate); positive-asset fraction is still
+reported below for the same-sign disclosure every other item in this file includes.
+
+| Multiplier | Split | Trades | avgR/trade | Positive assets |
+|---|---|---|---|---|
+| 2x | train | 1200 | -1.032 | 0/28 |
+| 3x | train | 911 | -1.006 | 0/28 |
+| 5x | train | 629 | -0.982 | 0/28 |
+| **5x (selected)** | **holdout** | **221** | **-0.895** | **4/27** |
+
+**Threshold selection was "least bad," not a genuine signal.** All three candidates were
+decisively negative on train with 0/28 positive assets each; train avgR/trade improved
+monotonically with a tighter (higher) multiplier (-1.032 -> -1.006 -> -0.982 for 2x -> 3x -> 5x),
+so 5x was selected as best-on-train not because it looked promising but because it was least
+unprofitable among three uniformly failing candidates — the same "selectivity direction
+consistent, but everything still failing" pattern VOL-CONFIRM-BREAKOUT's train-gate found for
+`breakout` under relative-volume filtering.
+
+**Verdict: LIQUIDATION-CASCADE-REVERSAL FAIL, decisive, not a sample-size non-verdict.** The
+selected 5x-multiplier holdout clears the >=100 trade floor comfortably (221 trades — roughly
+5.6x the floor, not a marginal pass), so this is not a case of the gate excluding too much to
+judge. Holdout avgR/trade (-0.895) is far past the -0.30 floor and matches train's sign and
+rough magnitude (-0.982 train vs -0.895 holdout at the same multiplier) — no train/holdout
+divergence to explain away. Positive-asset fraction (4/27, ~15%) is reported for disclosure only
+(not part of this item's gate) and would not have cleared the 40% bar OI-trend-gate's own gate
+used, for context. Confirmed genuine forced-liquidation origin does not rescue the already-failed
+`sweep_reclaim` pattern — if anything, gating on the spike concentrates entries into a
+still-decisively-losing subset (holdout avgR actually slightly *better* in magnitude than
+`sweep_reclaim`'s own already-recorded unfiltered result of -0.711, but nowhere near the -0.30
+gate either way). Recorded as VERDICTS.md's `LIQUIDATION-CASCADE-REVERSAL` row and as a
+decision-journal entry (`research-runs/2026-08-15T06-06-27-127Z-liquidation-cascade-reversal.json`).
