@@ -2,12 +2,12 @@
  "version": 2,
  "control": {
   "status": "IDLE",
-  "target_file": "liquidation-cascade-reversal.mjs, liquidation-cascade-reversal.test.mjs, VERDICTS.md, TOURNAMENT_ROADMAP.md (LIQUIDATION-CASCADE-REVERSAL, commit 4ea096a)",
-  "objective": "Completed LIQUIDATION-CASCADE-REVERSAL as the next work_queue item (scheduled firing, cajh-loop-check). New module liquidation-cascade-reversal.mjs gates sweep_reclaim entries (the codebase existing contrarian-reversal price family) on a Kraken Futures liquidation-volume spike, reusing derivatives.mjs fetchAnalytics(type:liquidation-volume) for the first time in a sealed-holdout study. Data-availability gate run first against the real API: liquidation history reaches back to 2024-02-28 for PF_XBTUSD (899 days, same depth as open-interest, no separate rolling-window ceiling); 28/29 watchlist assets cleared the 500-day floor (EOS excluded on the same pre-existing candle-history shortfall as other derivatives studies, not a liquidation-data problem). Threshold (spike multiplier) selected on TRAIN only among 2x/3x/5x candidates (best-on-train = 5x, but all three uniformly negative on train, so selection was least-bad not a genuine signal), holdout evaluated exactly once for that one multiplier. Result: FAIL on the pre-registered two-clause gate (holdout avgR>-0.30, trades>=100) - decisive, not a sample-size non-verdict: holdout avgR -0.895 (far past the -0.30 floor), 221 trades (5.6x the 100-trade floor), train agrees in sign (-0.982). Full detail in the work_queue items own note and TOURNAMENT_ROADMAP.md 2026-08-15 LIQUIDATION-CASCADE-REVERSAL section. See prior control.notes for the still-current QUEUE-RETENTION-HOOK-PRUNE-EXCEPTION context (unchanged this firing).",
+  "target_file": "basis-directional-signal.mjs, basis-directional-signal.test.mjs, VERDICTS.md, TOURNAMENT_ROADMAP.md (FUTURES-BASIS-DIRECTIONAL-SIGNAL, commit c7f67fe)",
+  "objective": "Completed FUTURES-BASIS-DIRECTIONAL-SIGNAL as the next work_queue item (scheduled firing, cajh-loop-check). New module basis-directional-signal.mjs gates breakout/anticipate entries (the codebase existing trend-following price families) on Kraken Futures basis widening (current day basis above its own trailing 7-day average), reusing derivatives.mjs fetchAnalytics(type:future-basis) for the first time in a sealed-holdout study. Distinct from the already-closed FUNDING-CARRY-DECAY-CHECK (delta-neutral carry harvesting off the periodic funding payment, a mechanically different metric from basis level) and from the already-closed OPEN-INTEREST-TREND-CONFIRMATION (same gate shape and same two families, but basis not OI as the information source). Primary hypothesis pre-registered in writing before any train/holdout result was examined: of two competing hypotheses for what widening contango means (bullish momentum confirmation vs crowded-long contrarian fade), tested the momentum/confirmation hypothesis, mirroring OPEN-INTEREST-TREND-CONFIRMATION own gate shape on the same two families; the contrarian-fade hypothesis was explicitly left untested and out of scope for this result, not retrofitted post hoc. Data-availability gate run first against the real API: future-basis history reaches back to 2024-02-28 for PF_XBTUSD and PF_ETHUSD (899 days, same depth as open-interest and liquidation-volume, same underlying Kraken analytics endpoint, no separate rolling-window ceiling); 28/29 watchlist assets cleared the 500-day floor (EOS excluded on the same pre-existing candle-history shortfall as other derivatives studies, not a basis-data problem). Kraken future-basis value shape is an object {basis:\"<decimal string>\"}, distinct from OI OHLC array and liquidation-volume plain scalar - parsed as Number(value.basis). Gate mechanism N=7 trailing average, matching OI-trend-gate own window and self-exclusion convention, a single pre-registered choice not a threshold sweep. Result: FAIL on the pre-registered three-clause gate for both families - decisive, not a sample-size non-verdict: breakout holdout avgR -0.994 (gate required greater than -0.30), 1229 trades (8.2x the 150-trade floor), 0/27 assets positive; anticipate holdout avgR -0.938, 1491 trades (9.9x the floor), 0/27 assets positive; both agree in sign with train (-0.777 / -0.793). Full detail in the work_queue items own note and TOURNAMENT_ROADMAP.md 2026-08-15 FUTURES-BASIS-DIRECTIONAL-SIGNAL section. See prior control.notes for the still-current QUEUE-RETENTION-HOOK-PRUNE-EXCEPTION context (unchanged this firing).",
   "notes": "Human directly authorized resolving QUEUE-RETENTION-HOOK-PRUNE-EXCEPTION in a live interactive session (\"no preference, up to you\") rather than the unattended-loop path the hook's own guidance warns against self-authorizing. Reviewed the diff before creating the marker: pruning FEE-SCHEDULE-REBASE and the 5 PARITY-* items removed only their stored task/done_when prose from work_queue (identical to the 32 items STATE-QUEUE-RETENTION already pruned cleanly) - their findings survive permanently in PARITY_MATRIX.md's COVERED rows and ROADMAP.md/VERDICTS.md/TOURNAMENT_ROADMAP.md prose, per the same retention rule. Confirmed the hook's protected-pattern scan checks both added and removed diff lines (scripts/check-protected-logic.cjs, findMatches()), so no rewording could have avoided the marker for that fix either - removing text that names a protected identifier trips it exactly like adding such text would. NOTE FOR FUTURE WRITES TO THIS FIELD: this note itself was rewritten once already (2026-08-14, this write) because the previous version quoted two of the exact protected identifier strings from scripts/check-protected-logic.cjs's own list while explaining the pruning fix, which silently self-blocked every subsequent control.notes update for 4+ firings until a human noticed the pattern in stuck 'hook collision' ledger entries and fixed it here. Describe the buy/sell order-placement functions generically in this field going forward (e.g. 'the order-placement functions' or 'checkout scripts/check-protected-logic.cjs's own pattern list') - never spell out their literal names, even inside an explanation of an unrelated fix, or this recurs.",
   "block_detail": null,
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-08-15T06:09:26.840Z"
+  "updated_at": "2026-08-15T07:09:03.312Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -260,7 +260,7 @@
    },
    {
     "id": "FUTURES-BASIS-DIRECTIONAL-SIGNAL",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: basis-signal study using derivatives.mjs's fetchAnalytics(type:'future-basis')",
     "depends_on": [],
@@ -398,14 +398,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-08T07:16:22.725Z",
-   "agent": "cajh-loop-check",
-   "action": "no_op_check",
-   "detail": "Queue re-confirmed genuinely empty (14th consecutive check): 0/16 work_queue items pending, no new PASS verdict in VERDICTS.md, no repo changes since d304419. npm test clean 199/199 first try. empty-queue notification deduped (last sent 03:25:00Z, within 6h window).",
-   "commit": null,
-   "tests": "199/199 pass"
-  },
   {
    "ts": "2026-08-08T07:31:35.000Z",
    "agent": "cajh-loop-check",
@@ -1193,6 +1185,14 @@
    "detail": "LIQUIDATION-CASCADE-REVERSAL: liquidation-volume-spike gate (2x/3x/5x, train-selected) on sweep_reclaim entries, via new derivatives.mjs liquidation-volume-backed module liquidation-cascade-reversal.mjs. FAIL - holdout avgR -0.895 (gate >-0.30), 221 trades (>=100 floor cleared), train agrees in sign (-0.982 at selected 5x). Recorded in VERDICTS.md/TOURNAMENT_ROADMAP.md. 374/374 tests green.",
    "commit": "4ea096a",
    "tests": "374/374 green"
+  },
+  {
+   "ts": "2026-08-15T07:09:03.312Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "closed-work-queue-item",
+   "detail": "FUTURES-BASIS-DIRECTIONAL-SIGNAL: basis-widening gate (current > trailing 7d avg, N=7) on breakout/anticipate, new module basis-directional-signal.mjs reusing derivatives.mjs fetchAnalytics(type:future-basis) for the first sealed-holdout use of that data source. Momentum/confirmation hypothesis pre-registered before data was examined (contrarian-fade explicitly out of scope). Data-availability confirmed against real API first (899-day future-basis history for PF_XBTUSD/PF_ETHUSD, 28/29 watchlist assets clear 500-day floor, EOS excluded on pre-existing candle shortfall). FAIL both families: breakout holdout avgR -0.994/1229 trades/0-27 positive, anticipate holdout avgR -0.938/1491 trades/0-27 positive, both agree in sign with train, both trade counts comfortably clear the 150 floor. VERDICTS.md and TOURNAMENT_ROADMAP.md updated. 380/380 pre-existing tests plus 6 new tests green.",
+   "commit": "c7f67fe",
+   "tests": "green (380/380 npm test)"
   }
  ],
  "automation": {
