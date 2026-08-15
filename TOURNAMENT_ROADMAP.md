@@ -1784,3 +1784,77 @@ closes the explicitly-flagged PHASE4 gap: all four PWR5-era cost-reduction candi
 (Classifier P5, CLASSIFIER-FUNDING-FEATURE, B5-REVERSAL, T4-PORTFOLIO-MOMENTUM) have now been
 tested to the same depth, and none clears a full shared-capital PHASE4 simulation. Recorded as
 VERDICTS.md's `T4-PORTFOLIO-MOMENTUM-PHASE4` row.
+
+---
+
+## 2026-08-15 — OPEN-INTEREST-TREND-CONFIRMATION: futures OI trend as an entry gate
+
+Genuinely untested information source, picked from the work_queue's derivatives-infra batch:
+`derivatives.mjs` already implements a real, tested (3 tests) Kraken Futures analytics
+collector covering 15 endpoint types, including `open-interest` — built during PWR5-era work
+but never wired into an actual sealed-holdout study, only ever exercised via `research.js`'s
+`derivatives` CLI diagnostic (prints point counts, nothing more). Hypothesis: rising OI
+alongside a `breakout`/`anticipate` entry signal indicates fresh leveraged conviction (real
+trend confirmation, keep the trade); falling OI on the same signal indicates
+short-covering/weak-hands (a move likely to fade, skip it). Distinct from every prior
+gate/filter tested here (T3-REGIMEFILTER, TREND-GATE-MA/STRUCTURE — price structure;
+VOL-CONFIRM-BREAKOUT — spot volume; ATR-ADAPTIVE-STOP — volatility; H11/FUNDING-MEANREV —
+funding rate): this is the first study in this project to use futures positioning depth as an
+information source.
+
+**Data-availability gate, run first, against the real API — not assumed.** The task's own
+pre-registered `done_when` named the precedent to follow if coverage came up short: H11's
+funding-data non-verdict (28/29 assets blocked by a geo-blocked API / a hard ~365-day rolling
+window). Before writing any backtest code, `fetchAnalytics({type:'open-interest'})` was called
+directly against every watchlist symbol's Kraken Futures product (`PF_<SYM>USD`, requesting a
+900-day window). Result: **no H11-style ceiling exists for this data source.** Every symbol
+returned real, non-empty daily OI history reaching back to 2024-02-28 (694-899 days, depending
+on the futures product's own listing date) — materially deeper than the ~365-730-day rolling
+windows that gated H11 and FUNDING-MEANREV. 28/29 watchlist assets clear a 500-day coverage
+floor; the one exclusion (EOS) is the same pre-existing local-candle-history shortfall that has
+excluded it from other studies (e.g. FUNDING-CARRY-DECAY-CHECK), not an OI-availability
+problem. The gate cleared decisively, so the study proceeded to the actual sealed-holdout
+backtest rather than stopping at a non-verdict.
+
+**Gate mechanism (`oi-trend-gate.mjs`, new module).** Kraken's open-interest analytics value is
+a daily `[open, high, low, close]` array; the day's `close` is used as that day's OI level.
+Each daily point only becomes visible once its own day has fully closed (+1 day) — this
+codebase's standard no-lookahead offset (`tournament.mjs`'s `buildBtcAboveMa200At` uses the
+same +1 day on its own daily timeline). The gate compares the latest revealed OI close against
+the average of the **N=7** closes immediately before it (current point excluded from its own
+trailing average, avoiding a trivial self-inclusion bias) — a single pre-registered choice
+disclosed up front, not a threshold grid, since the task specifies one mechanism (OI vs its own
+trailing average) rather than a parameter sweep. Applied via `backtest.js`'s existing
+`entryGate` hook — no `backtest.js` changes — to `breakout` and `anticipate`'s exact
+`tournament.mjs` baseline configs, unmodified, full 28-asset (of 29) watchlist, corrected real
+cost basis (FEE_RATE=0.008/side, SLIPPAGE_PCT=0.0005/side, ~1.7% round trip — already
+`strategy.js`'s default, not overridden). Sealed 70/30 chronological split within each asset's
+OI-covered window (same `windowedSplit` technique FUNDING-MEANREV uses, needed because the
+OI-covered window can differ slightly from the full candle history's span).
+
+**Gate scope, disclosed:** this item's own pre-registered `done_when` specifies exactly three
+holdout-only clauses (avgR/trade > -0.30, trades >= 150, positiveAssets/assets >= 0.40) and
+nothing else — no separate train-side pre-gate the way FUNDING-MEANREV/FIB-PULLBACK/
+VOL-CONFIRM-BREAKOUT require (train must clear its own bar before holdout is even examined).
+Train scores were still computed and are reported below for the same-sign disclosure every
+other item in this file includes, but they are not gating.
+
+| Family | Split | Trades | avgR/trade | Positive assets |
+|---|---|---|---|---|
+| breakout | train | 3034 | -0.763 | 0/28 |
+| breakout | **holdout** | **1252** | **-0.975** | **1/28** |
+| anticipate | train | 3985 | -0.801 | 0/28 |
+| anticipate | **holdout** | **1462** | **-0.895** | **0/27** |
+
+**Verdict: OPEN-INTEREST-TREND-CONFIRMATION FAIL (both families), decisive, not a
+sample-size non-verdict.** Both families clear the trade-count floor comfortably
+(1252/1462 holdout trades, well above the >=150 gate), so this is not a case of the gate
+excluding too much to judge — the OI-trend filter simply does not produce a viable entry
+population. Holdout avgR is far past the -0.30 floor for both (-0.975 breakout, -0.895
+anticipate), train agrees in sign and magnitude for both (-0.763, -0.801) — no train/holdout
+divergence to explain away — and the positive-asset fraction (1/28 breakout, 0/27 anticipate)
+is nowhere near the required 40%. Rising OI alongside a breakout/anticipate trigger does not
+appear to carry the "fresh leveraged conviction" signal the hypothesis predicted, at least not
+at the daily/7-day-trailing granularity tested here. Recorded as VERDICTS.md's
+`OPEN-INTEREST-TREND-CONFIRMATION` row and as a decision-journal entry
+(`research-runs/2026-08-15T*-oi-trend-gate.json`).
