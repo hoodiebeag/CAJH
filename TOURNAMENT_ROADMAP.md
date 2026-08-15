@@ -1951,3 +1951,81 @@ still-decisively-losing subset (holdout avgR actually slightly *better* in magni
 `sweep_reclaim`'s own already-recorded unfiltered result of -0.711, but nowhere near the -0.30
 gate either way). Recorded as VERDICTS.md's `LIQUIDATION-CASCADE-REVERSAL` row and as a
 decision-journal entry (`research-runs/2026-08-15T06-06-27-127Z-liquidation-cascade-reversal.json`).
+
+## 2026-08-15 — FUTURES-BASIS-DIRECTIONAL-SIGNAL: futures basis level as a directional momentum gate
+
+Distinct from the already-closed FUNDING-CARRY-DECAY-CHECK (KILLED/decayed), which tested a
+delta-neutral carry-HARVESTING strategy off the periodic perpetual funding payment. This item
+tests a mechanically different metric: the futures BASIS LEVEL itself — the price differential
+between the futures contract and spot, i.e. contango/backwardation steepness reflecting the
+whole term-structure pricing, not a specific periodic payment mechanism — as a DIRECTIONAL
+signal, not a market-neutral carry position. Also distinct from OPEN-INTEREST-TREND-CONFIRMATION
+even though both gate the same `breakout`/`anticipate` families with the same "current > trailing
+average" shape: the information source is basis (futures-vs-spot price), not OI (open contract
+volume).
+
+**Pre-registered primary hypothesis, stated before any train/holdout result was examined.** Two
+competing hypotheses exist for what a steep/widening contango means: (a) bullish leveraged-long
+buildup — a momentum/confirmation signal; or (b) a crowded-long extreme — a contrarian fade
+signal. This item pre-registers (a) as primary: basis widening (current day's basis above its own
+trailing average) is hypothesized to confirm fresh bullish leveraged conviction, applied as a gate
+on `breakout`/`anticipate` — the same two directional/momentum families, and the exact same
+"current > trailing average" gate shape, that OPEN-INTEREST-TREND-CONFIRMATION already used for
+its own OI-trend confirmation hypothesis. This choice mirrors the closest existing mechanical
+precedent in the codebase rather than being picked to fit a result later. Hypothesis (b)
+(contrarian fade on a reversal family, e.g. `sweep_reclaim`, the same shape
+LIQUIDATION-CASCADE-REVERSAL used for its own forced-flow hypothesis) is a distinct,
+separately-registerable study and is explicitly NOT tested here — this item's result is not to be
+retroactively reinterpreted as evidence for or against (b).
+
+**Data-availability check, run first, against the real API.** `fetchAnalytics` for
+`future-basis` (same underlying Kraken analytics endpoint family as `open-interest` and
+`liquidation-volume`) was called directly for PF_XBTUSD and PF_ETHUSD over a 900-day window
+before writing any backtest code: 899 days of daily history for both (2024-02-28 to present),
+matching OI's and liquidation-volume's own depth exactly — no separate rolling-window ceiling for
+this data source either. Kraken's future-basis analytics value has a distinct shape from both
+prior sources: an object `{ basis: "<decimal string>" }` (not OI's `[open,high,low,close]` array
+or liquidation-volume's plain scalar) — parsed as `Number(value.basis)`. Observed distribution is
+centered slightly above zero (contango-biased: median ~0.0001, mean ~0.00015-0.00018 on
+PF_XBTUSD/PF_ETHUSD) with occasional backwardation (min as low as -0.0022 on PF_ETHUSD),
+consistent with a real, non-degenerate series. 28/29 watchlist assets clear the same 500-day
+coverage floor used by OI-trend-gate and liquidation-cascade (EOS excluded on the same
+pre-existing candle-history shortfall, not a basis-data problem).
+
+**Mechanism (`basis-directional-signal.mjs`, new module).** Each daily point only becomes visible
+once its own day has closed (+1 day) — the same no-lookahead offset `oi-trend-gate.mjs` and
+`liquidation-cascade-reversal.mjs` use. The gate fires when the latest revealed day's basis
+exceeds the average of the N=7 days immediately before it (current point excluded from its own
+trailing average, matching OI-trend-gate's N=7 window and self-exclusion convention — "one clean
+choice," not a parameter sweep, since the task specifies one mechanism). Applied via
+`backtest.js`'s existing `entryGate` hook — no `backtest.js` changes — to `breakout`'s and
+`anticipate`'s exact `tournament.mjs` baseline configs, unmodified, full 28-asset (of 29)
+watchlist, corrected real cost basis (FEE_RATE=0.008/side, SLIPPAGE_PCT=0.0005/side, ~1.7% round
+trip). Sealed 70/30 chronological split within each asset's basis-data-covered window (same
+`windowedSplit` technique OI-trend-gate/liquidation-cascade-reversal use).
+
+**Gate (this item's own pre-registered `done_when`, identical three-clause shape to
+OPEN-INTEREST-TREND-CONFIRMATION):** holdout avgR/trade > -0.30 AND holdout trades >= 150 AND
+holdout positiveAssets/assets >= 0.40, evaluated per family.
+
+| Family | Split | Trades | avgR/trade | Positive assets |
+|---|---|---|---|---|
+| breakout | train | 3059 | -0.777 | 0/28 |
+| breakout | holdout | 1229 | -0.994 | 0/27 |
+| anticipate | train | 3989 | -0.793 | 1/28 |
+| anticipate | holdout | 1491 | -0.938 | 0/27 |
+
+**Verdict: FUTURES-BASIS-DIRECTIONAL-SIGNAL FAIL, decisive, both families.** Both holdout trade
+counts clear the >=150 floor comfortably (1229 and 1491 trades — 8.2x and 9.9x the floor), so
+this is not a case of the gate excluding too much to judge. Holdout avgR/trade is far past the
+-0.30 floor for both families (breakout -0.994, anticipate -0.938) and matches train's sign and
+rough magnitude in both cases (train -0.777/-0.793 vs holdout -0.994/-0.938) — no train/holdout
+divergence to explain away. Positive-asset fraction is 0/27 for both families holdout, nowhere
+near the 0.40 floor. The pre-registered primary hypothesis (widening contango as bullish momentum
+confirmation) is not supported: gating breakout/anticipate on basis widening does not rescue
+either family, and the magnitude is comparable to OPEN-INTEREST-TREND-CONFIRMATION's own FAIL on
+the same two families with the same gate shape, suggesting the failure mode here is more likely
+about `breakout`/`anticipate`'s own baseline weakness on this cost basis than about basis
+specifically carrying no information. Recorded as VERDICTS.md's `FUTURES-BASIS-DIRECTIONAL-SIGNAL`
+row and as a decision-journal entry
+(`research-runs/2026-08-15T07-04-21-258Z-basis-directional-signal.json`).
