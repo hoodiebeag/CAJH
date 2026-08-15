@@ -2029,3 +2029,101 @@ about `breakout`/`anticipate`'s own baseline weakness on this cost basis than ab
 specifically carrying no information. Recorded as VERDICTS.md's `FUTURES-BASIS-DIRECTIONAL-SIGNAL`
 row and as a decision-journal entry
 (`research-runs/2026-08-15T07-04-21-258Z-basis-directional-signal.json`).
+
+## 2026-08-15 — LONG-SHORT-RATIO-CONTRARIAN: crowd long/short positioning as a contrarian-fade gate
+
+Genuinely new information source, distinct in KIND from every prior derivatives study, not just a
+different endpoint on the same theme: OPEN-INTEREST-TREND-CONFIRMATION and
+FUTURES-BASIS-DIRECTIONAL-SIGNAL both measure the SIZE/PRICING of the futures market (open
+contract count, futures-vs-spot price); LIQUIDATION-CASCADE-REVERSAL measures forced-flow events
+(involuntary liquidations). This item measures the crowd's own DIRECTIONAL LEAN — the fraction of
+open futures positions that are long — a sentiment/positioning signal, structurally different from
+either "how big is the market" or "how forced was this flow."
+
+**Pre-registered hypothesis — the task's own stated framing, and notably the first CONTRARIAN
+(not momentum/confirmation) gate shape tested in this project's derivatives-gate series.** Every
+prior gate study here (OI-trend, basis-directional) pre-registered a "current > trailing average"
+CONFIRMATION shape: rising OI, widening basis. This item is different in mechanism as well as
+information source: the classic sentiment-extreme contrarian-fade hypothesis says that once the
+crowd is already heavily positioned long — an EXTREME reading of the ratio, not "long" in
+general — most of the buying that was going to happen already has, so forward returns on a
+freshly-opened long entry tend to be worse. Applied as a SUPPRESSION gate on `breakout`/
+`anticipate` — the same two directional/momentum families every prior gate study here used, kept
+for direct comparability — that blocks new entries only while the ratio sits in its own
+train-fixed extreme-long zone, and allows them otherwise.
+
+**Granularity check, run first, against the real API — this item's own explicit done_when
+requirement.** The task's framing raised aggregate/market-wide-only as a real possibility, since
+positioning data is not always per-symbol. It is not aggregate-only here: `fetchAnalytics` takes a
+`symbol` parameter, and Kraken returned a genuinely distinct daily value per futures contract when
+queried directly — PF_XBTUSD/PF_ETHUSD/PF_SOLUSD/PF_XRPUSD each independently 0.60/0.77/0.81/0.76
+on the same most-recent day, not a shared market-wide constant. This study is therefore scoped
+PER-ASSET, matching every other gate study's own-history convention (OI/basis compare a value to
+ITS OWN trailing average; this compares a value to ITS OWN train-window percentile) instead of the
+aggregate-only fallback the task described as a possibility.
+
+**Data-availability check, against the real API.** `fetchAnalytics` for `long-short-ratio` (same
+underlying Kraken analytics endpoint family as `open-interest`/`liquidation-volume`/
+`future-basis`) was called directly for all four spot-checked symbols before writing any backtest
+code: 899 days of daily history for each (2024-02-28 to present), matching every other derivatives
+source's depth and start date exactly — no separate rolling-window ceiling for this data source
+either. Kraken's `long-short-ratio` value is a plain decimal string (e.g. `"0.71"`) — already the
+long-side FRACTION of open positions, cross-checked against the sibling `long-short-info` type's
+`{longCount,shortCount,longPercent,shortPercent,ratio}` shape on the same symbol/day (`ratio`
+there equals `longPercent/100` exactly) — a distinct shape from OI's `[open,high,low,close]`
+array, liquidation-volume's plain scalar count, and basis's `{basis}` object. 28/29 watchlist
+assets clear the same 500-day coverage floor used by every other derivatives study (EOS excluded
+on the same pre-existing candle-history shortfall, not a ratio-data problem).
+
+**Mechanism (`long-short-ratio-contrarian.mjs`, new module).** Each daily point only becomes
+visible once its own day has closed (+1 day) — the same no-lookahead offset every other
+derivatives-gate module here uses. Rather than a trailing average, this gate is a fixed
+threshold: the 80th percentile of the asset's OWN long-short ratio values within the TRAIN window
+only (never recomputed on holdout, so the threshold itself carries zero holdout information) — a
+single pre-registered choice ("top quintile of the asset's own observed history is 'heavily
+skewed long'"), not a threshold grid, matching OI-trend-gate's/basis-directional-signal's own
+"one clean choice" convention for their own N=7 window. The gate blocks an entry only while the
+latest revealed ratio exceeds that fixed train threshold, and allows entry otherwise, applied via
+`backtest.js`'s existing `entryGate` hook — no `backtest.js` changes — to `breakout`'s and
+`anticipate`'s exact `tournament.mjs` baseline configs, unmodified, full 28-asset (of 29)
+watchlist, corrected real cost basis (FEE_RATE=0.008/side, SLIPPAGE_PCT=0.0005/side, ~1.7% round
+trip). Sealed 70/30 chronological split within each asset's ratio-data-covered window (same
+windowing technique OI-trend-gate/basis-directional-signal use), with the SAME split-boundary
+timestamp also used to bound the train-only ratio values that fix the threshold — one shared cut,
+no separate leakage surface between "which candles are train" and "which ratio values set the
+threshold."
+
+**Gate (this item's own pre-registered `done_when`, standard three-clause shape — no separate
+aggregate/portfolio-level fallback gate was needed once the granularity check above confirmed
+real per-asset resolution):** holdout avgR/trade > -0.30 AND holdout trades >= 150 AND holdout
+positiveAssets/assets >= 0.40, evaluated per family.
+
+| Family | Split | Trades | avgR/trade | Positive assets |
+|---|---|---|---|---|
+| breakout | train | 4627 | -0.776 | 0/28 |
+| breakout | holdout | 1973 | -0.970 | 0/28 |
+| anticipate | train | 6480 | -0.777 | 0/28 |
+| anticipate | holdout | 2512 | -0.934 | 0/27 |
+
+**Verdict: LONG-SHORT-RATIO-CONTRARIAN FAIL, decisive, both families.** Both holdout trade counts
+clear the >=150 floor comfortably (1973 and 2512 trades — 13.2x and 16.7x the floor), so this is
+not a case of the gate excluding too much to judge; the suppression is real (holdout trade counts
+are lower than each family's own unfiltered baseline elsewhere in VERDICTS.md, e.g.
+FUTURES-BASIS-DIRECTIONAL-SIGNAL's unfiltered-by-this-gate breakout holdout of 1229 vs this
+gate's differently-windowed 1973 — not directly comparable trade-for-trade since coverage windows
+differ per study, but the gate visibly did filter, not pass everything through). Holdout
+avgR/trade is far past the -0.30 floor for both families (breakout -0.970, anticipate -0.934) and
+matches train's sign and rough magnitude in both cases (train -0.776/-0.777 vs holdout
+-0.970/-0.934) — no train/holdout divergence to explain away. Positive-asset fraction is 0/28 and
+0/27 holdout, nowhere near the 0.40 floor. The pre-registered contrarian-fade hypothesis
+(suppressing entries during crowd long-extremes improves forward returns) is not supported:
+removing the ratio's own top-quintile-long periods does not rescue `breakout`/`anticipate`, and
+the magnitude is comparable to every other derivatives-gate FAIL on these same two families
+(OPEN-INTEREST-TREND-CONFIRMATION, FUTURES-BASIS-DIRECTIONAL-SIGNAL) regardless of whether the
+gate shape was confirmation or contrarian-fade — continued evidence that the failure mode here is
+about `breakout`/`anticipate`'s own baseline weakness on this cost basis (deeply negative even
+unfiltered — see e.g. SCALED-EXIT-LADDER-CONFIRMATORY's plain fixed-TP baselines) rather than
+about any one of these four information sources (OI, basis, liquidation-volume, long/short ratio)
+carrying no information at all. Recorded as VERDICTS.md's `LONG-SHORT-RATIO-CONTRARIAN` row and as
+a decision-journal entry
+(`research-runs/2026-08-15T08-07-41-757Z-long-short-ratio-contrarian.json`).
