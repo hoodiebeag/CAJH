@@ -20,3 +20,16 @@ test("analytics normalization supports Kraken named parallel series", () => {
     { timestamp: 200, value: { rate: 2, relativeRate: 4 } },
   ]);
 });
+
+test("analytics normalization unwraps a single-key cohort wrapper (e.g. top-traders' top20Percent), matching Kraken's real response shape", () => {
+  const out = normalizeAnalytics({
+    result: {
+      timestamp: [100, 200],
+      data: { top20Percent: { longCount: [511, 509], ratio: ["0.50", "0.49"] } },
+    },
+  });
+  assert.deepEqual(out.points, [
+    { timestamp: 100, value: { longCount: 511, ratio: "0.50" } },
+    { timestamp: 200, value: { longCount: 509, ratio: "0.49" } },
+  ]);
+});

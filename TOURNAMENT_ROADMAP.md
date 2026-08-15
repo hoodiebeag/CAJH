@@ -2127,3 +2127,105 @@ about any one of these four information sources (OI, basis, liquidation-volume, 
 carrying no information at all. Recorded as VERDICTS.md's `LONG-SHORT-RATIO-CONTRARIAN` row and as
 a decision-journal entry
 (`research-runs/2026-08-15T08-07-41-757Z-long-short-ratio-contrarian.json`).
+
+## 2026-08-15 — TOP-TRADERS-DIVERGENCE: informed-vs-crowd positioning divergence as a confirmation gate
+
+Distinct from LONG-SHORT-RATIO-CONTRARIAN (immediately above): that item tested the aggregate
+long-short-ratio alone, against ITS OWN history, as a contrarian-fade suppression signal. This item
+tests whether the top-traders cohort DISAGREEING with the aggregate crowd is itself predictive — a
+different axis (divergence between two series, not one series' own extremity), evaluated on its own
+pre-registered gate per this item's own instruction not to let LONG-SHORT-RATIO-CONTRARIAN's result
+color it.
+
+**Endpoint definition, verified against Kraken's real public docs before writing any strategy
+code — this item's own explicit done_when requirement ("verify its actual definition... don't infer
+from the name alone").** `docs.kraken.com/api/docs/futures-api/charts/analytics` defines
+`top-traders` as `{ top20Percent: { openInterest, longCount, shortCount, longPercent, shortPercent,
+ratio } }` — the top 20% of accounts BY OPEN INTEREST (position size). The task's hypothesis framed
+this cohort as "larger/more sophisticated accounts, if that is genuinely what this endpoint
+represents." Kraken's own definition confirms "larger" (by open interest) but says nothing about
+sophistication or informedness — that half of the hypothesis is not testable from this endpoint and
+is not assumed true here; only "a distinct, larger-position cohort from the aggregate" is claimed.
+
+**A real bug was found and fixed as part of this item's own data-availability check, before any
+strategy code was written.** `derivatives.mjs`'s `normalizeAnalytics` handles two response shapes
+(a flat array of values, and a flat object of parallel arrays) — every other analytics type this
+project has used (`open-interest`, `long-short-ratio`, `long-short-info`, `future-basis`,
+`liquidation-volume`) is one of those two flat shapes. Kraken's real `top-traders` response nests
+its parallel-array object one level deeper, under the single key `top20Percent`. Calling
+`normalizeAnalytics` on a real `top-traders` response, directly verified against the live API before
+this was understood as a bug: every point's `value` silently came back as `{}` — not an error, not
+an empty result, just an empty object at every timestamp, because the un-fixed code filtered
+`Object.entries(result.data)` for array-typed values, found none (the sole entry's value was an
+object, not an array), and produced an empty `series`, while the point-count `length` calculation
+still ran to `timestamp.length` regardless. This would have silently corrupted every use of the
+`top-traders` type with no exception thrown, the kind of failure that is easy to miss precisely
+because it looks like success. Fixed generically in `derivatives.mjs` (unwraps any single-key object
+wrapper whose sole value is itself a non-array object, not hardcoded to the literal string
+`top20Percent`, so it also covers any future Kraken analytics type using the same wrapping
+convention) with a dedicated regression test in `derivatives.test.mjs` asserting the unwrap
+behavior against a shape matching the real response. Confirmed against the live API after the fix:
+`top-traders`' `ratio` field for PF_XBTUSD now decodes correctly (0.49-0.55 across a 10-day spot
+check) — the existing three `derivatives.test.mjs` cases (flat array, flat object, error path) and
+the full 388-test suite stayed green before and after, so no other analytics type's handling
+changed.
+
+**Data-availability check, against the real API.** Both `top-traders` and `long-short-ratio` were
+fetched directly, for the same symbol/window, for all four spot-checked symbols before writing the
+study: 950 days of daily history apiece for PF_XBTUSD/PF_ETHUSD/PF_SOLUSD/PF_XRPUSD (back to
+2024-01-09 — deeper than every prior derivatives study's checked depth), with IDENTICAL daily
+timestamp anchors on both series — no alignment gaps to bridge, no interpolation needed. Both
+values are already the long-side fraction of open positions/accounts (`top-traders`' `ratio` field;
+`long-short-ratio`'s plain decimal value, already validated by LONG-SHORT-RATIO-CONTRARIAN), so
+`divergence = topTradersRatio - aggregateRatio` needed no unit conversion. Spot-checked on
+PF_XBTUSD: top traders read 0.49-0.55 against an aggregate reading 0.54-0.60 on the same 10 days — a
+real, moving spread (aggregate consistently more bullish than the top-20%-by-OI cohort in this
+window), not a constant offset or degenerate series. 28/29 watchlist assets clear the same 500-day
+coverage floor used by every other derivatives study (EOS excluded on the same pre-existing
+candle-history shortfall, not a data-source problem).
+
+**Pre-registered hypothesis and gate mechanism (`top-traders-divergence.mjs`, new module).** The
+task's own framing — "the top-trader side is more predictive" when the two disagree — translates,
+for this project's long-only entry families, into requiring the top-traders cohort to lean MORE
+bullish than the aggregate crowd before allowing an entry: a CONFIRMATION gate (require positive
+divergence), the same shape OPEN-INTEREST-TREND-CONFIRMATION and FUTURES-BASIS-DIRECTIONAL-SIGNAL
+used, and functionally the opposite of LONG-SHORT-RATIO-CONTRARIAN's suppress-on-own-extreme shape.
+Each daily divergence point only becomes visible once its own day has closed (+1 day) — the same
+no-lookahead offset every derivatives-gate module here uses. The threshold is fixed, not a trailing
+average: the 80th percentile of the asset's OWN divergence values within the TRAIN window only
+(never recomputed on holdout), the same "one clean choice, not a threshold grid" convention every
+prior gate study here has used. The gate allows an entry only while the latest revealed divergence
+is at/above that fixed train threshold, applied via `backtest.js`'s existing `entryGate` hook — no
+`backtest.js` changes — to `breakout`'s and `anticipate`'s exact `tournament.mjs` baseline configs,
+unmodified, full 28-asset (of 29) watchlist, corrected real cost basis (FEE_RATE=0.008/side,
+SLIPPAGE_PCT=0.0005/side, ~1.7% round trip). Sealed 70/30 chronological split within each asset's
+divergence-covered window, with the same split-boundary timestamp also bounding the train-only
+divergence values used to fix the threshold — one shared cut, no separate leakage surface.
+
+**Gate (this item's own pre-registered `done_when`, standard three-clause shape):** holdout
+avgR/trade > -0.30 AND holdout trades >= 150 AND holdout positiveAssets/assets >= 0.40, evaluated
+per family.
+
+| Family | Split | Trades | avgR/trade | Positive assets |
+|---|---|---|---|---|
+| breakout | train | 1333 | -0.737 | 0/28 |
+| breakout | holdout | 1145 | -0.961 | 1/27 |
+| anticipate | train | 1940 | -0.806 | 0/28 |
+| anticipate | holdout | 1470 | -0.982 | 0/27 |
+
+**Verdict: TOP-TRADERS-DIVERGENCE FAIL, decisive, both families.** Both holdout trade counts clear
+the >=150 floor comfortably (1145 and 1470 trades — 7.6x and 9.8x the floor), so this is not a
+sample-size non-verdict. Holdout avgR/trade is far past the -0.30 floor for both families (breakout
+-0.961, anticipate -0.982) and matches train's sign and rough magnitude in both cases (train
+-0.737/-0.806 vs holdout -0.961/-0.982) — no train/holdout divergence to explain away. Positive-asset
+fraction is 1/27 and 0/27 holdout, nowhere near the 0.40 floor. The pre-registered confirmation
+hypothesis (requiring top-traders to lean more bullish than the aggregate crowd before entering
+improves forward returns) is not supported: gating on informed-vs-crowd divergence does not rescue
+`breakout`/`anticipate` any more than any other derivatives-based gate tested in this project
+(OPEN-INTEREST-TREND-CONFIRMATION, FUTURES-BASIS-DIRECTIONAL-SIGNAL, LONG-SHORT-RATIO-CONTRARIAN),
+regardless of whether the gate shape was confirmation or contrarian-fade, or whether the information
+source was a single series' own history or a divergence between two series — continued evidence
+that the failure mode is about `breakout`/`anticipate`'s own baseline weakness on this cost basis
+rather than about any of these five derivatives-based information sources carrying no information at
+all. Recorded as VERDICTS.md's `TOP-TRADERS-DIVERGENCE` row and as a decision-journal entry
+(`research-runs/2026-08-15T09-06-22-664Z-top-traders-divergence.json`).

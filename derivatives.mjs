@@ -29,17 +29,32 @@ export function normalizeAnalytics(response) {
   if (!result || !Array.isArray(result.timestamp) || !(Array.isArray(result.data) || (result.data && typeof result.data === "object"))) {
     throw new Error("Unexpected Kraken analytics response: expected result.timestamp and result.data");
   }
-  const series = Array.isArray(result.data)
+  // A few analytics types (e.g. `top-traders`) wrap their parallel-array object one level
+  // deeper under a single cohort key (`{top20Percent: {openInterest:[...], ratio:[...], ...}}`)
+  // instead of exposing the arrays directly like every other type. Unwrap that single wrapper
+  // key so the rest of this function sees the same flat parallel-array shape it already handles
+  // — confirmed against Kraken's real top-traders response, which is otherwise silently
+  // normalized to an empty `{}` value on every point (no series entries survive the
+  // Array.isArray filter below, but the loop still runs to timestamp.length, so this fails
+  // silently rather than throwing).
+  let data = result.data;
+  if (!Array.isArray(data) && data && typeof data === "object") {
+    const entries = Object.entries(data);
+    if (entries.length === 1 && entries[0][1] && typeof entries[0][1] === "object" && !Array.isArray(entries[0][1])) {
+      data = entries[0][1];
+    }
+  }
+  const series = Array.isArray(data)
     ? null
-    : Object.entries(result.data).filter(([, values]) => Array.isArray(values));
+    : Object.entries(data).filter(([, values]) => Array.isArray(values));
   const length = Math.min(result.timestamp.length, series
     ? Math.min(...series.map(([, values]) => values.length))
-    : result.data.length);
+    : data.length);
   const points = [];
   for (let i = 0; i < length; i++) {
     const timestamp = Number(result.timestamp[i]);
     if (!Number.isFinite(timestamp)) continue;
-    const value = series ? Object.fromEntries(series.map(([key, values]) => [key, values[i]])) : result.data[i];
+    const value = series ? Object.fromEntries(series.map(([key, values]) => [key, values[i]])) : data[i];
     points.push({ timestamp, value });
   }
   return { points, more: Boolean(result.more), sourcePoints: length };
