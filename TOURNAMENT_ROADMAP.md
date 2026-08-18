@@ -2229,3 +2229,107 @@ that the failure mode is about `breakout`/`anticipate`'s own baseline weakness o
 rather than about any of these five derivatives-based information sources carrying no information at
 all. Recorded as VERDICTS.md's `TOP-TRADERS-DIVERGENCE` row and as a decision-journal entry
 (`research-runs/2026-08-15T09-06-22-664Z-top-traders-divergence.json`).
+
+---
+
+## 2026-08-18 — ORDER-FLOW-AGGRESSOR-IMBALANCE: aggressor-side trade-flow direction as an entry gate
+
+Picked from the work_queue's derivatives-infra batch. Distinct from the already-FAILED
+VOL-CONFIRM-BREAKOUT (TOURNAMENT_ROADMAP.md, 2026-08-14), which gated `breakout` on raw
+spot-candle VOLUME MAGNITUDE — no directional information, and made results worse than the
+unfiltered baseline. `derivatives.mjs`'s `cvd` and `aggressor-differential` analytics types
+measure aggressive BUY volume vs aggressive SELL volume — real order-flow direction, genuinely
+unavailable from OHLCV candles alone. Per this item's own instruction, the two types are treated
+as ONE information source (two computations of the same aggressor-imbalance concept — cumulative
+running total vs periodic differential), not two independent hypotheses, to avoid inflating this
+project's multiple-comparisons exposure.
+
+**Endpoint shapes verified against a live API probe, not documentation** (this project's standing
+convention — see TOP-TRADERS-DIVERGENCE's endpoint-definition note). Both
+`docs.kraken.com/api/docs/futures-api/charts/analytics` and the `.../market-analytics` variant
+404'd as of this check, so the shapes below come from calling `fetchAnalytics` directly against
+`PF_XBTUSD` before writing any strategy code:
+- `cvd`: `result.data = { buy_volume: [...], sell_volume: [...], cvd: [...] }`. `buy_volume`/
+  `sell_volume` are real per-period trade volume, confirmed query-window-INDEPENDENT (identical
+  value for the same day across two fetches with different `since`). The `cvd` sub-field itself is
+  **not** window-independent — it is a running sum that resets to zero baseline at the query's own
+  `since`: the same day's `cvd` value read `11.47` on a 5-day fetch and `583.84` on a 10-day fetch
+  for the identical timestamp. This project's `fetchAnalytics` always uses one fixed `since` per
+  asset per run (confirmed single-page for the full 900-day window, no pagination observed for any
+  of four sampled symbols), so the raw field would have been internally consistent in practice —
+  but this module deliberately does not rely on it, since it is undocumented API behavior
+  discovered empirically, not a guaranteed contract. Instead it self-computes a running sum from
+  the verified window-independent `buy_volume - sell_volume` primitives.
+- `aggressor-differential`: `result.data = [...]` (flat array). Confirmed query-window-INDEPENDENT.
+  Sign convention read directly off real numbers, not assumed from the field name — generic
+  descriptions of "aggressor differential" suggested a buy-positive convention; the real data says
+  the opposite: `aggressor-differential[i] == -(buy_volume[i] - sell_volume[i])`, i.e. Kraken's raw
+  value is POSITIVE when SELL-side aggression dominates (verified exactly on 5 live sample points).
+  Negated on read to a consistent buy-positive `netBuyPressure` convention used throughout.
+
+**Data-availability check performed directly against the real API before writing this module.**
+Both `cvd` and `aggressor-differential` reach back to 2024-02-28 for PF_XBTUSD/PF_ETHUSD/
+PF_SOLUSD/PF_XRPUSD alike — the same start date and underlying endpoint family as
+OPEN-INTEREST-TREND-CONFIRMATION's `open-interest` and LIQUIDATION-CASCADE-REVERSAL's
+`liquidation-volume` checks, single page for the full 900-day window (no pagination observed for
+any sampled symbol). Coverage is gated on the same candle-history floor as every other derivatives
+study: 28/29 watchlist assets clear it (EOS excluded on its pre-existing candle-history shortfall,
+not an order-flow-availability problem).
+
+**Two formulations, best-on-train selection (`order-flow-aggressor-imbalance.mjs`, new module).**
+Matching the task's own "cumulative running total vs periodic differential" framing:
+- `periodic`: `aggressor-differential`'s own per-period `netBuyPressure`, gated at/above its own
+  TRAIN-fixed 80th percentile — the same confirmation shape TOP-TRADERS-DIVERGENCE/
+  LONG-SHORT-RATIO-CONTRARIAN use.
+- `cumulative`: the self-computed running sum of `buy_volume - sell_volume`, gated above its own
+  N=7-bar trailing average (current point excluded from its own average) — the same trend shape
+  OI-TREND-GATE's `makeOiRisingAt` uses, N=7 reused unmodified as one disclosed choice, not a
+  parameter sweep.
+
+Both formulations cross-checked against each other on the real API: for the same day,
+`aggressor-differential`'s raw value equals `-(buy_volume - sell_volume)` from `cvd` exactly,
+confirming the two endpoints measure the same underlying per-period flow, as the task's framing
+assumes. Both are scored on TRAIN ONLY, **per family** (`breakout`/`anticipate` independently,
+since each family's optimal filter mechanism can differ — every prior study in this series
+selects/reports per family, not globally); only the best-on-train formulation per family (highest
+train avgR/trade among those with >=1 train trade) has its holdout ever computed, evaluated
+exactly once — the same selection discipline LIQUIDATION-CASCADE-REVERSAL used across its own
+three candidate multipliers. Each daily point only becomes visible once its own day has closed
+(+1 day) — this codebase's standard no-lookahead offset. `breakout`/`anticipate` baseline configs
+reused unmodified from `tournament.mjs`; corrected real cost basis (FEE_RATE=0.008/side,
+SLIPPAGE_PCT=0.0005/side, ~1.7% round trip). Sealed 70/30 chronological split within the
+INTERSECTION of both formulations' covered windows (not either series' own full window), so the
+train-only formulation comparison runs on an identical candle universe for both candidates.
+
+**Gate (this item's own pre-registered `done_when`, standard three-clause shape):** holdout
+avgR/trade > -0.30 AND holdout trades >= 150 AND holdout positiveAssets/assets >= 0.40, evaluated
+per family, on the best-on-train formulation only.
+
+| Family | Candidate | Split | Trades | avgR/trade | Positive assets |
+|---|---|---|---|---|---|
+| breakout | periodic | train | 1471 | -0.790 | 0/28 |
+| breakout | cumulative | train | 999 | -0.819 | 1/28 |
+| breakout | **periodic (selected)** | **holdout** | **751** | **-0.896** | **2/28** |
+| anticipate | periodic | train | 1725 | -0.818 | 0/28 |
+| anticipate | cumulative | train | 1157 | -0.851 | 0/28 |
+| anticipate | **periodic (selected)** | **holdout** | **822** | **-0.964** | **1/27** |
+
+**Verdict: ORDER-FLOW-AGGRESSOR-IMBALANCE FAIL, decisive, both families.** `periodic` won the
+best-on-train selection for both families, though by a small margin — both candidates were
+decisively negative on train in both cases (breakout -0.790 vs -0.819; anticipate -0.818 vs
+-0.851), so this was not a case of one formulation looking promising and the other not. Both
+holdout trade counts clear the >=150 floor comfortably (751 and 822 trades — 5.0x and 5.5x the
+floor), so this is not a sample-size non-verdict. Holdout avgR/trade is far past the -0.30 floor
+for both families (breakout -0.896, anticipate -0.964) and matches train's sign and rough
+magnitude in both cases — no train/holdout divergence to explain away. Positive-asset fraction is
+2/28 and 1/27 holdout, nowhere near the 0.40 floor. Genuine aggressor-side trade-flow direction,
+unlike raw volume magnitude (VOL-CONFIRM-BREAKOUT), still does not rescue `breakout`/`anticipate`
+— both formulations of the same underlying signal fail in the same direction and magnitude as
+every other derivatives-based gate tested in this project (OPEN-INTEREST-TREND-CONFIRMATION,
+FUTURES-BASIS-DIRECTIONAL-SIGNAL, LONG-SHORT-RATIO-CONTRARIAN, TOP-TRADERS-DIVERGENCE), regardless
+of whether the information source is positioning, pricing, forced-flow events, or now executed
+trade direction — continued evidence that the failure mode is about `breakout`/`anticipate`'s own
+baseline weakness on this cost basis rather than about any of these six derivatives-based
+information sources carrying no information at all. Recorded as VERDICTS.md's
+`ORDER-FLOW-AGGRESSOR-IMBALANCE` row and as a decision-journal entry
+(`research-runs/2026-08-18T18-26-39-898Z-order-flow-aggressor-imbalance.json`).
