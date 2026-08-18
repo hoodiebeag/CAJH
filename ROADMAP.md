@@ -1566,3 +1566,115 @@ gated horizons, not an overwrite).
 **Survivorship caveat (mandatory, applies here too):** the universe is survivors-only; this
 weakens any positive result and makes the present nulls, if anything, conservative evidence
 against a robust short-horizon edge rather than for one.
+
+## 2026-08-18 — SEASONALITY-DAYOFWEEK-SESSION: descriptive day/session breakdown, no cell
+rescues the baseline (exploratory, not gated)
+
+Genuinely untested axis — zero prior mention anywhere in this project's research record —
+and unlike every other item worked from the current work_queue batch, this one needs no new
+data source or account access at all: every input (candle timestamps) already exists in
+every study run to date. Two related sub-hypotheses, computed together since they reuse the
+same per-trade timestamps: (a) day-of-week effects on `breakout`/`anticipate` holdout
+performance (crypto trades 24/7, but liquidity/participation still clusters around TradFi
+trading days); (b) session-based effects (Asian/European/US UTC windows). This item is
+explicitly descriptive/exploratory by its own task wording — there is no single pre-existing
+gate for "is Tuesday better than Thursday" — so the deliverable is the full breakdown table
+below, every cell reported, not a pass/fail row. **No cell here is a promotable result on its
+own:** slicing seven ways (or three) and then picking the best-looking cell is
+multiple-comparisons p-hacking almost by construction; any cell that looks strong would need
+its own fresh pre-registration on new, non-overlapping data before it could be treated as a
+finding.
+
+**Design.** Session buckets: one disclosed, non-overlapping 8-hour UTC partition — asian
+00:00-08:00, european 08:00-16:00, us 16:00-24:00 (real sessions overlap; a clean partition
+keeps every trade in exactly one cell rather than making an arbitrary double-counting choice).
+Day-of-week: UTC calendar day of the entry-decision candle's open. Reported as two separate
+1-D breakdowns per family (7 day cells + 3 session cells), not a combined 7x3 cross table —
+the task's own framing treats day and session as two distinct slicing axes on the same trades,
+and crossing them would fragment an already-modest per-cell trade count for a hypothesis this
+item never actually asked about. Same `breakout`/`anticipate` baseline configs as every other
+verdict in this series (`tournament.mjs`'s `families` table, unmodified), same 70/30
+chronological holdout split fraction as the rest of this study series — but no external data
+source here, so (unlike every derivatives-analytics study) there is no coverage-window
+intersection step first; the split is just each asset's own trailing 30% of local candle
+history. Holdout only, per this item's own task wording ("Apply to breakout/anticipate holdout
+performance").
+
+**A genuine engineering finding surfaced while building this, not just the eventual numbers:**
+`backtestMultiTF`'s `results` array carries only raw per-trade R values, no timestamp — so
+entry times were recovered via a new instrumentation technique (an `entryGate` callback that
+always returns `true`, a byte-identical no-op vs. the ungated baseline, which records `tClose`
+as a side effect; `backtest.js`'s two `entryGate` call sites are each the LAST condition
+checked before an entry is marked "taken," and only one position is ever open at a time, so
+each recorded call maps 1:1 to an eventual trade, in order). The module's own length-mismatch
+assertion caught a real discrepancy on the first live run against real data (57 recorded
+entry times vs. 56 trades for one asset/family): a position opened near the very end of the
+holdout window can still be open, unresolved, when the candle series ends —
+`backtestMultiTF` correctly drops an unresolved position from `results` rather than marking it
+to market, but the entry-time recorder had already logged it. Fixed by trimming at most one
+trailing orphaned time (the only case possible, since only one position is ever open at once);
+the test suite's bucket-sum-equals-total-trades check now passes and stays in place as a
+standing invariant, not just a one-time fix.
+
+**Coverage:** 28/29 watchlist assets (EOS excluded on the same pre-existing candle-history
+shortfall every other study in this series hits).
+
+**Result — `breakout` (holdout, pooled across 28 assets: 3,156 trades, avgR -0.864, totalR
+-2,726.65):**
+
+| Day (UTC) | trades | avgR | totalR |
+|---|---:|---:|---:|
+| Sun | 407 | -0.999 | -406.76 |
+| Mon | 592 | -1.100 | -651.04 |
+| Tue | 469 | -0.758 | -355.54 |
+| Wed | 501 | -0.832 | -416.86 |
+| Thu | 380 | -0.821 | -311.84 |
+| Fri | 476 | -0.569 | -270.70 |
+| Sat | 331 | -0.948 | -313.92 |
+
+| Session (UTC) | trades | avgR | totalR |
+|---|---:|---:|---:|
+| Asian (00-08) | 898 | -0.922 | -827.98 |
+| European (08-16) | 1237 | -0.780 | -964.51 |
+| US (16-24) | 1021 | -0.915 | -934.16 |
+
+**Result — `anticipate` (holdout, pooled across 28 assets: 3,966 trades, avgR -0.884, totalR
+-3,506.77):**
+
+| Day (UTC) | trades | avgR | totalR |
+|---|---:|---:|---:|
+| Sun | 437 | -0.772 | -337.47 |
+| Mon | 640 | -0.990 | -633.79 |
+| Tue | 634 | -0.840 | -532.51 |
+| Wed | 571 | -1.024 | -584.86 |
+| Thu | 726 | -0.905 | -657.10 |
+| Fri | 612 | -0.871 | -532.88 |
+| Sat | 346 | -0.659 | -228.16 |
+
+| Session (UTC) | trades | avgR | totalR |
+|---|---:|---:|---:|
+| Asian (00-08) | 1113 | -1.000 | -1113.51 |
+| European (08-16) | 1259 | -0.928 | -1167.94 |
+| US (16-24) | 1594 | -0.769 | -1225.32 |
+
+**Reading the table (descriptively — this is not a gate).** Every single cell in both
+families, across both axes, is deeply net-negative (avgR roughly -0.57 to -1.10), the same
+neighborhood as this baseline's already-established unfiltered holdout performance in sibling
+studies (e.g. ROLLING-VOLATILITY-REGIME-TIMING's four cells ranged -0.815 to -1.037 with the
+same baseline configs). No day or session comes remotely close to breakeven, let alone
+positive — the least-bad cells are breakout/Friday (-0.569) and anticipate/Saturday (-0.659)
+on the day axis, and breakout/European (-0.780) and anticipate/US (-0.769) on the session
+axis, but "least negative of several very negative options" is not evidence of a real day/
+session effect on its own, and per this item's own pre-registration none of these cells is
+being promoted to a follow-up hypothesis. The honest reading: this baseline's lack of edge is
+uniform across the calendar, not concentrated in (or hidden by) any particular day or trading
+session — day-of-week and session do not appear to be a lever worth pursuing further for this
+signal family, on this data.
+
+**Survivorship caveat (mandatory, applies here too):** the universe is survivors-only; this
+weakens any positive result and, since every cell here is negative rather than positive,
+doesn't materially change the reading.
+
+Full run output: `research-runs/2026-08-18T20-08-01-299Z-seasonality-dayofweek-session.json`
+(code revision, per-asset trade counts, and coverage detail in the run's own provenance
+block).
