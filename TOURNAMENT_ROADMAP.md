@@ -2333,3 +2333,87 @@ baseline weakness on this cost basis rather than about any of these six derivati
 information sources carrying no information at all. Recorded as VERDICTS.md's
 `ORDER-FLOW-AGGRESSOR-IMBALANCE` row and as a decision-journal entry
 (`research-runs/2026-08-18T18-26-39-898Z-order-flow-aggressor-imbalance.json`).
+
+## 2026-08-18 — ROLLING-VOLATILITY-REGIME-TIMING: realized-volatility regime as an entry-timing filter
+
+Picked from the work_queue's derivatives-infra batch (next pending item after
+ORDER-FLOW-AGGRESSOR-IMBALANCE closed). Distinct from ATR-ADAPTIVE-STOP-CONFIRMATORY (already
+FAIL, TOURNAMENT_ROADMAP.md 2026-08-14 — sized the STOP DISTANCE by a candle-derived ATR proxy)
+and T2-VOLCONTRACTION (already FAIL — an ATR-compression ENTRY TRIGGER, also candle-derived).
+This tests realized-volatility REGIME as an entry-timing FILTER on the existing
+`breakout`/`anticipate` signal, using `derivatives.mjs`'s `rolling-volatility` analytics type
+(Kraken's own annualized realized-vol feed) for the first time in a sealed-holdout study — a
+genuinely different (if related) volatility measurement than a candle-derived ATR proxy, and a
+FILTER mechanism rather than a stop-sizing or entry-trigger one.
+
+**Endpoint shape verified against a live API probe, not documentation** (this project's standing
+convention — the docs.kraken.com analytics pages have 404'd on every prior check this project has
+made). Calling `fetchAnalytics` directly against `PF_XBTUSD` before writing any strategy code:
+`result.data = [...]` — a flat array of numeric-string annualized-vol percentages (e.g.
+`"22.11"`), already the shape `normalizeAnalytics` handles for every non-wrapped type, no unwrap
+needed. Confirmed query-window-INDEPENDENT: fetching the same trailing window at two different
+widths (5-day vs 10-day, both ending "now") returned an *identical* value for the shared
+timestamp `1786579200` (`"22.11"` both times) — unlike `cvd`'s raw field (see
+ORDER-FLOW-AGGRESSOR-IMBALANCE above), so no self-computation workaround was needed here; the raw
+field is used directly.
+
+**Data-availability check performed directly against the real API before writing this module.**
+`rolling-volatility` reaches back to 2024-03-01 for PF_XBTUSD/PF_ETHUSD/PF_SOLUSD/PF_XRPUSD alike
+(901 daily points for a 900-day window, single page, no pagination observed for any sampled
+symbol) — the same start-date depth as every other derivatives study's checked family. Coverage
+gated on the same candle-history floor as every other derivatives study: 28/29 watchlist assets
+clear it (EOS excluded on its pre-existing candle-history shortfall, not a vol-data-availability
+problem).
+
+**Two directions, BOTH pre-registered together — no train-based selection step**
+(`rolling-volatility-regime-timing.mjs`, new module). This item's own task explicitly said "test
+both directions... not picked from train results," which is a genuinely different discipline from
+every prior gate study in this series (all of which score multiple candidates on train and only
+compute holdout for the best-on-train winner): here, both `expanding` (current
+rolling-volatility above its own N=7-day trailing average — a "vol is rising" regime) and
+`contracting` (current below its own trailing average — a "vol is falling" regime) get their own
+independent train AND holdout evaluation, gated separately, no selection step to skip either one.
+The two are mutually exclusive by construction (current cannot simultaneously exceed and fall
+below the same trailing average) — confirmed empirically in this module's own test suite: a
+monotonically rising synthetic vol series produces `expanding` trades that dominate `contracting`
+trades by a wide margin, and a flat series produces zero trades for both directions
+simultaneously. N=7 trailing days reused unmodified — the same single disclosed window
+OI-TREND-GATE's `makeOiRisingAt` and ORDER-FLOW-AGGRESSOR-IMBALANCE's `cumulative` formulation
+both use, one pre-registered choice, not a parameter sweep. Current point excluded from its own
+trailing average (no self-inclusion bias); each daily point only becomes visible once its own day
+has closed (+1 day), this codebase's standard no-lookahead offset. `breakout`/`anticipate`
+baseline configs reused unmodified from `tournament.mjs`; corrected real cost basis
+(FEE_RATE=0.008/side, SLIPPAGE_PCT=0.0005/side, ~1.7% round trip). Sealed 70/30 chronological
+split within the vol-covered window (same `windowedSplit` technique OI-TREND-GATE uses).
+
+**Gate (this item's own pre-registered `done_when`, standard three-clause shape, evaluated
+independently for both directions):** holdout avgR/trade > -0.30 AND holdout trades >= 150 AND
+holdout positiveAssets/assets >= 0.40.
+
+| Family | Direction | Split | Trades | avgR/trade | Positive assets |
+|---|---|---|---|---|---|
+| breakout | expanding | train | 2813 | -0.807 | 0/28 |
+| breakout | expanding | **holdout** | **967** | **-0.970** | **0/28** |
+| breakout | contracting | train | 2878 | -0.774 | 0/28 |
+| breakout | contracting | **holdout** | **1300** | **-0.978** | **0/27** |
+| anticipate | expanding | train | 4511 | -0.757 | 0/28 |
+| anticipate | expanding | **holdout** | **1587** | **-1.037** | **0/27** |
+| anticipate | contracting | train | 3449 | -0.817 | 0/28 |
+| anticipate | contracting | **holdout** | **1238** | **-0.815** | **1/27** |
+
+**Verdict: ROLLING-VOLATILITY-REGIME-TIMING FAIL, decisive, all four family/direction
+combinations.** Every holdout trade count clears the >=150 floor comfortably (967-1587 trades,
+6.4x-10.6x the floor), so none of the four are sample-size non-verdicts. Every holdout avgR/trade
+is far past the -0.30 floor (-0.815 to -1.037) and matches its own train split's sign and rough
+magnitude — no train/holdout divergence to explain away for any combination. Positive-asset
+fraction is 0/28, 0/27, 0/27, and 1/27 across the four combinations, nowhere near the 0.40 floor.
+Realized-volatility regime, tested in both directions exactly as pre-registered rather than
+cherry-picking the better-looking one after the fact, does not rescue `breakout`/`anticipate` any
+more than any other derivatives-based gate tested in this project (OPEN-INTEREST-TREND-
+CONFIRMATION, FUTURES-BASIS-DIRECTIONAL-SIGNAL, LONG-SHORT-RATIO-CONTRARIAN,
+TOP-TRADERS-DIVERGENCE, ORDER-FLOW-AGGRESSOR-IMBALANCE) — continued evidence that the failure mode
+is about `breakout`/`anticipate`'s own baseline weakness on this cost basis, not about any
+particular derivatives-based information source (or its timing/confirmation/regime framing)
+carrying no information at all. Recorded as VERDICTS.md's `ROLLING-VOLATILITY-REGIME-TIMING` row
+and as a decision-journal entry
+(`research-runs/2026-08-18T19-04-49-763Z-rolling-volatility-regime-timing.json`).
