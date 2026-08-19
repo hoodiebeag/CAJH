@@ -4,10 +4,10 @@
   "status": "IDLE",
   "target_file": null,
   "objective": null,
-  "notes": "MULTIPLE-COMPARISONS-AUDIT closed this firing: new MULTIPLE_COMPARISONS_AUDIT.md enumerates all 45 studies to date (corrects the stale roughly-14 premise), computes real FWER (0.370, k=9) and BH-FDR (q=0.05) for the 9 formal NHST sub-tests -- Classifier P5 p=0.0198 does not survive family BH-FDR correction, no verdict changed since P5 was already KILLED on the independent economic clause. Identifies SEALED_SYMBOLS (AVAX/LINK/NEAR/SUI/UNI) as the one never-examined holdout resource and retires the 2025-06-01-present calendar window (~27 uses) as a fresh judge. Binding rule written into AGENT_PROTOCOL.md new Multiple-comparisons discipline section, pointer added in TOURNAMENT_ROADMAP.md Honest Baseline First. No strategy code touched (bot.js/monitor.js/trader.js untouched), pre-commit hook did not fire, npm.cmd test green (447/447/0/0) before commit. Commit 433f66b, pushed.",
+  "notes": "PAIRS-COINTEGRATION-STATARB closed this firing: new pairs-cointegration.mjs implements a two-step Engle-Granger cointegration test (OLS regression + ADF-style regression on the residual spread) across every active-watchlist pair (SEALED_SYMBOLS excluded), significance via a block-permutation null (this project own convention, no fabricated asymptotic critical-value table). Pre-registered BH-FDR q=0.05 correction applied across the 105 pairs that actually cleared the >=500-day overlap-history gate (of 276 nominal active pairs; the task assumed a stale 28-asset/378 count, watchlist has since grown to 29/24-active) -- result: 0/105 survive correction (best raw p=0.0050 corrects to q=0.1741), verdict NO-COINTEGRATED-PAIRS, holdout economic gate (avgNetR>0 AND trades>=10, cost on both legs) pre-registered but never reached. No-short-access and calendar-holdout disclosures included per AGENT_PROTOCOL.md Multiple-comparisons discipline. Updated MULTIPLE_COMPARISONS_AUDIT.md study count 45->46 and non-verdict bucket 5->6 (with a note distinguishing this screen-gate non-verdict from the other five data-gate ones); AGENT_PROTOCOL.md two tracked family counters left unchanged, explained why. Also corrected VERDICTS.md bottom-line sentence that called grid.mjs \"the one market-neutral mechanism tested to date\" (now two, both net-negative/non-existent). 14 new tests, 461/461 project tests green. No strategy code touched (bot.js/monitor.js/trader.js untouched), pre-commit hook did not fire. Commit 9e0f437, pushed.",
   "block_detail": null,
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-08-19T16:11:57.231Z"
+  "updated_at": "2026-08-19T17:20:00.000Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -374,7 +374,7 @@
    },
    {
     "id": "PAIRS-COINTEGRATION-STATARB",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: cointegration/pairs module (additive), reuses the existing candle panel",
     "depends_on": [],
@@ -532,14 +532,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-08T14:20:00.000Z",
-   "agent": "cajh-loop-check",
-   "action": "no_op_check",
-   "detail": "Queue still genuinely empty: 0/23 pending, control IDLE, HEAD unchanged (afa7918) since the prior firing's identical no_op_check - confirmed via `git log afa7918..HEAD` (zero commits) and `git pull --rebase` (already up to date, no foreign changes to skim). Restock re-verified independently, not rubber-stamped: grepped ROADMAP.md for VERDICT/PASS patterns (zero matches) and TOURNAMENT_ROADMAP.md for Combined/Overall verdict lines (zero matches - only isolated gate-clause PASSes exist); FOLLOWON_SPECS.md Part A confirmed still gated on \"momentum sec6 = pass\" (KILLED). No code changed this firing, so npm.cmd test was not re-run. empty-queue notification deduped (last sent 2026-08-08T12:55:00.000Z, ~1.4h elapsed, well within 6h window) - not resent.",
-   "commit": null,
-   "tests": "230/230 pass (unchanged, not re-run this firing)"
-  },
   {
    "ts": "2026-08-08T14:31:08.000Z",
    "agent": "cajh-loop-check",
@@ -1327,6 +1319,14 @@
    "detail": "Wrote MULTIPLE_COMPARISONS_AUDIT.md (full study inventory: 45 total vs the stale roughly-14 estimate; FWER=0.370 and BH-FDR q=0.05 computed over the 9 formal-significance sub-tests, Classifier P5 does not survive family correction but no verdict changes since it was already KILLED on its economic clause; SEALED_SYMBOLS identified as the one genuinely unused holdout resource; calendar holdout 2025-06-01-present retired as fresh for the active watchlist, ~27 prior uses). Added binding Multiple-comparisons discipline section to AGENT_PROTOCOL.md (family-size counters, BH-FDR recompute rule for new NHST results, SEALED_SYMBOLS replication requirement for new gate PASSes). Added pointer in TOURNAMENT_ROADMAP.md Honest Baseline First. No strategy code touched.",
    "commit": "433f66b",
    "tests": "447/447/0/0 green before commit"
+  },
+  {
+   "ts": "2026-08-19T17:20:00.000Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "PAIRS-COINTEGRATION-STATARB closed",
+   "detail": "New pairs-cointegration.mjs: Engle-Granger cointegration screen (block-permutation p-values) over 105 active-watchlist pairs clearing the overlap-history gate, BH-FDR q=0.05 pre-registered. 0/105 survive (best q=0.1741) -> NO-COINTEGRATED-PAIRS, holdout gate never reached. VERDICTS.md/AGENT_PROTOCOL.md/MULTIPLE_COMPARISONS_AUDIT.md updated. 461/461 tests green.",
+   "commit": "9e0f437",
+   "tests": "461/461"
   }
  ],
  "automation": {
