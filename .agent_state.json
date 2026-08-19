@@ -362,6 +362,86 @@
     "done_when": "The chosen delayed-data policy is stated in the module's header comment alongside the existing verified-against-source notes, and asserted by a test that emits only field 68 and checks the documented outcome (marked-delayed resolve, or a fast explicit rejection - not a timeout). A test asserts cancelMktData is called exactly once on each of the three terminal paths: success, request-scoped fatal error, and timeout. If the marked-delayed option is taken, the returned shape's extra field is documented in brokers/interface.md, since every adapter shares that contract. npm.cmd test green."
    },
    {
+    "id": "MULTIPLE-COMPARISONS-AUDIT",
+    "state": "pending",
+    "owner": "executor",
+    "file": "new: meta-analysis report (additive) - no strategy code",
+    "depends_on": [],
+    "note": "HIGHEST PRIORITY of this batch, and the reason it is first: this is the item that tells you whether any future PASS can be believed. Not a new hypothesis - a correction to how every existing and future verdict is read.",
+    "task": "This project has now run roughly 14 pre-registered studies (VERDICTS.md: 6 FAIL, 7 KILLED, 1 DATA-GATED, zero PASS) plus several descriptive breakdowns, largely against the SAME holdout window and the same watchlist. That is a multiple-comparisons problem nobody has quantified: with k independent tests at alpha=0.05, the probability of at least one false positive is 1-(0.95^k), which at k=14 is about 51 percent. The implication is uncomfortable and needs stating plainly - if a future study finally PASSES, the base rate says it is roughly a coin flip whether that is signal or the accumulated look-elsewhere effect. Enumerate every study run to date from VERDICTS.md, ROADMAP.md and TOURNAMENT_ROADMAP.md (count them honestly, including descriptive ones that had no formal gate, and note which reused the same holdout). Compute the family-wise error rate and a Benjamini-Hochberg FDR threshold for the set. State what alpha a NEW study would have to clear to be credible given everything already tested. Do not retroactively change any recorded verdict.",
+    "done_when": "A table of every study with its verdict, holdout window, and whether that window overlapped prior studies. FWER and BH-FDR computed and stated. A concrete, pre-registered significance threshold recommended for all future studies, written into AGENT_PROTOCOL.md or TOURNAMENT_ROADMAP.md so it binds subsequent work rather than sitting in a report. An explicit statement of how many genuinely independent holdout windows remain unused. npm.cmd test green."
+   },
+   {
+    "id": "CROSS-ASSET-LEAD-LAG",
+    "state": "pending",
+    "owner": "executor",
+    "file": "new: lead-lag study (additive), reuses existing candle panel",
+    "depends_on": [],
+    "note": "Runs from local candle history only - no external egress needed. Genuinely untouched: DISPERSION-CORRELATION-REGIME-GATE measures the LEVEL of correlation, never its direction in time.",
+    "task": "Never tested here in any form. Hypothesis: BTC (and possibly ETH) moves lead altcoin moves by a short, exploitable lag, so a breakout/anticipate entry on an alt is more likely to follow through when the majors already moved in the same direction over the preceding N bars. Compute lagged cross-correlation between BTC returns and each alt's returns at lags 1..6 bars on the train window, identify whether a consistent positive lead exists and at what lag, fix that lag and a threshold on train, then apply as a confirmation gate. Distinct from every prior study: this is directional causality in time, not contemporaneous correlation level (DISPERSION), not a market-wide regime switch (T3-REGIMEFILTER, which was a BTC 200d-SMA level gate, not a lag relationship). Be honest about the obvious failure mode: if the best lag is 0 bars, there is nothing tradeable and that is the finding.",
+    "done_when": "Pre-register the direction and threshold on train ONLY, then evaluate the sealed holdout exactly once. Gate: holdout avgR/trade > -0.30, trades >= 150, positiveAssets/assets >= 0.40. Never relax a gate after seeing results, never cherry-pick assets, never re-tune exits on the existing negative-EV families (this is a signal-absence problem, per the standing rule). Record in VERDICTS.md and TOURNAMENT_ROADMAP.md whether it passes or fails. Additionally: report the fitted lag per asset and state explicitly if the modal best lag is 0 (no exploitable lead)."
+   },
+   {
+    "id": "STABLECOIN-PREMIUM-RISK-GATE",
+    "state": "pending",
+    "owner": "executor",
+    "file": "new: stablecoin-premium study (additive), USDT/USD + USDC/USD candles from Kraken spot",
+    "depends_on": [],
+    "note": "Runs from local candle history only - no external egress needed. Uses the same Kraken spot OHLC path the project already relies on - no new API surface, just pairs never fetched before.",
+    "task": "Never touched. Crypto-native risk indicator with no equity analogue: when USDT or USDC trades at a discount to USD on-exchange, it typically signals stress/deleveraging, and when at a premium it can signal capital rotating into crypto. Hypothesis: breakout/anticipate entries taken while the stablecoin complex is at a discount below a train-fixed threshold fail more often, so suppressing them improves avgR. Fetch USDT/USD and USDC/USD spot OHLC via the existing fetchOHLC path, build a daily premium/discount series (deviation from 1.0), fix the threshold and direction on train, evaluate holdout once. Distinct from ONCHAIN-FLOW-GATE (wallet movement, data-gated) and from every funding/basis study (derivatives positioning, not spot dollar-peg stress). Check data availability first: confirm both pairs return usable history covering the train+holdout window before writing any strategy code.",
+    "done_when": "Pre-register the direction and threshold on train ONLY, then evaluate the sealed holdout exactly once. Gate: holdout avgR/trade > -0.30, trades >= 150, positiveAssets/assets >= 0.40. Never relax a gate after seeing results, never cherry-pick assets, never re-tune exits on the existing negative-EV families (this is a signal-absence problem, per the standing rule). Record in VERDICTS.md and TOURNAMENT_ROADMAP.md whether it passes or fails. Coverage of both stablecoin pairs across train+holdout confirmed before any gate is fitted; if either is too short, say so and scope to the one that is sufficient rather than silently dropping it."
+   },
+   {
+    "id": "SIGNAL-DECAY-TEMPORAL-STABILITY",
+    "state": "pending",
+    "owner": "executor",
+    "file": "new: temporal-stability diagnostic (additive), reuses existing backtest output",
+    "depends_on": [],
+    "note": "Runs from local candle history only - no external egress needed. Diagnostic, not a new signal - it asks whether the BASELINE itself is stationary, which every prior study assumed without checking.",
+    "task": "Never checked. Every study here compares a gated variant against a fixed baseline avgR, implicitly assuming that baseline is stationary across the sample. If the underlying edge (or anti-edge) drifts - for example if breakout was mildly profitable in early history and sharply negative later, or vice versa - then a single pooled avgR hides it, and both the train-fitted thresholds and the holdout comparison are measuring a moving target. Split the full history into consecutive equal-length epochs (at least 4), compute baseline avgR per family per epoch, and test whether the differences are larger than sampling noise. This is descriptive: no gate, no VERDICTS.md row. Report every epoch including flat ones. If the baseline IS non-stationary, that is a methodological finding affecting the interpretation of all 14 prior verdicts and must be stated as such in ROADMAP.md.",
+    "done_when": "Per-epoch baseline avgR table for breakout and anticipate, with trade counts, and an explicit stationarity call with its test statistic. Recorded in ROADMAP.md. If non-stationary, an explicit note on what that implies for prior verdicts - do not retroactively rewrite them. npm.cmd test green."
+   },
+   {
+    "id": "MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC",
+    "state": "pending",
+    "owner": "executor",
+    "file": "new: excursion diagnostic (additive), instruments existing backtest path",
+    "depends_on": [],
+    "note": "Runs from local candle history only - no external egress needed. DIAGNOSTIC ONLY. Explicitly does NOT re-tune exits - that is a standing prohibition. It measures where stops sit relative to actual adverse excursion and reports it.",
+    "task": "Never measured. For every trade the backtest generates, record maximum adverse excursion (worst unrealized R before exit) and maximum favorable excursion (best unrealized R before exit). This answers a question the project has never asked: are losing trades being stopped out just before reverting, or do they run straight to the stop and beyond? The two cases have opposite implications and are currently indistinguishable in the aggregate avgR. CRITICAL SCOPE LIMIT, stated because the temptation is obvious: this item MUST NOT change any stop or target parameter, and must not recommend a specific replacement value. The standing rule that exits are not to be re-tuned on negative-EV families holds; producing a distribution that would make a re-tune look attractive is exactly the p-hacking this project has avoided. Report the distributions and stop there.",
+    "done_when": "MAE/MFE distributions per family, split by winners and losers, recorded in ROADMAP.md with the trade counts. An explicit statement of which of the two failure shapes dominates. NO parameter change in any file, and no recommended replacement value. npm.cmd test green."
+   },
+   {
+    "id": "TRADE-SIZE-CONCENTRATION",
+    "state": "pending",
+    "owner": "executor",
+    "file": "new: large-trade concentration study, derivatives.mjs trade-volume + trade-count analytics",
+    "depends_on": [],
+    "note": "Needs futures.kraken.com egress via derivatives.mjs; run the data-availability and history-depth check FIRST and record an honest non-verdict if the window is too short. Distinct from ORDER-FLOW-AGGRESSOR-IMBALANCE, which measured trade DIRECTION; this measures trade SIZE distribution.",
+    "task": "Never tested. Average trade size (trade-volume divided by trade-count, both already available from derivatives.mjs fetchAnalytics) is a proxy for whether flow is dominated by large participants or retail-sized orders. Hypothesis: breakouts occurring while average trade size is elevated relative to its own trailing average are more likely to be institutionally driven and follow through, versus breakouts into retail-sized flow that fail. Derive the ratio series, fix a train threshold, apply as a confirmation gate on breakout/anticipate. Verify both analytics types return window-independent values before using them - the CVD study already found one Kraken field whose value depends on the query window, so check rather than assume.",
+    "done_when": "Pre-register the direction and threshold on train ONLY, then evaluate the sealed holdout exactly once. Gate: holdout avgR/trade > -0.30, trades >= 150, positiveAssets/assets >= 0.40. Never relax a gate after seeing results, never cherry-pick assets, never re-tune exits on the existing negative-EV families (this is a signal-absence problem, per the standing rule). Record in VERDICTS.md and TOURNAMENT_ROADMAP.md whether it passes or fails. Window-independence of both series verified explicitly against a live probe (fetch the same timestamp in two different query windows and compare) before any gate is fitted."
+   },
+   {
+    "id": "SPREAD-REGIME-RISK-GATE",
+    "state": "pending",
+    "owner": "executor",
+    "file": "new: spread-regime study, derivatives.mjs 'spreads' analytics",
+    "depends_on": [],
+    "note": "Needs futures.kraken.com egress via derivatives.mjs; run the data-availability and history-depth check FIRST and record an honest non-verdict if the window is too short. Distinct from ORDERBOOK-IMBALANCE-DEPTH, which measures resting DEPTH imbalance; this measures the width of the touch as a stress indicator.",
+    "task": "Never tested. Bid-ask spread widening is a classic liquidity-stress signal. Hypothesis: entries taken while the spread is wide relative to its own trailing norm perform worse, both because execution is worse and because wide spreads mark disorderly conditions where breakouts fail. Apply as a suppression gate: skip entries when the normalized spread exceeds a train-fixed percentile of its own history. This has a second, independent value beyond the gate: it produces a real per-asset spread series that can be checked against the flat slippage assumption the cost model currently uses, so report that comparison even if the gate fails.",
+    "done_when": "Pre-register the direction and threshold on train ONLY, then evaluate the sealed holdout exactly once. Gate: holdout avgR/trade > -0.30, trades >= 150, positiveAssets/assets >= 0.40. Never relax a gate after seeing results, never cherry-pick assets, never re-tune exits on the existing negative-EV families (this is a signal-absence problem, per the standing rule). Record in VERDICTS.md and TOURNAMENT_ROADMAP.md whether it passes or fails. Plus: report measured spread versus the cost model's assumed per-side slippage per asset, and flag any asset where the real spread materially exceeds it, regardless of whether the gate passes."
+   },
+   {
+    "id": "FUNDING-BASIS-DISLOCATION",
+    "state": "pending",
+    "owner": "executor",
+    "file": "new: carry-dislocation study, derivatives.mjs 'funding' + 'future-basis' analytics",
+    "depends_on": [],
+    "note": "Needs futures.kraken.com egress via derivatives.mjs; run the data-availability and history-depth check FIRST and record an honest non-verdict if the window is too short. Both inputs were used SEPARATELY in prior studies (TEST3-FUNDING-MEANREV, FUTURES-BASIS-DIRECTIONAL-SIGNAL, both FAIL); their SPREAD has never been examined.",
+    "task": "Genuinely new combination. Funding rate and futures basis are two expressions of the same underlying carry, and in an orderly market they track each other. When they DISLOCATE - basis says one thing, funding another - that gap indicates either a market inefficiency or genuine stress, and either way marks conditions where price-structure signals may behave differently. Construct both series over their intersected coverage window, normalize each to comparable units, and use the absolute spread between them as a regime gate on breakout/anticipate. Both underlying series individually FAILED as directional signals, which is precisely why this must be framed as a genuinely new hypothesis about their RELATIONSHIP and not as a rescue attempt on either - do not reuse either study's fitted thresholds. Intersect coverage windows before fitting anything, per this project's standard practice for two-source studies.",
+    "done_when": "Pre-register the direction and threshold on train ONLY, then evaluate the sealed holdout exactly once. Gate: holdout avgR/trade > -0.30, trades >= 150, positiveAssets/assets >= 0.40. Never relax a gate after seeing results, never cherry-pick assets, never re-tune exits on the existing negative-EV families (this is a signal-absence problem, per the standing rule). Record in VERDICTS.md and TOURNAMENT_ROADMAP.md whether it passes or fails. Coverage-window intersection performed and reported before fitting. Explicit statement that neither parent study's threshold was reused."
+   },
+   {
     "id": "DISPERSION-CORRELATION-REGIME-GATE",
     "state": "pending",
     "owner": "executor",
