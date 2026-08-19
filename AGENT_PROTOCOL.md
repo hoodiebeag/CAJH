@@ -60,6 +60,11 @@ rather than clobbering entries another agent added while you worked.
 4. **Never run `git checkout`, `restore`, `reset`, `clean`, or `stash` on paths you do
    not own.** This is the rule that was actually violated. If you need a clean tree,
    commit your own work first; never discard someone else's.
+   *Narrow exception:* `package-lock.json` churn that `npm install` generated during this
+   run is yours, not another agent's — `git checkout -- package-lock.json` to drop it is
+   allowed. Prefer not to create it at all: use `npm.cmd ci` (runbook step 3). If
+   `package.json` itself is dirty and you did not edit it, that is someone else's change —
+   rule 4 applies unchanged: set `BLOCKED`, name the file, and stop.
 5. **`git pull --rebase` before you start; commit and push before you hand off.**
    Uncommitted work is work that will be lost. Small commits, always.
 6. **Frozen paths** — `scanner.js`, `monitor.js`, `trader.js`, `bot.js`, `strategy.js`,

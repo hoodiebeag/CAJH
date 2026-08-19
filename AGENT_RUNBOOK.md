@@ -8,9 +8,15 @@ and `AGENT_PROTOCOL.md` remain authoritative when anything differs.
 1. Read `.agent_state.json`; act only when `control.status` names your phase.
 2. Inspect `git status --short`. Preserve other agents' changes; do not reset, restore,
    clean, stash, or amend their work.
-3. Run the Windows-safe baseline: `npm.cmd test`. PowerShell may reject `npm test` because
+3. If the pull brought a `package.json`/`package-lock.json` change, sync dependencies with
+   `npm.cmd ci` — never `npm.cmd install`. `ci` installs exactly what the lockfile pins and
+   leaves both files untouched; `install` rewrites the lockfile, which dirties a tracked file
+   the next `git pull --rebase` then refuses to overwrite, deadlocking the loop against hard
+   rule 4. This step exists because that deadlock actually happened after the `@stoqey/ib`
+   dependency landed.
+4. Run the Windows-safe baseline: `npm.cmd test`. PowerShell may reject `npm test` because
    `npm.ps1` is disabled; that is an invocation issue, not a test failure.
-4. Read only the target file, direct dependencies, the queue item's acceptance criteria, and
+5. Read only the target file, direct dependencies, the queue item's acceptance criteria, and
    the relevant test. Never enable `LIVE_TRADING`, call `!resume`, or use a funded account.
 
 ## Executor handoff
