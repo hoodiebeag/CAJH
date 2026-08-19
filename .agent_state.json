@@ -4,10 +4,10 @@
   "status": "IDLE",
   "target_file": null,
   "objective": null,
-  "notes": "TEST-DATA-GATE-SKIP-NOT-FAIL closed this firing (see ledger + work_queue item detail). No protected-logic files touched (bot.js/monitor.js/trader.js untouched), pre-commit hook did not fire on the code commit, npm.cmd test green (447/447/0/0) before commit.",
+  "notes": "MULTIPLE-COMPARISONS-AUDIT closed this firing: new MULTIPLE_COMPARISONS_AUDIT.md enumerates all 45 studies to date (corrects the stale roughly-14 premise), computes real FWER (0.370, k=9) and BH-FDR (q=0.05) for the 9 formal NHST sub-tests -- Classifier P5 p=0.0198 does not survive family BH-FDR correction, no verdict changed since P5 was already KILLED on the independent economic clause. Identifies SEALED_SYMBOLS (AVAX/LINK/NEAR/SUI/UNI) as the one never-examined holdout resource and retires the 2025-06-01-present calendar window (~27 uses) as a fresh judge. Binding rule written into AGENT_PROTOCOL.md new Multiple-comparisons discipline section, pointer added in TOURNAMENT_ROADMAP.md Honest Baseline First. No strategy code touched (bot.js/monitor.js/trader.js untouched), pre-commit hook did not fire, npm.cmd test green (447/447/0/0) before commit. Commit 433f66b, pushed.",
   "block_detail": null,
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-08-19T15:29:36.000Z"
+  "updated_at": "2026-08-19T16:11:57.231Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -364,7 +364,7 @@
    },
    {
     "id": "MULTIPLE-COMPARISONS-AUDIT",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: meta-analysis report (additive) - no strategy code",
     "depends_on": [],
@@ -532,14 +532,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-08T14:16:30.000Z",
-   "agent": "cajh-loop-check",
-   "action": "no_op_check",
-   "detail": "Queue still genuinely empty: 0/23 pending, control IDLE, HEAD unchanged (d83375a) since the prior firing wrote it - confirmed via git log -1 and git pull --rebase (already up to date). Restock re-verified independently via fresh grep: ROADMAP.md verdict/PASS search returned only the pre-existing KILLED momentum verdict (line 523), no new PASS; TOURNAMENT_ROADMAP.md combined/overall verdict search returned zero matches. No code changed this firing, so npm.cmd test was not re-run. empty-queue notification deduped (last sent 2026-08-08T12:55:00.000Z, ~1.35h elapsed, well within 6h window) - not resent.",
-   "commit": null,
-   "tests": "230/230 pass (unchanged, not re-run this firing)"
-  },
   {
    "ts": "2026-08-08T14:20:00.000Z",
    "agent": "cajh-loop-check",
@@ -1327,6 +1319,14 @@
    "detail": "TEST-DATA-GATE-SKIP-NOT-FAIL closed. Converted 45 precondition-driven test failures (candles/XBTUSD.csv absent) across 11 .test.mjs files to explicit node:test skips with reasons, verified individually rather than by filename pattern-matching. Classification table in ROADMAP.md. Discovered but left out of scope: a pre-existing intermittent cross-file test-isolation leak in researchlib.test.mjs loadWatchlist tests (storage.js DATA_DIR frozen-at-import pollution from another test file) - flagged for a follow-up queue item, not fixed here (would need a source-module change, outside this item's additive-guards-only scope).",
    "commit": "c7893d1",
    "tests": "fresh clone: 447 tests / 402 pass / 0 fail / 45 skip (post-fix consistently 0 fail, 45 skip; the pre-existing researchlib.test.mjs flake -- unrelated to this fix -- occasionally adds 2 more failures under full-suite parallelism). Research machine: 447 pass / 0 fail / 0 skip (same pass count as pre-change baseline, proving guards do not silently disable coverage when data is present)."
+  },
+  {
+   "ts": "2026-08-19T16:11:57.232Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "closed work_queue item MULTIPLE-COMPARISONS-AUDIT",
+   "detail": "Wrote MULTIPLE_COMPARISONS_AUDIT.md (full study inventory: 45 total vs the stale roughly-14 estimate; FWER=0.370 and BH-FDR q=0.05 computed over the 9 formal-significance sub-tests, Classifier P5 does not survive family correction but no verdict changes since it was already KILLED on its economic clause; SEALED_SYMBOLS identified as the one genuinely unused holdout resource; calendar holdout 2025-06-01-present retired as fresh for the active watchlist, ~27 prior uses). Added binding Multiple-comparisons discipline section to AGENT_PROTOCOL.md (family-size counters, BH-FDR recompute rule for new NHST results, SEALED_SYMBOLS replication requirement for new gate PASSes). Added pointer in TOURNAMENT_ROADMAP.md Honest Baseline First. No strategy code touched.",
+   "commit": "433f66b",
+   "tests": "447/447/0/0 green before commit"
   }
  ],
  "automation": {
