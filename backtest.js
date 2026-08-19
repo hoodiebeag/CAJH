@@ -122,7 +122,15 @@ export function backtestMultiTF({ series } = {}, {
   fibLevel = 0.5,
   // Research-only entry veto. It receives only the completed entry bar's close time.
   // Live scanning never supplies this callback.
-  entryGate = null
+  entryGate = null,
+  // EXECUTION-DELAY-DECAY-CURVE: bars of fill latency between signal and entry (0 = original
+  // immediate-fill behaviour, unchanged). Only wired into "anticipate" mode and the shared
+  // dip/breakout candidate branch (which "breakout" uses) — every other entryMode ignores it.
+  // The stop level is fixed at signal time (structural, doesn't move); entry becomes the OPEN
+  // of bar k+entryDelayBars, risk/tp are recomputed off that delayed entry. If the delay runs
+  // past the end of the series, or price has already closed the risk to zero or below by fill
+  // time, the trade is skipped entirely (tallied as reason "delaySkipped") rather than forced.
+  entryDelayBars = 0
 } = {}) {
   // `series` = timeframes ascending, e.g. [{label:"1h",mins:60,candles},{label:"4h",...},{label:"1d",...}].
   // The entry TF (entryTf label, default the lowest) trades; everything ABOVE it is the
@@ -435,14 +443,29 @@ export function backtestMultiTF({ series } = {}, {
         reasons[reason] = (reasons[reason] || 0) + 1;
         if (reason === "taken") {
           antTradedIdx = antCand.index;   // one trade per structural level (mirrors live cooldown)
-          pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: entry, trailing: false, maxAdverseR: 0, maxFavorableR: 0 };
-          // Intrabar order is unknowable: if this bar also traded at/below the stop,
-          // assume the worst and take the stop on the entry bar.
-          if (L[k] <= stop) {
-            const r = (stop - entry) / risk - ((feeRate + slipPct) * (entry + stop)) / risk;
-            trades.push(r);
-            excursions.push({ r, mae: Math.max(0, (entry - L[k]) / risk), mfe: Math.max(0, (H[k] - entry) / risk) });
-            pos = null;
+          if (entryDelayBars > 0) {
+            const fillIdx = k + entryDelayBars;
+            const dEntry = fillIdx < entryCandles.length ? O[fillIdx] : null;
+            const dRisk = dEntry != null ? dEntry - stop : null;
+            if (dEntry == null || !(dRisk > 0)) {
+              reasons.delaySkipped = (reasons.delaySkipped || 0) + 1;
+            } else if (L[fillIdx] <= stop) {
+              const r = (stop - dEntry) / dRisk - ((feeRate + slipPct) * (dEntry + stop)) / dRisk;
+              trades.push(r);
+              excursions.push({ r, mae: Math.max(0, (dEntry - L[fillIdx]) / dRisk), mfe: Math.max(0, (H[fillIdx] - dEntry) / dRisk) });
+            } else {
+              pos = { entry: dEntry, stop, risk: dRisk, tp: dEntry + tpR * dRisk, beMoved: false, openedAt: fillIdx, open: 1, realized: 0, partialDone: false, peak: dEntry, trailing: false, maxAdverseR: 0, maxFavorableR: 0 };
+            }
+          } else {
+            pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: entry, trailing: false, maxAdverseR: 0, maxFavorableR: 0 };
+            // Intrabar order is unknowable: if this bar also traded at/below the stop,
+            // assume the worst and take the stop on the entry bar.
+            if (L[k] <= stop) {
+              const r = (stop - entry) / risk - ((feeRate + slipPct) * (entry + stop)) / risk;
+              trades.push(r);
+              excursions.push({ r, mae: Math.max(0, (entry - L[k]) / risk), mfe: Math.max(0, (H[k] - entry) / risk) });
+              pos = null;
+            }
           }
         }
       }
@@ -507,7 +530,24 @@ export function backtestMultiTF({ series } = {}, {
         else if (trendGate && !(trendGateMode === "structure" ? trendAsOf(tClose) : aboveMaAsOf(tClose))) reason = "trendGate";
         else if (entryGate && !entryGate(tClose))               reason = "externalGate";
         reasons[reason] = (reasons[reason] || 0) + 1;
-        if (reason === "taken") pos = { entry: cand.entry, stop: cand.stop, risk, tp: cand.tp, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: cand.entry, trailing: false, maxAdverseR: 0, maxFavorableR: 0 };
+        if (reason === "taken") {
+          if (entryDelayBars > 0) {
+            const fillIdx = k + entryDelayBars;
+            const dEntry = fillIdx < entryCandles.length ? O[fillIdx] : null;
+            const dRisk = dEntry != null ? dEntry - cand.stop : null;
+            if (dEntry == null || !(dRisk > 0)) {
+              reasons.delaySkipped = (reasons.delaySkipped || 0) + 1;
+            } else if (L[fillIdx] <= cand.stop) {
+              const r = (cand.stop - dEntry) / dRisk - ((feeRate + slipPct) * (dEntry + cand.stop)) / dRisk;
+              trades.push(r);
+              excursions.push({ r, mae: Math.max(0, (dEntry - L[fillIdx]) / dRisk), mfe: Math.max(0, (H[fillIdx] - dEntry) / dRisk) });
+            } else {
+              pos = { entry: dEntry, stop: cand.stop, risk: dRisk, tp: dEntry + tpR * dRisk, beMoved: false, openedAt: fillIdx, open: 1, realized: 0, partialDone: false, peak: dEntry, trailing: false, maxAdverseR: 0, maxFavorableR: 0 };
+            }
+          } else {
+            pos = { entry: cand.entry, stop: cand.stop, risk, tp: cand.tp, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: cand.entry, trailing: false, maxAdverseR: 0, maxFavorableR: 0 };
+          }
+        }
       }
     }
     if (lowHere) prevLowPrice = lowHere.price;

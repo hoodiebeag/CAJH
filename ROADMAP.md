@@ -2035,3 +2035,103 @@ widening `tournament.mjs`'s export surface for a one-off diagnostic. No new test
 `phase2-triage.mjs`, which also carry no dedicated test file) since it exercises only
 already-tested `backtest.js`/`tournament.mjs` code paths through their existing public
 interfaces. Suite stays 488 pass, 0 fail, 0 skip locally (candles/ present).
+
+## 2026-08-19 — EXECUTION-DELAY-DECAY-CURVE: sharp degradation with fill latency — the maker-execution thesis is dead on arrival
+
+Every backtest run in this project, including every cost-reduction study (PWR5 through
+PHASE4, COST-COMPONENT-ATTRIBUTION), has assumed the signal bar fills the trade immediately.
+Real execution has latency — signal generation, order transmission, and for any maker/
+post-only plan, waiting for price to come to the resting order. This asks directly whether
+that hidden assumption is where the loss comes from: re-run the `breakout`/`anticipate`
+holdout baselines with entry deliberately delayed by 0, 1, 2, 3 and 5 bars (1h timeframe, so
+0-5 hours of latency) and measure how net avgR moves.
+
+**Mechanism — new `entryDelayBars` parameter on `backtest.js`'s `backtestMultiTF`** (default
+0, fully backward-compatible — every existing caller and every other family is byte-for-byte
+unchanged). When a signal is taken, the stop stays at its structural level fixed at signal
+time (it does not move); the actual fill becomes the OPEN of bar `k+entryDelayBars`; risk and
+tp are recomputed off that delayed entry (`tp = delayedEntry + tpR*risk`, the same formula
+the rest of the codebase already uses everywhere tp is computed). If the delay runs past the
+end of the series, or price has already closed the risk to zero or below by fill time, the
+trade is skipped outright (tallied under `reasons.delaySkipped`) rather than forced through at
+an invalid price. Wired into `anticipate` mode and the shared dip/breakout candidate branch
+(which `breakout` mode uses); the other 8 entry modes sharing that branch inherit the same
+mechanic for free but are untouched by this study's scope. 4 new tests in
+`backtest.test.mjs` (exact delayed-entry-price arithmetic, same-bar stop-out on the delayed
+fill, out-of-bounds `delaySkipped` tallying, and an explicit `entryDelayBars: 0` ==
+omitted-parameter equality check) — suite 488 → 492 green.
+
+New file `scripts/execution-delay-decay-curve.mjs` (read-only diagnostic, not part of the
+app): full 28-asset watchlist, standard 70/30 holdout split, exact `breakout`/`anticipate`
+family configs duplicated from `tournament.mjs` (not exported there, same convention as
+COST-COMPONENT-ATTRIBUTION's script). The `entryDelayBars: 0` row reproduces the already-
+established baseline trade counts and avgR bit-for-bit (`anticipate` 3,966 trades /
+-0.8842R, `breakout` 3,156 trades / -0.8640R — identical to COST-COMPONENT-ATTRIBUTION's
+numbers), which is itself a correctness check on the new parameter, not just a convenience.
+
+**Result — pooled, holdout, net-of-cost:**
+
+| `anticipate` | delay 0 | delay 1 | delay 2 | delay 3 | delay 5 |
+|---|---:|---:|---:|---:|---:|
+| trades | 3,966 | 3,636 | 3,329 | 3,147 | 2,755 |
+| avgR | -0.8842 | -1.1994 | -1.3217 | -1.3473 | -1.6242 |
+| delaySkipped | 0 | 36 | 176 | 254 | 357 |
+
+| `breakout` | delay 0 | delay 1 | delay 2 | delay 3 | delay 5 |
+|---|---:|---:|---:|---:|---:|
+| trades | 3,156 | 3,141 | 2,897 | 2,688 | 2,386 |
+| avgR | -0.8640 | -0.8847 | -1.5442 | -1.6669 | -2.2953 |
+| delaySkipped | 0 | 0 | 76 | 190 | 365 |
+
+**Outcome: SHARP DEGRADATION, monotonic, for both families.** avgR degrades at every single
+delay step for both families (`monotonicDegrade: true`, zero exceptions across 5 points ×
+2 families) — never flat, never an improvement. By 5 bars of delay, `anticipate` loses an
+additional -0.7400R/trade (-0.8842 → -1.6242, an 84% relative worsening) and `breakout` loses
+an additional -1.4314R/trade (-0.8640 → -2.2953, a 166% relative worsening) on top of an
+already-negative baseline. Trade count also falls at every step (more `delaySkipped` misses
+as the delay window widens, plus fewer bars remaining in the holdout to re-trigger a fresh
+signal after a skip) — both effects point the same direction, degradation isn't an artifact
+of a shrinking, cherry-picked sample either.
+
+**What this means for the maker-execution thesis PWR5 through PHASE4 were built on, stated
+plainly.** That entire line of work (PWR5's calibrated adverse-selection model, PHASE1-4's
+maker/post-only cost-reduction scenarios) is premised on being able to wait for price to come
+to a resting order — which is *itself* a form of execution delay, exactly the thing this
+diagnostic tests. A signal that degrades this sharply from a few hours of ordinary
+transmission latency, before any deliberate resting-order wait is even added, means the
+maker-execution cost-reduction thesis is not merely insufficient (PHASE2/PHASE4's prior
+finding) — it is actively counterproductive for these two families: the very act of waiting
+for a better fill price destroys more edge than the fee savings it was meant to capture. This
+closes the maker-execution thesis for `breakout`/`anticipate` on a mechanism basis, independent
+of and in addition to PHASE4's equity-curve-level FAIL.
+
+**Why this direction, mechanically — not just empirically.** Both families enter on upward
+momentum (a confirmed/anticipated break of structure, or a lookback-high breakout) against a
+FIXED structural stop. Delaying the fill means buying after the move has already continued,
+at a higher price against the same unmoved stop — risk (price-to-stop distance) grows while
+the target (`tp = entry + tpR*risk`) recedes even further in absolute price terms, so a
+larger favorable move is now required to bank the same R-multiple than would have been needed
+at the original signal price. This is the textbook cost of chasing a breakout instead of
+catching it at the moment it fires, and it compounds with position count shrinking
+(`delaySkipped`) as the delay window widens.
+
+**What this does NOT license.** No entry, stop, or exit parameter was changed in the live
+strategy or in any config `tournament.mjs`/`bot.js` actually uses. `entryDelayBars` defaults
+to 0 everywhere it isn't explicitly passed, so this diagnostic introduces zero behavioral
+change to any existing backtest, tournament run, or the live bot. This is descriptive per its
+own scope (no gate, no VERDICTS.md row, per the work_queue item's own note) — it is a
+mechanism finding about WHY delayed/maker execution fails these families, layered on top of
+PHASE4's already-sealed equity-curve-level FAIL, not a new verdict.
+
+**Engineering note.** `backtest.js`'s two touched entry sites (anticipate mode, the shared
+dip/breakout branch) each gate the new logic behind `if (entryDelayBars > 0) { ... } else { ...
+original code, untouched ... }` rather than unifying through a shared helper — a deliberate
+choice to make the zero-risk-of-regression case (delay omitted) literally the same code path
+that ran before this change, verifiable by inspection rather than by trusting a refactor.
+`fib_pullback` and `bos` modes do not wire up `entryDelayBars` (out of scope — neither
+family under study uses them); passing a nonzero `entryDelayBars` with those entry modes is
+currently a silent no-op, worth remembering if this parameter is ever reused for a different
+family. No production file touched (bot.js/monitor.js/trader.js/scanner.js/strategy.js
+untouched; `backtest.js` is the shared research/live simulation engine, extended additively
+with a default-off parameter, same category of change as MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC's
+prior `excursions` addition to the same function). Suite 488 → 492 green.

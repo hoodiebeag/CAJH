@@ -125,6 +125,80 @@ test("ANTICIPATE mode: MAE/MFE on the same-bar stop-out path (entry and stop hit
   assert.equal(x.r, r.results[0]);
 });
 
+// ── entryDelayBars (EXECUTION-DELAY-DECAY-CURVE) ───────────────────────────────
+// Same pivot (low 95, high 97.6 trigger) as the ANTICIPATE tests above, but with an extra
+// bar after the trigger-cross so entryDelayBars=1's delayed fill lands on a bar with a
+// distinct, known open price (98) instead of the trigger price (97.6).
+test("ANTICIPATE mode + entryDelayBars: fills at the OPEN of the delayed bar, stop stays structural", () => {
+  const series = buildSeries([[96.5, 97.8, 96, 97.5], [98, 99, 97, 98.5]], 98.5);
+  const r = backtestMultiTF({ series }, {
+    entryTf: "1h", entryMode: "anticipate", alignMode: "none", trendGate: false, chopFilter: false,
+    requireHigherLow: false, maxStopPct: 0.04, minStopPct: 0.015, lockBreakeven: false, tpR: 4,
+    feeRate: 0.004, slipPct: 0.0005, entryDelayBars: 1,
+  });
+  // Delayed entry = O[bar after trigger] = 98, stop unchanged at the structural low (95),
+  // risk = 3, tp = 98 + 4*3 = 110 — the auto-generated uptrend after p0=98.5 climbs into it.
+  assert.equal(r.trades, 1);
+  assert.ok(Math.abs(r.results[0] - netWinR(98, 3)) < 1e-9,
+    `winner R ${r.results[0]} != expected ${netWinR(98, 3)} (entry 98, risk 3)`);
+});
+
+// ma_dip uses the same shared candidate branch "breakout" mode does (backtest.js's generic
+// `else if (!pos)` dip/breakout dispatch) — exercised here instead of breakout because its
+// stop (`L[k] - 0.001*entry`) is exact with no ATR to hand-replicate for the assertion.
+function buildFlatDipSeries(afterBars, p0) {
+  const c = []; let t = 1_700_000_000, p = 100;
+  for (let i = 0; i < 25; i++) { c.push({ time: String(t), open: String(p), high: String(p + 0.1), low: String(p - 0.1), close: String(p), volume: "1" }); t += HOUR; }
+  c.push({ time: String(t), open: String(p), high: String(p), low: "94.8", close: "95", volume: "1" }); t += HOUR; // dip bar: close 95, low 94.8 (>=2% below MA~99.75)
+  for (const bar of afterBars) { c.push(mk(t, ...bar)); t += HOUR; }
+  p = p0;
+  for (let i = 0; i < 200; i++) { c.push(mk(t, p, p + 0.2, p - 0.05, p + 0.15)); p += 0.15; t += HOUR; }
+  return [{ label: "1h", mins: 60, candles: c }];
+}
+
+test("ma_dip mode (shared dip/breakout branch) + entryDelayBars: same-bar stop-out on the delayed fill", () => {
+  // Dip bar: entry 95, stop = 94.8 - 0.001*95 = 94.705, risk = 0.295 (well within bounds).
+  // Delayed (k+1) bar opens 96, low 94 <= stop -> immediate stop-out at the structural stop.
+  // Its own close (99.6) is kept back above the k+1 bar's own MA*0.98 so it doesn't ALSO
+  // independently qualify as its own separate ma_dip signal (unrelated to the delay).
+  const series = buildFlatDipSeries([[96, 97, 94, 99.6]], 99.6);
+  const r = backtestMultiTF({ series }, {
+    entryTf: "1h", entryMode: "ma_dip", alignMode: "none", trendGate: false, chopFilter: false,
+    requireHigherLow: false, maxStopPct: 0.5, minStopPct: 0, lockBreakeven: false, tpR: 4,
+    feeRate: 0.004, slipPct: 0.0005, entryDelayBars: 1,
+  });
+  const stop = 94.8 - 0.001 * 95, dEntry = 96, dRisk = dEntry - stop;
+  const expected = (stop - dEntry) / dRisk - (FEE * (dEntry + stop)) / dRisk;
+  assert.equal(r.trades, 1);
+  assert.ok(Math.abs(r.results[0] - expected) < 1e-9, `stop-out R ${r.results[0]} != expected ${expected}`);
+});
+
+test("entryDelayBars skips the trade (reason delaySkipped) when the delay runs past the end of the series", () => {
+  const series = buildFlatDipSeries([[96, 97, 95.5, 96.5]], 96.5);
+  const r = backtestMultiTF({ series }, {
+    entryTf: "1h", entryMode: "ma_dip", alignMode: "none", trendGate: false, chopFilter: false,
+    requireHigherLow: false, maxStopPct: 0.5, minStopPct: 0, lockBreakeven: false, tpR: 4,
+    feeRate: 0.004, slipPct: 0.0005, entryDelayBars: 100000,
+  });
+  assert.equal(r.trades, 0);
+  assert.ok(r.reasons.delaySkipped >= 1, "expected a delaySkipped tally when the delay exceeds the series length");
+});
+
+test("entryDelayBars: default (0) reproduces the original immediate-fill result exactly", () => {
+  const series = buildSeries([[96.5, 97.8, 96, 97.5]], 97.5);
+  const withDefault = backtestMultiTF({ series }, {
+    entryTf: "1h", entryMode: "anticipate", alignMode: "none", trendGate: false, chopFilter: false,
+    requireHigherLow: false, maxStopPct: 0.04, minStopPct: 0.015, lockBreakeven: false, tpR: 4,
+    feeRate: 0.004, slipPct: 0.0005,
+  });
+  const withExplicitZero = backtestMultiTF({ series }, {
+    entryTf: "1h", entryMode: "anticipate", alignMode: "none", trendGate: false, chopFilter: false,
+    requireHigherLow: false, maxStopPct: 0.04, minStopPct: 0.015, lockBreakeven: false, tpR: 4,
+    feeRate: 0.004, slipPct: 0.0005, entryDelayBars: 0,
+  });
+  assert.deepEqual(withExplicitZero.results, withDefault.results);
+});
+
 test("profileEntries resolves the confirmed candidate with identical netR", () => {
   const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
   const { records } = profileEntries({ series }, { tpR: 4, feeRate: 0.004, slipPct: 0.0005 });
