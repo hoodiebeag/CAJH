@@ -407,14 +407,6 @@
  },
  "ledger": [
   {
-   "ts": "2026-08-08T09:39:00.000Z",
-   "agent": "cajh-loop-check",
-   "action": "handoff",
-   "detail": "Committed a concurrent session's uncommitted 7-item queue restock (DCA-SIZING-HARNESS/DCA-FIXED-INTERVAL/DCA-MARTINGALE/DCA-ANTIMARTINGALE/GRID-SIM/TRAIL-STOP-EXIT/H11-COVERAGE-DIAGNOSIS + VERDICTS.md H11 row) that had blocked git pull --rebase since 09:21:10Z, after confirming origin had no new commits to actually rebase onto; reworded one prose line in DCA-MARTINGALE's task text that tripped check-protected-logic.cjs on a literal substring match (the live-trading env-flag name) inside descriptive text (same false-positive pattern as the C2 item, no protected code touched). Then did DCA-SIZING-HARNESS itself: new sizing.mjs (simulateSizedEquity - fixed/martingale/antimartingale position sizing over an already-decided trade list, capped doubling, equity curve, max drawdown %, ruin flag) + 6 tests (per-rule hand-computed fixtures, ruin-boundary exactness, and a regression proving fixed-sizing reproduces the repo's existing plain avgR aggregate exactly). This unblocks DCA-MARTINGALE and DCA-ANTIMARTINGALE. One work_queue item this firing per HYGIENE; 5 items remain pending for future firings.",
-   "commit": "3604312",
-   "tests": "205 pass, 0 fail"
-  },
-  {
    "ts": "2026-08-08T09:52:00.000Z",
    "agent": "cajh-loop-check",
    "action": "handoff",
@@ -1199,6 +1191,14 @@
    "agent": "cajh-loop-check-scheduled",
    "action": "pull-blocked-exit",
    "detail": "STEP 0.3, second consecutive firing: git pull --rebase still fails on the same pre-existing unstaged package.json change (allowScripts.canvas@3.2.3=true), still not created this run - did not stash/checkout/reset/clean it. blackboard.notifications['persistent-pull-blocker'] was last set 2026-08-18T20:30:00.000Z, which is >6h old (now 2026-08-19T04:00:46.000Z, ~7.5h), so re-attempted PushNotification per dedup rule (tool reported not sent: terminal active/redundant, same as before) and refreshed the notifications timestamp. No STEP 1-6 work attempted; exiting for next firing to retry the pull. A human still needs to resolve the package.json change (commit, revert, or otherwise clear it) to unblock the loop.",
+   "commit": null,
+   "tests": "not run (exited at STEP 0.3, before STEP 3)"
+  },
+  {
+   "ts": "2026-08-19T06:00:55.000Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "pull-blocked-exit",
+   "detail": "STEP 0.3: git pull --rebase still fails on the same pre-existing unstaged package.json change (allowScripts.canvas@3.2.3=true), still not created this run - did not stash/checkout/reset/clean it. blackboard.notifications['persistent-pull-blocker'] was last set 2026-08-19T04:00:46.000Z, only ~2h ago (well under the 6h dedup window), so per notification_policy.dedup this firing skipped PushNotification and left the notifications entry untouched rather than resending. No STEP 1-6 work attempted; exiting for next firing to retry the pull. A human still needs to resolve the package.json change (commit, revert, or otherwise clear it) to unblock the loop.",
    "commit": null,
    "tests": "not run (exited at STEP 0.3, before STEP 3)"
   }
