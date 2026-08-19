@@ -19,7 +19,15 @@
  * Defaults to AAPL, 15 seconds. Uses IBKR_HOST/IBKR_PORT/IBKR_CLIENT_ID env
  * vars if set, otherwise 127.0.0.1:4002 (paper).
  */
-import { IBApi, EventName, Stock, TickType, MarketDataType } from "@stoqey/ib";
+// NOTE: TickType must come from the subpath, not the package root. The root's
+// index.d.ts declares `export type TickType = IBApiTickType | IBApiNextTickType`
+// - a TYPE ALIAS with no runtime value - so importing it from "@stoqey/ib"
+// throws "Named export 'TickType' not found" under ESM. The real enum (LAST=4,
+// DELAYED_LAST=68) is only exported from this file. MarketDataType, by contrast,
+// IS a real root export. This is also why brokers/ibkr.mjs uses the literal 4
+// with a comment instead of importing the enum.
+import { IBApi, EventName, Stock, MarketDataType } from "@stoqey/ib";
+import { TickType } from "@stoqey/ib/dist/api/market/tickType.js";
 
 const symbol = process.argv[2] || "AAPL";
 const seconds = Number(process.argv[3]) || 15;
