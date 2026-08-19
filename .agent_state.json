@@ -4,10 +4,10 @@
   "status": "IDLE",
   "target_file": null,
   "objective": null,
-  "notes": "CROSS-SECTIONAL-NONPRICE-RANK closed this firing: new cross-sectional-nonprice-rank.mjs tests open-interest change as a PRIMARY cross-sectional ranking signal (not a gate) - the structural fix for T1-ZEROCOSTs finding that 8/10 non-price sources were only tested as gates on a population with no gross edge. ONE feature pre-registered before any result was examined: OI change (Kraken Futures derivatives.mjs), chosen over funding-rate level and long-short-ratio on data-coverage grounds alone (OI confirmed whole-watchlist coverage per oi-trend-gate.mjs vs fundings ~365-730d ceiling and long-short-ratios only-4-majors-confirmed resolution). Formation: trailing 7-day OI pct change (reuses oi-trend-gate.mjs own N=7 window); horizon 7d, entry delay 1d; no price-structure entry condition anywhere. Reused momentum.mjs own IC/permutation-p/BH-FDR/bootstrap/economics machinery directly (scoreMomentumPanelRows, economicMomentumViews, tagMomentumRegimes, bhFdr) on a new panel - only the OI fetch + no-lookahead panel join is new statistical code. Universe: ACTIVE watchlist (SEALED_SYMBOLS excluded), 24/24 active symbols cleared the 500-day OI coverage gate, 106 rebalance dates (102 train / 4 recent-holdout). Expected sign pre-registered POSITIVE (rising OI predicts higher forward returns, same directional hypothesis oi-trend-gate.mjs used as a gate); observed sign came back NEGATIVE and far from significant. Verdict: KILLED at train-significance stage - train meanIC=-0.0395, p=0.1249 (fails naive p<0.05; wrong sign vs pre-registration). MULTIPLE-COMPARISONS DISCIPLINE (AGENT_PROTOCOL.md, added 2026-08-19): added as the 10th test to MULTIPLE_COMPARISONS_AUDIT.md section 2s formal-NHST family (was 9 across 6 studies, now 10 across 7); family-wide BH-FDR recomputed across all 10 - this studys own q=0.2498, does not survive, the two prior survivors (B5-REVERSAL L=3, CLASSIFIER-FUNDING-FEATURE) unchanged. Re-derived the binomial P(>=3 hits) figure for n=10 (1.15%, up from the prior n=9 figure of 0.84%) in the same doc. Updated MULTIPLE_COMPARISONS_AUDIT.md section 1s total-study count (46->47) and AGENT_PROTOCOL.mds NHST counter (9->10 sub-tests, 6->7 studies) in the same commit as the verdict, per that documents own binding rule. Holdout (4 rebalance dates) evaluated once for disclosure per this items own done_when (holdout meanIC=+0.0022 p=1, top-5 net return -0.034) but was never decisive since the train-significance gate failed first, the same train/screen-gate-first pattern H11/FUNDING-MEANREV/PAIRS-COINTEGRATION-STATARB already established. Added VERDICTS.md row. 7 new tests, 468/468 project tests green. No strategy code touched (bot.js/monitor.js/trader.js/scanner.js untouched), pre-commit hook did not fire. Commit 0583013, pushed.",
+  "notes": "SIGNAL-DECAY-TEMPORAL-STABILITY closed this firing: new signal-decay-temporal-stability.mjs asks whether the pooled breakout/anticipate baseline avgR figures quoted throughout this project (e.g. breakout holdout avgR -0.864) are stationary across time, or hide drift a single pooled number cannot reveal - never checked before. Purely descriptive per its own task wording: no gate, no VERDICTS.md row. Method: full local history per asset (not train/holdout) cut into 5 equal consecutive chronological epochs via a new epochSlices helper (mirrors researchlib.mjs walkForwardSeriesWindows anchor-then-time-boundary technique, generalized to N disjoint slices instead of one expanding train/holdout cut); each epoch backtested independently with tournament.mjs breakout/anticipate configs unmodified. Stationarity tested with a one-way ANOVA F-statistic and a permutation p-value (1000 iterations, seed 20260819) - this projects established significance-testing idiom (momentum.mjs permutationP), not a parametric F-distribution this codebase has never needed. Coverage 28/28 eligible watchlist assets (EOS excluded, known candle-history gap). Result: both families reject stationarity decisively - breakout F(4,10499)=7.459 p=0.000999 (10504 trades pooled, epoch avgR ranges -0.985 to -0.766); anticipate F(4,13569)=13.967 p=0.000999 (13574 trades pooled, epoch avgR ranges -0.674 to -0.956, worst in the most recent epoch). No epoch in either family approaches breakeven, so this changes no prior verdicts pass/fail outcome and no prior verdict is rewritten (this items own scope) - it is a methodological caveat on how to read every pooled avgR figure in this projects research record, not a new signal. 11 new tests including synthetic-data checks that the ANOVA/permutation math correctly separates an obviously-stationary case from an obviously-non-stationary one before trusting either on real data. 468->479 project tests green. No strategy code touched (bot.js/monitor.js/trader.js/scanner.js untouched), pre-commit hook did not fire. Commit 1d0c8e7, pushed.",
   "block_detail": null,
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-08-19T18:16:45.052Z"
+  "updated_at": "2026-08-19T19:14:41.762Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -404,7 +404,7 @@
    },
    {
     "id": "SIGNAL-DECAY-TEMPORAL-STABILITY",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: temporal-stability diagnostic (additive), reuses existing backtest output",
     "depends_on": [],
@@ -532,14 +532,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-08T14:46:08.000Z",
-   "agent": "cajh-loop-check",
-   "action": "no_op_check",
-   "detail": "Queue still genuinely empty: 0/23 pending, control IDLE, HEAD unchanged (ef4479d) since the prior firing's identical no_op_check - confirmed via `git status` (clean) and `git pull --rebase` (already up to date, no foreign commits). Restock re-verified independently: grepped ROADMAP.md for VERDICT/Combined/Overall PASS patterns (zero matches) and TOURNAMENT_ROADMAP.md for \"-> PASS\"/Combined/Overall PASS (only isolated gate-clause PASSes inside combined-FAIL results, e.g. TRAIL-STOP-EXIT's trades>=150 clause, no study-level PASS). No code changed this firing, so npm.cmd test was not re-run. empty-queue notification deduped (last sent 2026-08-08T12:55:00.000Z, ~1.85h elapsed, well within 6h window) - not resent.",
-   "commit": null,
-   "tests": "230/230 pass (unchanged, not re-run this firing)"
-  },
   {
    "ts": "2026-08-08T15:01:03.561Z",
    "agent": "cajh-loop-check",
@@ -1327,6 +1319,14 @@
    "detail": "CROSS-SECTIONAL-NONPRICE-RANK: OI-change tested as a primary cross-sectional signal (not a gate), reusing momentum.mjs scoring machinery. KILLED at train-significance stage (train meanIC=-0.0395, p=0.1249, wrong sign vs pre-registration). Added as 10th test to MULTIPLE_COMPARISONS_AUDIT.md formal-NHST family; family BH-FDR recomputed, does not survive. Updated AGENT_PROTOCOL.md/MULTIPLE_COMPARISONS_AUDIT.md/VERDICTS.md same commit. 468/468 tests green.",
    "commit": "0583013",
    "tests": "468/468"
+  },
+  {
+   "ts": "2026-08-19T19:14:41.763Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "closed-work-item",
+   "detail": "SIGNAL-DECAY-TEMPORAL-STABILITY: full-history temporal-stability diagnostic for breakout/anticipate baselines. Both families NON-STATIONARY (permutation ANOVA p=0.000999 each) but no epoch approaches breakeven, so no prior verdict outcome changes. Descriptive only, no VERDICTS.md row. 11 new tests, suite 468->479 green.",
+   "commit": "1d0c8e7",
+   "tests": "479/479 pass, 0 fail, 0 skip"
   }
  ],
  "automation": {
