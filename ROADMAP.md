@@ -1925,3 +1925,113 @@ diagnostic.mjs` are additive (new file + a new always-present return field on
 `backtestMultiTF`); 9 new tests (3 in `backtest.test.mjs`, 6 in
 `mae-mfe-stop-placement-diagnostic.test.mjs`). Suite 479 → 488 pass, 0 fail, 0 skip locally
 (candles/ present).
+
+## 2026-08-19 — COST-COMPONENT-ATTRIBUTION: fee is 94.1% of the -0.864/-0.884R baseline drag, exactly and by construction
+
+The pooled `breakout` (-0.8640R) and `anticipate` (-0.8842R) holdout baselines have always
+been reported as single net numbers. This decomposes each into gross R and its cost
+components by re-running `backtest.js`'s existing cost path (`backtestMultiTF`'s
+`feeRate`/`slipPct` params — the same override mechanism `tournament.mjs`'s `runTournament`
+already exposes) at three configurations — zero-cost, fee-only, slip-only — instead of one,
+against the exact `breakout`/`anticipate` family configs `tournament.mjs` uses, full 28-asset
+watchlist, standard 70/30 holdout split. New file: `scripts/cost-component-attribution.mjs`
+(read-only diagnostic, not part of the app). No cost parameter changed anywhere; this is
+measurement only.
+
+**Method — exact, not estimated.** `backtest.js`'s net-R formula
+(`netR = grossR - (feeRate + slipPct) * (entry + exitPx) / risk`, backtest.js:526) is affine
+in `feeRate`/`slipPct` with a per-trade coefficient that does not itself depend on either —
+FEE-SCHEDULE-REBASE already established cost doesn't change which trades fire, only their
+realized R (confirmed again here: trade counts are identical — 3156/3966 — across all four
+cost configurations below). That makes the decomposition an exact identity, not a fit:
+`feeDrag = grossAvgR - feeOnlyAvgR`, `slipDrag = grossAvgR - slipOnlyAvgR`, and
+`grossAvgR - feeDrag - slipDrag` reconstructs `netAvgR` to within floating-point noise
+(~1e-15) for both families — verified below, not assumed.
+
+**Result — pooled, holdout:**
+
+| | trades | gross (zero-cost) | fee-only | slip-only | net (default) |
+|---|---:|---:|---:|---:|---:|
+| `breakout` | 3,156 | **+0.0637** | -0.8094 | +0.0091 | -0.8640 |
+| `anticipate` | 3,966 | **-0.0861** | -0.8373 | -0.1331 | -0.8842 |
+
+| | grossAvgR | feeDrag | slip/spread-crossing drag | adverse-selection drag | reconstructed net | actual net | discrepancy |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `breakout` | +0.0637 | 0.8731 | 0.0546 | 0 | -0.8640 | -0.8640 | -6.7e-16 |
+| `anticipate` | -0.0861 | 0.7511 | 0.0469 | 0 | -0.8842 | -0.8842 | -1.1e-15 |
+
+Components sum to net within the stated tolerance (< 1e-9) for both families — no
+reconciliation gap to explain away.
+
+**Fee is 94.1% of total drag, for both families, and that ratio is structural, not
+empirical.** `feeShareOfTotalDrag` = 0.9412 for `breakout` and `anticipate` alike. This
+isn't a coincidence of the data — the cost formula applies `feeRate` and `slipPct` to the
+*same* per-trade coefficient `(entry+exitPx)/risk`, so their relative share of any pooled
+drag is exactly `FEE_RATE / (FEE_RATE + SLIPPAGE_PCT) = 0.008 / 0.0085 = 0.94118`,
+independent of family, asset, or trade population. Any future cost-basis change that alters
+`FEE_RATE` relative to `SLIPPAGE_PCT` will shift this ratio predictably without a fresh
+backtest.
+
+**Spread-crossing vs. modeled slippage — not separable in this codebase, stated plainly
+rather than fabricated.** `SLIPPAGE_PCT` (strategy.js:28) is documented as "per-side slippage
+estimate for market fills" — a single proxy already standing in for the cost of crossing the
+spread on a taker order. Splitting it further into a distinct spread-crossing line would need
+real bid/ask tick data; `candles/*.csv` is OHLC only. Reported as one combined
+"slippage/spread-crossing" component above rather than inventing an unsupported split.
+
+**Adverse selection — genuinely zero for this baseline, not "unmeasured."** PWR5's
+calibrated model (`cost-model.mjs`'s `simulateLimitFill`, consumed via PHASE1/PHASE2's
+"incl. calibrated adverse selection" scenarios, `scripts/phase2-triage.mjs`'s `SCENARIOS`)
+prices the extra cost of a *resting* maker order that fills and is then watched to run
+further against the position before exit. `breakout`/`anticipate`'s holdout baseline uses
+`backtest.js`'s default market/taker fills — no resting order, no wait — so PWR5's model has
+nothing to attach to here; its contribution is exactly 0 by construction, matching the exact
+reconciliation above. For context only (not re-derived here): PHASE1's calibrated add-on for
+maker execution is ~0.0024 round-trip: PHASE2-MAX-SURVIVABLE-COST's own scope note confirms
+it never covered `breakout`/`anticipate` (only the four already-cost-killed signals), so no
+prior sealed number exists for this baseline at maker cost — that full fee×slippage grid,
+including a maker-execution point, is COST-SENSITIVITY-SURFACE's job (already queued), not
+re-derived here as a byproduct.
+
+**What fraction of the gap the best plausible improvement to the dominant component (fee)
+could close.** Computed directly from the table above, no extrapolation: driving `feeRate` to
+its theoretical floor of zero (holding `slipPct` fixed at its current value — the actual
+floor of any real venue is higher than zero, but this is the cleanest upper bound available
+without assuming a specific alternate venue's fee) leaves `breakout` at **+0.0091R**
+(`grossAvgR - slipDrag`, exact) and `anticipate` at **-0.1331R**. So even a literal
+zero-fee floor closes 94.1% of `breakout`'s drag but produces only a razor-thin, one-basis-
+point-scale positive that would not survive any real execution friction (spread, funding, or
+the adverse selection any actual zero-fee maker/rebate venue would reintroduce) — and closes
+none of `anticipate`'s gap to positive, because `anticipate`'s *gross* (zero-cost) holdout
+avgR is itself already negative (-0.0861). **The fee component is the dominant cost lever by
+a wide, structural margin, but eliminating it entirely is not sufficient on its own to flip
+either family's sign with any real margin** — `breakout`'s zero-cost edge is too thin and
+`anticipate` has no zero-cost edge to begin with. This is a statement about the fee
+component's improvement ceiling only; it is not a substitute for COST-SENSITIVITY-SURFACE's
+queued fee×slippage grid, which will state the full picture including realistic (non-zero)
+maker/futures cost points and a verdict-flip table against every FAIL/KILLED row.
+
+**Per-asset.** Full per-asset attribution table (28 assets × 2 families × 4 cost
+configurations) is in the saved experiment
+(`research-runs/2026-08-19T21-07-22-540Z-cost-component-attribution.json`), not reproduced
+in full here. Notable spread: `breakout`'s per-asset fee drag ranges from 0.543R (ZEC, 44
+trades) to 1.482R (TRX, 2 trades) — this variance is fee arithmetic, not signal quality: it
+tracks each asset's typical `(entry+exitPx)/risk` ratio (tighter stops relative to price
+inflate the R-cost of a fixed percentage fee), and the TRX figure in particular carries a
+2-trade sample and should not be read as asset-level signal. No asset-exclusion or
+per-asset cost adjustment is proposed here — descriptive only, per this item's scope.
+
+**What this does NOT license.** No cost parameter (`FEE_RATE`, `SLIPPAGE_PCT`, or any
+override) was changed anywhere in the codebase. No replacement cost value is recommended.
+This is a decomposition of the existing baseline's existing cost path, not a new signal, a
+new exit, or a proposal to trade at a different venue.
+
+**Engineering note.** `scripts/cost-component-attribution.mjs` is additive (new file only,
+zero production files touched); it imports `backtestMultiTF` from `backtest.js` and
+`FEE_RATE`/`SLIPPAGE_PCT` from `strategy.js` read-only, and duplicates `tournament.mjs`'s
+`breakout`/`anticipate` family configs verbatim (that array isn't exported) rather than
+widening `tournament.mjs`'s export surface for a one-off diagnostic. No new tests added
+(consistent with this project's other throwaway `scripts/*.mjs` diagnostics, e.g.
+`phase2-triage.mjs`, which also carry no dedicated test file) since it exercises only
+already-tested `backtest.js`/`tournament.mjs` code paths through their existing public
+interfaces. Suite stays 488 pass, 0 fail, 0 skip locally (candles/ present).
