@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { runOrderFlowAggressorImbalance } from "./order-flow-aggressor-imbalance.mjs";
+
+// Tests below that use watchlist ["XBT"] need real local candle history to clear the
+// candle-coverage gate before they can exercise orderflow-specific classification logic.
+const HAS_XBT_CANDLES = fs.existsSync(new URL("./candles/XBTUSD.csv", import.meta.url));
 
 test("classifies an asset with no local candles as insufficient-candle-history, never calling either fetch", async () => {
   const report = await runOrderFlowAggressorImbalance({
@@ -14,7 +19,8 @@ test("classifies an asset with no local candles as insufficient-candle-history, 
   assert.equal(report.result.eligibleAssets, 0);
 });
 
-test("classifies a cvd fetch failure precisely instead of silently dropping the asset", async () => {
+test("classifies a cvd fetch failure precisely instead of silently dropping the asset", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const report = await runOrderFlowAggressorImbalance({
     watchlist: ["XBT"],
     fetchCvd: async () => { throw new Error("Request failed with status code 500"); },
@@ -42,7 +48,8 @@ test("reports ORDERFLOW-DATA-INSUFFICIENT (not a crash) when zero assets clear t
 const NOW = Math.floor(Date.now() / 1000);
 const RECENT_SINCE = NOW - 900 * 86400;
 
-test("classifies orderflow history shorter than minHistoryDays precisely, reporting the actual intersected coverage", async () => {
+test("classifies orderflow history shorter than minHistoryDays precisely, reporting the actual intersected coverage", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const shortAgg = { normalized: { points: [{ timestamp: RECENT_SINCE, value: "-0.05" }, { timestamp: RECENT_SINCE + 30 * 86400, value: "-0.05" }] } };
   const shortCvd = { normalized: { points: [{ timestamp: RECENT_SINCE, value: { buy_volume: "1.1", sell_volume: "1.0" } }, { timestamp: RECENT_SINCE + 30 * 86400, value: { buy_volume: "1.1", sell_volume: "1.0" } }] } };
   const report = await runOrderFlowAggressorImbalance({
@@ -55,7 +62,8 @@ test("classifies orderflow history shorter than minHistoryDays precisely, report
   assert.equal(report.input.coverage[0].reason, "orderflow-history-short (30.0 of 500 days)");
 });
 
-test("restricts coverage to the INTERSECTION of both formulations' windows, not either series' own full window", async () => {
+test("restricts coverage to the INTERSECTION of both formulations' windows, not either series' own full window", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   // aggressor-differential covers the full 900 days; cvd covers only the first 400 — the
   // intersection (400 days) should gate coverage, not periodic's own longer 900-day window.
   const aggPoints = Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + i * 86400, value: "-0.05" }));
@@ -70,7 +78,8 @@ test("restricts coverage to the INTERSECTION of both formulations' windows, not 
   assert.equal(report.input.coverage[0].reason, "orderflow-history-short (399.0 of 500 days)");
 });
 
-test("computes the periodic formulation's train threshold as the 80th percentile of its own train-window netBuyPressure, sign-corrected from Kraken's raw sell-minus-buy convention", async () => {
+test("computes the periodic formulation's train threshold as the 80th percentile of its own train-window netBuyPressure, sign-corrected from Kraken's raw sell-minus-buy convention", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   // Raw aggressor-differential is -0.05 throughout (Kraken's sell-minus-buy convention,
   // verified against the real API), so netBuyPressure = -(-0.05) = +0.05 constant, and its
   // own 80th percentile over a constant train series equals that same constant.
@@ -87,7 +96,8 @@ test("computes the periodic formulation's train threshold as the 80th percentile
   assert.equal(report.input.eligibleAssets.length, 1);
 });
 
-test("parses raw non-finite points defensively (both series), ignoring them rather than crashing", async () => {
+test("parses raw non-finite points defensively (both series), ignoring them rather than crashing", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const aggPoints = [
     { timestamp: RECENT_SINCE, value: "not-a-number" },
     ...Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + (i + 1) * 86400, value: "-0.05" })),
@@ -105,7 +115,8 @@ test("parses raw non-finite points defensively (both series), ignoring them rath
   assert.equal(report.input.coverage[0].included, true);
 });
 
-test("both candidates trade freely under a flat, never-blocking configuration for the breakout/anticipate families", async () => {
+test("both candidates trade freely under a flat, never-blocking configuration for the breakout/anticipate families", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   // Constant positive netBuyPressure (periodic gate fires from its first revealed point on)
   // and constant positive buy-minus-sell diff (cumulative rises monotonically, so it sits
   // above its own trailing average throughout once warmed up) — neither formulation should
@@ -124,7 +135,8 @@ test("both candidates trade freely under a flat, never-blocking configuration fo
   }
 });
 
-test("selects the best-on-train candidate per family (highest train avgR among those with trades) and evaluates holdout only for that selection", async () => {
+test("selects the best-on-train candidate per family (highest train avgR among those with trades) and evaluates holdout only for that selection", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   // Periodic netBuyPressure rises monotonically from -1 to +1 across the full series, so its
   // train-only 80th-percentile threshold sits near the top of the TRAIN range — the gate opens
   // only in the last slice of train time, sharply restricting periodic's own train trade count
@@ -152,7 +164,8 @@ test("selects the best-on-train candidate per family (highest train avgR among t
   }
 });
 
-test("selects periodic deterministically when cumulative's own gate mathematically can never open (flat zero diff: 0 is never > its own 0 trailing average)", async () => {
+test("selects periodic deterministically when cumulative's own gate mathematically can never open (flat zero diff: 0 is never > its own 0 trailing average)", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const aggPoints = Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + i * 86400, value: "-0.05" })); // netBuyPressure flat +0.05, proven to trade freely above
   const cvdPoints = Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + i * 86400, value: { buy_volume: "1.0", sell_volume: "1.0" } })); // diff=0 constant, cumulative stays 0 forever
   const report = await runOrderFlowAggressorImbalance({

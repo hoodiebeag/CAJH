@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { runRollingVolatilityRegimeTiming } from "./rolling-volatility-regime-timing.mjs";
+
+// Tests below that use watchlist ["XBT"] need real local candle history to clear the
+// candle-coverage gate before they can exercise vol-specific classification logic.
+const HAS_XBT_CANDLES = fs.existsSync(new URL("./candles/XBTUSD.csv", import.meta.url));
 
 test("classifies an asset with no local candles as insufficient-candle-history, never calling fetchVol", async () => {
   const report = await runRollingVolatilityRegimeTiming({
@@ -13,7 +18,8 @@ test("classifies an asset with no local candles as insufficient-candle-history, 
   assert.equal(report.result.eligibleAssets, 0);
 });
 
-test("classifies a vol fetch failure precisely instead of silently dropping the asset", async () => {
+test("classifies a vol fetch failure precisely instead of silently dropping the asset", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const report = await runRollingVolatilityRegimeTiming({
     watchlist: ["XBT"],
     fetchVol: async () => { throw new Error("Request failed with status code 500"); },
@@ -39,7 +45,8 @@ test("reports VOLREGIME-DATA-INSUFFICIENT (not a crash) when zero assets clear t
 const NOW = Math.floor(Date.now() / 1000);
 const RECENT_SINCE = NOW - 900 * 86400;
 
-test("classifies vol history shorter than minHistoryDays precisely, reporting the actual coverage", async () => {
+test("classifies vol history shorter than minHistoryDays precisely, reporting the actual coverage", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const shortPoints = [{ timestamp: RECENT_SINCE, value: "20" }, { timestamp: RECENT_SINCE + 30 * 86400, value: "20" }];
   const report = await runRollingVolatilityRegimeTiming({
     watchlist: ["XBT"],
@@ -50,7 +57,8 @@ test("classifies vol history shorter than minHistoryDays precisely, reporting th
   assert.equal(report.input.coverage[0].reason, "vol-history-short (30.0 of 500 days)");
 });
 
-test("parses non-finite points defensively, ignoring them rather than crashing", async () => {
+test("parses non-finite points defensively, ignoring them rather than crashing", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const points = [
     { timestamp: RECENT_SINCE, value: "not-a-number" },
     ...Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + (i + 1) * 86400, value: "20" })),
@@ -63,7 +71,8 @@ test("parses non-finite points defensively, ignoring them rather than crashing",
   assert.equal(report.input.coverage[0].included, true);
 });
 
-test("includes an asset once candles and vol coverage both clear the gate, and scores both directions' gates honestly on a flat (never-expanding, never-contracting) series", async () => {
+test("includes an asset once candles and vol coverage both clear the gate, and scores both directions' gates honestly on a flat (never-expanding, never-contracting) series", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const flatPoints = Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + i * 86400, value: "20" }));
   const report = await runRollingVolatilityRegimeTiming({
     watchlist: ["XBT"],
@@ -86,7 +95,8 @@ test("includes an asset once candles and vol coverage both clear the gate, and s
   }
 });
 
-test("expanding and contracting directions are mutually exclusive on a monotonically rising series (never both fire at the same instant)", async () => {
+test("expanding and contracting directions are mutually exclusive on a monotonically rising series (never both fire at the same instant)", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const risingPoints = Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + i * 86400, value: String(10 + i * 0.05) }));
   const report = await runRollingVolatilityRegimeTiming({
     watchlist: ["XBT"],
@@ -105,7 +115,8 @@ test("expanding and contracting directions are mutually exclusive on a monotonic
   }
 });
 
-test("both directions are independently gated (no train-based selection) — regimes object always reports both, even when one has zero trades", async () => {
+test("both directions are independently gated (no train-based selection) — regimes object always reports both, even when one has zero trades", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const flatPoints = Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + i * 86400, value: "20" }));
   const report = await runRollingVolatilityRegimeTiming({
     watchlist: ["XBT"],

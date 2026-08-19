@@ -1678,3 +1678,72 @@ doesn't materially change the reading.
 Full run output: `research-runs/2026-08-18T20-08-01-299Z-seasonality-dayofweek-session.json`
 (code revision, per-asset trade counts, and coverage detail in the run's own provenance
 block).
+
+## 2026-08-19 — TEST-DATA-GATE-SKIP-NOT-FAIL: precondition-driven test failures converted to explicit skips (engineering, not research)
+
+Protocol hard rule 7 ("`npm.cmd test` must pass before advancing status") was unsatisfiable
+off the research machine: on a fresh clone with no `candles/` directory and no external
+egress, 45 of 447 tests failed — every one because its data source (local candle history, or
+a live analytics fetch) was absent, not because the code under test was wrong. A red suite
+was therefore indistinguishable from a real regression. Fixed by making each precondition-
+driven test detect its own precondition and skip explicitly (`node:test`'s `t.skip()`, with a
+reason naming the absent source) instead of failing. No assertions were weakened, no
+fallbacks fabricate data, and no test was converted to skip without individually confirming
+its failure was precondition-driven — verified per-file, not by pattern-matching the filename.
+
+**Root cause, all 45.** Every one of these `runXyz({ watchlist: ["XBT"], ... })`-style research
+signal modules checks local candle coverage (`researchlab.mjs`'s `loadResearchCandles`, which
+reads `candles/XBTUSD.csv`) *before* it ever calls the injected `fetchXyz` analytics stub. With
+`candles/` absent, every one of these tests gets `included: false, reason:
+"insufficient-candle-history"` immediately — even though most of them are actually testing
+fetch-failure classification, short-history classification, or gate-scoring logic downstream
+of coverage, using a *fake* analytics fetcher. The fix in every case: `fs.existsSync(new
+URL("./candles/XBTUSD.csv", import.meta.url))`, checked once per file, and `t.skip(...)` in
+each affected test when false. `funding-study.test.mjs` additionally has no fetch-injection
+point (it calls the real `fetchFundingRates`), so it skips on the same candle-file check before
+ever attempting network, with a secondary catch on the "aligned BTC/funding days" precondition
+error as a safety net for the case where the file exists but is too short.
+
+| File | Precondition-driven | Genuinely failing |
+|---|---:|---|
+| `basis-directional-signal.test.mjs` | 4 (candles/XBTUSD.csv) | none |
+| `cost-model.test.mjs` | 1 (candles/XBTUSD.csv) | none |
+| `funding-gate-h11.test.mjs` | 3 (candles/XBTUSD.csv) | none |
+| `funding-study.test.mjs` | 1 (candles/XBTUSD.csv, live funding fetch) | none |
+| `liquidation-cascade-reversal.test.mjs` | 4 (candles/XBTUSD.csv) | none |
+| `long-short-ratio-contrarian.test.mjs` | 5 (candles/XBTUSD.csv) | none |
+| `oi-trend-gate.test.mjs` | 3 (candles/XBTUSD.csv) | none |
+| `order-flow-aggressor-imbalance.test.mjs` | 8 (candles/XBTUSD.csv) | none |
+| `rolling-volatility-regime-timing.test.mjs` | 6 (candles/XBTUSD.csv) | none |
+| `seasonality-dayofweek-session.test.mjs` | 4 (candles/XBTUSD.csv) | none |
+| `top-traders-divergence.test.mjs` | 6 (candles/XBTUSD.csv) | none |
+| **Total** | **45** | **0** |
+
+**Measured, both environments, per done_when:**
+- Fresh clone (`git clone` into a scratch dir, `npm install`, no `candles/`, no `.env`, no
+  `config.json`): `npm.cmd test` → **447 tests, 402 pass, 0 fail, 45 skip.**
+- Research machine (`candles/` and egress present, unchanged working tree otherwise):
+  `npm.cmd test` → **447 tests, 447 pass, 0 fail, 0 skip** — identical to the pre-change
+  baseline pass count, and zero skips proves the guards detect the precondition rather than
+  silently disabling coverage when the data is actually there.
+
+**Discovered but explicitly NOT touched (out of scope for this item): a pre-existing,
+intermittent test-isolation leak.** Running the full suite twice in the same fresh clone
+produced 45 skips both times, but the fail count was 0 on one run and 2 on the next — both
+extra failures were `researchlib.test.mjs`'s `loadWatchlist` tests
+(`falls back to the on-disk candle store when config's watchlist is genuinely empty` and
+`returns [] rather than throwing when no candles/ directory exists`), which pass 12/12 every
+time when that file is run alone. Cause: `storage.js` resolves `DATA_DIR = process.env.DATA_DIR
+|| process.cwd()` once at module-import time (`storage.js:14`); some other test file that
+imports a module transitively depending on `storage.js` — `money-path.test.mjs`,
+`monitor-health.test.mjs`, `scheduler.test.mjs`, and `trader.test.mjs` are the candidates that
+reference storage-backed modules without ever mentioning `DATA_DIR` — writes a real
+`config.json`/`config.json.bak` into the repo-root working tree as a side effect when run
+concurrently with `researchlib.test.mjs`'s own tests (which correctly use isolated
+`mkdtempSync` dirs and a `DATA_DIR` override, and are not themselves at fault). This is a real,
+reproducible bug, but it is unrelated to missing external data — it is a cross-file
+isolation leak in the suite's own use of `storage.js` — so per this item's own scope
+("additive guards only... no source module changes") it is called out here rather than fixed.
+Left for a follow-up work_queue item to identify the exact polluting call site and either set
+`DATA_DIR` in that test file or make `storage.js`'s default lazy per-call instead of
+frozen-at-import.

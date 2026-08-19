@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { runLongShortRatioContrarian } from "./long-short-ratio-contrarian.mjs";
+
+// Tests below that use watchlist ["XBT"] need real local candle history to clear the
+// candle-coverage gate before they can exercise ratio-specific classification logic.
+const HAS_XBT_CANDLES = fs.existsSync(new URL("./candles/XBTUSD.csv", import.meta.url));
 
 test("classifies an asset with no local candles as insufficient-candle-history, never calling fetchRatio", async () => {
   const report = await runLongShortRatioContrarian({
@@ -13,7 +18,8 @@ test("classifies an asset with no local candles as insufficient-candle-history, 
   assert.equal(report.result.eligibleAssets, 0);
 });
 
-test("classifies a ratio-fetch failure precisely instead of silently dropping the asset", async () => {
+test("classifies a ratio-fetch failure precisely instead of silently dropping the asset", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const report = await runLongShortRatioContrarian({
     watchlist: ["XBT"],
     fetchRatio: async () => { throw new Error("Request failed with status code 500"); },
@@ -24,7 +30,8 @@ test("classifies a ratio-fetch failure precisely instead of silently dropping th
   assert.match(report.input.coverage[0].reason, /^ratio-fetch-error: Request failed with status code 500$/);
 });
 
-test("classifies ratio history shorter than minHistoryDays precisely, reporting the actual coverage", async () => {
+test("classifies ratio history shorter than minHistoryDays precisely, reporting the actual coverage", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const shortAnalytics = { normalized: { points: [{ timestamp: 0, value: "0.5" }, { timestamp: 30 * 86400, value: "0.5" }] } };
   const report = await runLongShortRatioContrarian({
     watchlist: ["XBT"],
@@ -51,7 +58,8 @@ test("reports RATIO-DATA-INSUFFICIENT (not a crash) when zero assets clear the c
 const NOW = Math.floor(Date.now() / 1000);
 const RECENT_SINCE = NOW - 900 * 86400;
 
-test("includes an asset once candles and ratio coverage both clear the gate, and a flat ratio (never extreme relative to itself) never blocks an entry", async () => {
+test("includes an asset once candles and ratio coverage both clear the gate, and a flat ratio (never extreme relative to itself) never blocks an entry", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const flatPoints = Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + i * 86400, value: "0.50" }));
   const report = await runLongShortRatioContrarian({
     watchlist: ["XBT"],
@@ -71,7 +79,8 @@ test("includes an asset once candles and ratio coverage both clear the gate, and
   }
 });
 
-test("suppresses every holdout entry once the ratio moves into its own train-fixed extreme-long zone", async () => {
+test("suppresses every holdout entry once the ratio moves into its own train-fixed extreme-long zone", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const trainPoints = Array.from({ length: 630 }, (_, i) => ({ timestamp: RECENT_SINCE + i * 86400, value: "0.30" }));
   const holdoutPoints = Array.from({ length: 270 }, (_, i) => ({ timestamp: RECENT_SINCE + (630 + i) * 86400, value: "0.99" }));
   const report = await runLongShortRatioContrarian({
@@ -99,7 +108,8 @@ test("suppresses every holdout entry once the ratio moves into its own train-fix
   }
 });
 
-test("parses the plain decimal-string ratio value and ignores non-finite points", async () => {
+test("parses the plain decimal-string ratio value and ignores non-finite points", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const points = [
     { timestamp: RECENT_SINCE, value: "not-a-number" },
     ...Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + (i + 1) * 86400, value: "0.50" })),

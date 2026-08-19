@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { runFuturesBasisDirectionalSignal } from "./basis-directional-signal.mjs";
+
+// Tests below that use watchlist ["XBT"] need real local candle history to clear the
+// candle-coverage gate before they can exercise basis-specific classification logic.
+const HAS_XBT_CANDLES = fs.existsSync(new URL("./candles/XBTUSD.csv", import.meta.url));
 
 test("classifies an asset with no local candles as insufficient-candle-history, never calling fetchBasis", async () => {
   const report = await runFuturesBasisDirectionalSignal({
@@ -13,7 +18,8 @@ test("classifies an asset with no local candles as insufficient-candle-history, 
   assert.equal(report.result.eligibleAssets, 0);
 });
 
-test("classifies a basis-fetch failure precisely instead of silently dropping the asset", async () => {
+test("classifies a basis-fetch failure precisely instead of silently dropping the asset", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const report = await runFuturesBasisDirectionalSignal({
     watchlist: ["XBT"],
     fetchBasis: async () => { throw new Error("Request failed with status code 500"); },
@@ -24,7 +30,8 @@ test("classifies a basis-fetch failure precisely instead of silently dropping th
   assert.match(report.input.coverage[0].reason, /^basis-fetch-error: Request failed with status code 500$/);
 });
 
-test("classifies basis history shorter than minHistoryDays precisely, reporting the actual coverage", async () => {
+test("classifies basis history shorter than minHistoryDays precisely, reporting the actual coverage", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const shortAnalytics = { normalized: { points: [{ timestamp: 0, value: { basis: "0.0001" } }, { timestamp: 30 * 86400, value: { basis: "0.0001" } }] } };
   const report = await runFuturesBasisDirectionalSignal({
     watchlist: ["XBT"],
@@ -45,7 +52,8 @@ test("reports BASIS-DATA-INSUFFICIENT (not a crash) when zero assets clear the c
   assert.deepEqual(report.result.families, {});
 });
 
-test("includes an asset once candles and basis coverage both clear the gate, and scores both families' gates honestly on zero-signal (flat basis) data", async () => {
+test("includes an asset once candles and basis coverage both clear the gate, and scores both families' gates honestly on zero-signal (flat basis) data", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const longPoints = Array.from({ length: 900 }, (_, i) => ({ timestamp: i * 86400, value: { basis: "0.0001" } }));
   const report = await runFuturesBasisDirectionalSignal({
     watchlist: ["XBT"],
@@ -66,7 +74,8 @@ test("includes an asset once candles and basis coverage both clear the gate, and
   }
 });
 
-test("parses the { basis } object value shape and ignores points with a non-finite basis", async () => {
+test("parses the { basis } object value shape and ignores points with a non-finite basis", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const points = [
     { timestamp: 0, value: { basis: "not-a-number" } },
     ...Array.from({ length: 900 }, (_, i) => ({ timestamp: (i + 1) * 86400, value: { basis: "0.0001" } })),

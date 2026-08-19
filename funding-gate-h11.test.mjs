@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { runFundingGateH11 } from "./funding-gate-h11.mjs";
+
+// Tests below that use watchlist ["XBT"] need real local candle history to clear the
+// candle-coverage gate before they can exercise funding-specific classification logic.
+const HAS_XBT_CANDLES = fs.existsSync(new URL("./candles/XBTUSD.csv", import.meta.url));
 
 test("classifies an asset with no local candles as insufficient-candle-history", async () => {
   const report = await runFundingGateH11({ watchlist: ["ZZZFAKE"], fetchFunding: async () => { throw new Error("should not be called"); } });
@@ -10,7 +15,8 @@ test("classifies an asset with no local candles as insufficient-candle-history",
   assert.match(report.result.verdict, /unavailable/);
 });
 
-test("classifies a funding-fetch failure precisely instead of silently dropping the asset", async () => {
+test("classifies a funding-fetch failure precisely instead of silently dropping the asset", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const report = await runFundingGateH11({
     watchlist: ["XBT"],
     fetchFunding: async () => { const err = new Error("Request failed with status code 451"); throw err; },
@@ -22,7 +28,8 @@ test("classifies a funding-fetch failure precisely instead of silently dropping 
   assert.equal(report.input.eligibleAssets.length, 0);
 });
 
-test("classifies funding history shorter than minHistoryDays precisely, reporting the actual coverage", async () => {
+test("classifies funding history shorter than minHistoryDays precisely, reporting the actual coverage", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const shortPoints = { points: [{ time: 0, rate: 0 }, { time: 30 * 86400_000, rate: 0 }] };
   const report = await runFundingGateH11({
     watchlist: ["XBT"],
@@ -34,7 +41,8 @@ test("classifies funding history shorter than minHistoryDays precisely, reportin
   assert.equal(report.input.coverage[0].reason, "funding-history-short (30.0 of 730 days)");
 });
 
-test("includes an asset once candles and funding coverage both clear the gate (no regression vs prior behavior)", async () => {
+test("includes an asset once candles and funding coverage both clear the gate (no regression vs prior behavior)", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const start = 0, end = 800 * 86400_000;
   const longPoints = { points: Array.from({ length: 900 }, (_, i) => ({ time: start + i * 86400_000, rate: -0.0002 })) };
   const report = await runFundingGateH11({

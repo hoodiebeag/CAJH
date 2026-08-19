@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { runSeasonalityDayOfWeekSession } from "./seasonality-dayofweek-session.mjs";
+
+// Tests below that use watchlist ["XBT"] need real local candle history to clear the
+// candle-coverage gate before they can exercise seasonality-specific classification logic.
+const HAS_XBT_CANDLES = fs.existsSync(new URL("./candles/XBTUSD.csv", import.meta.url));
 
 test("classifies an asset with no local candles as insufficient-candle-history", async () => {
   const report = await runSeasonalityDayOfWeekSession({ watchlist: ["ZZZFAKE"] });
@@ -17,7 +22,8 @@ test("reports SEASONALITY-DATA-INSUFFICIENT (not a crash) when zero assets clear
   assert.deepEqual(report.result.families, {});
 });
 
-test("includes an asset once local candle coverage clears the gate, and reports both families with full day/session breakdowns", async () => {
+test("includes an asset once local candle coverage clears the gate, and reports both families with full day/session breakdowns", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const report = await runSeasonalityDayOfWeekSession({ watchlist: ["XBT"] });
   assert.equal(report.input.coverage[0].included, true);
   assert.equal(report.input.eligibleAssets.length, 1);
@@ -32,7 +38,8 @@ test("includes an asset once local candle coverage clears the gate, and reports 
   }
 });
 
-test("day-of-week and session bucket totals each sum to the family's reported holdout trade count (the entry-time recovery is lossless and 1:1, not merely assumed)", async () => {
+test("day-of-week and session bucket totals each sum to the family's reported holdout trade count (the entry-time recovery is lossless and 1:1, not merely assumed)", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const report = await runSeasonalityDayOfWeekSession({ watchlist: ["XBT"] });
   for (const family of ["breakout", "anticipate"]) {
     const f = report.result.families[family];
@@ -43,7 +50,8 @@ test("day-of-week and session bucket totals each sum to the family's reported ho
   }
 });
 
-test("this is a real backtest on real local candle history, not a zero-trade no-op (XBT has enough holdout history to produce trades in at least one family)", async () => {
+test("this is a real backtest on real local candle history, not a zero-trade no-op (XBT has enough holdout history to produce trades in at least one family)", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const report = await runSeasonalityDayOfWeekSession({ watchlist: ["XBT"] });
   const totalTrades = report.result.families.breakout.holdout.trades + report.result.families.anticipate.holdout.trades;
   assert.ok(totalTrades > 0, "expected at least one trade across breakout/anticipate on real XBT holdout history");
@@ -69,7 +77,8 @@ test("session buckets are a clean non-overlapping partition of all 24 UTC hours 
   assert.equal(seen.get(23), "us");
 });
 
-test("splitSeries holdout is strictly the trailing (chronologically later) portion of history, not train re-used as holdout", async () => {
+test("splitSeries holdout is strictly the trailing (chronologically later) portion of history, not train re-used as holdout", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const full = await runSeasonalityDayOfWeekSession({ watchlist: ["XBT"], splitFraction: 0.01 });
   const mostlyHoldout = full.result.families.breakout.holdout.trades + full.result.families.anticipate.holdout.trades;
   const almostNone = await runSeasonalityDayOfWeekSession({ watchlist: ["XBT"], splitFraction: 0.99 });

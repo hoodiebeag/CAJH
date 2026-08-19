@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { runTopTradersDivergence } from "./top-traders-divergence.mjs";
+
+// Tests below that use watchlist ["XBT"] need real local candle history to clear the
+// candle-coverage gate before they can exercise divergence-specific classification logic.
+const HAS_XBT_CANDLES = fs.existsSync(new URL("./candles/XBTUSD.csv", import.meta.url));
 
 test("classifies an asset with no local candles as insufficient-candle-history, never calling either fetch", async () => {
   const report = await runTopTradersDivergence({
@@ -14,7 +19,8 @@ test("classifies an asset with no local candles as insufficient-candle-history, 
   assert.equal(report.result.eligibleAssets, 0);
 });
 
-test("classifies a top-traders fetch failure precisely instead of silently dropping the asset", async () => {
+test("classifies a top-traders fetch failure precisely instead of silently dropping the asset", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const report = await runTopTradersDivergence({
     watchlist: ["XBT"],
     fetchTop: async () => { throw new Error("Request failed with status code 500"); },
@@ -25,7 +31,8 @@ test("classifies a top-traders fetch failure precisely instead of silently dropp
   assert.match(report.input.coverage[0].reason, /^divergence-fetch-error: Request failed with status code 500$/);
 });
 
-test("classifies divergence history shorter than minHistoryDays precisely, reporting the actual coverage", async () => {
+test("classifies divergence history shorter than minHistoryDays precisely, reporting the actual coverage", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const shortTop = { normalized: { points: [{ timestamp: 0, value: { ratio: "0.5" } }, { timestamp: 30 * 86400, value: { ratio: "0.5" } }] } };
   const shortAgg = { normalized: { points: [{ timestamp: 0, value: "0.5" }, { timestamp: 30 * 86400, value: "0.5" }] } };
   const report = await runTopTradersDivergence({
@@ -55,7 +62,8 @@ test("reports DIVERGENCE-DATA-INSUFFICIENT (not a crash) when zero assets clear 
 const NOW = Math.floor(Date.now() / 1000);
 const RECENT_SINCE = NOW - 900 * 86400;
 
-test("drops a day present in only one of the two series instead of guessing its value", async () => {
+test("drops a day present in only one of the two series instead of guessing its value", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const topPoints = Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + i * 86400, value: { ratio: "0.60" } }));
   // Aggregate is missing every 10th day.
   const aggPoints = Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + i * 86400, value: "0.50" })).filter((_, i) => i % 10 !== 0);
@@ -71,7 +79,8 @@ test("drops a day present in only one of the two series instead of guessing its 
   assert.equal(report.input.coverage[0].trainThreshold, 0.1);
 });
 
-test("includes an asset once candles and divergence coverage both clear the gate, and a flat divergence (never above its own threshold) trades freely", async () => {
+test("includes an asset once candles and divergence coverage both clear the gate, and a flat divergence (never above its own threshold) trades freely", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const topPoints = Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + i * 86400, value: { ratio: "0.55" } }));
   const aggPoints = Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + i * 86400, value: "0.50" }));
   const report = await runTopTradersDivergence({
@@ -90,7 +99,8 @@ test("includes an asset once candles and divergence coverage both clear the gate
   }
 });
 
-test("suppresses every holdout entry once divergence falls below its own train-fixed confirmation threshold", async () => {
+test("suppresses every holdout entry once divergence falls below its own train-fixed confirmation threshold", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const trainTop = Array.from({ length: 630 }, (_, i) => ({ timestamp: RECENT_SINCE + i * 86400, value: { ratio: "0.60" } }));
   const trainAgg = Array.from({ length: 630 }, (_, i) => ({ timestamp: RECENT_SINCE + i * 86400, value: "0.50" }));
   // Holdout divergence flips sign entirely (top traders now less bullish than the crowd).
@@ -122,7 +132,8 @@ test("suppresses every holdout entry once divergence falls below its own train-f
   }
 });
 
-test("parses the top-traders ratio field and aggregate decimal string, ignoring non-finite points", async () => {
+test("parses the top-traders ratio field and aggregate decimal string, ignoring non-finite points", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const topPoints = [
     { timestamp: RECENT_SINCE, value: { ratio: "not-a-number" } },
     ...Array.from({ length: 900 }, (_, i) => ({ timestamp: RECENT_SINCE + (i + 1) * 86400, value: { ratio: "0.55" } })),

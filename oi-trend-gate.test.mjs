@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { runOpenInterestTrendConfirmation } from "./oi-trend-gate.mjs";
+
+// Tests below that use watchlist ["XBT"] need real local candle history to clear the
+// candle-coverage gate before they can exercise OI-specific classification logic.
+const HAS_XBT_CANDLES = fs.existsSync(new URL("./candles/XBTUSD.csv", import.meta.url));
 
 test("classifies an asset with no local candles as insufficient-candle-history, never calling fetchOi", async () => {
   const report = await runOpenInterestTrendConfirmation({
@@ -13,7 +18,8 @@ test("classifies an asset with no local candles as insufficient-candle-history, 
   assert.equal(report.result.eligibleAssets, 0);
 });
 
-test("classifies an OI-fetch failure precisely instead of silently dropping the asset", async () => {
+test("classifies an OI-fetch failure precisely instead of silently dropping the asset", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const report = await runOpenInterestTrendConfirmation({
     watchlist: ["XBT"],
     fetchOi: async () => { throw new Error("Request failed with status code 500"); },
@@ -24,7 +30,8 @@ test("classifies an OI-fetch failure precisely instead of silently dropping the 
   assert.match(report.input.coverage[0].reason, /^oi-fetch-error: Request failed with status code 500$/);
 });
 
-test("classifies OI history shorter than minHistoryDays precisely, reporting the actual coverage", async () => {
+test("classifies OI history shorter than minHistoryDays precisely, reporting the actual coverage", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const shortAnalytics = { normalized: { points: [{ timestamp: 0, value: ["1", "1", "1", "1"] }, { timestamp: 30 * 86400, value: ["1", "1", "1", "1"] }] } };
   const report = await runOpenInterestTrendConfirmation({
     watchlist: ["XBT"],
@@ -45,7 +52,8 @@ test("reports OI-DATA-INSUFFICIENT (not a crash) when zero assets clear the cove
   assert.deepEqual(report.result.families, {});
 });
 
-test("includes an asset once candles and OI coverage both clear the gate, and scores both families' gates honestly on zero-signal data", async () => {
+test("includes an asset once candles and OI coverage both clear the gate, and scores both families' gates honestly on zero-signal data", async (t) => {
+  if (!HAS_XBT_CANDLES) { t.skip("candles/XBTUSD.csv absent (no local candle history)"); return; }
   const longPoints = Array.from({ length: 900 }, (_, i) => ({ timestamp: i * 86400, value: ["100", "100", "100", "100"] }));
   const report = await runOpenInterestTrendConfirmation({
     watchlist: ["XBT"],
