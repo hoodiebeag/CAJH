@@ -37,13 +37,13 @@ VERDICTS.md at all:**
   audit is about ("slicing seven ways and picking the best-looking cell is
   multiple-comparisons p-hacking almost by construction").
 
-**Total: 45 studies conducted to date**, not 14. Breakdown by kind:
+**Total: 46 studies conducted to date** (updated 2026-08-19 post-audit by PAIRS-COINTEGRATION-STATARB), not 14. Breakdown by kind:
 
 | Kind | Count | What it means for this audit |
 |---|---:|---|
 | Formal NHST (reports a p-value against a pre-registered gate) | 6 studies / 9 sub-tests | Section 2 — a real FWER/FDR computation applies |
 | Economic-gate-only (point-estimate threshold, no p-value/null distribution) | 33 | Section 3 — classical alpha math doesn't transfer cleanly; discussed qualitatively |
-| Non-verdict (data-availability gate failed before any test ran) | 5 (H11, FUNDING-MEANREV, ONCHAIN-FLOW-GATE, FIB-PULLBACK, VOL-CONFIRM-BREAKOUT) | Consumed zero holdout looks — train-gate or data-gate failures, holdout never examined. Not part of either look-elsewhere pool. |
+| Non-verdict (a gate failed before holdout was ever examined) | 6 (H11, FUNDING-MEANREV, ONCHAIN-FLOW-GATE, FIB-PULLBACK, VOL-CONFIRM-BREAKOUT, PAIRS-COINTEGRATION-STATARB) | Consumed zero holdout looks — train-gate, data-gate, or (new with PAIRS-COINTEGRATION-STATARB) internal-screen-gate failures, holdout never examined. Not part of either look-elsewhere pool. PAIRS-COINTEGRATION-STATARB differs from the other five: its gate wasn't missing data, it was its own internal, ALREADY BH-FDR-corrected 105-pair Engle-Granger screen (0/105 survived q=0.05) — a self-contained formal-NHST family that doesn't feed Section 2's 9-sub-test table, since it was corrected within the study rather than needing retroactive cross-study correction. |
 | Descriptive / no gate at all | 2 (T1-ZEROCOST informal 8-family screen, SEASONALITY-DAYOFWEEK-SESSION) | No pass/fail claim was ever made, so nothing to correct — but the holdout window was looked at, which matters for Section 4 |
 | Informal, pre-dates any written protocol (pre-2026-08-04) | 3 (Trade intensity, Order-flow pooled, MR1) | No p-value, no formal gate on record; included for honesty, excluded from every quantitative computation below |
 

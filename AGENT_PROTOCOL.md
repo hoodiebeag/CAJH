@@ -243,8 +243,15 @@ fail):**
 
 - Formal NHST studies (report a p-value against a pre-registered significance gate):
   **9** sub-tests across 6 studies as of 2026-08-19 (see audit §2 for the list and p-values).
+  Unchanged by PAIRS-COINTEGRATION-STATARB (2026-08-19): that study ran its own internal
+  105-test Engle-Granger screen, already BH-FDR-corrected within the study (0/105 survived
+  q=0.05) — it doesn't add a raw uncorrected p-value to this cross-study table the way
+  Classifier P5's did.
 - Economic-gate studies (point-estimate threshold, no p-value): **33** as of 2026-08-19
-  (audit §1/§3).
+  (audit §1/§3). Unchanged by PAIRS-COINTEGRATION-STATARB — its holdout economic gate was
+  never evaluated (0 pairs cleared the internal screen), same "screen/train-gate blocked,
+  holdout never touched" bucket as H11/FUNDING-MEANREV/FIB-PULLBACK (audit §1 Non-verdict row,
+  now 6 studies).
 
 **Rule for a new formal NHST result.** Do not evaluate it against `alpha=0.05` in isolation.
 Add its p-value to the family-size counter above, recompute Benjamini-Hochberg FDR across
