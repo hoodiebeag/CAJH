@@ -37,11 +37,14 @@ VERDICTS.md at all:**
   audit is about ("slicing seven ways and picking the best-looking cell is
   multiple-comparisons p-hacking almost by construction").
 
-**Total: 46 studies conducted to date** (updated 2026-08-19 post-audit by PAIRS-COINTEGRATION-STATARB), not 14. Breakdown by kind:
+**Total: 47 studies conducted to date** (updated 2026-08-19 post-audit by
+CROSS-SECTIONAL-NONPRICE-RANK — see its own row below and VERDICTS.md — a 47th study; the
+prior post-audit update, PAIRS-COINTEGRATION-STATARB, brought the count to 46), not 14.
+Breakdown by kind:
 
 | Kind | Count | What it means for this audit |
 |---|---:|---|
-| Formal NHST (reports a p-value against a pre-registered gate) | 6 studies / 9 sub-tests | Section 2 — a real FWER/FDR computation applies |
+| Formal NHST (reports a p-value against a pre-registered gate) | 7 studies / 10 sub-tests | Section 2 — a real FWER/FDR computation applies |
 | Economic-gate-only (point-estimate threshold, no p-value/null distribution) | 33 | Section 3 — classical alpha math doesn't transfer cleanly; discussed qualitatively |
 | Non-verdict (a gate failed before holdout was ever examined) | 6 (H11, FUNDING-MEANREV, ONCHAIN-FLOW-GATE, FIB-PULLBACK, VOL-CONFIRM-BREAKOUT, PAIRS-COINTEGRATION-STATARB) | Consumed zero holdout looks — train-gate, data-gate, or (new with PAIRS-COINTEGRATION-STATARB) internal-screen-gate failures, holdout never examined. Not part of either look-elsewhere pool. PAIRS-COINTEGRATION-STATARB differs from the other five: its gate wasn't missing data, it was its own internal, ALREADY BH-FDR-corrected 105-pair Engle-Granger screen (0/105 survived q=0.05) — a self-contained formal-NHST family that doesn't feed Section 2's 9-sub-test table, since it was corrected within the study rather than needing retroactive cross-study correction. |
 | Descriptive / no gate at all | 2 (T1-ZEROCOST informal 8-family screen, SEASONALITY-DAYOFWEEK-SESSION) | No pass/fail claim was ever made, so nothing to correct — but the holdout window was looked at, which matters for Section 4 |
@@ -54,7 +57,7 @@ study by `B5-REVERSAL-PHASE4-PORTFOLIO-SIM`'s FAIL under a stricter, more realis
 
 ## 2. The formal-significance subfamily: a real FWER/FDR computation
 
-Nine sub-tests across six studies report an actual p-value against the project's
+Ten sub-tests across seven studies report an actual p-value against the project's
 pre-registered `p<0.05` significance gate (`MOMENTUM_SPEC.md §6` clause 1, and the
 classifier spec's equivalent permutation-null clause). These are the only results in this
 project where classical multiple-comparisons math applies without qualification, because
@@ -66,52 +69,58 @@ they're the only ones with an actual null distribution behind them.
 | 2 | CLASSIFIER-FUNDING-FEATURE (holdout, primary) | 0.0099 | yes |
 | 3 | Classifier P5 (holdout, primary) | 0.0198 | yes |
 | 4 | Low-vol B4 negBeta (train) | 0.0579 | yes |
-| 5 | Low-vol B4 negVol (train) | 0.2278 | yes |
-| 6 | B5-REVERSAL L=5 (train) | 0.4226 | yes |
-| 7 | MOMENTUM-SHORT-HORIZON-RECHECK L=14 (train) | 0.4266 | yes |
-| 8 | MOMENTUM-SHORT-HORIZON-RECHECK L=7 (train) | 0.6024 | **no** (wrong sign) |
-| 9 | Momentum M7 (train, residual IC) | 0.7013 | yes |
+| 5 | CROSS-SECTIONAL-NONPRICE-RANK (train, OI-change primary IC) | 0.1249 | **no** (wrong sign) |
+| 6 | Low-vol B4 negVol (train) | 0.2278 | yes |
+| 7 | B5-REVERSAL L=5 (train) | 0.4226 | yes |
+| 8 | MOMENTUM-SHORT-HORIZON-RECHECK L=14 (train) | 0.4266 | yes |
+| 9 | MOMENTUM-SHORT-HORIZON-RECHECK L=7 (train) | 0.6024 | **no** (wrong sign) |
+| 10 | Momentum M7 (train, residual IC) | 0.7013 | yes |
 
-**Naive FWER, k=9, alpha=0.05:** 1 − (1 − 0.05)^9 = **0.370** (assuming independence, which
-these tests only partially satisfy — see caveat below). Over a family this size, more than a
-1-in-3 chance of at least one nominal "significant" hit existed even if every single
+**Naive FWER, k=10, alpha=0.05:** 1 − (1 − 0.05)^10 = **0.401** (assuming independence,
+which these tests only partially satisfy — see caveat below). Over a family this size, more
+than a 2-in-5 chance of at least one nominal "significant" hit existed even if every single
 underlying effect were exactly zero. Three did clear p<0.05 (ranks 1–3 above) — informative,
 but this alone doesn't say anything about which are real.
 
-**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 9 is `(i/9)×0.05`):
+**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 10 is `(i/10)×0.05`):
 
-| Rank *i* | p-value | Threshold (i/9)×0.05 | Survives? |
+| Rank *i* | p-value | Threshold (i/10)×0.05 | Survives? |
 |---:|---:|---:|---|
-| 1 | 0.0010 | 0.00556 | **yes** |
-| 2 | 0.0099 | 0.01111 | **yes** |
-| 3 | 0.0198 | 0.01667 | no — 0.0198 > 0.01667 |
-| 4–9 | 0.0579–0.7013 | 0.02222–0.05 | no |
+| 1 | 0.0010 | 0.005 | **yes** |
+| 2 | 0.0099 | 0.010 | **yes** |
+| 3 | 0.0198 | 0.015 | no — 0.0198 > 0.015 |
+| 4–10 | 0.0579–0.7013 | 0.020–0.05 | no |
 
 **Only B5-REVERSAL (L=3) and CLASSIFIER-FUNDING-FEATURE survive family-wise BH-FDR
-correction at q=0.05.** Classifier P5's originally-reported "clears p<0.05" result
-(p=0.0198) does **not** survive correction against the other 8 tests in its own family —
-stated here for the first time, changing nothing: P5 was already KILLED on the separate,
-independently-required economic clause (its best-scoring subset still nets -0.46R/trade
-after cost), so this correction doesn't flip any verdict, it just removes a claim
-("statistically significant") that shouldn't have been read as surviving multiple
-comparisons in isolation.
+correction at q=0.05.** Unchanged by adding CROSS-SECTIONAL-NONPRICE-RANK as the 10th test
+(2026-08-19): its own train IC came back wrong-signed and nowhere near p<0.05 in isolation
+(p=0.1249; q=0.2498 after correction), so it doesn't get close to surviving either the naive
+or corrected bar — it is simply one more non-hit added to the family, not a new near-miss.
+Classifier P5's originally-reported "clears p<0.05" result (p=0.0198) does **not** survive
+correction against the other tests in its own family — stated here for the first time,
+changing nothing: P5 was already KILLED on the separate, independently-required economic
+clause (its best-scoring subset still nets -0.46R/trade after cost), so this correction
+doesn't flip any verdict, it just removes a claim ("statistically significant") that
+shouldn't have been read as surviving multiple comparisons in isolation.
 
 **A genuinely surprising pattern, stated with its caveat.** Under a null of "no real effect
-anywhere in this family," P(at least 3 of 9 independent trials clear p<0.05) ≈ **0.84%**
-(exact binomial, n=9, p=0.05) — getting 3 hits by pure chance alone is unlikely. Read at
-face value this would suggest at least one of these three signals is real. **The caveat that
-matters:** these nine tests are not independent draws. B5-REVERSAL L=3/L=5 share the same
-underlying reversal mechanism and overlapping data; CLASSIFIER-FUNDING-FEATURE is P5's own
-model plus one covariate, built on the same classifier and much of the same holdout rows.
-Correlated tests cluster hits and misses together more than independent ones do, which makes
-"3 hits" less surprising than the naive binomial number suggests — the 0.84% figure is a
-useful anchor, not a rigorous p-value for the meta-question. **The honest reading:** this
-project has three separate lines of evidence (a short-horizon reversal signal, an
-entry-time classifier, and a funding-augmented version of that classifier) that are
-*statistically real and economically dead* — not noise, not a coding bug, but real effects
-too small for this project's actual trading costs (~1.7% round-trip) to ever monetize. That
-is a materially different, more informative conclusion than "still no edge," and it is
-consistent with every one of these three rows' own individually-recorded verdicts.
+anywhere in this family," P(at least 3 of 10 independent trials clear p<0.05) ≈ **1.15%**
+(exact binomial, n=10, p=0.05, updated from the prior n=9 figure of 0.84% now that
+CROSS-SECTIONAL-NONPRICE-RANK has added a 10th, non-hit, test) — getting 3 hits by pure
+chance alone is still unlikely. Read at face value this would suggest at least one of these
+three signals is real. **The caveat that matters:** these ten tests are not independent
+draws. B5-REVERSAL L=3/L=5 share the same underlying reversal mechanism and overlapping
+data; CLASSIFIER-FUNDING-FEATURE is P5's own model plus one covariate, built on the same
+classifier and much of the same holdout rows. Correlated tests cluster hits and misses
+together more than independent ones do, which makes "3 hits" less surprising than the naive
+binomial number suggests — the 1.15% figure is a useful anchor, not a rigorous p-value for
+the meta-question. **The honest reading:** this project has three separate lines of evidence
+(a short-horizon reversal signal, an entry-time classifier, and a funding-augmented version
+of that classifier) that are *statistically real and economically dead* — not noise, not a
+coding bug, but real effects too small for this project's actual trading costs (~1.7%
+round-trip) to ever monetize. That is a materially different, more informative conclusion
+than "still no edge," and it is consistent with every one of these three rows' own
+individually-recorded verdicts.
 
 ## 3. The economic-gate subfamily: why classical FWER doesn't transfer, and what does
 
