@@ -8,6 +8,14 @@
 
 ## Honest Baseline First
 
+**Before pre-registering a new study, read `MULTIPLE_COMPARISONS_AUDIT.md` and
+AGENT_PROTOCOL.md's "Multiple-comparisons discipline" section (added 2026-08-19).** This
+project has run 45 studies to date, not the "roughly 14" an earlier estimate assumed, and the
+2025-06-01–present calendar holdout has been examined ~27 times — it is retired as a fresh
+judge for this watchlist. A new significance result must clear a recomputed family-wise
+BH-FDR correction, not raw p<0.05; a new economic-gate PASS must replicate on the
+`SEALED_SYMBOLS` pool before being treated as a live candidate.
+
 Every entry family tested in the latest tournament is **net-negative after costs, in both train and holdout**:
 
 | Family | Train R/trade | Holdout R/trade |

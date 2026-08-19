@@ -232,6 +232,41 @@ Apply this rule whenever work_queue is touched at scale — a dedicated retentio
 STEP 5 restock once the done count has grown past the cap again — not just as a one-time
 cleanup.
 
+## Multiple-comparisons discipline for pre-registered studies (added 2026-08-19)
+
+Full derivation and the audit that motivated this: `MULTIPLE_COMPARISONS_AUDIT.md`. This
+section is the binding rule; that document is the reasoning behind it. Update both together
+— the counters below go stale the moment a new study lands if only one is touched.
+
+**Family-size counters (update every time a new study of that kind completes, pass or
+fail):**
+
+- Formal NHST studies (report a p-value against a pre-registered significance gate):
+  **9** sub-tests across 6 studies as of 2026-08-19 (see audit §2 for the list and p-values).
+- Economic-gate studies (point-estimate threshold, no p-value): **33** as of 2026-08-19
+  (audit §1/§3).
+
+**Rule for a new formal NHST result.** Do not evaluate it against `alpha=0.05` in isolation.
+Add its p-value to the family-size counter above, recompute Benjamini-Hochberg FDR across
+*all* p-values in that family (old + new) at `q=0.05`, and only call the new result
+"statistically significant" if it survives that recomputed correction. If it doesn't survive
+correction but does clear the economic gate independently, record both facts plainly — do
+not report only the flattering one.
+
+**Rule for a new economic-gate result that clears its literal pre-registered threshold.**
+Treat it as provisional, not a live candidate for the D3 human gate, until it is re-run
+against `researchlib.mjs`'s `SEALED_SYMBOLS` pool (`AVAX`, `LINK`, `NEAR`, `SUI`, `UNI`) — the
+one holdout resource in this project confirmed never yet examined by any study. A PASS that
+does not replicate there is not promoted. This exists because 33 consecutive economic-gate
+studies have all missed their threshold by 2-5x with zero near-misses (audit §3) — a future
+result that clears the line for the first time deserves more scrutiny than less.
+
+**Rule for the calendar holdout.** `2025-06-01–present` has been examined by roughly 27
+separate economic-gate/descriptive studies as of this audit and is retired as a "fresh"
+judge for the 28-asset active watchlist. A new price-structure family study either uses
+candle data collected after 2026-08-19 for its holdout, or explicitly discloses in its own
+result writeup that it is re-examining already-spent data — never silently.
+
 ## Scheduling (updated 2026-08-07 — one task, not three)
 
 The loop originally ran as three independent scheduled tasks (`cajh-executor-check`,
