@@ -128,12 +128,12 @@ export function backtestMultiTF({ series } = {}, {
   // The entry TF (entryTf label, default the lowest) trades; everything ABOVE it is the
   // bias filter, and the highest TF anchors the chop/MA gate.
   if (!Array.isArray(series) || !series.length || series.some(s => !s?.candles?.length)) {
-    return { trades: 0, winRate: 0, totalR: 0, avgR: 0, maxDrawdownR: 0, results: [] };
+    return { trades: 0, winRate: 0, totalR: 0, avgR: 0, maxDrawdownR: 0, results: [], excursions: [] };
   }
   const TFS = series;
   const ei  = entryTf ? TFS.findIndex(t => t.label === entryTf) : 0;
   if (ei < 0) {
-    return { trades: 0, winRate: 0, totalR: 0, avgR: 0, maxDrawdownR: 0, results: [] };
+    return { trades: 0, winRate: 0, totalR: 0, avgR: 0, maxDrawdownR: 0, results: [], excursions: [] };
   }
   const entryCandles = TFS[ei].candles;
   const entryMins    = TFS[ei].mins;
@@ -345,6 +345,10 @@ export function backtestMultiTF({ series } = {}, {
   };
 
   const trades = [];
+  // Per closed trade: realized R alongside the worst/best unrealized R seen while it was
+  // open (MAE/MFE), measured from bars strictly after the entry bar — see MAE-MFE-STOP-
+  // PLACEMENT-DIAGNOSTIC. Same length and order as `trades`.
+  const excursions = [];
   const reasons = {};   // tally of why each candidate swing low was taken / rejected
   const exits   = {};   // tally of HOW each trade ended (stop / target / trail-be / partial / timeout)
   // Net R banked specifically by the partialAtR leg vs. every other leg (the runner, or a
@@ -388,7 +392,7 @@ export function backtestMultiTF({ series } = {}, {
       else if (minRoomR && (nearestResAbove(entry, tClose) - entry) / risk < minRoomR)    { ok = false; reason = "noRoom"; }
       else                                                                        { reason = "taken"; }
       reasons[reason] = (reasons[reason] || 0) + 1;
-      if (ok) pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: entry, trailing: false };
+      if (ok) pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: entry, trailing: false, maxAdverseR: 0, maxFavorableR: 0 };
      }
     } else if (!pos && entryMode === "anticipate") {
       // ── anticipate mode ── mirrors live: enter the moment price trades ABOVE the
@@ -431,11 +435,13 @@ export function backtestMultiTF({ series } = {}, {
         reasons[reason] = (reasons[reason] || 0) + 1;
         if (reason === "taken") {
           antTradedIdx = antCand.index;   // one trade per structural level (mirrors live cooldown)
-          pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: entry, trailing: false };
+          pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: entry, trailing: false, maxAdverseR: 0, maxFavorableR: 0 };
           // Intrabar order is unknowable: if this bar also traded at/below the stop,
           // assume the worst and take the stop on the entry bar.
           if (L[k] <= stop) {
-            trades.push((stop - entry) / risk - ((feeRate + slipPct) * (entry + stop)) / risk);
+            const r = (stop - entry) / risk - ((feeRate + slipPct) * (entry + stop)) / risk;
+            trades.push(r);
+            excursions.push({ r, mae: Math.max(0, (entry - L[k]) / risk), mfe: Math.max(0, (H[k] - entry) / risk) });
             pos = null;
           }
         }
@@ -463,7 +469,7 @@ export function backtestMultiTF({ series } = {}, {
           else if (maxStopPct && risk / entry > maxStopPct)   reason = "stopTooFar";
           else if (minStopPct && risk / entry < minStopPct)   reason = "stopTooTight";
           reasons[reason] = (reasons[reason] || 0) + 1;
-          if (reason === "taken") pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: entry, trailing: false };
+          if (reason === "taken") pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: entry, trailing: false, maxAdverseR: 0, maxFavorableR: 0 };
           fibOrder = null;   // one attempt per broken level, filled or not
         }
       } else if (lowHere) {
@@ -501,13 +507,18 @@ export function backtestMultiTF({ series } = {}, {
         else if (trendGate && !(trendGateMode === "structure" ? trendAsOf(tClose) : aboveMaAsOf(tClose))) reason = "trendGate";
         else if (entryGate && !entryGate(tClose))               reason = "externalGate";
         reasons[reason] = (reasons[reason] || 0) + 1;
-        if (reason === "taken") pos = { entry: cand.entry, stop: cand.stop, risk, tp: cand.tp, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: cand.entry, trailing: false };
+        if (reason === "taken") pos = { entry: cand.entry, stop: cand.stop, risk, tp: cand.tp, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: cand.entry, trailing: false, maxAdverseR: 0, maxFavorableR: 0 };
       }
     }
     if (lowHere) prevLowPrice = lowHere.price;
 
     if (pos && k > pos.openedAt) {
       const hi = H[k], lo = L[k];
+      // Track the worst/best unrealized R this bar reached, before any exit this bar closes
+      // the position — MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC. The exit bar's own excursion counts:
+      // MAE/MFE is "how far price ran", not "how far it ran before the exit price specifically".
+      pos.maxAdverseR = Math.max(pos.maxAdverseR, (pos.entry - lo) / pos.risk);
+      pos.maxFavorableR = Math.max(pos.maxFavorableR, (hi - pos.entry) / pos.risk);
       // Net R of the FULL position exiting at `px`: gross R minus fees+slippage, with the
       // entry leg on the entry notional and the exit leg on the exit notional (matches
       // monitor.js's live P&L). A partial leg of fraction f is simply f × this value, so
@@ -522,6 +533,7 @@ export function backtestMultiTF({ series } = {}, {
         pos.open -= f;
         if (pos.open <= 1e-9) {
           trades.push(pos.realized);
+          excursions.push({ r: pos.realized, mae: pos.maxAdverseR, mfe: pos.maxFavorableR });
           exits[why] = (exits[why] || 0) + 1;
           pos = null;
         }
@@ -601,6 +613,7 @@ export function backtestMultiTF({ series } = {}, {
     avgR: count ? totalR / count : 0,
     maxDrawdownR: maxDD,
     results: trades,  // raw per-trade R values, for pooling across pairs
+    excursions,       // [{ r, mae, mfe }] per closed trade, same order as `results`
     exits,            // { stop, target, "trail/be", "partial+runner", swingHigh, timeout }
     reasons,          // { taken, stopTooTight, stopTooFar, trendGate, notAligned, notHigherLow, priceBelowStop }
     partialR,         // net R banked by partialAtR legs specifically (0 when partialAtR is off)

@@ -74,6 +74,57 @@ test("ANTICIPATE mode: entry when the high crosses the trigger, before any confi
     `winner R ${r.results[0]} != expected ${netWinR(97.6, 2.6)}`);
 });
 
+// ── MAE/MFE excursion tracking (MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC) ─────────────
+// Same BOS entry as above (97.7, risk 2.7, stop 95, tp 108.5 at tpR=4). A bar right after
+// entry dips to 95.5 (above the stop, so the trade survives) before a later bar's high lands
+// EXACTLY on the tp price — chosen so mfe comes out to exactly tpR with no overshoot to reason
+// about, and the dip bar's low stays above the stop so it doesn't pre-empt the win.
+test("BOS mode: MAE/MFE track the worst/best unrealized R seen before a winning exit", () => {
+  const series = buildSeries([[96, 97.8, 96, 97.7], [97.7, 98, 95.5, 96], [96, 108.5, 95.6, 108]], 108);
+  const r = backtestMultiTF({ series }, {
+    entryTf: "1h", entryMode: "bos", alignMode: "none", trendGate: false, chopFilter: false,
+    requireHigherLow: false, maxStopPct: null, minStopPct: null, lockBreakeven: false, tpR: 4,
+    feeRate: 0.004, slipPct: 0.0005,
+  });
+  assert.equal(r.trades, 1);
+  assert.equal(r.excursions.length, 1);
+  const [x] = r.excursions;
+  assert.ok(Math.abs(x.mae - (97.7 - 95.5) / 2.7) < 1e-9, `mae ${x.mae} != expected`);
+  assert.ok(Math.abs(x.mfe - 4) < 1e-9, `mfe ${x.mfe} != expected tpR 4`);
+  assert.ok(Math.abs(x.r - netWinR(97.7, 2.7)) < 1e-9, "excursions[0].r must match results[0]");
+  assert.equal(x.r, r.results[0]);
+});
+
+test("BOS mode: MAE/MFE on a stop-out — mae equals exactly 1R (stop is entry-risk by construction)", () => {
+  const series = buildSeries([[96, 97.8, 96, 97.7], [97.7, 99, 95, 95]], 108);
+  const r = backtestMultiTF({ series }, {
+    entryTf: "1h", entryMode: "bos", alignMode: "none", trendGate: false, chopFilter: false,
+    requireHigherLow: false, maxStopPct: null, minStopPct: null, lockBreakeven: false, tpR: 4,
+    feeRate: 0.004, slipPct: 0.0005,
+  });
+  assert.equal(r.trades, 1);
+  const [x] = r.excursions;
+  assert.ok(Math.abs(x.mae - 1) < 1e-9, `mae ${x.mae} != expected 1`);
+  assert.ok(Math.abs(x.mfe - (99 - 97.7) / 2.7) < 1e-9, `mfe ${x.mfe} != expected`);
+  assert.ok(x.r < 0, "stop-out must realize a loss");
+});
+
+test("ANTICIPATE mode: MAE/MFE on the same-bar stop-out path (entry and stop hit in one bar)", () => {
+  // Trigger bar's own low (95) sits AT the candidate stop, so the position opens and is
+  // stopped out within the special-cased same-bar branch, not the per-bar tracking loop.
+  const series = buildSeries([[96.5, 97.8, 95, 97.5]], 108);
+  const r = backtestMultiTF({ series }, {
+    entryTf: "1h", entryMode: "anticipate", alignMode: "none", trendGate: false, chopFilter: false,
+    requireHigherLow: false, maxStopPct: 0.04, minStopPct: 0.015, lockBreakeven: false, tpR: 4,
+    feeRate: 0.004, slipPct: 0.0005,
+  });
+  assert.equal(r.trades, 1);
+  const [x] = r.excursions;
+  assert.ok(Math.abs(x.mae - 1) < 1e-9, `mae ${x.mae} != expected 1 (entry 97.6, stop 95, risk 2.6)`);
+  assert.ok(Math.abs(x.mfe - (97.8 - 97.6) / 2.6) < 1e-9, `mfe ${x.mfe} != expected`);
+  assert.equal(x.r, r.results[0]);
+});
+
 test("profileEntries resolves the confirmed candidate with identical netR", () => {
   const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
   const { records } = profileEntries({ series }, { tpR: 4, feeRate: 0.004, slipPct: 0.0005 });

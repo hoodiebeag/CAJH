@@ -1844,3 +1844,84 @@ independently-tested pure helper (11 unit/integration tests in
 ANOVA F-statistic and its permutation p-value correctly distinguish an obviously-stationary
 synthetic case from an obviously-non-stationary one before trusting either on real data).
 Suite 468 → 479 pass, 0 fail, 0 skip locally (candles/ present).
+
+## 2026-08-19 — MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC: losing trades mostly run straight to the stop, not stopped just short of reverting
+
+**Question, never asked before this item.** For every losing trade in the `breakout`/
+`anticipate` baselines, does price get meaningfully close to profitable territory before
+reversing and hitting the stop (a "near miss" — stop placement or exit timing is plausibly
+implicated), or does it barely move in the trade's favor before running straight to the stop
+(the entry thesis itself looks wrong, not the stop distance)? The two shapes carry opposite
+implications for whether re-tuning stop placement could ever help, and the aggregate avgR
+cannot distinguish them. **This item is diagnostic only** — it does not change any stop/target
+parameter and does not recommend a replacement value, per the standing prohibition on
+re-tuning exits on these already-KILLED/FAIL baselines.
+
+**Method.** `backtestMultiTF` (`backtest.js`) now tracks, for every closed trade, the worst and
+best unrealized R the position saw (`maxAdverseR`/`maxFavorableR`, floored at 0, from bars
+strictly after the entry bar — the same "entry bar itself isn't re-examined" convention the
+existing stop/target/breakeven checks already use) and returns it as a new `excursions: [{r,
+mae, mfe}]` array parallel to `results`, using the position's REAL stop/target/breakeven/trail
+state at every bar — not a separate synthetic re-simulation (unlike this file's existing
+`excursionProfile`, which runs its own first-passage grid over ATR-multiple stops rather than
+the actual baseline configs). This is a purely additive field: every existing call site and
+test is unaffected (26/26 prior `backtest.test.mjs` tests still pass unmodified), verified with
+3 new targeted tests pinning exact mae/mfe values against hand-constructed candle paths for
+the winning-trade, stop-loss, and anticipate same-bar-stop-out code paths.
+
+`mae-mfe-stop-placement-diagnostic.mjs` runs the exact `breakout`/`anticipate` baseline
+configs from `tournament.mjs`'s `families` table (unmodified, `entryTf: "1h"`), **holdout only**
+(split=.70, matching every gated verdict's convention so trade populations are comparable to
+the pooled holdout avgR figures already in this record), pools `excursions` across all eligible
+watchlist assets, and splits winners (r>0) from losers (r<=0). **Failure-shape call, fixed
+before looking at results:** a loser is a "near miss" if its mfe reached at least 0.5R before
+reversing, else "ran straight to the stop." Coverage 28/28 eligible watchlist assets (EOS
+excluded, the same pre-existing candle-history shortfall every study in this series hits).
+
+**Result — `breakout` (holdout, 3,156 trades):**
+
+| | count | mae mean/p50 | mfe mean/p50 |
+|---|---:|---|---|
+| Winners | 1,070 | 0.391 / 0.343 | 3.042 / 3.040 |
+| Losers | 2,086 | 1.315 / 1.190 | 0.634 / 0.499 |
+
+Failure shape: near-miss 1,041, ran-straight 1,045 (share 0.499) — **effectively a coin flip,
+RAN-STRAIGHT wins by 4 trades out of 2,086**, not a real dominance.
+
+**Result — `anticipate` (holdout, 3,966 trades):**
+
+| | count | mae mean/p50 | mfe mean/p50 |
+|---|---:|---|---|
+| Winners | 1,201 | 0.395 / 0.365 | 3.286 / 3.080 |
+| Losers | 2,765 | 1.393 / 1.243 | 0.582 / 0.433 |
+
+Failure shape: near-miss 1,256, ran-straight 1,509 (share 0.454) — **RAN-STRAIGHT-TO-STOP
+dominates**, a real 253-trade margin.
+
+**Reading it.** `anticipate` has a genuine (if not overwhelming) majority of losers that never
+got meaningfully close to profitable before stopping out — consistent with the entry thesis
+itself being wrong on those trades more often than with a stop placed just barely too tight.
+`breakout`'s split is close enough to 50/50 that no directional claim survives at this
+threshold; calling it either way would overstate the signal. Neither family's losers show a
+pattern of "got most of the way to target and then reversed" (mfe p90 for losers tops out
+around 1.45-1.49R against a 3R/4R target) — a near-miss loser here means "recovered part of
+the way toward breakeven," not "almost hit the take-profit." A secondary, unplanned
+observation: losers' median MAE sits at 1.19R (breakout) / 1.24R (anticipate), slightly ABOVE
+the nominal 1R initial-stop distance — some losing trades run through where a pure fixed stop
+would have exited, which is consistent with `lockBreakeven`/trailing logic occasionally
+widening the effective stop before a trade ultimately still loses. This is reported as an
+observation, not diagnosed further — doing so would mean re-examining exit-model mechanics,
+out of this item's diagnostic-only scope.
+
+**What this does NOT license.** Per the standing prohibition and this item's own scope: no
+stop or target parameter was changed anywhere, and no replacement value is recommended. The
+`anticipate` near-miss/ran-straight split is a genuine, if modest, finding that some minority
+of `anticipate` losses might be stop-placement-sensitive — but demonstrating that would require
+a pre-registered variant tested on its own holdout, not inferred from this diagnostic's
+threshold choice.
+
+**Engineering note.** `backtest.js`'s new `excursions` field and `mae-mfe-stop-placement-
+diagnostic.mjs` are additive (new file + a new always-present return field on
+`backtestMultiTF`); 9 new tests (3 in `backtest.test.mjs`, 6 in
+`mae-mfe-stop-placement-diagnostic.test.mjs`). Suite 479 → 488 pass, 0 fail, 0 skip locally
+(candles/ present).
