@@ -31,7 +31,26 @@
  * on submission) - same hard requirement as trader.js's confirmBuyFill/
  * confirmSellFill, for the same reason: prevents phantom positions.
  */
-import { IBApi, EventName, Stock, MarketOrder, OrderAction, WhatToShow, BarSizeSetting } from "@stoqey/ib";
+import { IBApi, EventName, Stock, MarketOrder, OrderAction, WhatToShow, BarSizeSetting, isNonFatalError } from "@stoqey/ib";
+
+/**
+ * The error event is OVERLOADED by @stoqey/ib: request-scoped errors arrive as
+ * (id, errorCode, errorMsg), but socket-level failures arrive as (error: Error).
+ * Filtering on a numeric id silently swallows the latter. Normalizes both shapes.
+ */
+function parseErrorEvent(a, b, c) {
+  if (a instanceof Error) return { id: -1, code: -1, message: a.message, error: a, socket: true };
+  return { id: a, code: b, message: String(c ?? ""), error: new Error(String(c ?? "")), socket: false };
+}
+
+/**
+ * TWS emits plenty of errors that are informational, not failures - the whole
+ * 2100-2999 band (data-farm status), 10090/10167 (delayed/partial market data),
+ * and anything prefixed "Warning:". The package ships the authoritative predicate
+ * for this; treating every error as fatal is what made a benign data-farm notice
+ * fail a connection and a benign order warning look like an unfilled order.
+ */
+const isFatal = (e) => e.socket || !isNonFatalError(e.code, e.error);
 
 const HOST = process.env.IBKR_HOST || "127.0.0.1";
 const PORT = Number(process.env.IBKR_PORT) || 4002; // 4002 = paper, 4001 = live
@@ -59,16 +78,24 @@ function getClient() {
   if (connecting) return connecting;
   const c = clientFactory();
   connecting = new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`IBKR connect timed out after ${CONNECT_TIMEOUT_MS}ms (${HOST}:${PORT})`)), CONNECT_TIMEOUT_MS);
-    c.once(EventName.connected, () => {
-      clearTimeout(timer);
+    const timer = setTimeout(() => { cleanup(); reject(new Error(`IBKR connect timed out after ${CONNECT_TIMEOUT_MS}ms (${HOST}:${PORT})`)); }, CONNECT_TIMEOUT_MS);
+    const cleanup = () => { clearTimeout(timer); c.off(EventName.connected, onConnected); c.off(EventName.error, onError); };
+    const onConnected = () => {
+      cleanup();
       client = c;
       resolve(c);
-    });
-    c.once(EventName.error, (id, errorCode, errorMsg) => {
-      clearTimeout(timer);
-      reject(new Error(`IBKR connect failed: ${errorCode} ${errorMsg}`));
-    });
+    };
+    // NOT `once`: TWS emits 2104/2106/2158 data-farm notices around connect time,
+    // so a `once` listener would consume a benign notice and fail the connection
+    // outright. Stay subscribed and reject only on a genuinely fatal error.
+    const onError = (a, b, cc) => {
+      const e = parseErrorEvent(a, b, cc);
+      if (!isFatal(e)) return;
+      cleanup();
+      reject(new Error(`IBKR connect failed: ${e.code} ${e.message}`));
+    };
+    c.on(EventName.connected, onConnected);
+    c.on(EventName.error, onError);
     c.connect(CLIENT_ID);
   }).finally(() => { connecting = null; });
   return connecting;
@@ -104,8 +131,10 @@ async function fetchOHLC(pair, minutes) {
       if (String(time).startsWith("finished")) return finish(bars);
       bars.push({ time, open: String(open), high: String(high), low: String(low), close: String(close), volume: String(volume) });
     };
-    const onError = (rid, errorCode, errorMsg) => {
-      if (rid !== id) return; // IB emits plenty of non-fatal, non-request-scoped error events (market data farm status etc.) - only this request's own errors are fatal here
+    const onError = (a, b, cc) => {
+      const e = parseErrorEvent(a, b, cc);
+      if (!e.socket && e.id !== id) return; // another request's error is not ours; socket failures are
+      if (!isFatal(e)) return; // e.g. 10167/10090 - data is still coming
       finish(null);
     };
     c.on(EventName.historicalData, onBar);
@@ -114,30 +143,58 @@ async function fetchOHLC(pair, minutes) {
   });
 }
 
-async function getCurrentPriceSnapshot(symbol) {
+/**
+ * Resolves {price, asOf, delayed}. `delayed` is true when IBKR served delayed
+ * data because the account lacks a live subscription for the symbol - confirmed
+ * against a real Gateway, where an unsubscribed symbol emits error 10167
+ * ("Displaying delayed market data") and then every tick on the DELAYED_* fields,
+ * never LAST.
+ *
+ * When delayed, `asOf` carries the REAL exchange timestamp (DELAYED_LAST_TIMESTAMP,
+ * field 88), never Date.now(). This matters: a measured delayed quote was 804s old
+ * against scanner.js's 10s MAX_ORDER_SNAPSHOT_AGE_MS, so stamping it with the
+ * current time would launder a 13-minute-old price straight past isQuoteStale.
+ * Reporting the true age lets that guard reject it, which is the correct outcome -
+ * the price is still usable for research and monitoring, just not for an order.
+ */
+async function getCurrentPriceSnapshot(symbol, timeoutMs = MKT_DATA_TIMEOUT_MS) {
   const c = await getClient();
   const id = reqId();
   return new Promise((resolve, reject) => {
     let settled = false;
-    const timer = setTimeout(() => { if (!settled) { settled = true; c.off(EventName.tickPrice, onTick); c.off(EventName.error, onError); reject(new Error(`IBKR getCurrentPriceSnapshot timed out for ${symbol}`)); } }, MKT_DATA_TIMEOUT_MS);
-    const onTick = (rid, field, value) => {
-      if (rid !== id || field !== 4 /* TickType.LAST, verified above */ || settled) return;
-      settled = true;
+    let delayedPrice = null; // held until its timestamp arrives (IB sends price first, then field 88)
+    const cleanup = () => {
       clearTimeout(timer);
       c.off(EventName.tickPrice, onTick);
+      c.off(EventName.tickString, onString);
       c.off(EventName.error, onError);
-      c.cancelMktData(id);
-      resolve({ price: value, asOf: Date.now() });
+      c.cancelMktData(id); // every terminal path: an uncancelled request leaks a market-data line
     };
-    const onError = (rid, errorCode, errorMsg) => {
+    const settle = (fn) => { if (settled) return; settled = true; cleanup(); fn(); };
+    const timer = setTimeout(() => settle(() => reject(new Error(
+      delayedPrice !== null
+        ? `IBKR getCurrentPriceSnapshot for ${symbol}: delayed price ${delayedPrice} arrived but its DELAYED_LAST_TIMESTAMP never did - refusing to report an unknown quote age`
+        : `IBKR getCurrentPriceSnapshot timed out for ${symbol}`
+    ))), timeoutMs);
+    const onTick = (rid, field, value) => {
       if (rid !== id || settled) return;
-      settled = true;
-      clearTimeout(timer);
-      c.off(EventName.tickPrice, onTick);
-      c.off(EventName.error, onError);
-      reject(new Error(`IBKR getCurrentPriceSnapshot failed for ${symbol}: ${errorCode} ${errorMsg}`));
+      if (field === 4 /* LAST - live */) return settle(() => resolve({ price: value, asOf: Date.now(), delayed: false }));
+      if (field === 68 /* DELAYED_LAST */) delayedPrice = value; // wait for field 88 before resolving
+    };
+    const onString = (rid, field, value) => {
+      if (rid !== id || settled || field !== 88 /* DELAYED_LAST_TIMESTAMP, epoch seconds */ || delayedPrice === null) return;
+      const asOf = Number(value) * 1000;
+      if (!Number.isFinite(asOf)) return;
+      settle(() => resolve({ price: delayedPrice, asOf, delayed: true }));
+    };
+    const onError = (a, b, cc) => {
+      const e = parseErrorEvent(a, b, cc);
+      if (!e.socket && e.id !== id) return;
+      if (!isFatal(e)) return; // 10167 means delayed data IS coming - not a failure
+      settle(() => reject(new Error(`IBKR getCurrentPriceSnapshot failed for ${symbol}: ${e.code} ${e.message}`)));
     };
     c.on(EventName.tickPrice, onTick);
+    c.on(EventName.tickString, onString);
     c.on(EventName.error, onError);
     c.reqMktData(id, stockContract(symbol), null, true /* snapshot */, false);
   });
@@ -192,11 +249,18 @@ function confirmedMarketOrder(action, symbol, quantity) {
         reject(new Error(`IBKR order ${oid} was ${status} - nothing filled, not tracked`));
       }
     };
-    const onError = (oid, errorCode, errorMsg) => {
-      if (orderId === null || oid !== orderId || settled) return;
+    // Highest-stakes error site in this file. A thrown error here means "do not
+    // track this as a position", so misclassifying a benign warning on a genuinely
+    // filled order produces exactly the untracked-real-position outcome the
+    // confirmed-fill design exists to prevent. Non-fatal codes must not reject.
+    const onError = (a, b, cc) => {
+      const e = parseErrorEvent(a, b, cc);
+      if (settled) return;
+      if (!e.socket && (orderId === null || e.id !== orderId)) return;
+      if (!isFatal(e)) return;
       settled = true;
       cleanup();
-      reject(new Error(`IBKR order ${oid} error: ${errorCode} ${errorMsg}`));
+      reject(new Error(`IBKR order ${orderId} error: ${e.code} ${e.message}`));
     };
     c.on(EventName.orderStatus, onStatus);
     c.on(EventName.error, onError);
