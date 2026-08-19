@@ -1747,3 +1747,100 @@ isolation leak in the suite's own use of `storage.js` — so per this item's own
 Left for a follow-up work_queue item to identify the exact polluting call site and either set
 `DATA_DIR` in that test file or make `storage.js`'s default lazy per-call instead of
 frozen-at-import.
+
+## 2026-08-19 — SIGNAL-DECAY-TEMPORAL-STABILITY: the pooled baseline is NOT stationary — both families drift significantly across time
+
+**Question, never asked before this item.** Every study in this project's research record
+compares a gated variant against a fixed pooled baseline avgR (e.g. `breakout` holdout avgR
+-0.864, `anticipate` holdout avgR -0.884, both from SEASONALITY-DAYOFWEEK-SESSION above),
+implicitly assuming that baseline is stationary across the sample window. If the underlying
+edge (or anti-edge) drifts over calendar time, a single pooled number hides it, and both the
+train-fitted thresholds and every train/holdout comparison in this series are measuring a
+moving target rather than a fixed effect. This item is purely descriptive — no gate, no
+VERDICTS.md row (its own task wording) — the deliverable is the epoch table and an honest
+stationarity call, not a promotable finding.
+
+**Method.** Same `breakout`/`anticipate` baseline configs as every other verdict in this
+series (`tournament.mjs`'s `families` table, unmodified, `entryTf: "1h"`). Unlike every
+train/holdout study in this series, this uses each asset's **full local candle history**
+(no split) — the question is about the baseline's behavior across its entire available
+sample, not train vs. holdout. Each asset's full history is cut into 5 consecutive,
+non-overlapping, equal-length (by index on the 1h anchor timeframe) chronological epochs;
+every timeframe is then filtered to each epoch's time boundary independently
+(`signal-decay-temporal-stability.mjs`'s `epochSlices`, mirroring `researchlib.mjs`'s
+`walkForwardSeriesWindows` anchor-then-time-boundary technique, generalized from one
+expanding train/holdout cut to 5 disjoint fixed slices). Each epoch is then an entirely
+independent `backtestMultiTF` run against its own bounded series — no per-trade timestamp
+recovery needed (unlike the seasonality study), since epoch membership is which slice
+produced the trade, not a per-trade attribute recovered after one continuous run. Caveat
+disclosed in the module docstring: a position that would run past an epoch boundary in a
+continuous backtest gets truncated at that boundary instead — the same boundary artifact
+every train/holdout split in this project already has (`tournament.mjs`'s `splitSeries`),
+not a new problem this diagnostic introduces.
+
+**Stationarity test.** One-way ANOVA F-statistic across the 5 epochs' pooled per-trade R
+values, with a permutation p-value (1000 iterations, seed 20260819) rather than a parametric
+F-distribution CDF — this project has never needed one elsewhere and already has an
+established permutation-testing idiom (`momentum.mjs`'s `permutationP`: shuffle, recompute,
+`(extreme+1)/(iterations+1)`). Applied here to epoch-label shuffles instead of panel pairs.
+
+**Coverage:** 28/29 watchlist assets (EOS excluded on the same pre-existing candle-history
+shortfall every other study in this series hits).
+
+**Result — `breakout` (full history, pooled across 28 assets: 10,504 trades, avgR -0.875,
+totalR -9,188.13):**
+
+| Epoch | trades | avgR | totalR | 95% CI |
+|---|---:|---:|---:|---|
+| 1 (earliest) | 2016 | -0.985 | -1984.87 | [-1.053, -0.916] |
+| 2 | 2176 | -0.870 | -1894.28 | [-0.937, -0.805] |
+| 3 | 2150 | -0.804 | -1729.69 | [-0.873, -0.736] |
+| 4 | 2122 | -0.766 | -1624.64 | [-0.834, -0.697] |
+| 5 (most recent) | 2040 | -0.958 | -1954.65 | [-1.024, -0.892] |
+
+ANOVA: F(4, 10499) = 7.459, permutation p = 0.000999 (1000 iterations — this is the minimum
+resolvable p at that iteration count, i.e. 0/1000 permuted F-statistics reached the observed
+value). **NON-STATIONARY.**
+
+**Result — `anticipate` (full history, pooled across 28 assets: 13,574 trades, avgR -0.769,
+totalR -10,439.25):**
+
+| Epoch | trades | avgR | totalR | 95% CI |
+|---|---:|---:|---:|---|
+| 1 (earliest) | 2346 | -0.674 | -1581.26 | [-0.743, -0.605] |
+| 2 | 2738 | -0.692 | -1895.54 | [-0.756, -0.629] |
+| 3 | 2746 | -0.689 | -1891.46 | [-0.755, -0.623] |
+| 4 | 3184 | -0.824 | -2622.63 | [-0.880, -0.768] |
+| 5 (most recent) | 2560 | -0.956 | -2448.35 | [-1.015, -0.897] |
+
+ANOVA: F(4, 13569) = 13.967, permutation p = 0.000999 (same floor as above). **NON-STATIONARY.**
+
+**Reading it.** Both families reject stationarity at every conventional threshold, and both
+show the same directional shape: relatively flat/best in the early-to-middle epochs, then
+notably worse in the most recent epoch (`anticipate` most starkly — epoch 1's -0.674 vs.
+epoch 5's -0.956, a 0.28R swing on the SAME unmodified config, no cost change, no parameter
+change). `breakout`'s epoch 5 (-0.958) is also its second-worst of the five, though epoch 1
+is comparably bad (-0.985), so `breakout`'s drift is closer to "worse at both ends, best in
+the middle third" than a clean monotonic trend. Neither family has a single epoch anywhere
+near zero, let alone positive — the non-stationarity is real and significant, but it moves
+the pooled avgR around within a band that stays decisively negative throughout; it does not
+surface a hidden profitable regime.
+
+**What this changes, and what it does NOT change, about every prior verdict in this
+series.** Per this item's own task wording, prior verdicts are not retroactively rewritten.
+What this finding does establish: every pooled avgR figure quoted anywhere in this project's
+research record (VERDICTS.md, TOURNAMENT_ROADMAP.md, every FAIL/KILLED row) is a
+time-averaged number over a baseline that is not actually constant, and should be read as
+such going forward — a single pooled avgR communicates central tendency across a
+significantly-drifting series, not a fixed per-trade expectation. This does NOT change any
+verdict's pass/fail outcome: no epoch in either family gets anywhere close to breakeven, so
+there is no scenario in this data where the temporal drift, on its own, would have flipped a
+KILLED/FAIL verdict to a PASS. It is a methodological caveat on how to interpret the existing
+negative numbers, not a new positive signal and not grounds to revisit any closed item.
+
+**Engineering note.** `signal-decay-temporal-stability.mjs`'s `epochSlices` is a new,
+independently-tested pure helper (11 unit/integration tests in
+`signal-decay-temporal-stability.test.mjs`, including synthetic-data tests confirming the
+ANOVA F-statistic and its permutation p-value correctly distinguish an obviously-stationary
+synthetic case from an obviously-non-stationary one before trusting either on real data).
+Suite 468 → 479 pass, 0 fail, 0 skip locally (candles/ present).
