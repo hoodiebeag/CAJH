@@ -4,10 +4,10 @@
   "status": "IDLE",
   "target_file": null,
   "objective": null,
-  "notes": "SIGNAL-DECAY-TEMPORAL-STABILITY closed this firing: new signal-decay-temporal-stability.mjs asks whether the pooled breakout/anticipate baseline avgR figures quoted throughout this project (e.g. breakout holdout avgR -0.864) are stationary across time, or hide drift a single pooled number cannot reveal - never checked before. Purely descriptive per its own task wording: no gate, no VERDICTS.md row. Method: full local history per asset (not train/holdout) cut into 5 equal consecutive chronological epochs via a new epochSlices helper (mirrors researchlib.mjs walkForwardSeriesWindows anchor-then-time-boundary technique, generalized to N disjoint slices instead of one expanding train/holdout cut); each epoch backtested independently with tournament.mjs breakout/anticipate configs unmodified. Stationarity tested with a one-way ANOVA F-statistic and a permutation p-value (1000 iterations, seed 20260819) - this projects established significance-testing idiom (momentum.mjs permutationP), not a parametric F-distribution this codebase has never needed. Coverage 28/28 eligible watchlist assets (EOS excluded, known candle-history gap). Result: both families reject stationarity decisively - breakout F(4,10499)=7.459 p=0.000999 (10504 trades pooled, epoch avgR ranges -0.985 to -0.766); anticipate F(4,13569)=13.967 p=0.000999 (13574 trades pooled, epoch avgR ranges -0.674 to -0.956, worst in the most recent epoch). No epoch in either family approaches breakeven, so this changes no prior verdicts pass/fail outcome and no prior verdict is rewritten (this items own scope) - it is a methodological caveat on how to read every pooled avgR figure in this projects research record, not a new signal. 11 new tests including synthetic-data checks that the ANOVA/permutation math correctly separates an obviously-stationary case from an obviously-non-stationary one before trusting either on real data. 468->479 project tests green. No strategy code touched (bot.js/monitor.js/trader.js/scanner.js untouched), pre-commit hook did not fire. Commit 1d0c8e7, pushed.",
+  "notes": "MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC closed this firing: added a real-simulation excursion tracker to backtestMultiTF (backtest.js) - per closed trade, maxAdverseR/maxFavorableR tracked from bars strictly after the entry bar using the positions ACTUAL stop/target/breakeven/trail state, exposed as a new additive excursions:[{r,mae,mfe}] array parallel to results (unlike the pre-existing excursionProfile, which runs a separate synthetic first-passage grid on ATR-multiple stops, not the real baseline configs). New mae-mfe-stop-placement-diagnostic.mjs runs the exact tournament.mjs breakout/anticipate baseline configs unmodified, holdout only (split=.70, matching every other gated verdicts convention), pools excursions across the full 28/28-eligible-asset watchlist (EOS excluded, known gap), splits winners(r>0)/losers(r<=0), and calls each losers failure shape via a threshold fixed before looking at results: mfe>=0.5R before reversing = near-miss, else ran-straight-to-stop. Result: anticipate losers lean RAN-STRAIGHT-TO-STOP (1509 vs 1256, real 253-trade margin, 3966 total holdout trades); breakout is an effective coin flip (1045 vs 1041 of 3156 total holdout trades, no directional claim survives). Secondary unplanned observation reported but not diagnosed further (out of scope): losers median MAE (1.19R breakout, 1.24R anticipate) sits slightly above the nominal 1R stop, consistent with lockBreakeven/trailing occasionally widening the effective stop before an eventual loss. Purely descriptive per its own task wording: no gate, no VERDICTS.md row, no stop/target parameter changed anywhere, no replacement value recommended. 9 new tests (3 in backtest.test.mjs pinning exact mae/mfe values via hand-constructed candle paths for the winning-trade/stop-loss/anticipate-same-bar-stop-out code paths, 6 in mae-mfe-stop-placement-diagnostic.test.mjs). All 26 pre-existing backtest.test.mjs tests still pass unmodified (excursions is a new always-present field, non-breaking). 479->488 project tests green. No strategy code touched beyond backtest.js research-instrumentation (bot.js/monitor.js/trader.js/scanner.js untouched), pre-commit hook did not fire. Commit f5c55cd, pushed.",
   "block_detail": null,
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-08-19T19:14:41.762Z"
+  "updated_at": "2026-08-19T20:12:01.082Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -454,7 +454,7 @@
    },
    {
     "id": "MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: excursion diagnostic (additive), instruments existing backtest path",
     "depends_on": [],
@@ -532,14 +532,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-08T15:01:03.561Z",
-   "agent": "cajh-loop-check",
-   "action": "no-op-check",
-   "detail": "Queue confirmed genuinely empty (23/23 done, 0 pending). No new PASS verdicts in ROADMAP/TOURNAMENT_ROADMAP since last firing (git log verified no new commits to those files). Empty-queue notification within 6h dedup window, not resent. Control set to IDLE.",
-   "commit": null,
-   "tests": null
-  },
   {
    "ts": "2026-08-08T15:16:29.000Z",
    "agent": "cajh-loop-check",
@@ -1327,6 +1319,14 @@
    "detail": "SIGNAL-DECAY-TEMPORAL-STABILITY: full-history temporal-stability diagnostic for breakout/anticipate baselines. Both families NON-STATIONARY (permutation ANOVA p=0.000999 each) but no epoch approaches breakeven, so no prior verdict outcome changes. Descriptive only, no VERDICTS.md row. 11 new tests, suite 468->479 green.",
    "commit": "1d0c8e7",
    "tests": "479/479 pass, 0 fail, 0 skip"
+  },
+  {
+   "ts": "2026-08-19T20:12:01.083Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "closed-work-queue-item",
+   "detail": "MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC: instrumented backtestMultiTF with real per-trade MAE/MFE tracking (new additive excursions field), ran breakout/anticipate holdout diagnostic across 28/28 assets. anticipate losers lean RAN-STRAIGHT-TO-STOP (1509/2765, margin 253); breakout is a coin flip (1045/2086, no claim). Diagnostic only, no gate, no parameter change. 479->488 tests green.",
+   "commit": "f5c55cd",
+   "tests": "488 pass, 0 fail, 0 skip"
   }
  ],
  "automation": {
