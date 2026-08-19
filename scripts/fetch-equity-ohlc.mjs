@@ -58,6 +58,14 @@ if (!universeFile) {
   process.exit(2);
 }
 if (!Number.isFinite(years) || years < 1) { console.error("--years must be a positive number"); process.exit(2); }
+if (!fs.existsSync(universeFile)) {
+  console.error(`Universe file not found: ${path.resolve(universeFile)}`);
+  console.error("Create it with one symbol per line, e.g.:");
+  console.error('  @("AAPL","MSFT","JPM") | Set-Content universe.txt      # PowerShell');
+  console.error("  printf 'AAPL\\nMSFT\\nJPM\\n' > universe.txt            # bash");
+  console.error("The selection rule is part of the result - record it with the output.");
+  process.exit(2);
+}
 
 const symbols = fs.readFileSync(universeFile, "utf8").split("\n").map((s) => s.trim().toUpperCase()).filter(Boolean);
 const bad = symbols.filter((s) => !/^[A-Za-z0-9]+$/.test(s));
