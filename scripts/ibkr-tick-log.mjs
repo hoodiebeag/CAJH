@@ -80,15 +80,23 @@ ib.on(EventName.info, (msg) => console.log(`info       ${msg}`));
 ib.on(EventName.disconnected, () => console.log("disconnected"));
 ib.on(EventName.connectionClosed, () => console.log("connectionClosed"));
 
+// Actually open the socket. Without this the client sits idle with its handlers
+// registered and never contacts Gateway at all - which looks identical to a
+// refused connection from the outside, and sends you hunting through Gateway's
+// settings and logs for a connection that was never attempted.
+ib.connect(clientId);
+
 setTimeout(() => {
   if (!connected) {
     console.log(`\nNEVER CONNECTED after ${seconds}s.`);
     console.log("Checklist, in the order worth checking:");
     console.log(`  - Port: ${port} is IB Gateway PAPER. Gateway LIVE is 4001; TWS is 7497 paper / 7496 live.`);
     console.log("    Set IBKR_PORT to match whichever you are actually running.");
-    console.log("  - Gateway: Configure > Settings > API > Settings > 'Enable ActiveX and Socket Clients' must be ticked.");
+    console.log("  - IB Gateway has no 'Enable ActiveX and Socket Clients' option (that is TWS-only);");
+    console.log("    Gateway always serves the API. Check Configure > Settings > API > Settings for the socket port.");
     console.log(`  - Trusted IPs: 127.0.0.1 must be listed there.`);
-    console.log(`  - Client ID ${clientId} may already be in use by another connected session; try IBKR_CLIENT_ID=9.`);
+    console.log("  - NOT the client id: the id is sent only after Gateway replies with its server");
+    console.log("    version, so an id conflict cannot cause a silent no-reply. It surfaces as error 326.");
   }
   console.log(`\n${seconds}s elapsed - cancelling and disconnecting.`);
   try { ib.cancelMktData(reqId); ib.disconnect(); } catch { /* never connected */ }
