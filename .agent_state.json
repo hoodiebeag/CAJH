@@ -1201,6 +1201,14 @@
    "detail": "STEP 0.3: git pull --rebase still fails on the same pre-existing unstaged package.json change (allowScripts.canvas@3.2.3=true), still not created this run - did not stash/checkout/reset/clean it. blackboard.notifications['persistent-pull-blocker'] was last set 2026-08-19T04:00:46.000Z, only ~4h ago (under the 6h dedup window), so per notification_policy.dedup this firing skipped PushNotification and left the notifications entry untouched rather than resending. No STEP 1-6 work attempted; exiting for next firing to retry the pull. A human still needs to resolve the package.json change (commit, revert, or otherwise clear it) to unblock the loop. Note: also observed a pre-existing structural duplication in this state file - a stale top-level notifications object (root.notifications, distinct from the canonical root.blackboard.notifications) still holding an unrelated 2026-08-08 pull-blocker entry about a different incident (nested repo clone). Not touched this firing (out of scope for a pull-blocked exit), flagging for a future cleanup pass.",
    "commit": null,
    "tests": "not run (exited at STEP 0.3, before STEP 3)"
+  },
+  {
+   "ts": "2026-08-19T09:00:58.000Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "pull-blocked-exit",
+   "detail": "STEP 0.3: git pull --rebase still fails on the same pre-existing unstaged package.json change (allowScripts.canvas@3.2.3=true), still not created this run - did not stash/checkout/reset/clean it. Confirmed via git fetch that origin/main has no commits ahead of HEAD, so this is purely the unstaged-change block, not an actual divergence to reconcile. blackboard.notifications['persistent-pull-blocker'] was last set 2026-08-19T04:00:46.000Z, ~5h ago (under the 6h dedup window), so per notification_policy.dedup this firing skipped PushNotification and left the notifications entry untouched rather than resending. No STEP 1-6 work attempted; exiting for next firing to retry the pull. A human still needs to resolve the package.json change (commit, revert, or otherwise clear it) to unblock the loop.",
+   "commit": null,
+   "tests": "not run (exited at STEP 0.3, before STEP 3)"
   }
  ],
  "automation": {
