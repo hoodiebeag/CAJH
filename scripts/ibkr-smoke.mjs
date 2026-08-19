@@ -1,5 +1,5 @@
 /**
- * scripts/ibkr-smoke-test.mjs — run this locally, on the machine where IB
+ * scripts/ibkr-smoke.mjs — run this locally, on the machine where IB
  * Gateway is actually running, to confirm brokers/ibkr.mjs's real connection
  * works end-to-end.
  *
@@ -7,7 +7,7 @@
  * fetchOHLC only. Never calls placeBuy/placeSell - no order is placed.
  *
  * Usage:
- *   node scripts/ibkr-smoke-test.mjs [SYMBOL]
+ *   node scripts/ibkr-smoke.mjs [SYMBOL]
  *
  * Defaults to AAPL if no symbol given. Uses IBKR_HOST/IBKR_PORT/
  * IBKR_CLIENT_ID env vars if set, otherwise 127.0.0.1:4002 (paper).
