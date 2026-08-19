@@ -4,10 +4,10 @@
   "status": "IDLE",
   "target_file": null,
   "objective": null,
-  "notes": "PAIRS-COINTEGRATION-STATARB closed this firing: new pairs-cointegration.mjs implements a two-step Engle-Granger cointegration test (OLS regression + ADF-style regression on the residual spread) across every active-watchlist pair (SEALED_SYMBOLS excluded), significance via a block-permutation null (this project own convention, no fabricated asymptotic critical-value table). Pre-registered BH-FDR q=0.05 correction applied across the 105 pairs that actually cleared the >=500-day overlap-history gate (of 276 nominal active pairs; the task assumed a stale 28-asset/378 count, watchlist has since grown to 29/24-active) -- result: 0/105 survive correction (best raw p=0.0050 corrects to q=0.1741), verdict NO-COINTEGRATED-PAIRS, holdout economic gate (avgNetR>0 AND trades>=10, cost on both legs) pre-registered but never reached. No-short-access and calendar-holdout disclosures included per AGENT_PROTOCOL.md Multiple-comparisons discipline. Updated MULTIPLE_COMPARISONS_AUDIT.md study count 45->46 and non-verdict bucket 5->6 (with a note distinguishing this screen-gate non-verdict from the other five data-gate ones); AGENT_PROTOCOL.md two tracked family counters left unchanged, explained why. Also corrected VERDICTS.md bottom-line sentence that called grid.mjs \"the one market-neutral mechanism tested to date\" (now two, both net-negative/non-existent). 14 new tests, 461/461 project tests green. No strategy code touched (bot.js/monitor.js/trader.js untouched), pre-commit hook did not fire. Commit 9e0f437, pushed.",
+  "notes": "CROSS-SECTIONAL-NONPRICE-RANK closed this firing: new cross-sectional-nonprice-rank.mjs tests open-interest change as a PRIMARY cross-sectional ranking signal (not a gate) - the structural fix for T1-ZEROCOSTs finding that 8/10 non-price sources were only tested as gates on a population with no gross edge. ONE feature pre-registered before any result was examined: OI change (Kraken Futures derivatives.mjs), chosen over funding-rate level and long-short-ratio on data-coverage grounds alone (OI confirmed whole-watchlist coverage per oi-trend-gate.mjs vs fundings ~365-730d ceiling and long-short-ratios only-4-majors-confirmed resolution). Formation: trailing 7-day OI pct change (reuses oi-trend-gate.mjs own N=7 window); horizon 7d, entry delay 1d; no price-structure entry condition anywhere. Reused momentum.mjs own IC/permutation-p/BH-FDR/bootstrap/economics machinery directly (scoreMomentumPanelRows, economicMomentumViews, tagMomentumRegimes, bhFdr) on a new panel - only the OI fetch + no-lookahead panel join is new statistical code. Universe: ACTIVE watchlist (SEALED_SYMBOLS excluded), 24/24 active symbols cleared the 500-day OI coverage gate, 106 rebalance dates (102 train / 4 recent-holdout). Expected sign pre-registered POSITIVE (rising OI predicts higher forward returns, same directional hypothesis oi-trend-gate.mjs used as a gate); observed sign came back NEGATIVE and far from significant. Verdict: KILLED at train-significance stage - train meanIC=-0.0395, p=0.1249 (fails naive p<0.05; wrong sign vs pre-registration). MULTIPLE-COMPARISONS DISCIPLINE (AGENT_PROTOCOL.md, added 2026-08-19): added as the 10th test to MULTIPLE_COMPARISONS_AUDIT.md section 2s formal-NHST family (was 9 across 6 studies, now 10 across 7); family-wide BH-FDR recomputed across all 10 - this studys own q=0.2498, does not survive, the two prior survivors (B5-REVERSAL L=3, CLASSIFIER-FUNDING-FEATURE) unchanged. Re-derived the binomial P(>=3 hits) figure for n=10 (1.15%, up from the prior n=9 figure of 0.84%) in the same doc. Updated MULTIPLE_COMPARISONS_AUDIT.md section 1s total-study count (46->47) and AGENT_PROTOCOL.mds NHST counter (9->10 sub-tests, 6->7 studies) in the same commit as the verdict, per that documents own binding rule. Holdout (4 rebalance dates) evaluated once for disclosure per this items own done_when (holdout meanIC=+0.0022 p=1, top-5 net return -0.034) but was never decisive since the train-significance gate failed first, the same train/screen-gate-first pattern H11/FUNDING-MEANREV/PAIRS-COINTEGRATION-STATARB already established. Added VERDICTS.md row. 7 new tests, 468/468 project tests green. No strategy code touched (bot.js/monitor.js/trader.js/scanner.js untouched), pre-commit hook did not fire. Commit 0583013, pushed.",
   "block_detail": null,
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-08-19T17:20:00.000Z"
+  "updated_at": "2026-08-19T18:16:45.052Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -384,7 +384,7 @@
    },
    {
     "id": "CROSS-SECTIONAL-NONPRICE-RANK",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: non-price cross-sectional study, reuses derivatives.mjs + momentum.mjs's ranking harness",
     "depends_on": [],
@@ -532,14 +532,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-08T14:31:08.000Z",
-   "agent": "cajh-loop-check",
-   "action": "no_op_check",
-   "detail": "Queue still genuinely empty: 0/23 pending (independently re-grepped, zero \"state\": \"pending\" matches), control IDLE, HEAD unchanged (f91b8fd) since the prior firing wrote it - confirmed via `git status` (clean) and `git pull --rebase` (already up to date, no foreign commits). Restock re-verified independently and more thoroughly than the last few checks: ROADMAP.md has zero PASS matches; TOURNAMENT_ROADMAP.md's verdict/PASS matches are all isolated gate-clauses inside combined-FAIL results, no study-level PASS; read (not just grepped) FOLLOWON_SPECS.md Part A/B - both still gated on KILLED prerequisites (momentum §6, low-vol B4); read SELF_AWARENESS_SPEC.md Phase 1-2 queue table - only C1/C2/C3 listed, all done, Phase 3 explicitly gated/manual; read SIGNAL3_CLASSIFIER_SPEC.md - gated on the same FOLLOWON Part A prerequisite. No legitimately-next item exists. No code changed this firing (f91b8fd only touched .agent_state.json), so npm.cmd test was not re-run - last known-good 230/230 green, unchanged. empty-queue notification deduped (last sent 2026-08-08T12:55:00.000Z, ~1.6h elapsed, well within 6h window) - not resent.",
-   "commit": null,
-   "tests": "230/230 pass (unchanged, not re-run this firing)"
-  },
   {
    "ts": "2026-08-08T14:46:08.000Z",
    "agent": "cajh-loop-check",
@@ -1327,6 +1319,14 @@
    "detail": "New pairs-cointegration.mjs: Engle-Granger cointegration screen (block-permutation p-values) over 105 active-watchlist pairs clearing the overlap-history gate, BH-FDR q=0.05 pre-registered. 0/105 survive (best q=0.1741) -> NO-COINTEGRATED-PAIRS, holdout gate never reached. VERDICTS.md/AGENT_PROTOCOL.md/MULTIPLE_COMPARISONS_AUDIT.md updated. 461/461 tests green.",
    "commit": "9e0f437",
    "tests": "461/461"
+  },
+  {
+   "ts": "2026-08-19T18:16:45.052Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "closed-item",
+   "detail": "CROSS-SECTIONAL-NONPRICE-RANK: OI-change tested as a primary cross-sectional signal (not a gate), reusing momentum.mjs scoring machinery. KILLED at train-significance stage (train meanIC=-0.0395, p=0.1249, wrong sign vs pre-registration). Added as 10th test to MULTIPLE_COMPARISONS_AUDIT.md formal-NHST family; family BH-FDR recomputed, does not survive. Updated AGENT_PROTOCOL.md/MULTIPLE_COMPARISONS_AUDIT.md/VERDICTS.md same commit. 468/468 tests green.",
+   "commit": "0583013",
+   "tests": "468/468"
   }
  ],
  "automation": {
