@@ -128,8 +128,14 @@ async function fetchOHLC(pair, minutes) {
     };
     const onBar = (rid, time, open, high, low, close, volume) => {
       if (rid !== id) return;
+      // The decoder constructs this marker itself, so it is a literal string
+      // regardless of formatDate - check it before any numeric coercion.
       if (String(time).startsWith("finished")) return finish(bars);
-      bars.push({ time, open: String(open), high: String(high), low: String(low), close: String(close), volume: String(volume) });
+      // formatDate=2 makes IBKR send epoch seconds, matching what Kraken's
+      // fetchOHLC returns. Without it IBKR sends "YYYYMMDD" strings and the two
+      // adapters silently disagree about what `time` means, which breaks every
+      // downstream consumer that does arithmetic on it.
+      bars.push({ time: Number(time), open: String(open), high: String(high), low: String(low), close: String(close), volume: String(volume) });
     };
     const onError = (a, b, cc) => {
       const e = parseErrorEvent(a, b, cc);
@@ -139,7 +145,8 @@ async function fetchOHLC(pair, minutes) {
     };
     c.on(EventName.historicalData, onBar);
     c.on(EventName.error, onError);
-    c.reqHistoricalData(id, stockContract(pair), "", duration, barSize, WhatToShow.TRADES, 1, 1, false);
+    //                                                          useRTH=1, formatDate=2 (epoch seconds)
+    c.reqHistoricalData(id, stockContract(pair), "", duration, barSize, WhatToShow.TRADES, 1, 2, false);
   });
 }
 

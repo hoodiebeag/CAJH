@@ -24,18 +24,22 @@ function mockClient() {
 
 test.afterEach(() => setIBApiForTests());
 
-test("fetchOHLC resolves with bars once the decoder's finished-marker call arrives, converted to trader.js's string shape", async () => {
+test("fetchOHLC resolves with bars once the decoder's finished-marker call arrives, matching Kraken's epoch-seconds time contract", async () => {
   const c = mockClient();
   setIBApiForTests(() => c);
   const promise = IBKRBroker.fetchOHLC("AAPL", 60);
   await new Promise((r) => setTimeout(r, 0));
-  c.emit(EventName.historicalData, 1, "20260101", 100, 105, 99, 104, 1000);
-  c.emit(EventName.historicalData, 1, "20260102", 104, 106, 103, 105, 1200);
+  // formatDate=2, so IBKR sends epoch seconds as a string - the same units
+  // trader.js's Kraken fetchOHLC returns, so both adapters agree on `time`.
+  c.emit(EventName.historicalData, 1, "1767225600", 100, 105, 99, 104, 1000);
+  c.emit(EventName.historicalData, 1, "1767312000", 104, 106, 103, 105, 1200);
   c.emit(EventName.historicalData, 1, "finished-20260101-20260102", -1, -1, -1, -1, -1);
-  assert.deepEqual(await promise, [
-    { time: "20260101", open: "100", high: "105", low: "99", close: "104", volume: "1000" },
-    { time: "20260102", open: "104", high: "106", low: "103", close: "105", volume: "1200" },
+  const bars = await promise;
+  assert.deepEqual(bars, [
+    { time: 1767225600, open: "100", high: "105", low: "99", close: "104", volume: "1000" },
+    { time: 1767312000, open: "104", high: "106", low: "103", close: "105", volume: "1200" },
   ]);
+  assert.equal(typeof bars[0].time, "number", "time must be numeric epoch seconds, not an IBKR date string");
 });
 
 test("fetchOHLC resolves null on a request-scoped error, not on an unrelated reqId's error", async () => {
