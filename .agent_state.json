@@ -4,10 +4,10 @@
   "status": "IDLE",
   "target_file": null,
   "objective": null,
-  "notes": "MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC closed this firing: added a real-simulation excursion tracker to backtestMultiTF (backtest.js) - per closed trade, maxAdverseR/maxFavorableR tracked from bars strictly after the entry bar using the positions ACTUAL stop/target/breakeven/trail state, exposed as a new additive excursions:[{r,mae,mfe}] array parallel to results (unlike the pre-existing excursionProfile, which runs a separate synthetic first-passage grid on ATR-multiple stops, not the real baseline configs). New mae-mfe-stop-placement-diagnostic.mjs runs the exact tournament.mjs breakout/anticipate baseline configs unmodified, holdout only (split=.70, matching every other gated verdicts convention), pools excursions across the full 28/28-eligible-asset watchlist (EOS excluded, known gap), splits winners(r>0)/losers(r<=0), and calls each losers failure shape via a threshold fixed before looking at results: mfe>=0.5R before reversing = near-miss, else ran-straight-to-stop. Result: anticipate losers lean RAN-STRAIGHT-TO-STOP (1509 vs 1256, real 253-trade margin, 3966 total holdout trades); breakout is an effective coin flip (1045 vs 1041 of 3156 total holdout trades, no directional claim survives). Secondary unplanned observation reported but not diagnosed further (out of scope): losers median MAE (1.19R breakout, 1.24R anticipate) sits slightly above the nominal 1R stop, consistent with lockBreakeven/trailing occasionally widening the effective stop before an eventual loss. Purely descriptive per its own task wording: no gate, no VERDICTS.md row, no stop/target parameter changed anywhere, no replacement value recommended. 9 new tests (3 in backtest.test.mjs pinning exact mae/mfe values via hand-constructed candle paths for the winning-trade/stop-loss/anticipate-same-bar-stop-out code paths, 6 in mae-mfe-stop-placement-diagnostic.test.mjs). All 26 pre-existing backtest.test.mjs tests still pass unmodified (excursions is a new always-present field, non-breaking). 479->488 project tests green. No strategy code touched beyond backtest.js research-instrumentation (bot.js/monitor.js/trader.js/scanner.js untouched), pre-commit hook did not fire. Commit f5c55cd, pushed.",
+  "notes": "COST-COMPONENT-ATTRIBUTION closed this firing: decomposed the breakout (-0.8640R) and anticipate (-0.8842R) holdout baselines into gross R and cost components via exact linear re-derivation from backtest.js existing feeRate/slipPct override path (backtestMultiTF, same mechanism tournament.mjs runTournament already exposes) - zero-cost, fee-only, slip-only, and default(fee+slip) runs, full 28-asset watchlist, standard 70/30 holdout split, exact breakout/anticipate family configs duplicated from tournament.mjs (not exported there). New file scripts/cost-component-attribution.mjs (read-only diagnostic). Method is an exact identity (net-R formula is affine in feeRate/slipPct with a cost-independent per-trade coefficient), not a fit or estimate - reconciliation discrepancy ~1e-15 for both families, well within stated 1e-9 tolerance. Result: fee is 94.1% of total drag for BOTH families, and that ratio (FEE_RATE/(FEE_RATE+SLIPPAGE_PCT)=0.94118) is structural, not empirical - it holds regardless of asset or trade population given the current cost formula. Slip/spread-crossing is the remaining 5.9% (not further separable into spread-crossing vs slippage without real bid/ask tick data, which candles/ OHLC does not carry - stated as a limitation, not fabricated). Adverse-selection component is exactly 0 for this baseline, correctly, because the baseline uses market/taker fills, not resting maker orders - PWR5 calibrated adverse-selection model (cost-model.mjs simulateLimitFill) has nothing to attach to here; explicitly NOT re-deriving a maker-cost scenario since PHASE2-MAX-SURVIVABLE-COST never covered breakout/anticipate and COST-SENSITIVITY-SURFACE (already queued) owns that full grid. Best-plausible-improvement-to-fee computed directly (not extrapolated): driving feeRate to a literal zero floor (slipPct held fixed) leaves breakout at +0.0091R (thin, would not survive any real execution friction) and anticipate at -0.1331R (still solidly negative, because anticipate zero-cost gross avgR is itself already negative at -0.0861R) - so eliminating fee entirely closes 94.1% of breakout drag but is NOT sufficient alone to flip either family with real margin. Per-asset attribution table (28 assets x 2 families x 4 cost configs) saved to research-runs/ (gitignored, not committed) rather than reproduced in full in ROADMAP.md; noted spread e.g. breakout fee drag ranges 0.543R (ZEC,44 trades) to 1.482R (TRX,2 trades, low-sample caveat stated) - fee arithmetic tracking each assets entry/exit-to-risk ratio, not signal quality. No cost parameter changed anywhere, no replacement value recommended, purely descriptive per its own scope. Recorded in ROADMAP.md. No production/strategy files touched (bot.js/monitor.js/trader.js/scanner.js/strategy.js/backtest.js untouched - backtest.js/tournament.mjs/strategy.js only imported read-only), pre-commit hook false-tripped once on a full-file reformat (2-space/LF vs original 1-space/CRLF) with no actual protected-identifier content added - recovered by restoring original formatting and re-committing a minimal diff, no marker used, no bypass used. 488/488 tests green (no new tests added, consistent with other throwaway scripts/*.mjs diagnostics e.g. phase2-triage.mjs which also carry no dedicated test file, since it exercises only already-tested backtest.js/tournament.mjs code paths through their existing public interfaces). Commit 84c4943, pushed.",
   "block_detail": null,
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-08-19T20:12:01.082Z"
+  "updated_at": "2026-08-19T21:12:39.030Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -414,7 +414,7 @@
    },
    {
     "id": "COST-COMPONENT-ATTRIBUTION",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: cost attribution report (additive), instruments the existing backtest cost path",
     "depends_on": [],
@@ -532,14 +532,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-08T15:16:29.000Z",
-   "agent": "cajh-loop-check",
-   "action": "no_op_check",
-   "detail": "Queue still genuinely empty: 0/23 pending, control IDLE, HEAD unchanged (60be142) since the prior firing - confirmed via git status (clean) and git pull --rebase (already up to date). Restock re-verified independently: grepped ROADMAP.md for PASS (zero matches); grepped TOURNAMENT_ROADMAP.md for PASS and read context around each match (T2-VOLCONTRACTION win-rate clause, TRAIL-STOP-EXIT trades-floor clauses) - all isolated gate-clause PASSes inside combined-FAIL verdicts, no study-level PASS. FOLLOWON_SPECS.md/SELF_AWARENESS_SPEC.md/SIGNAL3_CLASSIFIER_SPEC.md unchanged since 758f3d2 (only commit ever touching them) - still gated on killed prerequisites. No code changed this firing, so npm.cmd test was not re-run - last known-good 230/230 green, unchanged. empty-queue notification deduped (last sent 2026-08-08T12:55:00.000Z, ~2.4h elapsed, well within 6h window) - not resent.",
-   "commit": null,
-   "tests": "230/230 pass (unchanged, not re-run this firing)"
-  },
   {
    "ts": "2026-08-08T15:32:00.000Z",
    "agent": "cajh-loop-check",
@@ -1326,6 +1318,14 @@
    "action": "closed-work-queue-item",
    "detail": "MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC: instrumented backtestMultiTF with real per-trade MAE/MFE tracking (new additive excursions field), ran breakout/anticipate holdout diagnostic across 28/28 assets. anticipate losers lean RAN-STRAIGHT-TO-STOP (1509/2765, margin 253); breakout is a coin flip (1045/2086, no claim). Diagnostic only, no gate, no parameter change. 479->488 tests green.",
    "commit": "f5c55cd",
+   "tests": "488 pass, 0 fail, 0 skip"
+  },
+  {
+   "ts": "2026-08-19T21:12:39.030Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "closed-work-queue-item",
+   "detail": "COST-COMPONENT-ATTRIBUTION: decomposed breakout(-0.864R)/anticipate(-0.884R) holdout baselines into gross R + cost components via exact linear re-derivation of the existing feeRate/slipPct cost path. Fee = 94.1% of total drag for both families (structural: FEE_RATE/(FEE_RATE+SLIPPAGE_PCT)), slip/spread-crossing = 5.9% (not separable further, no tick data), adverse-selection = 0 (taker fills, no resting order - PWR5 model correctly N/A here). Zero-fee floor: breakout +0.0091R (thin), anticipate -0.1331R (still negative, zero-cost gross already negative). Components reconcile to net within 1e-9. No cost parameter changed. 488 tests green.",
+   "commit": "84c4943",
    "tests": "488 pass, 0 fail, 0 skip"
   }
  ],
