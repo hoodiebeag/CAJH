@@ -1327,6 +1327,14 @@
    "detail": "STEP 0.3: git pull --rebase failed on unstaged changes present at session start, not created this run: brokers/ibkr.mjs (daily-bar YYYYMMDD-to-epoch timestamp fix, ~20 lines) + brokers/ibkr.test.mjs (+16 lines of tests) modified, plus untracked scripts/equities-baseline-port.mjs and universe.txt (new equities-baseline work). package.json (the prior blocker cause) is now clean - resolved between firings - but different unrelated in-progress work has since appeared and blocks pull. Per hygiene rules, did not stash/checkout/reset/clean any of it. Last persistent-pull-blocker notification was 2026-08-19T10:02:01Z (>6h stale), so attempted PushNotification per dedup policy; tool reported not sent (terminal active, redundant) - recorded regardless, as a NEW dated notifications key (persistent-pull-blocker-2026-08-20) rather than overwriting the existing persistent-pull-blocker entry, since that entrys message references the live-trading env-gate identifier in its own historical prose and .git/hooks/pre-commit scans full diffs including removed lines - same convention already used for the 2026-08-10 dated key per its own note field. Exiting per STEP 0.3 to let next firing retry the pull; no code work attempted, control untouched (remains IDLE).",
    "commit": null,
    "tests": "not run (exited at STEP 0.3, before STEP 3)"
+  },
+  {
+   "ts": "2026-08-20T01:00:59.000Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "pull-blocked-exit",
+   "detail": "STEP 0.3: git pull --rebase failed again on the same unstaged content as the prior firing (03c5b8b): brokers/ibkr.mjs + brokers/ibkr.test.mjs modified, plus untracked scripts/equities-baseline-port.mjs and universe.txt, none created this run. git fetch + git log HEAD..origin/main confirmed zero new remote commits, so this is a purely local dirty-tree block, not an actual missed sync. Did not stash/checkout/reset/clean any of it. MISTAKE MADE AND CORRECTED: checked blackboard.notifications.persistent-pull-blocker (base key, last sent 2026-08-19T10:02:01Z, >6h stale) and sent a PushNotification without also checking the dated key persistent-pull-blocker-2026-08-20 that the immediately-prior firing had set only about 1 hour earlier (2026-08-20T00:00:58Z) - that dated key was inside the 6h dedup window and should have suppressed this send. The notification (\"Mobile push requested\") already fired before the oversight was caught, so it stands as a duplicate; cannot be unsent. A first attempt to record this via a full JSON.stringify rewrite of this file was caught before commit - it reformatted all ~1370 lines (2-space indent + LF vs this file's 1-space indent + CRLF) and tripped scripts/check-protected-logic.cjs on unrelated historical mentions of the protected trading-safety identifiers elsewhere in the file's older entries; reverted with git checkout and redone as this surgical Edit instead, touching only this entry and one notifications key. No code work attempted, control untouched (remains IDLE).",
+   "commit": null,
+   "tests": "not run (exited at STEP 0.3, before STEP 3)"
   }
  ],
  "automation": {
@@ -1334,6 +1342,12 @@
   "note": "Read by cajh-loop-check BEFORE anything else, every firing regardless of which role's turn it is. Set enabled:false to pause both without touching the scheduler UI - each check still fires on its cron but exits immediately, so pausing costs nothing and resuming is instant. No quota-based auto-pause exists: a scheduled run cannot see remaining usage from inside the prompt, so this is a manual switch, not a self-detecting one."
  },
  "notifications": {
+  "persistent-pull-blocker-2026-08-20-b": {
+   "lastSentAt": "2026-08-20T01:00:59.000Z",
+   "deliveryResult": "Mobile push requested (tool call succeeded; delivery to device not independently confirmed). Sent in error - duplicate of persistent-pull-blocker-2026-08-20 (00:00:58Z), inside its 6h dedup window. See ledger 2026-08-20T01:00:59.000Z entry.",
+   "message": "cajh: pull still blocked >6h by pre-existing unstaged brokers/ibkr.mjs/.test.mjs + untracked equities-baseline-port.mjs/universe.txt (not from this run). Needs your look.",
+   "note": "New dated key rather than overwriting persistent-pull-blocker or persistent-pull-blocker-2026-08-20, so this edit does not touch those entries' message lines (same false-positive-avoidance convention as the 2026-08-10 dated key below). This send was a dedup miss, documented for the next firing so it dedups against the -2026-08-20 key (00:00:58Z) going forward, not this one."
+  },
   "persistent-pull-blocker-2026-08-10": {
    "lastSentAt": "2026-08-10T04:01:10.000Z",
    "deliveryResult": "Mobile push requested (tool call succeeded; delivery to device not independently confirmed - see notification_policy.known_gap).",
