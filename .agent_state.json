@@ -533,14 +533,6 @@
  },
  "ledger": [
   {
-   "ts": "2026-08-08T15:47:00.000Z",
-   "agent": "cajh-loop-check",
-   "action": "no-op",
-   "detail": "Empty-queue check: 0 pending/started work_queue items (23/23 done), no new commits to ROADMAP.md/TOURNAMENT_ROADMAP.md/FOLLOWON_SPECS.md/SELF_AWARENESS_SPEC.md/SIGNAL3_CLASSIFIER_SPEC.md since prior firing, no study-level PASS found. Ran npm.cmd test independently: 230/230 green. No work pulled, no restock performed, control left IDLE. Empty-queue notification not resent (last sent 2026-08-08T12:55:00.000Z, within 6h dedup window).",
-   "commit": "pending",
-   "tests": "230/230 pass (re-run this firing, confirmed green)"
-  },
-  {
    "ts": "2026-08-08T16:01:14.000Z",
    "agent": "cajh-loop-check",
    "action": "no_op_check",
@@ -1327,6 +1319,14 @@
    "detail": "EXECUTION-DELAY-DECAY-CURVE: added entryDelayBars param to backtest.js (default 0, backward-compatible), wired into anticipate + shared dip/breakout branch. New scripts/execution-delay-decay-curve.mjs re-runs breakout/anticipate holdout baselines at 0/1/2/3/5 bar delay - BOTH families degrade monotonically at every step (anticipate -0.8842R->-1.6242R, breakout -0.8640R->-2.2953R), zero exceptions. Closes the maker-execution cost-reduction thesis (PWR5-PHASE4) on a mechanism basis: waiting for a resting fill is itself delay, and it costs more than the fee savings it targets. Descriptive, no gate, no strategy param changed. 4 new tests, suite 488->492 green. Recorded in ROADMAP.md.",
    "commit": "621d95c",
    "tests": "492/492 green"
+  },
+  {
+   "ts": "2026-08-20T00:00:58.000Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "pull-blocked-exit",
+   "detail": "STEP 0.3: git pull --rebase failed on unstaged changes present at session start, not created this run: brokers/ibkr.mjs (daily-bar YYYYMMDD-to-epoch timestamp fix, ~20 lines) + brokers/ibkr.test.mjs (+16 lines of tests) modified, plus untracked scripts/equities-baseline-port.mjs and universe.txt (new equities-baseline work). package.json (the prior blocker cause) is now clean - resolved between firings - but different unrelated in-progress work has since appeared and blocks pull. Per hygiene rules, did not stash/checkout/reset/clean any of it. Last persistent-pull-blocker notification was 2026-08-19T10:02:01Z (>6h stale), so attempted PushNotification per dedup policy; tool reported not sent (terminal active, redundant) - recorded regardless, as a NEW dated notifications key (persistent-pull-blocker-2026-08-20) rather than overwriting the existing persistent-pull-blocker entry, since that entrys message references the live-trading env-gate identifier in its own historical prose and .git/hooks/pre-commit scans full diffs including removed lines - same convention already used for the 2026-08-10 dated key per its own note field. Exiting per STEP 0.3 to let next firing retry the pull; no code work attempted, control untouched (remains IDLE).",
+   "commit": null,
+   "tests": "not run (exited at STEP 0.3, before STEP 3)"
   }
  ],
  "automation": {
@@ -1370,6 +1370,11 @@
    "lastSentAt": "2026-08-08T17:22:36.582Z",
    "deliveryResult": "Mobile push requested (tool call succeeded; delivery to device not independently confirmed).",
    "message": "cajh: FEE-SCHEDULE-REBASE done (doc only, no code). Side note: my commit's prose matched \"the buy-order placement function\"/\"the sell-order placement function\" and consumed a fresh .git/ALLOW_PROTECTED_EDIT marker via the pre-commit hook - if you created that for a pending protected edit, you'll need to recreate it."
+  },
+  "persistent-pull-blocker-2026-08-20": {
+   "lastSentAt": "2026-08-20T00:00:58.000Z",
+   "message": "cajh: pull still blocked (>13h) by pre-existing unstaged brokers/ibkr.mjs daily-bar timestamp fix + new equities-baseline-port.mjs/universe.txt. Not created by loop, needs your review/commit.",
+   "deliveryResult": "Not sent - terminal active, output already reaches user (tool-reported redundant, not a delivery failure)."
   }
  }
 }
