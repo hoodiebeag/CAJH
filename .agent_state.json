@@ -4,7 +4,7 @@
   "status": "IDLE",
   "target_file": null,
   "objective": null,
-  "notes": "HOLDING-PERIOD-COST-AMORTIZATION-MAP closed this firing: mapped net R against realized holding period for the breakout/anticipate crypto holdout baseline (diagnostic only, no exit parameter changed, no holding-period value recommended). Added additive barsHeld field to backtest.js excursions (k - pos.openedAt at trade close; 0 for the pre-existing same-bar stop-out branches) - purely additive telemetry off state the loop already tracks, no entry/exit/stop/target logic touched. New script scripts/holding-period-cost-amortization-map.mjs runs the exact tournament.mjs family configs twice per symbol (default net cost vs zero cost) and pairs per-trade results by index (relies on the already-established fact that cost never changes which trades fire - verified per-symbol this pass, symbolMismatches:0 both families), bucketing by barsHeld in 1h-equivalent bands (0h,1-4h,5-12h,13-24h,25-48h,49-100h incl. maxHold timeout). Sanity check: trade-count-weighted avg of this items own per-bucket net avgR reproduces COST-COMPONENT-ATTRIBUTIONs pooled baseline exactly (breakout -0.8639R vs recorded -0.864R, anticipate -0.8843R vs recorded -0.884R). Result: anticipate reaches net-positive in exactly one bucket, the longest (49-100h, +0.446R net), covering 430/3966 = 10.8% of trades; every shorter bucket stays net-negative, monotonically worsening as holding period shrinks. breakout never reaches net-positive at any holding period tested (best bucket 49-100h still -0.135R net), though gross does cross zero by 13-24h. Explicitly noted this does NOT license lengthening holds - the long-hold bucket is disproportionately trades that already ran to/near maxHold (survivorship within the sample), not a lever, and picking a holding period after seeing this table would be the same post-hoc exit re-tuning already prohibited on these negative-EV families. 3 new assertions added to 3 existing backtest.test.mjs MAE/MFE tests pinning exact barsHeld values (5, 1, 0) against the same hand-built candle paths already used there - no new test count, all pre-existing tests unmodified and passing. No protected-logic surface touched (bot.js/monitor.js/trader.js/scanner.js/strategy.js/tournament.mjs untouched), pre-commit hook passed clean on first try. Full writeup in ROADMAP.md. Suite 493 -> 493 green (test count unchanged, existing tests extended). STEP 5 restock check performed: read TOURNAMENT_ROADMAP.md and SELF_AWARENESS_SPEC.md (no FOLLOWON_SPECS.md/SIGNAL3_CLASSIFIER_SPEC.md present) - Self-awareness Phase 1-2 already implemented, Phase 3 remains gated/human-owned; TOURNAMENT_ROADMAP.md shows 45+ prior studies with every entry-signal family FAIL/KILLED after cost. No new legitimate queue item identified without either inventing busywork or overstepping into human-owned new-hypothesis selection (the same boundary the 2026-08-15 empty-queue notification already flagged) - left work_queue at its current 2 remaining pending items (COST-SENSITIVITY-SURFACE, WATCHLIST-LIQUIDITY-REALISM-AUDIT) rather than padding it.",
+  "notes": "COST-SENSITIVITY-SURFACE closed this firing: mapped net avgR for the breakout/anticipate holdout baseline families (exact tournament.mjs family config, no gate, standard 70/30 split) across a real 2-D grid of fee rate x slippage, spanning Kraken Futures retail maker through current spot taker (cost-model.mjs verified schedule). New scripts/cost-sensitivity-surface.mjs (read-only diagnostic) - exact analytic linear decomposition (netR affine in feeRate/slipPct, backtest.js:566), verified against direct backtest.js reruns at both grid corners (~1e-15 to 1e-17 discrepancy, not a fit residual). Result: anticipate gross avgR is already negative before any cost (-0.0861) - no grid point, real or idealized, flips it. breakout gross avgR is positive (+0.0637) and 4/12 grid cells come back net-positive, but every positive cell requires an idealized zero-adverse-selection resting-maker fill - PWR5/PHASE4 already found that exact scenario insufficient to rescue breakout (cited from COST-COMPONENT-ATTRIBUTION header), so this is a closed corner restated with numbers, not a new opening. Built a full verdict-flip table against every FAIL/KILLED/TRAIN-GATE-FAIL/DATA-GATED row in VERDICTS.md, in three explicit buckets by how directly the grid applies (exact baseline / approximate-bound gated-or-modified variant / different-mechanism not-applicable) rather than force an answer outside the grids actual domain. Recorded in ROADMAP.md (2026-08-20 COST-SENSITIVITY-SURFACE section) and cross-referenced from VERDICTS.md bottom-line without rewriting any recorded verdict. Closing statement: across all six signals now tested against a real, verified execution-cost model (the four PWR5-era signals plus these two baseline families), none survives at any achievable venue - the cost-reduction thesis is closed project-wide, not just for the four PHASE2 covered it. npm.cmd test 493/493 green. Commit a44a1f8, pushed.",
   "block_detail": null,
   "updated_by": "cajh-loop-check-scheduled",
   "updated_at": "2026-08-20T04:09:23.367Z"
@@ -444,7 +444,7 @@
    },
    {
     "id": "COST-SENSITIVITY-SURFACE",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: cost sensitivity grid (additive), reuses tournament baseline path",
     "depends_on": [],
@@ -532,14 +532,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-08T17:01:28.304Z",
-   "agent": "cajh-loop-check",
-   "action": "no-op-check",
-   "detail": "Queue confirmed genuinely empty (23/23 done, 0 pending/started), HEAD unchanged (884b90e) since prior firing via clean git status + git pull --rebase already-up-to-date. Restock re-verified independently: zero commits since e511b73 to ROADMAP.md/TOURNAMENT_ROADMAP.md and since 758f3d2 to FOLLOWON_SPECS.md/SELF_AWARENESS_SPEC.md/SIGNAL3_CLASSIFIER_SPEC.md. Zero PASS matches in ROADMAP.md; 9 gate-clause PASS matches in TOURNAMENT_ROADMAP.md at same lines as before, all inside combined-FAIL verdicts, no study-level PASS. Ran npm.cmd test independently: 230/230 green. empty-queue notification deduped (last sent 2026-08-08T12:55:00.000Z, ~4.1h elapsed, within 6h window) - not resent. control left IDLE.",
-   "commit": null,
-   "tests": "230/230 pass (re-run this firing, confirmed green)"
-  },
   {
    "ts": "2026-08-08T17:12:18.768Z",
    "agent": "architect",
@@ -1327,6 +1319,14 @@
    "detail": "Mapped net R vs realized holding period for breakout/anticipate holdout baseline. anticipate net-positive only in longest bucket (49-100h, +0.446R, 10.8% of trades); breakout never net-positive at any holding period. Additive barsHeld telemetry in backtest.js excursions, no exit logic changed. Sanity-checked against COST-COMPONENT-ATTRIBUTION pooled baseline (exact match). Diagnostic only, no parameter recommended.",
    "commit": "c3038ba",
    "tests": "493/493 pass"
+  },
+  {
+   "ts": "2026-08-20T05:09:37.060Z",
+   "agent": "scheduled-loop",
+   "action": "commit",
+   "detail": "COST-SENSITIVITY-SURFACE done - see control.notes for the full result. Closes the last open item from the PWR5-era cost-reduction plan family: the breakout/anticipate price-structure baseline itself, never covered by PHASE2-MAX-SURVIVABLE-COST (scoped to the 4 classifier/momentum signals only). anticipate closed unconditionally (gross already negative). breakout closed for practical purposes (only positive at an idealized maker-fill corner PWR5/PHASE4 already ruled out). Full 3-bucket verdict-flip accounting against every FAIL/KILLED row in VERDICTS.md in ROADMAP.md.",
+   "commit": "a44a1f8",
+   "tests": "493/493 green"
   }
  ],
  "automation": {
