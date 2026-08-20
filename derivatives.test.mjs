@@ -33,3 +33,19 @@ test("analytics normalization unwraps a single-key cohort wrapper (e.g. top-trad
     { timestamp: 200, value: { longCount: 509, ratio: "0.49" } },
   ]);
 });
+
+test("analytics normalization flattens nested bid/ask side wrappers (e.g. slippage/liquidity), matching Kraken's real response shape", () => {
+  const out = normalizeAnalytics({
+    result: {
+      timestamp: [100, 200],
+      data: {
+        bid: { slippage_1k: ["100", "101"], slippage_10k: ["99", "100"] },
+        ask: { slippage_1k: ["102", "103"], slippage_10k: ["103", "104"] },
+      },
+    },
+  });
+  assert.deepEqual(out.points, [
+    { timestamp: 100, value: { bid: { slippage_1k: "100", slippage_10k: "99" }, ask: { slippage_1k: "102", slippage_10k: "103" } } },
+    { timestamp: 200, value: { bid: { slippage_1k: "101", slippage_10k: "100" }, ask: { slippage_1k: "103", slippage_10k: "104" } } },
+  ]);
+});

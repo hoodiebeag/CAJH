@@ -2468,3 +2468,95 @@ six signals it has now been applied to, is closed.
 (read-only diagnostic). `backtest.js`, `strategy.js`, `tournament.mjs`, `cost-model.mjs`,
 `monitor.js`, `bot.js`, `trader.js`, `scanner.js` — all untouched. Suite green before commit
 (see commit for exact count).
+
+## 2026-08-20 — WATCHLIST-LIQUIDITY-REALISM-AUDIT: one asset (XTZ) real slippage 2.7x the flat
+assumption; everything else at or below it, most well below
+
+Methodology audit, not a new signal search — due diligence for whenever a future signal
+passes, not a re-test of any existing verdict (every price-structure family has already failed
+regardless of this question, per COST-SENSITIVITY-SURFACE et al.). Every backtest this project
+has run charges a flat per-side slippage of `strategy.js`'s `SLIPPAGE_PCT` (0.05%) uniformly
+across the whole watchlist. This checks whether that flat assumption actually holds
+per-asset, using Kraken Futures' own real `slippage`/`liquidity` analytics feeds
+(`derivatives.mjs`, live public data — not modeled), against the exact 29-asset universe
+`researchlib.mjs`'s `loadWatchlist()` resolves to with `WATCHLIST` unset and `config.json`'s
+watchlist empty (`symbolsFromCandleStore()` — every asset any backtest in this project has
+actually run against). New file: `scripts/watchlist-liquidity-realism-audit.mjs` (read-only
+diagnostic, not part of the app).
+
+**A real bug found and fixed en route.** `derivatives.mjs`'s `normalizeAnalytics` only handled
+three response shapes (flat array; named parallel series; a single-key cohort wrapper like
+`top-traders`' `top20Percent`). Kraken's `slippage`/`liquidity` types use a fourth shape this
+function didn't recognize — multiple named sides (`bid`/`ask`), each holding its own named
+parallel-array series (`{bid:{slippage_1k:[...],...}, ask:{...}}`) — and silently normalized
+every point to `{}` instead of throwing, exactly the failure mode the function's own comment
+already flagged as a risk for shapes like this. Fixed generically (any number of nested side
+keys, not just bid/ask) in `derivatives.mjs`, with a new test in `derivatives.test.mjs` pinning
+the nested-shape output; all 4 pre-existing `normalizeAnalytics` tests still pass unchanged.
+Scope: `normalizeAnalytics` only — no other function in `derivatives.mjs` touched, and nothing
+in `bot.js`/`monitor.js`/`trader.js`/`scanner.js` reads this module at all (research-only, as
+the file's own header states).
+
+**Method.** Kraken's `slippage` analytics type returns, per side, the average absolute
+execution price an order of a given USD notional (`slippage_1k`/`_10k`/`_100k`/`_1m`) would
+receive. `slippage_1k` (smallest bucket) is used as a touch-price proxy:
+`mid_t = (bid.slippage_1k_t + ask.slippage_1k_t) / 2`. Per-side slippage at size S is
+`(ask.slippage_S_t - mid_t)/mid_t` for buys and `(mid_t - bid.slippage_S_t)/mid_t` for sells,
+averaged across sides and across every daily point in a 60-day trailing window (60 samples/
+asset). This measures the full per-side cost a market order actually pays (spread + size
+impact) — the same thing `SLIPPAGE_PCT` proxies — not just incremental book-walk impact past
+an arbitrary reference.
+
+**Size assumption, stated rather than fabricated.** Exact live account equity isn't in this
+repo (`strategy.js`'s `RISK_PCT`=0.5% of free cash/trade and `MAX_POSITION_PCT` cap are ratios,
+not a dollar figure). $1k notional — Kraken's smallest published bucket — is used as the
+primary, conservative proxy; a 0.5%-risk personal account would need well over $1k of equity
+to size even one trade at $1k notional, larger than this project's own framing (a
+single-Discord-user personal bot) suggests. $10k is reported alongside for sensitivity, not as
+the primary comparison — see below, since it changes the flagged set materially.
+
+**Result — 28/29 assets got real data; EOS has no Kraken Futures perpetual listing at all**
+(confirmed directly against Kraken's `/derivatives/api/v3/instruments`, not inferred from an
+empty response — Kraken's analytics endpoint returns HTTP 200 with empty arrays for an unknown
+symbol rather than 404, so this needed an explicit check rather than trusting the absence of an
+error). EOS is excluded from the ratio analysis below; whether it stays on `DEFAULT_WATCHLIST`
+without a matching futures venue is a separate, pre-existing question this audit surfaces but
+doesn't resolve.
+
+**Flagged at the primary ($1k) threshold — real slippage >= 2x the flat 0.05% assumption:**
+
+| symbol | real per-side slippage (avg, 60d) | ratio vs. 0.05% assumption |
+|---|---:|---:|
+| XTZ | 0.1361% | **2.72x** |
+| TIA | 0.0958% | 1.92x (below threshold, closest to it) |
+
+Every other asset in the 28 is at or below the 2x threshold; most are well below it — the
+flat 0.05% assumption is actually *conservative* (overstated) for the largest-cap names: BTC
+0.0012% (0.02x), ETH 0.0039% (0.08x), SOL 0.0091% (0.18x), XRP 0.0115% (0.23x), DOGE 0.0119%
+(0.24x). Full per-asset table (all 28, both size buckets, plus `liquidity_01` depth context)
+saved to `research-runs/2026-08-20T15-09-09-407Z-watchlist-liquidity-realism-audit.json`.
+
+**Sensitivity — the flagged set is size-dependent, not just XTZ.** At the $10k bucket instead
+of $1k, 9 of 28 assets cross the same 2x line: XTZ (6.75x), TIA (3.99x), POL (3.18x), ETC
+(2.82x), ALGO (2.57x), ATOM (2.56x), APT (2.39x), INJ (2.30x), UNI (2.01x). This doesn't change
+the audit's finding — it sharpens it: the flat assumption's realism is a function of *how big
+the actual order is*, which this repo doesn't record as a dollar figure anywhere. The $1k
+result (XTZ alone) is the defensible floor given the stated conservative assumption; the $10k
+sensitivity table is the one to re-check first if actual position sizing ever turns out closer
+to that end.
+
+**Disposition — flagged for the human, not acted on unilaterally, per this item's own
+`done_when`.** This is a documentation/report deliverable, not a pass/fail gate, and does not
+touch `WATCHLIST`/`DISCOVER_UNIVERSE`/`config.json` in any way. If a future signal ever passes
+holdout/train gates on this watchlist, XTZ (and, depending on real position size, the other 8
+assets in the $10k sensitivity list) should be reviewed before counting on that signal's
+backtested edge translating to live execution — their real per-side cost is materially higher
+than every backtest in this project to date has charged them.
+
+**Engineering note.** New: `scripts/watchlist-liquidity-realism-audit.mjs` (read-only
+diagnostic). Fixed: `derivatives.mjs`'s `normalizeAnalytics` (bug described above, additive —
+handles a shape it previously silently mishandled, doesn't change output for any shape it
+already handled correctly, all pre-existing tests unchanged and passing) and
+`derivatives.test.mjs` (one new test for the fixed shape). `backtest.js`, `strategy.js`,
+`tournament.mjs`, `cost-model.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js` — all
+untouched. Suite green before commit (see commit for exact count).

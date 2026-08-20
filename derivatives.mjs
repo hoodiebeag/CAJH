@@ -47,14 +47,30 @@ export function normalizeAnalytics(response) {
   const series = Array.isArray(data)
     ? null
     : Object.entries(data).filter(([, values]) => Array.isArray(values));
-  const length = Math.min(result.timestamp.length, series
+  // Slippage/liquidity nest one level deeper still than the single-cohort-key case above:
+  // multiple named sides, each its own named parallel-array series -
+  // {bid:{slippage_1k:[...],...}, ask:{...}}. `series` comes back empty (no direct array
+  // values survive the filter) for this shape rather than throwing, so without this branch it
+  // would silently normalize to `{}` on every point the same way the cohort-key case's own
+  // comment above already warned this shape family could - confirmed against Kraken's real
+  // slippage/liquidity responses.
+  const nestedSeries = (series && series.length === 0)
+    ? Object.entries(data).filter(([, v]) => v && typeof v === "object" && !Array.isArray(v) && Object.values(v).some(Array.isArray))
+    : null;
+  const length = Math.min(result.timestamp.length, series && series.length
     ? Math.min(...series.map(([, values]) => values.length))
+    : nestedSeries && nestedSeries.length
+    ? Math.min(...nestedSeries.flatMap(([, side]) => Object.values(side).filter(Array.isArray).map((v) => v.length)))
     : data.length);
   const points = [];
   for (let i = 0; i < length; i++) {
     const timestamp = Number(result.timestamp[i]);
     if (!Number.isFinite(timestamp)) continue;
-    const value = series ? Object.fromEntries(series.map(([key, values]) => [key, values[i]])) : data[i];
+    const value = nestedSeries && nestedSeries.length
+      ? Object.fromEntries(nestedSeries.map(([side, arr]) => [side, Object.fromEntries(Object.entries(arr).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, v[i]]))]))
+      : series && series.length
+      ? Object.fromEntries(series.map(([key, values]) => [key, values[i]]))
+      : data[i];
     points.push({ timestamp, value });
   }
   return { points, more: Boolean(result.more), sourcePoints: length };
