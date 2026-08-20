@@ -4,10 +4,10 @@
   "status": "IDLE",
   "target_file": null,
   "objective": null,
-  "notes": "COST-SENSITIVITY-SURFACE closed this firing: mapped net avgR for the breakout/anticipate holdout baseline families (exact tournament.mjs family config, no gate, standard 70/30 split) across a real 2-D grid of fee rate x slippage, spanning Kraken Futures retail maker through current spot taker (cost-model.mjs verified schedule). New scripts/cost-sensitivity-surface.mjs (read-only diagnostic) - exact analytic linear decomposition (netR affine in feeRate/slipPct, backtest.js:566), verified against direct backtest.js reruns at both grid corners (~1e-15 to 1e-17 discrepancy, not a fit residual). Result: anticipate gross avgR is already negative before any cost (-0.0861) - no grid point, real or idealized, flips it. breakout gross avgR is positive (+0.0637) and 4/12 grid cells come back net-positive, but every positive cell requires an idealized zero-adverse-selection resting-maker fill - PWR5/PHASE4 already found that exact scenario insufficient to rescue breakout (cited from COST-COMPONENT-ATTRIBUTION header), so this is a closed corner restated with numbers, not a new opening. Built a full verdict-flip table against every FAIL/KILLED/TRAIN-GATE-FAIL/DATA-GATED row in VERDICTS.md, in three explicit buckets by how directly the grid applies (exact baseline / approximate-bound gated-or-modified variant / different-mechanism not-applicable) rather than force an answer outside the grids actual domain. Recorded in ROADMAP.md (2026-08-20 COST-SENSITIVITY-SURFACE section) and cross-referenced from VERDICTS.md bottom-line without rewriting any recorded verdict. Closing statement: across all six signals now tested against a real, verified execution-cost model (the four PWR5-era signals plus these two baseline families), none survives at any achievable venue - the cost-reduction thesis is closed project-wide, not just for the four PHASE2 covered it. npm.cmd test 493/493 green. Commit a44a1f8, pushed.",
+  "notes": "WATCHLIST-LIQUIDITY-REALISM-AUDIT closed this firing: per-asset real slippage vs strategy.js flat SLIPPAGE_PCT (0.05%/side) assumption, using derivatives.mjs slippage/liquidity analytics types (live Kraken Futures data) across the exact 29-asset universe researchlib.mjs loadWatchlist() resolves to. New scripts/watchlist-liquidity-realism-audit.mjs (read-only). Method: mid_t=(bid.slippage_1k+ask.slippage_1k)/2 as touch proxy, per-side slip at size S = (ask.slippage_S-mid)/mid (buy) / (mid-bid.slippage_S)/mid (sell), averaged over 60 daily points/asset; $1k notional as primary conservative size proxy (exact account equity not in repo), $10k reported for sensitivity. Result: 28/29 assets got real data (EOS has no Kraken Futures perpetual listing at all, confirmed against /instruments directly). XTZ flagged: real per-side slippage 0.1361% = 2.72x the flat assumption (>= this items own 2x threshold). TIA close but under (1.92x). All other 26 at or below 2x; large-caps (BTC/ETH/SOL/XRP/DOGE) well below it, meaning the flat assumption is conservative for them. At $10k sensitivity, 9/28 cross 2x instead of 1 (XTZ/TIA/POL/ETC/ALGO/ATOM/APT/INJ/UNI) - flagged set is size-dependent, this repo has no recorded dollar order-size figure. Documentation/report deliverable only per its own done_when - does NOT touch WATCHLIST/DISCOVER_UNIVERSE/config.json, flagged for human review only. Found+fixed a real bug en route: derivatives.mjs normalizeAnalytics silently normalized slippage/liquidity nested bid/ask-side responses to {} on every point (a 4th response shape it never handled) instead of throwing - fixed generically, 1 new test added, all 4 pre-existing normalizeAnalytics tests unchanged/passing. Recorded in ROADMAP.md 2026-08-20 WATCHLIST-LIQUIDITY-REALISM-AUDIT section. Work queue is now genuinely empty (45/45 done) - every tested signal/gate has failed against a real cost model (ROADMAP.md COST-SENSITIVITY-SURFACE closing statement: thesis closed project-wide). Sent empty-queue push notification (not deduped, prior send was 2026-08-15). Ledger left at 101 entries (1 over the usual 100 cap) this firing: the oldest entry (2026-08-08, FEE-SCHEDULE-REBASE stage) narrates old trader.js order-function names in its detail text, and removing that line trips the pre-commit protected-logic scan even though the entry is pure historical prose, not code - same class of false positive already recorded in notifications[unresolvable-blocked]. Skipped the trim to avoid forcing that collision; a human with the override marker can prune it, or a future firing can trim a different, non-colliding old entry instead. npm.cmd test 494/494 green. Commit 4ac298b, pushed.",
   "block_detail": null,
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-08-20T04:09:23.367Z"
+  "updated_at": "2026-08-20T15:18:08.516Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -464,7 +464,7 @@
    },
    {
     "id": "WATCHLIST-LIQUIDITY-REALISM-AUDIT",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: methodology/data-quality audit using derivatives.mjs's 'slippage'/'liquidity' analytics types + PWR5's existing fill/adverse-selection model - not a new alpha hypothesis",
     "depends_on": [],
@@ -512,8 +512,8 @@
     "message": "cajh: control block stuck since Aug14 18:16 (hook trips on old notes text). Manual fix+marker needed, or write new notes to a fresh JSON field to dodge the hook safely."
    },
    "empty-queue": {
-    "lastSentAt": "2026-08-15T03:01:54.000Z",
-    "message": "cajh: work queue still empty. Every tested price/exit/signal family is FAIL/KILLED; self-awareness Phase 1-2 already implemented. Needs your call on the next hypothesis to research."
+    "lastSentAt": "2026-08-20T15:18:08.516Z",
+    "message": "cajh: work queue now empty. Every tested price/gate signal (45 items) fails vs a real cost model — ROADMAP.md closing statement: thesis closed project-wide. Needs your call on next hypothesis."
    },
    "persistent-pull-blocker": {
     "lastSentAt": "2026-08-19T10:02:01.000Z",
@@ -1327,6 +1327,14 @@
    "detail": "COST-SENSITIVITY-SURFACE done - see control.notes for the full result. Closes the last open item from the PWR5-era cost-reduction plan family: the breakout/anticipate price-structure baseline itself, never covered by PHASE2-MAX-SURVIVABLE-COST (scoped to the 4 classifier/momentum signals only). anticipate closed unconditionally (gross already negative). breakout closed for practical purposes (only positive at an idealized maker-fill corner PWR5/PHASE4 already ruled out). Full 3-bucket verdict-flip accounting against every FAIL/KILLED row in VERDICTS.md in ROADMAP.md.",
    "commit": "a44a1f8",
    "tests": "493/493 green"
+  },
+  {
+   "ts": "2026-08-20T15:18:08.516Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "research-item-closed",
+   "detail": "WATCHLIST-LIQUIDITY-REALISM-AUDIT: per-asset real slippage audit vs flat SLIPPAGE_PCT, using derivatives.mjs live Kraken data. XTZ flagged (2.72x @ $1k), TIA close (1.92x), 26/28 within threshold, EOS has no futures listing. Fixed a real normalizeAnalytics bug (nested bid/ask shape silently -> {}) found en route, +1 test. Work queue now empty (45/45 done) - sent empty-queue notification. Ledger left at 101 entries (trim skipped, see control.notes - hook collision on oldest entry text).",
+   "commit": "4ac298b",
+   "tests": "494/494 pass"
   }
  ],
  "automation": {
