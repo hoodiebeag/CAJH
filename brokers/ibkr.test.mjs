@@ -42,6 +42,22 @@ test("fetchOHLC resolves with bars once the decoder's finished-marker call arriv
   assert.equal(typeof bars[0].time, "number", "time must be numeric epoch seconds, not an IBKR date string");
 });
 
+test("fetchOHLC converts DAILY bars' bare YYYYMMDD time to UTC-midnight epoch seconds, not Number(time)", async () => {
+  const c = mockClient();
+  setIBApiForTests(() => c);
+  const promise = IBKRBroker.fetchOHLC("AAPL", 1440);
+  await new Promise((r) => setTimeout(r, 0));
+  // Confirmed against a live IB Gateway: DAYS_ONE bars arrive as a bare "YYYYMMDD" string
+  // even with formatDate=2 requested - TWS ignores formatDate for daily/weekly bar sizes.
+  // Number("20240820") would silently parse as 20240820 seconds since epoch (1970-08-24),
+  // not 2024-08-20 - this must be caught, not just coerced.
+  c.emit(EventName.historicalData, 1, "20240820", 225.75, 227.17, 225.45, 226.51, 16813068);
+  c.emit(EventName.historicalData, 1, "finished-20240820-20260819", -1, -1, -1, -1, -1);
+  const bars = await promise;
+  assert.equal(bars.length, 1);
+  assert.equal(bars[0].time, Date.UTC(2024, 7, 20) / 1000, "must be real UTC-midnight epoch seconds for 2024-08-20, not Number('20240820')");
+});
+
 test("fetchOHLC resolves null on a request-scoped error, not on an unrelated reqId's error", async () => {
   const c = mockClient();
   setIBApiForTests(() => c);

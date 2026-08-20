@@ -131,11 +131,21 @@ async function fetchOHLC(pair, minutes) {
       // The decoder constructs this marker itself, so it is a literal string
       // regardless of formatDate - check it before any numeric coercion.
       if (String(time).startsWith("finished")) return finish(bars);
-      // formatDate=2 makes IBKR send epoch seconds, matching what Kraken's
-      // fetchOHLC returns. Without it IBKR sends "YYYYMMDD" strings and the two
-      // adapters silently disagree about what `time` means, which breaks every
-      // downstream consumer that does arithmetic on it.
-      bars.push({ time: Number(time), open: String(open), high: String(high), low: String(low), close: String(close), volume: String(volume) });
+      // formatDate=2 makes IBKR send epoch seconds for INTRADAY bar sizes, matching what
+      // Kraken's fetchOHLC returns. But for DAILY/WEEKLY bar sizes, TWS ignores formatDate
+      // and always sends a bare "YYYYMMDD" string (confirmed against a live Gateway with
+      // BarSizeSetting.DAYS_ONE - this is a documented TWS API quirk, not a formatDate bug
+      // in this file). Number("20240820") would silently parse as a tiny, wrong epoch value
+      // (year-1970 territory) rather than throwing, so every downstream consumer doing
+      // arithmetic on `time` - including backtest.js's `parseInt(candles[i].time)` - would
+      // silently corrupt every daily candle's timestamp. Detect the date-only shape and
+      // convert it to real UTC-midnight epoch seconds instead of trusting formatDate's
+      // documented (but daily-bar-false) contract.
+      const raw = String(time);
+      const t = /^\d{8}$/.test(raw)
+        ? Date.UTC(+raw.slice(0, 4), +raw.slice(4, 6) - 1, +raw.slice(6, 8)) / 1000
+        : Number(raw);
+      bars.push({ time: t, open: String(open), high: String(high), low: String(low), close: String(close), volume: String(volume) });
     };
     const onError = (a, b, cc) => {
       const e = parseErrorEvent(a, b, cc);

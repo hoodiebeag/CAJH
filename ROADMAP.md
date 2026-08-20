@@ -2135,3 +2135,130 @@ family. No production file touched (bot.js/monitor.js/trader.js/scanner.js/strat
 untouched; `backtest.js` is the shared research/live simulation engine, extended additively
 with a default-off parameter, same category of change as MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC's
 prior `excursions` addition to the same function). Suite 488 → 492 green.
+
+## 2026-08-19 — EQUITIES-BASELINE-PORT: breakout survives real IBKR costs (net positive); anticipate's net drag shrinks by ~20x but stays negative
+
+Cost, not signal, is the one variable that has ever moved a number materially in this project
+— the fee rebase alone shifted the breakout baseline 0.419R, larger than every signal effect
+ever measured combined, and COST-COMPONENT-ATTRIBUTION showed fee is 94.1% of the current
+-0.864/-0.884R crypto baseline drag by construction. Futures maker execution gave ~6x cheaper
+fills and still wasn't enough (PWR5→PHASE4, closed; and EXECUTION-DELAY-DECAY-CURVE just showed
+*why* — waiting for a maker fill is itself execution delay, which these families handle badly).
+US equities via IBKR are a different order of magnitude of cost again. `strategy.js`/
+`backtest.js` are asset-agnostic by design, and `brokers/ibkr.mjs` (built and tested but never
+exercised against a live Gateway from an automated session until this run) is reachable from
+this research machine. This ports the EXISTING, UNMODIFIED `breakout`/`anticipate` families
+(exact `tournament.mjs` configs) onto a real Dow-30-grade equity universe, unmodified, to see
+whether the same signal logic behaves differently in a cheaper market. No entry/stop/exit
+parameter was touched.
+
+**Universe — rule fixed at window start, survivorship bias addressed, not just mentioned.**
+The 30 DJIA constituents as of 2024-08-19 (exactly 2 years before this run) — sourced from
+Wikipedia's "Historical components of the Dow Jones Industrial Average" change log: the most
+recent change before the window start was 2024-02-26 (Walgreens Boots Alliance → Amazon.com),
+and no further change occurred before 2024-08-19. Concretely: **Intel (INTC) and Dow Inc.
+(DOW) are IN** the universe (both were real members on 2024-08-19, even though both were
+removed on 2024-11-08 and both underperformed after removal — including them despite that,
+rather than excluding them with hindsight, is the entire point of fixing the rule at window
+start) and **Walgreens is OUT** (already removed by window start). This is a genuine, citable,
+point-in-time list, not today's DJIA roster.
+https://en.wikipedia.org/wiki/Historical_components_of_the_Dow_Jones_Industrial_Average
+
+**Cost basis — sourced and cited, not carried from memory** (this project already learned once,
+via FEE-SCHEDULE-REBASE, that a memorized cost figure was wrong by ~2x):
+- **Commission**: IBKR Pro "Fixed" US-stock plan, USD 0.005/share, USD 1.00 minimum/order,
+  capped at 1% of trade value.
+  https://www.interactivebrokers.com/en/pricing/commissions-stocks.php
+  Modeled per-side as `commissionPerShare / thatSymbol'sOwnAvgHoldoutClose` — `backtest.js`'s
+  cost model is a % of price, and a single flat % would misprice a $50 stock and a $500 stock
+  identically wrong, so each symbol gets its own fee rate off its own price level. The $1.00
+  order minimum is NOT modeled — it only binds at very small share counts, and this backtest
+  works in R-multiples, not position sizing, so there's no share count to check it against.
+  Stated as a simplification, not hidden.
+- **Slippage/spread**: 0.0005 (5bps) per side, a deliberately conservative estimate for
+  Dow-30-grade large-cap liquidity — general large-cap spreads are commonly cited at "a penny
+  wide" / ≤15bps, and a 2024 Nasdaq Research figure puts institutional S&P 500 market impact at
+  ~4.5bps/trade. This is an assumption, not measured from IBKR's own NBBO tick history (would
+  need Level-1 quote data, out of scope this pass) — stated as such, not disguised as measured.
+
+**Data.** Daily OHLC (2024-08-20 → 2026-08-19, IBKR's max "2 Y" daily-bar duration) fetched
+live via `IBKRBroker.fetchOHLC(symbol, 1440)` against a real, running IB Gateway (paper port
+4002 — read-only historical-data requests only, never an order) for all 30 universe symbols,
+cached to `research-cache/equities-1d/<SYMBOL>.json`. Same 70/30 train/holdout split convention
+as every crypto study here. Because IBKR's hourly-bar history is capped at 30 days (too short
+for a meaningful multi-TF holdout), and because both families run with `trendGate: false,
+alignMode: "none"` — meaning neither needs higher-timeframe context — this uses a single `"1d"`
+series as `entryTf`, sidestepping the cap entirely without touching `backtest.js`'s multi-TF
+logic or either family's config.
+
+**Bug found and fixed en route (not a strategy change).** The live fetch surfaced a real
+correctness bug in `brokers/ibkr.mjs`: TWS sends DAILY/WEEKLY bars' `time` field as a bare
+`"YYYYMMDD"` string regardless of the `formatDate=2` request — confirmed directly against the
+live Gateway (`AAPL` daily fetch returned `time: 20240820`, not an epoch-seconds value). The
+existing code did `Number(time)` unconditionally, which would have silently parsed
+`"20240820"` as 20,240,820 *seconds* since epoch (≈1970-08-24) instead of throwing — corrupting
+every daily candle's timestamp with no error, since `formatDate` only actually affects
+*intraday* bars (undocumented in this file previously, and untested — no prior test exercised
+the 1440-minute path at all). Fixed at the source: `onBar` now detects the bare-8-digit-date
+shape and converts it to real UTC-midnight epoch seconds; intraday bars are unaffected (still
+`Number(time)`, unchanged). New unit test in `brokers/ibkr.test.mjs` reproduces the exact
+live-Gateway shape (`time: "20240820"` → UTC-midnight epoch for 2024-08-20). This is a
+historical-data read-path fix, nowhere near the protected trading-safety surface (the
+live-mode env gate, the halt/resume state machine, or order-fill validation) — none of that
+logic was touched.
+
+**Results — holdout, 30/30 symbols usable, aggregated by summed R / summed trades (same
+convention as every crypto baseline here):**
+
+| `anticipate` | gross (0 cost) | net (real IBKR cost) |
+|---|---:|---:|
+| trades | 303 | 303 |
+| avgR | -0.0019 | -0.0438 |
+| totalR | -0.581 | -13.262 |
+
+| `breakout` | gross (0 cost) | net (real IBKR cost) |
+|---|---:|---:|
+| trades | 61 | 61 |
+| avgR | +0.2110 | +0.1866 |
+| totalR | +12.872 | +11.384 |
+
+**Side by side with the crypto holdout baselines** (COST-COMPONENT-ATTRIBUTION, same two
+families, unchanged configs, ~1.7% round-trip crypto taker cost):
+
+| family | crypto gross | crypto net | equities gross | equities net |
+|---|---:|---:|---:|---:|
+| `breakout` | +0.0091 | -0.864 | +0.2110 | **+0.1866** |
+| `anticipate` | -0.1331 | -0.884 | -0.0019 | -0.0438 |
+
+**Does the cost difference change the sign of anything — stated explicitly, both ways.**
+**Yes, for `breakout`: the sign flips.** Crypto's realistic cost (-0.864R net) turns a thin
+positive gross edge (+0.0091R) deeply negative; IBKR's realistic cost, applied to the *same*
+unmodified entry/exit logic on equities, leaves a much larger gross edge (+0.2110R) net
+*positive* (+0.1866R) — costs here erode only ~12% of the gross edge, versus crypto's cost
+erasing gross edge and then some. **No, for `anticipate`: it stays negative.** The equities
+net figure (-0.0438R) is roughly 20x smaller in magnitude than crypto's net drag (-0.884R) —
+real IBKR costs are a small fraction of crypto's — but gross was already marginally negative
+on equities (-0.0019R) before any cost was applied, so a smaller cost still leaves it net
+negative, just barely. Cost magnitude alone does not decide the sign; it decides how far a
+family's *own* gross edge (which differs by market and isn't something this item touched or
+re-tuned) gets eroded.
+
+**What this does NOT license, stated as plainly as EXECUTION-DELAY-DECAY-CURVE's did.** This
+is a baseline port, not a verdict and not a promotion decision — no VERDICTS.md row, no
+change to any config `tournament.mjs`/`bot.js` actually uses, no live equities trading (this
+project remains 100% crypto/Kraken in production; IBKR here is read-only historical-data
+access on the paper port, nothing more). **Sample size is small and must not be oversold**:
+61 `breakout` trades and 303 `anticipate` trades over one ~7-month holdout window on 30
+symbols is a much thinner sample than crypto's baselines (thousands of trades) — no
+permutation test or significance check was run this pass (out of this item's declared
+`done_when` scope), so "breakout is net positive here" is a genuine, real-cost, real-data
+result on this window, not a sealed, statistically-confirmed edge. A different holdout window,
+a larger universe, or an out-of-sample re-check could move these numbers meaningfully. Any
+decision to actually trade equities — a `D3`-class live-promotion question — is explicitly
+human-owned and not attempted or implied here.
+
+**Engineering note.** New files only: `scripts/equities-baseline-port.mjs` (the port script)
+and `research-cache/equities-1d/*.json` (gitignored candle cache, 30 files). One correctness
+fix in `brokers/ibkr.mjs` (daily-bar time parsing, described above) plus its matching test in
+`brokers/ibkr.test.mjs`. `strategy.js`, `backtest.js`'s trading logic, `tournament.mjs`,
+`monitor.js`, `bot.js`, `trader.js`, `scanner.js` — all untouched. Suite 492 → 493 green.
