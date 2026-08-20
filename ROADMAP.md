@@ -2354,3 +2354,117 @@ would be exactly the post-hoc exit re-tuning already prohibited on these negativ
 new file); 3 new assertions added to 3 existing `backtest.test.mjs` tests (no new test count).
 `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js` — all
 untouched. Suite 493 → 493 green (test count unchanged; existing tests extended, not added).
+
+## 2026-08-20 — COST-SENSITIVITY-SURFACE: `breakout` crosses zero only at an idealized
+maker corner PWR5/PHASE4 already ruled out unrealistic; `anticipate` never crosses zero
+anywhere on the grid
+
+**Question.** One number has already moved every recorded verdict once before: the
+FEE-SCHEDULE-REBASE correction moved `breakout`'s net avgR by 0.419R. Every FAIL/KILLED
+verdict in this project is conditional on the cost assumption in force when it was run. This
+maps net avgR for the `breakout`/`anticipate` holdout **baseline** families (exact
+`tournament.mjs` `families` config, no gate, standard 70/30 split — the same config
+COST-COMPONENT-ATTRIBUTION and HOLDING-PERIOD-COST-AMORTIZATION-MAP already used, and the one
+PHASE2-MAX-SURVIVABLE-COST's own scope explicitly excluded) across a real 2-D grid of fee rate
+x slippage, spanning from Kraken Futures retail-tier maker at the cheap end to the current spot
+taker default at the expensive end (`cost-model.mjs`'s verified `SPOT_FEE_SCHEDULE`/
+`FUTURES_FEE_SCHEDULE`, re-verified 2026-08-13) — then checks whether any point on that grid
+would flip a prior recorded verdict. New file: `scripts/cost-sensitivity-surface.mjs`
+(read-only diagnostic, not part of the app). No cost parameter changed anywhere; no exit/stop/
+target parameter touched.
+
+**Method — exact, not interpolated.** Same identity COST-COMPONENT-ATTRIBUTION already
+established: `netR = grossR - (feeRate + slipPct) * (entry + exitPx) / risk` is affine in
+`feeRate`/`slipPct` with a per-trade coefficient independent of either. Three backtest passes
+(zero-cost, fee-only at the default rate, slip-only at the default rate) give exact per-unit
+drag coefficients (`feeUnitDragAvgR`, `slipUnitDragAvgR`), from which `netAvgR(fee, slip)` is
+computed analytically at every grid cell — **not** by re-running backtest at each of the 12
+cells. Trusting the extrapolation was verified, not assumed: the analytic formula was checked
+against a direct `backtest.js` re-run at both grid corners (cheapest and priciest) for both
+families — discrepancy ~1e-15 to 1e-17 in every case, floating-point noise, not a fit residual.
+
+**Grid axes (named real venues, not arbitrary steps).** Fee: futures maker retail tier
+(0.00020), futures taker retail tier (0.00050), spot maker (0.0040), spot taker/current default
+(0.0080, `strategy.js`'s `FEE_RATE`). Slip: 0 (resting maker fill, no spread-crossing), half
+current, current default (0.0005, `strategy.js`'s `SLIPPAGE_PCT`). Low end of slip is 0, not a
+rebate — a resting maker order that fills doesn't cross the spread; PWR5's calibrated
+adverse-selection add-on for that scenario is a separate ~0.12%/side effect not modeled by
+`feeRate`/`slipPct` at all, addressed explicitly below rather than silently folded in or ignored.
+
+**Result — pooled, holdout (28 assets, 3,156/3,966 trades, identical trade counts across every
+grid cell within each family, confirming cost still doesn't change which trades fire):**
+
+| | trades | gross (zero-cost) | best-case corner (futures maker, 0 slip) | worst-case corner (spot taker, default slip = current recorded baseline) | any grid cell positive? |
+|---|---:|---:|---:|---:|---:|
+| `breakout` | 3,156 | **+0.0637** | **+0.0419** | -0.8640 | **yes — 4/12 cells** |
+| `anticipate` | 3,966 | **-0.0861** | -0.1049 | -0.8842 | **no — 0/12 cells** |
+
+Full 4x3 grid (both families) saved to `research-runs/2026-08-20T05-06-17-785Z-cost-sensitivity-surface.json`. `breakout` cells: positive at (futures maker, 0 slip) +0.0419, (futures maker, half slip) +0.0146, (futures taker, 0 slip) +0.0091; negative everywhere else, including (futures maker, current default slip) -0.0127 — a single grid step past the cheapest fee tier already erases it. `anticipate`'s gross avgR is *already negative before any cost is applied* (-0.0861) — its worst-to-best-case range never approaches zero, let alone crosses it; monotonicity (both drag coefficients strictly >=0) means this single fact rules out every other point on the grid without needing to check them individually.
+
+**`breakout`'s positive corner is not a live option — PWR5/PHASE4 already closed it.** Because
+`feeUnitDragAvgR`/`slipUnitDragAvgR` are both ~109 for `breakout`, PWR5's own calibrated
+resting-maker adverse-selection add-on (~0.12%/side round trip, PHASE1/PHASE2, not modeled by
+this grid's `feeRate`/`slipPct` axes) would drag the best-case cell by roughly
+0.0012 x 109 ~= 0.13R — more than double the entire +0.0419R margin at that corner. This is not
+a new finding: COST-COMPONENT-ATTRIBUTION's own header already states "PWR5/PHASE4 already
+found maker execution insufficient to rescue `breakout`." This item's contribution is
+confirming, with the actual grid, that the *only* cells where `breakout` is nominally positive
+are exactly the idealized-maker-fill cells that finding already excludes as unrealistic — not a
+new avenue, a closed one restated with numbers attached.
+
+**Verdict-flip table.** Checked every FAIL/KILLED/TRAIN-GATE-FAIL/DATA-GATED row in
+VERDICTS.md against this grid, in three buckets by how directly this grid's decomposition
+applies to that row's own reported number:
+
+- **Bucket A — exact baseline, this grid answers directly.** T1-ZEROCOST's own `breakout`
+  holdout figure (an earlier data vintage, pre-FEE-SCHEDULE-REBASE cost basis: +0.045 gross /
+  -0.445 net, vs. this item's current-data +0.0637 gross / -0.8640 net at the corrected cost) —
+  same qualitative shape confirmed on a second, independent, larger dataset: positive gross,
+  deeply negative net, and now (new here) a razor-thin positive sliver at the cheapest
+  theoretical venue that a follow-up study (PWR5/PHASE4) already found unrealistic. Does not
+  flip the T1-ZEROCOST verdict as recorded (it never claimed net-positive), and does not open a
+  live path given the adverse-selection caveat above.
+- **Bucket B — same signal/cost mechanism, gated or modified trade subset (approximate bound
+  only, not an exact re-derivation — out of this item's scope per its own note not to
+  re-derive PHASE2's covered cases, and re-deriving each variant's own gross/cost split was not
+  attempted here).** TREND-GATE-MA/STRUCTURE, FUNDING-MEANREV, VOL-CONFIRM-BREAKOUT,
+  OPEN-INTEREST-TREND-CONFIRMATION, FUTURES-BASIS-DIRECTIONAL-SIGNAL,
+  LONG-SHORT-RATIO-CONTRARIAN, TOP-TRADERS-DIVERGENCE, ORDER-FLOW-AGGRESSOR-IMBALANCE,
+  ROLLING-VOLATILITY-REGIME-TIMING, WIDE-STOP-HIGH-TARGET-ASYMMETRY, T3-REGIMEFILTER,
+  T1B-BREAKOUT-COSTFIX, T5-DECAY-EXIT, TRAIL-STOP-EXIT, T6-TIMEFRAME-ISOLATION,
+  ATR-ADAPTIVE-STOP-CONFIRMATORY, SCALED-EXIT-LADDER-CONFIRMATORY. Every one of these rows'
+  reported net holdout avgR (range -0.32 to -1.65) sits well below the baseline family's own
+  entire recorded span on this grid (-0.86 to +0.04, an 0.90R range) — none is closer to zero
+  than the baseline itself was, so it is implausible any would cross zero on the same
+  cost-only axis, but this is a plausibility read from the baseline's span, **not** a per-row
+  proof — a gate or modified TP/stop changes the exact trade set and per-trade coefficient, and
+  only a direct re-derivation (out of scope here) would settle it exactly for any individual row.
+- **Bucket C — different mechanism entirely, this grid does not apply.** Every remaining
+  FAIL/KILLED/DATA-GATED row: Classifier P5, CLASSIFIER-FUNDING-FEATURE, B5-REVERSAL (+PHASE3/
+  PHASE4), T4-PORTFOLIO-MOMENTUM (+COVERAGE-FIX, +PHASE4), Momentum M7, Low-vol B4,
+  MOMENTUM-SHORT-HORIZON-RECHECK, CROSS-SECTIONAL-NONPRICE-RANK (all use `classifier.mjs`/
+  `momentum.mjs`'s own cost formulas, not `backtest.js`'s `feeRate`/`slipPct`); H3-HIGHER-LOW-
+  RECLAIM, RANGE-SWEEP-RECLAIM, FIB-PULLBACK, LIQUIDATION-CASCADE-REVERSAL, T2-VOLCONTRACTION
+  (different entry mode entirely, not `breakout`/`anticipate`); PORTFOLIO-LIVE-SIGNAL-SIM,
+  DCA-MARTINGALE, DCA-ANTIMARTINGALE, GRID-SIM, PAIRS-COINTEGRATION-STATARB,
+  FUNDING-CARRY-DECAY-CHECK (different signal/mechanism class entirely); H11, ONCHAIN-FLOW-GATE
+  (data-availability non-verdicts, not cost questions); Trade intensity, Order-flow (pre-2026-
+  08-04, no recoverable detail). None of these are answered — correctly, not by omission — by a
+  grid scoped to the plain `breakout`/`anticipate` baseline.
+
+**Closing statement on the cost-reduction thesis, as it applies to the price-structure
+baseline (distinct from PWR5's own closing statement on the four classifier/momentum signals
+it covered).** `anticipate` is closed unconditionally: its gross edge is already negative
+before any cost is charged, so no fee/slippage combination on Earth flips it, real or
+idealized. `breakout` is closed for practical purposes: its only positive grid cells require a
+resting maker fill with literally zero adverse selection, a scenario this project's own PWR5
+calibration already measured and found insufficient to rescue this exact family. Read
+together with PHASE2/PHASE3/PHASE4's closing statement on the other four signals, no signal
+tested in this project to date — price-structure or otherwise — survives its own real,
+verified execution-cost model at any achievable venue. The cost-reduction thesis, across all
+six signals it has now been applied to, is closed.
+
+**Engineering note.** `scripts/cost-sensitivity-surface.mjs` is new and additive
+(read-only diagnostic). `backtest.js`, `strategy.js`, `tournament.mjs`, `cost-model.mjs`,
+`monitor.js`, `bot.js`, `trader.js`, `scanner.js` — all untouched. Suite green before commit
+(see commit for exact count).
