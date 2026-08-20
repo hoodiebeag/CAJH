@@ -452,7 +452,7 @@ export function backtestMultiTF({ series } = {}, {
             } else if (L[fillIdx] <= stop) {
               const r = (stop - dEntry) / dRisk - ((feeRate + slipPct) * (dEntry + stop)) / dRisk;
               trades.push(r);
-              excursions.push({ r, mae: Math.max(0, (dEntry - L[fillIdx]) / dRisk), mfe: Math.max(0, (H[fillIdx] - dEntry) / dRisk) });
+              excursions.push({ r, mae: Math.max(0, (dEntry - L[fillIdx]) / dRisk), mfe: Math.max(0, (H[fillIdx] - dEntry) / dRisk), barsHeld: 0 });
             } else {
               pos = { entry: dEntry, stop, risk: dRisk, tp: dEntry + tpR * dRisk, beMoved: false, openedAt: fillIdx, open: 1, realized: 0, partialDone: false, peak: dEntry, trailing: false, maxAdverseR: 0, maxFavorableR: 0 };
             }
@@ -463,7 +463,7 @@ export function backtestMultiTF({ series } = {}, {
             if (L[k] <= stop) {
               const r = (stop - entry) / risk - ((feeRate + slipPct) * (entry + stop)) / risk;
               trades.push(r);
-              excursions.push({ r, mae: Math.max(0, (entry - L[k]) / risk), mfe: Math.max(0, (H[k] - entry) / risk) });
+              excursions.push({ r, mae: Math.max(0, (entry - L[k]) / risk), mfe: Math.max(0, (H[k] - entry) / risk), barsHeld: 0 });
               pos = null;
             }
           }
@@ -540,7 +540,7 @@ export function backtestMultiTF({ series } = {}, {
             } else if (L[fillIdx] <= cand.stop) {
               const r = (cand.stop - dEntry) / dRisk - ((feeRate + slipPct) * (dEntry + cand.stop)) / dRisk;
               trades.push(r);
-              excursions.push({ r, mae: Math.max(0, (dEntry - L[fillIdx]) / dRisk), mfe: Math.max(0, (H[fillIdx] - dEntry) / dRisk) });
+              excursions.push({ r, mae: Math.max(0, (dEntry - L[fillIdx]) / dRisk), mfe: Math.max(0, (H[fillIdx] - dEntry) / dRisk), barsHeld: 0 });
             } else {
               pos = { entry: dEntry, stop: cand.stop, risk: dRisk, tp: dEntry + tpR * dRisk, beMoved: false, openedAt: fillIdx, open: 1, realized: 0, partialDone: false, peak: dEntry, trailing: false, maxAdverseR: 0, maxFavorableR: 0 };
             }
@@ -573,7 +573,7 @@ export function backtestMultiTF({ series } = {}, {
         pos.open -= f;
         if (pos.open <= 1e-9) {
           trades.push(pos.realized);
-          excursions.push({ r: pos.realized, mae: pos.maxAdverseR, mfe: pos.maxFavorableR });
+          excursions.push({ r: pos.realized, mae: pos.maxAdverseR, mfe: pos.maxFavorableR, barsHeld: k - pos.openedAt });
           exits[why] = (exits[why] || 0) + 1;
           pos = null;
         }
@@ -653,7 +653,7 @@ export function backtestMultiTF({ series } = {}, {
     avgR: count ? totalR / count : 0,
     maxDrawdownR: maxDD,
     results: trades,  // raw per-trade R values, for pooling across pairs
-    excursions,       // [{ r, mae, mfe }] per closed trade, same order as `results`
+    excursions,       // [{ r, mae, mfe, barsHeld }] per closed trade, same order as `results`
     exits,            // { stop, target, "trail/be", "partial+runner", swingHigh, timeout }
     reasons,          // { taken, stopTooTight, stopTooFar, trendGate, notAligned, notHigherLow, priceBelowStop }
     partialR,         // net R banked by partialAtR legs specifically (0 when partialAtR is off)

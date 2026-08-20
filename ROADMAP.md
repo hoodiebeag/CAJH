@@ -2262,3 +2262,95 @@ and `research-cache/equities-1d/*.json` (gitignored candle cache, 30 files). One
 fix in `brokers/ibkr.mjs` (daily-bar time parsing, described above) plus its matching test in
 `brokers/ibkr.test.mjs`. `strategy.js`, `backtest.js`'s trading logic, `tournament.mjs`,
 `monitor.js`, `bot.js`, `trader.js`, `scanner.js` — all untouched. Suite 492 → 493 green.
+
+## 2026-08-20 — HOLDING-PERIOD-COST-AMORTIZATION-MAP: only anticipate's longest-hold bucket clears net-positive, and it's 11% of trades; breakout never clears at any holding period
+
+**Question, never asked before this item.** Round-trip cost is charged once per trade
+regardless of how long the position was held, so for any fixed gross edge, net R mechanically
+improves the longer a trade runs (the fixed cost becomes a smaller fraction of a bigger average
+move). Nobody had mapped where the `breakout`/`anticipate` crypto holdout baselines actually
+sit on that curve: is there a holding-period regime where the fixed cost is amortized enough
+for net R to approach or cross zero, and if so, what fraction of trades already land there?
+**This item is diagnostic only** — per the standing prohibition on re-tuning exits on these
+already-KILLED/FAIL baselines, it does not change any exit/stop/target parameter and does not
+recommend a replacement holding-period value. Selecting a holding period after seeing which
+bucket looks best would be exactly the exit re-tuning that prohibition exists to block.
+
+**Method.** `backtestMultiTF` (`backtest.js`) now also returns, per closed trade, `barsHeld`
+(current bar index minus the position's entry bar index — `0` for the same-bar-stop-out code
+paths, `k - pos.openedAt` from the general per-bar close path) inside the existing `excursions`
+array, alongside the pre-existing `mae`/`mfe`. Purely additive telemetry — no entry, exit, stop,
+or target logic changed; the field is simply read off state the loop already tracks. 3 new
+assertions in `backtest.test.mjs` pin exact `barsHeld` values against the same hand-constructed
+candle paths the existing MAE/MFE tests already use (winning BOS exit: 5 bars; BOS stop-out: 1
+bar; ANTICIPATE same-bar stop-out: 0 bars) — all pre-existing tests unmodified and still pass.
+
+`scripts/holding-period-cost-amortization-map.mjs` runs the exact `breakout`/`anticipate`
+baseline configs from `tournament.mjs`'s `families` table (unmodified, `entryTf: "1h"`),
+**holdout only** (split=.70, the same convention every gated verdict here uses), twice per
+symbol — once at the default net cost (`FEE_RATE`+`SLIPPAGE_PCT`) and once at zero cost — and
+pairs the two runs' per-trade results by index. This relies on the same fact
+COST-COMPONENT-ATTRIBUTION already established and this item re-verifies per symbol
+(`symbolMismatches: 0` for both families): cost is priced after the fact and never changes
+which trades fire, so both passes produce the identical trade sequence per symbol, and
+`net.excursions[i].barsHeld` from the net-cost pass is the real holding period for trade `i` in
+either pass. Trades are then bucketed by `barsHeld` in hourly-equivalent bands (entryTf is 1h,
+so 1 bar = 1 hour): 0h, 1-4h, 5-12h, 13-24h, 25-48h, 49-100h (the last band also catches
+`maxHold`=100 timeout exits). Coverage 28/28 eligible watchlist assets (same EOS exclusion as
+every study in this series, pre-existing candle-history shortfall).
+
+**Sanity check against prior results.** The trade-count-weighted average of this item's own
+per-bucket net avgR reproduces COST-COMPONENT-ATTRIBUTION's pooled net baseline exactly:
+breakout -0.8639R (recorded there: -0.864R), anticipate -0.8843R (recorded there: -0.884R) —
+same data, same configs, just re-sliced by holding period instead of pooled, so this is a
+reproduction check, not a new baseline.
+
+**Result — `anticipate` (holdout, 3,966 trades):**
+
+| bucket | trades | gross avgR | net avgR | net-positive? |
+|---|---:|---:|---:|:---:|
+| 0h (same-bar stop) | 226 | -1.000 | -1.869 | no |
+| 1-4h | 984 | -0.725 | -1.552 | no |
+| 5-12h | 1,004 | -0.386 | -1.194 | no |
+| 13-24h | 786 | +0.183 | -0.632 | no |
+| 25-48h | 536 | +0.681 | -0.098 | no |
+| 49-100h (incl. timeout) | 430 | +1.107 | **+0.446** | **yes** |
+
+**Result — `breakout` (holdout, 3,156 trades):**
+
+| bucket | trades | gross avgR | net avgR | net-positive? |
+|---|---:|---:|---:|:---:|
+| 0h (same-bar stop) | 0 | n/a | n/a | n/a |
+| 1-4h | 818 | -0.423 | -1.409 | no |
+| 5-12h | 948 | -0.053 | -1.008 | no |
+| 13-24h | 719 | +0.334 | -0.586 | no |
+| 25-48h | 464 | +0.493 | -0.366 | no |
+| 49-100h (incl. timeout) | 207 | +0.620 | -0.135 | no |
+
+**Reading it, both ways stated explicitly.** For `anticipate`, exactly one bucket — the longest
+(49-100h, which also absorbs `maxHold` timeout exits) — reaches net-positive, at
+**430/3,966 = 10.8% of trades**. Every shorter bucket stays net-negative, monotonically
+worsening as holding period shrinks (0h bucket averages -1.869R net, nearly double the -1.000R
+gross floor a same-bar stop-out mechanically produces, meaning cost alone drags those specific
+trades by ~0.87R — consistent with tight stops amplifying a fixed cost expressed in R terms).
+For `breakout`, **no bucket reaches net-positive at any holding period tested** — gross does
+cross zero by the 13-24h bucket (+0.334R) and keeps climbing with longer holds, but net cost
+drag never fully clears even in the longest-hold bucket (-0.135R at 49-100h). The two families'
+curves have the same shape (net R rises monotonically with holding period, mirroring the
+mechanical amortization effect this item set out to check for) but only `anticipate` actually
+crosses zero, and only in its tail bucket.
+
+**What this does NOT license.** Per the standing prohibition and this item's own scope: no
+exit, stop, or target parameter was changed anywhere, and no replacement holding-period value
+is recommended. That a longer hold correlates with a smaller (or, for `anticipate`, reversed)
+net drag is an amortization arithmetic fact already implied by a fixed per-trade cost, not
+evidence that lengthening holds would improve real forward performance — the 49-100h bucket is
+disproportionately trades that already ran to (or near) `maxHold`, i.e. survivorship within the
+sample, not a lever available to pull. Picking "hold longer" as a fix after seeing this table
+would be exactly the post-hoc exit re-tuning already prohibited on these negative-EV families.
+
+**Engineering note.** `backtest.js`'s `excursions[].barsHeld` field and
+`scripts/holding-period-cost-amortization-map.mjs` are additive (new always-present field +
+new file); 3 new assertions added to 3 existing `backtest.test.mjs` tests (no new test count).
+`strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js` — all
+untouched. Suite 493 → 493 green (test count unchanged; existing tests extended, not added).
