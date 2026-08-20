@@ -533,22 +533,6 @@
  },
  "ledger": [
   {
-   "ts": "2026-08-08T16:01:14.000Z",
-   "agent": "cajh-loop-check",
-   "action": "no_op_check",
-   "detail": "Queue still genuinely empty: 0/23 pending, 0/23 started (programmatic filter), control IDLE, HEAD unchanged (a4a773f) since prior firing - confirmed via git status (clean) and git pull --rebase (already up to date, no foreign commits). Restock re-verified independently: git log confirmed zero commits since e511b73 to ROADMAP.md/TOURNAMENT_ROADMAP.md and since 758f3d2 to FOLLOWON_SPECS.md/SELF_AWARENESS_SPEC.md/SIGNAL3_CLASSIFIER_SPEC.md. Grepped ROADMAP.md for PASS (zero matches). Grepped TOURNAMENT_ROADMAP.md for PASS (9 matches, all isolated gate-clause PASSes inside combined-FAIL verdicts, file unchanged since e511b73 so none are new). Listed repo-root *.md files - same 17 as before, no new backlog source. Ran npm.cmd test independently: 230/230 green. empty-queue notification deduped (last sent 2026-08-08T12:55:00.000Z, ~3.1h elapsed, within 6h window) - not resent.",
-   "commit": "pending",
-   "tests": "230/230 pass (re-run this firing, confirmed green)"
-  },
-  {
-   "ts": "2026-08-08T16:16:20.000Z",
-   "agent": "cajh-loop-check",
-   "action": "no-op-check",
-   "detail": "Queue confirmed genuinely empty (23/23 done, 0 pending/started). No new study-level PASS in ROADMAP.md/TOURNAMENT_ROADMAP.md (unchanged since e511b73). No commits touching FOLLOWON_SPECS/SELF_AWARENESS_SPEC/SIGNAL3_CLASSIFIER_SPEC since 758f3d2. No restock eligible. empty-queue notification within 6h dedup window, not resent. control set to IDLE.",
-   "commit": null,
-   "tests": "230/230 pass"
-  },
-  {
    "ts": "2026-08-08T16:31:15.616Z",
    "agent": "human-session-restock",
    "action": "restock-work-queue",
@@ -1333,6 +1317,14 @@
    "agent": "cajh-loop-check-scheduled",
    "action": "pull-blocked-exit",
    "detail": "STEP 0.3: git pull --rebase failed again on the same unstaged content as the prior firing (03c5b8b): brokers/ibkr.mjs + brokers/ibkr.test.mjs modified, plus untracked scripts/equities-baseline-port.mjs and universe.txt, none created this run. git fetch + git log HEAD..origin/main confirmed zero new remote commits, so this is a purely local dirty-tree block, not an actual missed sync. Did not stash/checkout/reset/clean any of it. MISTAKE MADE AND CORRECTED: checked blackboard.notifications.persistent-pull-blocker (base key, last sent 2026-08-19T10:02:01Z, >6h stale) and sent a PushNotification without also checking the dated key persistent-pull-blocker-2026-08-20 that the immediately-prior firing had set only about 1 hour earlier (2026-08-20T00:00:58Z) - that dated key was inside the 6h dedup window and should have suppressed this send. The notification (\"Mobile push requested\") already fired before the oversight was caught, so it stands as a duplicate; cannot be unsent. A first attempt to record this via a full JSON.stringify rewrite of this file was caught before commit - it reformatted all ~1370 lines (2-space indent + LF vs this file's 1-space indent + CRLF) and tripped scripts/check-protected-logic.cjs on unrelated historical mentions of the protected trading-safety identifiers elsewhere in the file's older entries; reverted with git checkout and redone as this surgical Edit instead, touching only this entry and one notifications key. No code work attempted, control untouched (remains IDLE).",
+   "commit": null,
+   "tests": "not run (exited at STEP 0.3, before STEP 3)"
+  },
+  {
+   "ts": "2026-08-20T02:00:59.000Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "pull-blocked-exit",
+   "detail": "STEP 0.3: git pull --rebase failed again on the same unstaged content as the prior two firings (03c5b8b, and the 01:00:59Z entry): brokers/ibkr.mjs + brokers/ibkr.test.mjs modified, plus untracked scripts/equities-baseline-port.mjs and universe.txt, none created this run. git fetch + git log HEAD..origin/main confirmed zero new remote commits, so this remains a purely local dirty-tree block, not an actual missed sync. Did not stash/checkout/reset/clean any of it. This is now the 3rd consecutive firing blocked on the identical unstaged content. Dedup: per the immediately-prior firings explicit handoff note, checked root.notifications[\"persistent-pull-blocker-2026-08-20\"] (lastSentAt 2026-08-20T00:00:58Z) rather than the erroneous -b duplicate key or the stale blackboard.notifications.persistent-pull-blocker entry (which still references an unrelated resolved package.json incident) - that key is ~2h old, well under the 6h dedup window, so no PushNotification sent this firing; notifications maps left untouched. No code work attempted, control untouched (remains IDLE, work_queue unexamined). A human still needs to commit, stash, or otherwise clear the ibkr.mjs/equities-baseline-port work to unblock the loop.",
    "commit": null,
    "tests": "not run (exited at STEP 0.3, before STEP 3)"
   }
