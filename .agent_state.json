@@ -4,10 +4,10 @@
   "status": "IDLE",
   "target_file": null,
   "objective": null,
-  "notes": "No-op firing: work_queue independently re-confirmed genuinely empty (46/46 done, 0 pending, 0 started/in_progress, nothing with unmet depends_on). git pull --rebase reported already up to date - no foreign commits since prior firing, nothing new to skim. State file health check passed (control object, work_queue array of 46, ledger array of 107 present, no BOM issue). Verified via git log that ROADMAP.md (last touch 2026-08-20T11:12:01-04:00, WATCHLIST-LIQUIDITY-REALISM-AUDIT), TOURNAMENT_ROADMAP.md (2026-08-19), and VERDICTS.md (2026-08-20T01:09:10-04:00, COST-SENSITIVITY-SURFACE close) are all unchanged since the prior no-op firing checked them - no new PASS verdict, no D3 human gate newly triggered. VERDICTS.md closing statement stands unmodified: all six tested signals fail under a real execution-cost model, thesis closed project-wide - nothing legitimate to restock without a human-supplied next hypothesis, so STEP 5 did not add queue items. STEP 4: empty-queue condition still holds; dedup checked against blackboard.notifications.empty-queue (lastSentAt 2026-08-21T13:01:11.000Z, ~5h before this firing at 2026-08-21T18:02:00.000Z, inside the 6h window) per the convention recent firings have actually maintained - no new PushNotification sent. The top-level notifications map vs blackboard.notifications split remains a pre-existing inconsistency, not introduced by this firing; left for a human to consolidate when convenient. No code changes this firing. npm.cmd test 494/494 green (baseline unchanged). Untracked universe.txt in the working tree was not created by this run and was left untouched. Ledger intentionally NOT trimmed again this firing, continuing prior firings' guidance that trimming risks a pre-commit protected-logic-scan collision on historical prose text - left for a human with the override marker to prune.",
+  "notes": "No-op firing: work_queue independently re-confirmed genuinely empty (46/46 done, 0 pending, 0 started/in_progress, nothing with unmet depends_on). git pull --rebase reported already up to date - no foreign commits since prior firing, nothing new to skim. State file health check passed (control object, work_queue array of 46, ledger array of 108 present, no BOM issue). Verified via git log that ROADMAP.md (last touch 2026-08-20T11:12:01-04:00), TOURNAMENT_ROADMAP.md (2026-08-19T12:09:39-04:00), and VERDICTS.md (2026-08-20T01:09:10-04:00) are all unchanged since the prior no-op firing checked them - no new PASS verdict, no D3 human gate newly triggered. Nothing legitimate to restock without a human-supplied next hypothesis, so STEP 5 did not add queue items. STEP 4: empty-queue dedup window (6h) had elapsed - last send was 2026-08-21T13:01:11.000Z, this firing at ~2026-08-21T19:01:45.000Z is 6h00m34s later, just past the window, so per the binding dedup policy (elapsed >= 6h triggers a resend, no discretion clause) a PushNotification was sent and blackboard.notifications.empty-queue.lastSentAt updated to this firing's time. This mirrors the 98cc7dc precedent (resent at 21h43m past window) rather than skipping on the theory that the underlying situation is unchanged - the policy text has no such exception. npm.cmd test 494/494 green (baseline unchanged, run at 19:01:28Z). No code changes this firing. Untracked universe.txt in the working tree was not created by this run and was left untouched. Ledger intentionally NOT trimmed again this firing, continuing prior firings' guidance that trimming risks a pre-commit protected-logic-scan collision on historical prose text - left for a human with the override marker to prune.",
   "block_detail": null,
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-08-21T18:02:00.000Z"
+  "updated_at": "2026-08-21T19:05:00.000Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -512,7 +512,7 @@
     "message": "cajh: control block stuck since Aug14 18:16 (hook trips on old notes text). Manual fix+marker needed, or write new notes to a fresh JSON field to dodge the hook safely."
    },
    "empty-queue": {
-    "lastSentAt": "2026-08-21T13:01:11.000Z",
+    "lastSentAt": "2026-08-21T19:05:00.000Z",
     "message": "cajh: queue still empty (46/46 done), idle since Aug20. Every tested signal fails a real cost model — thesis closed project-wide. Needs your call on next hypothesis."
    },
    "persistent-pull-blocker": {
@@ -1389,6 +1389,14 @@
    "agent": "cajh-loop-check-scheduled",
    "action": "no-op-firing",
    "detail": "Re-confirmed work_queue empty (46/46 done, 0 pending/started/in_progress). git pull already up to date. State file healthy. ROADMAP.md/TOURNAMENT_ROADMAP.md/VERDICTS.md unchanged since last check - no new PASS verdict, nothing legitimate to restock (VERDICTS.md thesis-closed statement still stands). empty-queue notification deduped (last sent 2026-08-21T13:01:11.000Z, ~5h prior, inside 6h window). No code changes. npm.cmd test 494/494 green.",
+   "commit": null,
+   "tests": "494/494"
+  },
+  {
+   "ts": "2026-08-21T19:05:00.000Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "no-op-firing",
+   "detail": "Queue re-confirmed empty (46/46 done, 0 pending/started/in_progress). git pull already up to date, no foreign commits. ROADMAP.md/TOURNAMENT_ROADMAP.md/VERDICTS.md unchanged since last check - no new PASS verdict, nothing legitimate to restock. Empty-queue dedup window (6h) had elapsed - last send 2026-08-21T13:01:11.000Z, this firing 6h00m34s later, just past the window - so per the binding dedup policy a PushNotification was resent (mirrors 98cc7dc precedent) and blackboard.notifications.empty-queue.lastSentAt updated. No code changes. npm.cmd test 494/494 green.",
    "commit": null,
    "tests": "494/494"
   }
