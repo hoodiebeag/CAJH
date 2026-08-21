@@ -146,3 +146,59 @@ sample. Test (4) says ~384 trades at the observed effect size, roughly 6x what
 exists. `EQUITIES-BREAKOUT-OUT-OF-SAMPLE` and `EQUITIES-ALL-FAMILIES-BASELINE`
 are the queued routes to it. Re-running this window and reporting a nicer figure
 would not.
+
+---
+
+## 5. Applied retrospectively to the whole record
+
+Asked directly: does anything this project has already run meet the bar?
+
+**No. Nothing does.** And the way things fail is more informative than the count.
+
+| candidate | 1. net E>0 | 3. CI excl. 0 + FDR | 5. survivable | 6. out-of-sample | verdict |
+|---|---|---|---|---|---|
+| `B5-REVERSAL` (L=3) | marginal (+0.0048R) | **train IC yes**, economics **no** | **no** (−79% to −90% DD) | **no** (sign flip on ±1 position) | fails |
+| `CLASSIFIER-FUNDING-FEATURE` | **no** (−0.2412R) | yes (survives BH-FDR) | n/a | n/a | fails |
+| `T4-PORTFOLIO-MOMENTUM` | yes (+30.8% return) | never computed | marginal (−33.1% DD) | **no** (Sharpe swings 52–92% on ±1 position) | fails |
+| `EQUITIES-BASELINE-PORT` breakout | yes (+0.1866R) | **no** ([−0.27, +0.65]) | not computed | not attempted | fails |
+| every other study (~42) | **no** | — | — | — | fails at (1) |
+
+### The pattern worth naming
+
+**No candidate has ever cleared conditions 1 and 3 at the same time.** Every result
+in this project's history is one of two shapes:
+
+- **Statistically real, economically dead.** `CLASSIFIER-FUNDING-FEATURE` survives
+  family-wise BH-FDR — one of only two that do — and still nets −0.2412R after
+  cost. The signal is there; it cannot pay for its own execution.
+- **Economically positive, statistically indistinguishable from noise.** The
+  equities breakout result (+0.1866R, CI [−0.27, +0.65]) and `B5-REVERSAL`'s
+  PHASE3 (+0.0048R, CI [−0.0064, 0.0142]) both sit on the right side of zero with
+  intervals that comfortably contain it.
+
+That these two sets have never intersected across ~46 studies is the single most
+useful summary of the research record, and it is not visible from any individual
+verdict.
+
+### On `B5-REVERSAL` specifically
+
+It is the closest thing to a counterexample and repays a careful look, because it
+*did* clear a pre-registered gate at PHASE3 — the only time that has happened
+here. What killed it was not significance but **survivability**: PHASE4 measured
+max drawdown between −79% and −90%. By §2's recovery table, −90% requires **+900%**
+to return to flat. A strategy can be real, positive, and still uninvestable, which
+is exactly why condition 5 is not optional and cannot be traded off against a
+good point estimate.
+
+It also failed condition 6 in the most diagnostic way available: the annual
+return's *sign* flipped when position count moved from 3 to 4. An edge that
+inverts on a one-position change is a fit to the sample, not a property of the
+market.
+
+### What this does not say
+
+It does not say no alpha exists, and it does not say the search should stop —
+that judgement belongs to `SEARCH-SPACE-EXHAUSTION-ASSESSMENT` and to the human,
+not to this document. What it says is narrower and firmer: **nothing tested so far
+qualifies**, and the reason is consistent enough across ~46 attempts to be
+treated as structural rather than as a run of bad luck.
