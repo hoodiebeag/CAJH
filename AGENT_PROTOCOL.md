@@ -242,8 +242,25 @@ section is the binding rule; that document is the reasoning behind it. Update bo
 fail):**
 
 - Formal NHST studies (report a p-value against a pre-registered significance gate):
-  **13** sub-tests across 10 studies as of 2026-08-22 (see audit §2 for the list and p-values).
-  Unchanged by PAIRS-COINTEGRATION-STATARB (2026-08-19): that study ran its own internal
+  **14** sub-tests across 11 studies as of 2026-08-22 (see audit §2 for the list and p-values).
+  Updated by LOG-REGRESSION-BANDS-CRYPTO (2026-08-22): added a log-price-vs-log-time
+  regression-band exposure signal's sign-flip permutation p-value (per-asset holdout
+  outperformance vs buy-and-hold, n=24 assets) as the 14th entry — p=0.0002, **correct sign**,
+  the smallest raw p-value recorded in this family; family-wide BH-FDR recomputed across all 14
+  (q=0.0028 for this entry, rank 1 of 14) — **formally survives**. **This survival should not be
+  read as a real effect**: the same study computed an always-flat (never-trade) control against
+  the identical buy-and-hold benchmark and found it outperforms buy-and-hold by MORE than the
+  real signal does (+0.4337 vs +0.1446 mean, n=24), because 23/24 assets had negative
+  buy-and-hold return over their holdout window — any reduced-exposure strategy is rewarded by
+  a benchmark that is falling almost everywhere. Signal-minus-always-flat delta is significantly
+  NEGATIVE (mean -0.2892, 95% CI [-0.4154,-0.1644]). Recorded KILLED in `VERDICTS.md` despite
+  the nominal BH-FDR survival — full writeup in `ROADMAP.md`'s 2026-08-22 LOG-REGRESSION-BANDS-CRYPTO
+  section and `MULTIPLE_COMPARISONS_AUDIT.md` §2. **Material side effect: CLASSIFIER-FUNDING-FEATURE
+  flips from non-survivor back to survivor** purely because the family grew (its own p=0.0099 is
+  unchanged; it moved from rank 2 to rank 3 as the new entry displaced it, and the rank-3
+  threshold at n=14, 0.01071, is looser than the rank-2 threshold it failed at n=13, 0.00769) —
+  B5-REVERSAL L=3 (q=0.0070) and LOG-REGRESSION-BANDS-CRYPTO (q=0.0028, see caveat above) are
+  the other two nominal survivors at q=0.05. Unchanged by PAIRS-COINTEGRATION-STATARB (2026-08-19): that study ran its own internal
   105-test Engle-Granger screen, already BH-FDR-corrected within the study (0/105 survived
   q=0.05) — it doesn't add a raw uncorrected p-value to this cross-study table the way
   Classifier P5's did. Updated by CROSS-SECTIONAL-NONPRICE-RANK (2026-08-19): added its own

@@ -37,7 +37,19 @@ VERDICTS.md at all:**
   audit is about ("slicing seven ways and picking the best-looking cell is
   multiple-comparisons p-hacking almost by construction").
 
-**Total: 52 studies conducted to date** (updated 2026-08-22 by EQUITIES-MADIP-SIGNIFICANCE —
+**Total: 53 studies conducted to date** (updated 2026-08-22 by LOG-REGRESSION-BANDS-CRYPTO —
+a primary market-exposure signal (log-price vs log-time regression bands, never attempted before
+in this project), pre-registered one-sided sign-flip permutation test on per-asset holdout
+outperformance vs buy-and-hold (n=24 assets), p=0.0002, 95% bootstrap CI [0.068, 0.232]
+(excludes zero). Joins the Formal NHST bucket below as the 14th sub-test (11th study) — see §2
+for the full recomputation; ranks 1st of 14 by raw p-value and formally SURVIVES BH-FDR at
+q=0.05 (adjusted q=0.0028) — but the study's own always-flat control (0% return, no trades)
+outperforms the identical buy-and-hold benchmark by MORE than the real signal does (+0.4337 vs
++0.1446), because 23/24 assets had negative buy-and-hold return over their holdout window (a
+broadly bearish stretch); signal-minus-always-flat delta is significantly NEGATIVE (mean -0.2892,
+CI [-0.4154,-0.1644]). Recorded KILLED in VERDICTS.md despite the nominal BH-FDR survival — the
+survival is a benchmark artifact, not a real effect, demonstrated by this same study rather than
+asserted — a 53rd study. Previously updated 2026-08-22 by EQUITIES-MADIP-SIGNIFICANCE —
 a formal one-sided sign-flip permutation test of `ma_dip`'s pooled per-trade net R on the same
 30-symbol equity universe/cost basis EQUITIES-ALL-FAMILIES-BASELINE established, reusing
 EQUITIES-BREAKOUT-SIGNIFICANCE's exact methodology; p=0.0648, 95% block-bootstrap CI
@@ -70,7 +82,7 @@ Breakdown by kind:
 
 | Kind | Count | What it means for this audit |
 |---|---:|---|
-| Formal NHST (reports a p-value against a pre-registered gate) | 9 studies / 12 sub-tests | Section 2 — a real FWER/FDR computation applies |
+| Formal NHST (reports a p-value against a pre-registered gate) | 11 studies / 14 sub-tests (this row lagged the real count before this update — see §1's own "the count is stale" framing; corrected here to match §2/AGENT_PROTOCOL.md's current totals as of LOG-REGRESSION-BANDS-CRYPTO) | Section 2 — a real FWER/FDR computation applies |
 | Economic-gate-only (point-estimate threshold, no p-value/null distribution) | 35 (see PER-EPOCH-GROSS-EDGE note above; §3's "33" below is pre-this-study and not rewritten here — see that section's own staleness framing) | Section 3 — classical alpha math doesn't transfer cleanly; discussed qualitatively |
 | Non-verdict (a gate failed before holdout was ever examined) | 6 (H11, FUNDING-MEANREV, ONCHAIN-FLOW-GATE, FIB-PULLBACK, VOL-CONFIRM-BREAKOUT, PAIRS-COINTEGRATION-STATARB) | Consumed zero holdout looks — train-gate, data-gate, or (new with PAIRS-COINTEGRATION-STATARB) internal-screen-gate failures, holdout never examined. Not part of either look-elsewhere pool. PAIRS-COINTEGRATION-STATARB differs from the other five: its gate wasn't missing data, it was its own internal, ALREADY BH-FDR-corrected 105-pair Engle-Granger screen (0/105 survived q=0.05) — a self-contained formal-NHST family that doesn't feed Section 2's 9-sub-test table, since it was corrected within the study rather than needing retroactive cross-study correction. |
 | Descriptive / no gate at all | 3 (T1-ZEROCOST informal 8-family screen, SEASONALITY-DAYOFWEEK-SESSION, EQUITIES-ALL-FAMILIES-BASELINE) | No pass/fail claim was ever made, so nothing to correct — but the holdout window was looked at, which matters for Section 4 |
@@ -83,7 +95,7 @@ study by `B5-REVERSAL-PHASE4-PORTFOLIO-SIM`'s FAIL under a stricter, more realis
 
 ## 2. The formal-significance subfamily: a real FWER/FDR computation
 
-Thirteen sub-tests across ten studies report an actual p-value against the project's
+Fourteen sub-tests across eleven studies report an actual p-value against the project's
 pre-registered `p<0.05` significance gate (`MOMENTUM_SPEC.md §6` clause 1, and the
 classifier spec's equivalent permutation-null clause). These are the only results in this
 project where classical multiple-comparisons math applies without qualification, because
@@ -91,80 +103,104 @@ they're the only ones with an actual null distribution behind them.
 
 | Rank | Study | p-value | Sign correct? |
 |---:|---|---:|---|
-| 1 | B5-REVERSAL L=3 (train) | 0.0010 | yes |
-| 2 | CLASSIFIER-FUNDING-FEATURE (holdout, primary) | 0.0099 | yes |
-| 3 | Classifier P5 (holdout, primary) | 0.0198 | yes |
-| 4 | Low-vol B4 negBeta (train) | 0.0579 | yes |
-| 5 | EQUITIES-MADIP-SIGNIFICANCE (holdout, primary) | 0.0648 | yes |
-| 6 | CROSS-SECTIONAL-NONPRICE-RANK (train, OI-change primary IC) | 0.1249 | **no** (wrong sign) |
-| 7 | EQUITIES-BREAKOUT-SIGNIFICANCE (holdout, primary) | 0.2036 | yes |
-| 8 | Low-vol B4 negVol (train) | 0.2278 | yes |
-| 9 | B5-REVERSAL L=5 (train) | 0.4226 | yes |
-| 10 | MOMENTUM-SHORT-HORIZON-RECHECK L=14 (train) | 0.4266 | yes |
-| 11 | MOMENTUM-SHORT-HORIZON-RECHECK L=7 (train) | 0.6024 | **no** (wrong sign) |
-| 12 | EQUITIES-BREAKOUT-OUT-OF-SAMPLE (holdout, primary) | 0.6165 | **no** (wrong sign) |
-| 13 | Momentum M7 (train, residual IC) | 0.7013 | yes |
+| 1 | LOG-REGRESSION-BANDS-CRYPTO (holdout, primary) | 0.0002 | yes (but see below — a demonstrated benchmark artifact, not a real effect) |
+| 2 | B5-REVERSAL L=3 (train) | 0.0010 | yes |
+| 3 | CLASSIFIER-FUNDING-FEATURE (holdout, primary) | 0.0099 | yes |
+| 4 | Classifier P5 (holdout, primary) | 0.0198 | yes |
+| 5 | Low-vol B4 negBeta (train) | 0.0579 | yes |
+| 6 | EQUITIES-MADIP-SIGNIFICANCE (holdout, primary) | 0.0648 | yes |
+| 7 | CROSS-SECTIONAL-NONPRICE-RANK (train, OI-change primary IC) | 0.1249 | **no** (wrong sign) |
+| 8 | EQUITIES-BREAKOUT-SIGNIFICANCE (holdout, primary) | 0.2036 | yes |
+| 9 | Low-vol B4 negVol (train) | 0.2278 | yes |
+| 10 | B5-REVERSAL L=5 (train) | 0.4226 | yes |
+| 11 | MOMENTUM-SHORT-HORIZON-RECHECK L=14 (train) | 0.4266 | yes |
+| 12 | MOMENTUM-SHORT-HORIZON-RECHECK L=7 (train) | 0.6024 | **no** (wrong sign) |
+| 13 | EQUITIES-BREAKOUT-OUT-OF-SAMPLE (holdout, primary) | 0.6165 | **no** (wrong sign) |
+| 14 | Momentum M7 (train, residual IC) | 0.7013 | yes |
 
-**Naive FWER, k=13, alpha=0.05:** 1 − (1 − 0.05)^13 = **0.4867** (assuming independence,
-which these tests only partially satisfy — see caveat below). Over a family this size, close
-to an even-money chance of at least one nominal "significant" hit existed even if every
-single underlying effect were exactly zero. Three did clear p<0.05 (ranks 1–3 above) —
-informative, but this alone doesn't say anything about which are real.
+**Naive FWER, k=14, alpha=0.05:** 1 − (1 − 0.05)^14 = **0.5123** (assuming independence,
+which these tests only partially satisfy — see caveat below). Over a family this size, better
+than even odds of at least one nominal "significant" hit existed even if every single
+underlying effect were exactly zero. Four now clear raw p<0.05 (ranks 1–4 above) —
+informative, but this alone doesn't say anything about which are real, and this update is
+direct proof that at least one of them (rank 1, this update's own study) is not.
 
-**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 13 is `(i/13)×0.05`):
+**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 14 is `(i/14)×0.05`):
 
-| Rank *i* | p-value | Threshold (i/13)×0.05 | Survives? |
-|---:|---:|---:|---|
-| 1 | 0.0010 | 0.00385 | **yes** |
-| 2 | 0.0099 | 0.00769 | no — 0.0099 > 0.00769 |
-| 3 | 0.0198 | 0.01154 | no |
-| 4–13 | 0.0579–0.7013 | 0.01538–0.05 | no |
+| Rank *i* | Study | p-value | q-value | Survives? |
+|---:|---|---:|---:|---|
+| 1 | LOG-REGRESSION-BANDS-CRYPTO | 0.0002 | 0.0028 | **yes** (nominally — see caveat) |
+| 2 | B5-REVERSAL L=3 | 0.0010 | 0.0070 | **yes** |
+| 3 | CLASSIFIER-FUNDING-FEATURE | 0.0099 | 0.0462 | **yes** (flipped back from non-survivor — see below) |
+| 4 | Classifier P5 | 0.0198 | 0.0693 | no |
+| 5–14 | (remaining 10, see full table above) | 0.0579–0.7013 | 0.1512–0.7013 | no |
 
-**Only B5-REVERSAL (L=3) survives family-wise BH-FDR correction at q=0.05 now that the
-family has grown to 13.** `EQUITIES-BREAKOUT-OUT-OF-SAMPLE` (2026-08-22) added `breakout`'s
-sign-flip permutation p-value, recomputed on a genuinely fresh, non-overlapping universe
-(DJTA-20 vs the original DJIA-30 — see `ROADMAP.md`), as the 13th test: p=0.6165, **wrong
-sign** — the point estimate flipped from `EQUITIES-BASELINE-PORT`'s original +0.1866R to
--0.0854R on this holdout, so unlike the prior update this entry is a clean miss, not a thin
-positive. It ranks 12th of 13 by raw p-value, nowhere near nominal significance. No prior
-survivor flips: `CLASSIFIER-FUNDING-FEATURE` was already a non-survivor at n=12 (q=0.0594
-there) and stays one at n=13 (q=0.0644 — the rank-2 threshold tightens from
-`2/12×0.05=0.00833` to `2/13×0.05=0.00769`, moving the adjusted p-value but not the pass/fail
-outcome). `EQUITIES-BREAKOUT-SIGNIFICANCE`'s own adjusted p-value moves from q=0.3417 (n=12)
-to q=0.3702 (n=13) purely from family growth — its own p-value (0.2036) is unchanged.
-Classifier P5's originally-reported "clears p<0.05" result (p=0.0198) still does **not**
-survive correction — unchanged from the prior recomputation: P5 was already KILLED on the
-separate, independently-required economic clause (its best-scoring subset still nets
--0.46R/trade after cost), so this correction doesn't flip any verdict, it just keeps removing
-a claim ("statistically significant") that shouldn't have been read as surviving multiple
-comparisons in isolation.
+**Three sub-tests formally survive family-wise BH-FDR correction at q=0.05 now that the
+family has grown to 14 — but one of the three is this update's own study, and this update's
+own study is the reason to distrust that count taken at face value.** `LOG-REGRESSION-BANDS-CRYPTO`
+(2026-08-22, `ROADMAP.md`) tested a log-price-vs-log-time regression-band exposure signal
+against crypto buy-and-hold: p=0.0002, the smallest raw p-value ever recorded in this family,
+formally the strongest BH-FDR survivor (q=0.0028). The SAME study computed an always-flat
+(never-trade) control against the identical buy-and-hold benchmark and found it outperforms
+buy-and-hold by MORE than the real signal does (+0.4337 vs +0.1446 mean per-asset
+outperformance, n=24) — because 23 of 24 assets had negative buy-and-hold return over their
+holdout window, a benchmark that is falling almost everywhere rewards ANY reduced-exposure
+strategy near-automatically. The signal-minus-always-flat delta (the only fair test of whether
+the band itself adds information) is significantly NEGATIVE: mean -0.2892, 95% CI
+[-0.4154, -0.1644], entirely below zero. Recorded KILLED in `VERDICTS.md` despite the nominal
+BH-FDR survival. This is disclosed here, in the correction math itself, rather than only in
+`ROADMAP.md`'s narrative, because the mechanical family-size rule below requires every reported
+p-value to be added and judged — it has no way to know a benchmark confound sits behind one of
+them, and this document should not silently launder that gap.
 
-**A genuinely surprising pattern, stated with its caveat.** Under a null of "no real effect
-anywhere in this family," P(at least 3 of 13 independent trials clear p<0.05) ≈ **2.45%**
-(exact binomial, n=13, p=0.05, updated from the prior n=12 figure of 1.96% now that
-EQUITIES-BREAKOUT-OUT-OF-SAMPLE has added a 13th, non-hit, test) — getting 3 hits by pure
-chance alone is still unlikely. Read at face value this would suggest at least one of these
-three signals is real. **The caveat that matters:** these thirteen tests are not independent
-draws. B5-REVERSAL L=3/L=5 share the same underlying reversal mechanism and overlapping
-data; CLASSIFIER-FUNDING-FEATURE is P5's own model plus one covariate, built on the same
-classifier and much of the same holdout rows. Correlated tests cluster hits and misses
-together more than independent ones do, which makes "3 hits" less surprising than the naive
-binomial number suggests — the 2.45% figure is a useful anchor, not a rigorous p-value for
-the meta-question. **The honest reading:** this project has three separate lines of evidence
-(a short-horizon reversal signal, an entry-time classifier, and a funding-augmented version
-of that classifier) that are *statistically real and economically dead* — not noise, not a
-coding bug, but real effects too small for this project's actual trading costs (~1.7%
-round-trip) to ever monetize. That is a materially different, more informative conclusion
-than "still no edge," and it is consistent with every one of these three rows' own
-individually-recorded verdicts. `EQUITIES-MADIP-SIGNIFICANCE` adds a further, differently
-shaped data point: a positive point estimate on a real-cost, real-data holdout that is *not
-yet distinguishable from noise* at all (CI includes zero, p=0.0648, 475 trades) —
-thinner-evidence positive, not (yet) a confirmed effect of any kind, real or dead.
-`EQUITIES-BREAKOUT-SIGNIFICANCE`'s own thin positive (+0.1866R, p=0.2036, 61 trades on
-DJIA-30) did **not** hold up out-of-sample: `EQUITIES-BREAKOUT-OUT-OF-SAMPLE`'s fresh DJTA-20
-universe put the same unmodified `breakout` config at -0.0854R over 33 trades, p=0.6165 — the
-one out-of-sample check completed so far in this family, and it points toward noise rather
-than toward a signal that just needed more data.
+**Material side effect of adding a very small p-value at rank 1: `CLASSIFIER-FUNDING-FEATURE`
+flips from non-survivor back to survivor.** At n=13 it was q=0.0644 (non-survivor, having just
+been flipped OUT by `EQUITIES-BREAKOUT-SIGNIFICANCE`'s addition the prior update). Adding
+`LOG-REGRESSION-BANDS-CRYPTO`'s p=0.0002 at rank 1 loosens the rank-3 threshold from
+`2/13×0.05=0.00769` to `3/14×0.05=0.01071` (CLASSIFIER-FUNDING-FEATURE moves from rank 2 to
+rank 3 as the new entry displaces it), and its own unchanged p=0.0099 now clears that looser
+threshold (q=0.0462). Its own economic-gate verdict (KILLED — best-scoring subset still nets
+-0.24R/trade after cost) is untouched — this is a purely statistical side effect of family
+size, not a re-examination of that study, and its "statistically real, economically dead"
+characterization below is unaffected. `B5-REVERSAL L=3` remains a comfortable survivor
+(q=0.0130→0.0070, tightens but does not flip). `EQUITIES-BREAKOUT-SIGNIFICANCE`'s own q moves
+from 0.3702 (n=13) to a looser value at n=14 purely from family growth — its own p-value
+(0.2036) is unchanged. Classifier P5's "clears p<0.05" result (p=0.0198) still does **not**
+survive correction (q=0.0693) — unchanged conclusion: P5 was already KILLED on the separate,
+independently-required economic clause (its best-scoring subset nets -0.46R/trade after cost).
+
+**A genuinely surprising pattern, stated with its caveat — and now with a concrete
+counter-example.** Under a null of "no real effect anywhere in this family," P(at least 4 of 14
+independent trials clear p<0.05) ≈ **0.42%** (exact binomial, n=14, p=0.05, updated from the
+prior n=13 figure of 2.45% now that a 4th raw hit — this update's own study — has joined the
+top of the table). Read at face value this would suggest real effects are present. **The
+caveat that mattered before still matters:** these fourteen tests are not independent draws —
+B5-REVERSAL L=3/L=5 share a mechanism and overlapping data; CLASSIFIER-FUNDING-FEATURE is P5's
+own model plus one covariate on much of the same holdout rows — which makes any raw hit-count
+less surprising than the naive binomial number suggests. **What is new this update: one of the
+four raw hits is now a demonstrated, disclosed non-effect, not a hypothetical caveat about
+correlation.** `LOG-REGRESSION-BANDS-CRYPTO`'s p=0.0002 — the single strongest raw hit in this
+project's history — is explained entirely by a benchmark artifact (a near-uniformly bearish
+holdout window rewarding any reduced exposure), demonstrated by the same study's own
+always-flat control, not asserted after the fact. This is concrete evidence for exactly the
+kind of overstatement this caveat has warned about since this document's first version: raw
+hit-counts under a global null (or a correlated near-null) can and do include artifacts that
+look, by every formal measure available here, exactly like a real discovery. **The honest
+reading, updated:** this project has three separate lines of evidence (a short-horizon
+reversal signal, an entry-time classifier, and a funding-augmented version of that classifier)
+that are *statistically real and economically dead* — not noise, not a coding bug, but real
+effects too small for this project's actual trading costs (~1.7% round-trip) to ever monetize.
+It now also has one concrete case of a result that is *statistically nominal and not real at
+all* — a materially different failure mode from either "real and dead" or "noise," and worth
+keeping distinct from both. `EQUITIES-MADIP-SIGNIFICANCE` adds a further, differently shaped
+data point: a positive point estimate that is *not yet distinguishable from noise* at all (CI
+includes zero, p=0.0648, 475 trades) — thinner-evidence positive, not (yet) a confirmed effect
+of any kind, real or dead. `EQUITIES-BREAKOUT-SIGNIFICANCE`'s own thin positive (+0.1866R,
+p=0.2036, 61 trades on DJIA-30) did **not** hold up out-of-sample:
+`EQUITIES-BREAKOUT-OUT-OF-SAMPLE`'s fresh DJTA-20 universe put the same unmodified `breakout`
+config at -0.0854R over 33 trades, p=0.6165 — the one out-of-sample check completed so far in
+this family, and it points toward noise rather than toward a signal that just needed more
+data.
 
 ## 3. The economic-gate subfamily: why classical FWER doesn't transfer, and what does
 

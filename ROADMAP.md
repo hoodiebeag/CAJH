@@ -3957,3 +3957,167 @@ was never reached — kept imported rather than stripped, since a future re-run 
 window is expected to use it) and `researchlib.mjs`'s `splitSealedSymbols`/`symbolToKrakenId`
 unmodified. `npm.cmd test`: 505/505 green (no new production code path exercised by existing
 tests).
+
+## LOG-REGRESSION-BANDS-CRYPTO — the pre-registered test formally survives BH-FDR, and this study's own control shows why that survival should not be trusted (2026-08-22)
+
+Never attempted here despite being a well-known crypto framing — zero hits for
+`log.regression`/`power.law`/`rainbow` anywhere in `VERDICTS.md`/`ROADMAP.md` before this item.
+STRUCTURAL REQUIREMENT (this item's own work_queue note): generates market EXPOSURE directly,
+never a gate/filter on `breakout`/`anticipate` — Template A is retired, and the zero-fee floor
+already explains why filtering a no-gross-edge population cannot work.
+
+**Method, pre-registered before any statistic below was computed** (full text in
+`scripts/log-regression-bands-crypto.mjs`'s header, same commit as these results). Per asset: fit
+OLS `log(close) ~ a + b*log(t)`, `t` = day index since this store's LOCAL WINDOW START for that
+asset (not true listing/genesis date — this codebase does not track that, and the task text
+explicitly allows either framing; disclosed here rather than silently mislabeled). Fit on TRAIN
+ONLY (first 70% of that asset's local history); the frozen `(slope, intercept)` are applied
+UNCHANGED to every day, train and holdout alike, giving a standardized residual
+`z = (actual - fitted) / trainResidualSE`. Band fixed before running, not searched: long
+(`exposure=1`) when `z<=-1.5`; flat (`exposure=0`) when `z>=+1.5`; hysteresis carry-forward inside
+the band (this project's existing `btcRegimeMap`/`MACRO-REGIME-PRIMARY-SIGNAL` convention, reused
+to avoid single-day whipsaw, not fit against this run's outcome). Standing real crypto cost
+(FEE_RATE 0.008 + SLIPPAGE_PCT 0.0005/side, ~1.7% round trip) charged once per flip; buy-and-hold
+gets one matching entry-cost and one exit-cost charge for a fair comparison
+(`MACRO-REGIME-PRIMARY-SIGNAL`'s convention, reused verbatim). Universe: all 24 active
+(non-`SEALED_SYMBOLS`) watchlist assets with >=150 local daily candles — a floor set before any
+result existed; every active asset clears it as of this run (minimum is EOS at 160), so it
+excludes nothing in practice but is stated as a rule, not a description of what happened to
+qualify.
+
+**Significance, pre-registered.** Unit of observation: per-asset (holdout strategy return −
+holdout buy-and-hold return), one scalar per asset — independence is across ASSETS (not days,
+which are cross-sectionally correlated within one calendar window and would overstate n), giving
+n=24, not a day-count. One-sided sign-flip permutation test (H1: mean outperformance > 0, matching
+`EQUITIES-MADIP-SIGNIFICANCE`'s convention), plain cross-sectional bootstrap 95% CI
+(`momentum.mjs`'s `bootstrapCI`, unmodified — the same function `momentum.mjs` itself uses for
+per-panel/per-symbol IC values, not the block variant, because these units are cross-sectional,
+not one autocorrelated time series). The one-sided direction was pre-registered on the
+mechanism's own economic rationale (a mean-reversion exposure signal should help by avoiding
+exposure during overextended trends) — this is this project's first run of the method, unlike
+`EQUITIES-MADIP-SIGNIFICANCE` which had a prior point estimate to justify its direction.
+
+**Primary result:**
+
+| test | n | mean | 95% CI | p (one-sided sign-flip) |
+|---|---:|---:|---|---:|
+| Signal outperformance vs buy-and-hold (pre-registered primary) | 24 | +0.1446 | [0.0682, 0.2323] | **0.0002** |
+
+CI excludes zero. This is, by raw p-value, the strongest hit of any formal test run in this
+project's history — smaller than `B5-REVERSAL L=3`'s 0.0010.
+
+**The check that matters, run before trusting anything new (same study, same commit, not a later
+follow-up).** 23 of the 24 assets' holdout windows had NEGATIVE buy-and-hold return — this
+universe's holdout landed in the same broadly bearish stretch `MACRO-REGIME-PRIMARY-SIGNAL`'s
+356-day holdout already found (-46.92% vs -47.37% buy-and-hold there). Against a benchmark that is
+falling almost everywhere, ANY reduced-exposure strategy looks like it "outperforms" close to
+automatically — including doing nothing at all. Three of the 24 assets (XMR, XRP, ZEC) never
+triggered a single long entry across their entire holdout (`z` never crossed -1.5) and simply
+posted 0% — yet still logged large "outperformance" (+0.028, +0.358, +0.627 respectively) purely
+because their buy-and-hold legs crashed. That is the tell. An always-flat control (0% return, zero
+trades, no cost — literally sit in cash) was computed against the SAME 24 per-asset buy-and-hold
+series, scored with the identical test:
+
+| test | n | mean | 95% CI | p (one-sided sign-flip) |
+|---|---:|---:|---|---:|
+| Always-flat (cash) outperformance vs buy-and-hold | 24 | **+0.4337** | [0.3355, 0.5266] | 0.0002 |
+| Signal outperformance vs buy-and-hold (primary, for comparison) | 24 | +0.1446 | [0.0682, 0.2323] | 0.0002 |
+| **Signal minus always-flat** (the only fair test of whether the BAND itself adds information) | 24 | **-0.2892** | **[-0.4154, -0.1644]** | 0.9996 (one-sided "signal beats cash") |
+
+The always-flat control beats buy-and-hold by roughly 3x more than the actual signal does, and the
+signal-minus-cash delta is negative with a 95% CI entirely below zero. Put plainly: simply not
+trading this universe over this window would have been substantially better than running the
+log-regression band signal. The band's real entries (21/24 assets did trigger at least one) cost
+more than they saved relative to just holding cash. The pre-registered primary test's tiny p-value
+is real arithmetic on real numbers, but it is measuring "was mostly out of a falling market,"
+not "correctly timed entries into a mean-reverting band" — and this study's own control isolates
+that difference cleanly rather than asserting it.
+
+**Model-form diagnostic (this item's own explicit ask: state plainly whether the fit is even
+stable, and whether it beats a naive drift baseline).** For each asset, a second, non-nested OLS
+was also fit on the identical train segment: `log(close) ~ a + b*t` (t raw, not log-transformed) —
+a plain constant-percentage-growth ("drift") model. Median across the 24 assets:
+
+| diagnostic | median across assets |
+|---|---:|
+| log-log slope | 0.0144 |
+| log-log slope SE | 0.0108 |
+| ΔR² (log-log R² − drift R²) | **-0.0533** |
+
+The log-log (power-law) framing fits *worse* than the naive drift model on the median asset — not
+a close call, and not one asset's outlier: `deltaR2` was negative for 19 of the 24 assets (the
+only exceptions were INJ +0.232, XTZ +0.168, ALGO +0.158, ETC +0.095, ETH +0.086 — 5/24, and none
+by a large margin). Read together with the primary result: this project's first test
+of the "rainbow chart" framing finds no evidence the log-time transform captures anything a plain
+exponential-growth line does not, and no evidence the resulting band, once benchmarked correctly,
+adds value over simply not trading.
+
+**Why this is recorded as KILLED and not treated as a live candidate despite formally clearing
+BH-FDR below.** `AGENT_PROTOCOL.md`'s binding rule requires every reported p-value to join the
+formal-NHST family and be judged only after family-wide correction — that mechanical rule does not
+know about a benchmark confound, and correctly does not exempt this result from the count just
+because the study itself found a reason to distrust it. The recomputation below is reported in
+full. But "survives BH-FDR" answers a narrower question (is this larger than chance alone would
+produce across everything tested so far) than "is this a real, usable signal" — this study answers
+the second question directly with the always-flat control, and the answer is no. No `SEALED_SYMBOLS`
+re-run was performed: the provisional-clearance rule exists for economic-gate results without a
+p-value; this already has a decisive, disclosed reason for rejection that a fresh symbol pool would
+not change (the confound is about the holdout WINDOW's direction, not this particular symbol set).
+
+**MULTIPLE_COMPARISONS_AUDIT.md update, same commit.** Adds this study's p=0.0002 as the 14th
+sub-test (11th study) to the formal-NHST family (13 sub-tests / 10 studies as of prior to this
+item). Family-wide BH-FDR recomputed across all 14 at q=0.05:
+
+| Rank | Study | p-value | q-value | Survives q=0.05? |
+|---:|---|---:|---:|---|
+| 1 | **LOG-REGRESSION-BANDS-CRYPTO (holdout, primary)** | 0.0002 | 0.0028 | **yes** (see confound above) |
+| 2 | B5-REVERSAL L=3 (train) | 0.0010 | 0.0070 | yes |
+| 3 | CLASSIFIER-FUNDING-FEATURE (holdout, primary) | 0.0099 | 0.0462 | **yes** (flipped back — see below) |
+| 4 | Classifier P5 (holdout, primary) | 0.0198 | 0.0693 | no |
+| 5 | Low-vol B4 negBeta (train) | 0.0579 | 0.1512 | no |
+| 6 | EQUITIES-MADIP-SIGNIFICANCE (holdout, primary) | 0.0648 | 0.1512 | no |
+| 7 | CROSS-SECTIONAL-NONPRICE-RANK (train) | 0.1249 | 0.2498 | no (wrong sign) |
+| 8 | EQUITIES-BREAKOUT-SIGNIFICANCE (holdout, primary) | 0.2036 | 0.3544 | no |
+| 9 | Low-vol B4 negVol (train) | 0.2278 | 0.3544 | no |
+| 10 | B5-REVERSAL L=5 (train) | 0.4226 | 0.5429 | no |
+| 11 | MOMENTUM-SHORT-HORIZON-RECHECK L=14 (train) | 0.4266 | 0.5429 | no |
+| 12 | MOMENTUM-SHORT-HORIZON-RECHECK L=7 (train) | 0.6024 | 0.6639 | no (wrong sign) |
+| 13 | EQUITIES-BREAKOUT-OUT-OF-SAMPLE (holdout, primary) | 0.6165 | 0.6639 | no (wrong sign) |
+| 14 | Momentum M7 (train) | 0.7013 | 0.7013 | no |
+
+**Material side effect, exactly the kind this family has produced before (see
+`EQUITIES-BREAKOUT-SIGNIFICANCE`'s and `EQUITIES-MADIP-SIGNIFICANCE`'s own updates for
+precedent): `CLASSIFIER-FUNDING-FEATURE` flips from non-survivor back to survivor.** At n=13 it
+was q=0.0644 (non-survivor). Adding this study's very small p-value at rank 1 loosens every lower
+rank's threshold (`i/n` grows smaller as `n` grows, so `(i/n)*q` shrinks less per step once a
+strong new hit occupies rank 1) — at n=14, `CLASSIFIER-FUNDING-FEATURE` lands at rank 3 with
+threshold `(3/14)*0.05=0.01071`, and its own unchanged p=0.0099 now clears it (q=0.0462). Its own
+economic-gate verdict (KILLED — best subset nets -0.24R/trade after cost) is untouched by this;
+this is a purely statistical side effect of family size, not a re-examination of that study.
+`B5-REVERSAL L=3` remains a comfortable survivor (q=0.0130→0.0070, tightens but does not flip).
+`Classifier P5` remains a non-survivor (q=0.0858→0.0693, still above 0.05).
+
+**Updated raw-hit-rate context.** Naive FWER at n=14, alpha=0.05: `1-(1-0.05)^14 ≈ 0.5123`.
+`P(>=4 of 14 independent trials clear raw p<0.05 | null) ≈ 0.42%` (updated from the n=13 figure —
+this study is itself the 4th raw hit, joining `B5-REVERSAL`/`CLASSIFIER-FUNDING-FEATURE`/`Classifier
+P5`). Read at face value this is a low-probability event under a global null. **The caveat that
+matters more here than in any prior update: this study is a demonstrated, disclosed case of a raw
+"significant" hit that is NOT real** — the always-flat control above shows definitively that the
+tiny p-value reflects a benchmark artifact (a near-uniformly bearish holdout), not a real effect.
+This is concrete evidence for the correlated-tests caution this document has carried since its
+first version: raw hit-counts under a global null overstate how many *real* effects are present,
+and this study is the clearest single illustration of that gap produced by this project so far —
+a p=0.0002 result that would be trusted at face value in almost any other context, caught only
+because the study itself went looking for the confound before reporting.
+
+**Engineering note.** New `scripts/log-regression-bands-crypto.mjs` only, additive. No strategy
+code touched — `backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`,
+`scanner.js` all untouched, grep-confirmed against the staged diff before commit. Reused
+`momentum.mjs`'s `bootstrapCI` and `researchlib.mjs`'s `splitSealedSymbols`/`symbolToKrakenId`/
+`loadWatchlist` unmodified; `researchlab.mjs`'s `loadDailyCandles`/`saveExperiment` unmodified.
+Full per-asset breakdown (all 24 rows: slope, SE, R² both models, episodes, strategy/buy-hold
+return, outperformance) is in the saved `research-runs/*-log-regression-bands-crypto.json`
+provenance record, not reproduced row-by-row here. `npm.cmd test`: 505/505 green (no new
+production code path exercised by existing tests). `MULTIPLE_COMPARISONS_AUDIT.md` and
+`AGENT_PROTOCOL.md`'s formal-NHST counters updated in the same commit per that document's own
+binding rule.
