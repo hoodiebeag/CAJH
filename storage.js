@@ -11,26 +11,30 @@ import * as logger from './logger.js';
 // Where persistent files (config.json, positions.json) live. On Railway, attach a
 // volume and set DATA_DIR to its mount path (e.g. /data) so they survive redeploys.
 // Falls back to the app directory when DATA_DIR is unset (local dev/research only).
-const DATA_DIR = process.env.DATA_DIR || process.cwd();
-try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch { /* dir already exists */ }
-export const DATA_DIR_EXPLICIT = Boolean(process.env.DATA_DIR);
+// Resolved per call (not memoized) so that a process which changes process.env.DATA_DIR
+// after storage.js's first import (e.g. a test file's fixture setup) is observed correctly,
+// rather than storage.js silently keeping whatever value existed at import time. Production
+// never changes DATA_DIR at runtime, so this is a no-op for any live path.
+const dataDir = () => process.env.DATA_DIR || process.cwd();
+try { fs.mkdirSync(dataDir(), { recursive: true }); } catch { /* dir already exists */ }
+const isDataDirExplicit = () => Boolean(process.env.DATA_DIR);
 
 export function checkStoragePreflight() {
-  if (!DATA_DIR_EXPLICIT) {
+  if (!isDataDirExplicit()) {
     return { ok: false, reason: "DATA_DIR must be explicitly set for live trading" };
   }
   try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    const probe = path.join(DATA_DIR, `.cajh-preflight-${process.pid}-${Date.now()}.tmp`);
+    fs.mkdirSync(dataDir(), { recursive: true });
+    const probe = path.join(dataDir(), `.cajh-preflight-${process.pid}-${Date.now()}.tmp`);
     fs.writeFileSync(probe, "ok");
     fs.unlinkSync(probe);
   } catch (err) {
     return { ok: false, reason: `DATA_DIR is not writable: ${err.message}` };
   }
   const preflightReads = [
-    ["positions", readRecord(POSITIONS_FILE, "positions", validTrades)],
-    ["stats", readRecord(STATS_FILE, "stats", validStats)],
-    ["config", readRecord(CONFIG_FILE, "config", validConfig)]
+    ["positions", readRecord(positionsFile(), "positions", validTrades)],
+    ["stats", readRecord(statsFile(), "stats", validStats)],
+    ["config", readRecord(configFile(), "config", validConfig)]
   ];
   for (const [kind, result] of preflightReads) {
     setHealth(
@@ -44,7 +48,7 @@ export function checkStoragePreflight() {
   for (const kind of ["positions", "stats", "config"]) {
     if (health[kind]?.ok === false) return { ok: false, reason: `${kind} persistence is unsafe: ${health[kind].reason ?? health[kind].source}` };
   }
-  return { ok: true, dataDir: DATA_DIR };
+  return { ok: true, dataDir: dataDir() };
 }
 
 // ─── Curated watchlist ─────────────────────────────────────────────────────────
@@ -113,7 +117,7 @@ function parseWatchlist(raw) {
 // mounted volume) this file is wiped on redeploy — attach a volume or set the env
 // vars for durable defaults.
 
-const CONFIG_FILE = path.join(DATA_DIR, "config.json");
+const configFile = () => path.join(dataDir(), "config.json");
 
 // ─── Open-trade persistence ────────────────────────────────────────────────────
 // Open positions live in memory, so a restart would otherwise lose them (and stop
@@ -121,9 +125,9 @@ const CONFIG_FILE = path.join(DATA_DIR, "config.json");
 // boot. NOTE: on an ephemeral host (Railway without a mounted volume) this file is
 // wiped on every *redeploy* — attach a volume to make recovery durable across deploys.
 
-const POSITIONS_FILE = path.join(DATA_DIR, "positions.json");
-const LEVEL_COOLDOWNS_FILE = path.join(DATA_DIR, "level_cooldowns.json");
-const DECISION_JOURNAL_FILE = path.join(DATA_DIR, "decision-journal.jsonl");
+const positionsFile = () => path.join(dataDir(), "positions.json");
+const levelCooldownsFile = () => path.join(dataDir(), "level_cooldowns.json");
+const decisionJournalFile = () => path.join(dataDir(), "decision-journal.jsonl");
 const STORAGE_VERSION = 1;
 const storageHealth = new Map();
 
@@ -258,7 +262,7 @@ export function appendDecisionEvent(event) {
     ...event,
   };
   try {
-    const fd = fs.openSync(DECISION_JOURNAL_FILE, "a");
+    const fd = fs.openSync(decisionJournalFile(), "a");
     fs.writeFileSync(fd, JSON.stringify(record) + "\n");
     fs.fsyncSync(fd); fs.closeSync(fd);
     setHealth("decisionJournal", { ok: true, source: "append" });
@@ -272,12 +276,12 @@ export function appendDecisionEvent(event) {
 
 export function loadDecisionJournal({ limit = 5000 } = {}) {
   if (!Number.isInteger(limit) || limit < 1) throw new Error("journal limit must be a positive integer");
-  if (!fs.existsSync(DECISION_JOURNAL_FILE)) {
+  if (!fs.existsSync(decisionJournalFile())) {
     setHealth("decisionJournal", { ok: true, source: "missing" });
     return [];
   }
   try {
-    const entries = fs.readFileSync(DECISION_JOURNAL_FILE, "utf8").split("\n").filter(Boolean)
+    const entries = fs.readFileSync(decisionJournalFile(), "utf8").split("\n").filter(Boolean)
       .map((line) => JSON.parse(line)).filter((record) => record?.schema === "cajh-decision-event/v1");
     setHealth("decisionJournal", { ok: true, source: "primary" });
     return entries.slice(-limit);
@@ -289,12 +293,12 @@ export function loadDecisionJournal({ limit = 5000 } = {}) {
 
 /** Detailed position result. Callers that manage entries must reject ok: false. */
 export function loadTradesResult() {
-  return setHealth("positions", readRecord(POSITIONS_FILE, "positions", validTrades));
+  return setHealth("positions", readRecord(positionsFile(), "positions", validTrades));
 }
 
 export function saveTrades(trades) {
   try {
-    atomicWrite(POSITIONS_FILE, "positions", trades, validTrades);
+    atomicWrite(positionsFile(), "positions", trades, validTrades);
     setHealth("positions", { ok: true, source: "primary" });
     return true;
   } catch (err) {
@@ -310,12 +314,12 @@ export function loadTrades() {
 }
 
 export function loadLevelCooldownsResult() {
-  return setHealth("levelCooldowns", readRecord(LEVEL_COOLDOWNS_FILE, "levelCooldowns", validLevelCooldowns));
+  return setHealth("levelCooldowns", readRecord(levelCooldownsFile(), "levelCooldowns", validLevelCooldowns));
 }
 
 export function saveLevelCooldowns(records) {
   try {
-    atomicWrite(LEVEL_COOLDOWNS_FILE, "levelCooldowns", records, validLevelCooldowns);
+    atomicWrite(levelCooldownsFile(), "levelCooldowns", records, validLevelCooldowns);
     setHealth("levelCooldowns", { ok: true, source: "primary" });
     return true;
   } catch (err) {
@@ -325,11 +329,11 @@ export function saveLevelCooldowns(records) {
   }
 }
 
-const STATS_FILE = path.join(DATA_DIR, "stats.json");
+const statsFile = () => path.join(dataDir(), "stats.json");
 
 export function saveStats(stats) {
   try {
-    atomicWrite(STATS_FILE, "stats", stats, validStats);
+    atomicWrite(statsFile(), "stats", stats, validStats);
     setHealth("stats", { ok: true, source: "primary" });
     return true;
   } catch (err) {
@@ -340,12 +344,12 @@ export function saveStats(stats) {
 }
 
 export function loadStats() {
-  const result = setHealth("stats", readRecord(STATS_FILE, "stats", validStats));
+  const result = setHealth("stats", readRecord(statsFile(), "stats", validStats));
   return result.value;
 }
 
 function readConfigFile() {
-  const result = setHealth("config", readRecord(CONFIG_FILE, "config", validConfig));
+  const result = setHealth("config", readRecord(configFile(), "config", validConfig));
   return result.value ?? {};
 }
 
@@ -365,7 +369,7 @@ export function saveConfig(config) {
       watchlist:     config.watchlist     ?? [],
       lastScanTime:  config.lastScanTime  ?? null
     };
-    atomicWrite(CONFIG_FILE, "config", payload, validConfig);
+    atomicWrite(configFile(), "config", payload, validConfig);
     setHealth("config", { ok: true, source: "primary" });
     return true;
   } catch (err) {

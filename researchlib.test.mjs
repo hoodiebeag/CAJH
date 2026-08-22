@@ -42,8 +42,20 @@ test("loadWatchlist falls back to the on-disk candle store when config's watchli
 
 test("loadWatchlist returns [] rather than throwing when no candles/ directory exists", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-watchlist-empty-"));
+  fs.writeFileSync(path.join(dir, "config.json"), JSON.stringify({
+    storageVersion: 1, kind: "config", data: { scanChannelId: null, watchlist: [], lastScanTime: null },
+  }));
   const result = withEnv({ WATCHLIST: "", DATA_DIR: dir }, () => loadWatchlist());
   assert.deepEqual(result, []);
+});
+
+test("loadWatchlist reads config.json from the DATA_DIR set at call time, not whatever DATA_DIR storage.js saw at its own first import", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-watchlist-datadir-"));
+  fs.writeFileSync(path.join(dir, "config.json"), JSON.stringify({
+    storageVersion: 1, kind: "config", data: { scanChannelId: null, watchlist: ["ZZZMARKERSYMBOL"], lastScanTime: null },
+  }));
+  const result = withEnv({ WATCHLIST: "", DATA_DIR: dir }, () => loadWatchlist());
+  assert.deepEqual(result, ["ZZZMARKERSYMBOL"]);
 });
 
 test("stat computes mean, CI, win rate, and total for a simple sample", () => {
