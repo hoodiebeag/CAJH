@@ -2230,6 +2230,32 @@ families, unchanged configs, ~1.7% round-trip crypto taker cost):
 | `breakout` | +0.0091 | -0.864 | +0.2110 | **+0.1866** |
 | `anticipate` | -0.1331 | -0.884 | -0.0019 | -0.0438 |
 
+> **CORRECTION, 2026-08-22 — the "crypto gross" column above is mislabeled, and the
+> 23x figure derived from it is wrong.** The crypto values in that column
+> (`breakout` +0.0091, `anticipate` -0.1331) are COST-COMPONENT-ATTRIBUTION's
+> **zero-FEE floor** — slippage still charged — not its zero-cost gross. That table's
+> true gross (zero-cost) row is `breakout` **+0.0637** and `anticipate` **-0.0861**.
+> So the row above compares crypto-at-zero-fee against equities-at-zero-cost under a
+> single "gross" header, which is not like-for-like. Corrected comparison:
+>
+> | family | crypto gross (0 cost) | equities gross (0 cost) | ratio |
+> |---|---:|---:|---:|
+> | `breakout` | +0.0637 | +0.2110 | **3.3x** |
+> | `anticipate` | -0.0861 | -0.0019 | sign unchanged, magnitude 45x smaller |
+>
+> **The cross-market gross-edge gap is 3.3x, not 23x.** The finding survives the
+> correction — a 3.3x difference in gross edge for byte-identical entry logic, with
+> zero cost charged on either side, is still large and still cost-independent, and it
+> still says the market matters more than this project assumed. But the 23x figure had
+> already propagated into two queue items' framing (`EQUITIES-ALL-FAMILIES-BASELINE`,
+> `LOG-REGRESSION-BANDS-EQUITIES`) as the headline motivation, and an inflated
+> motivating number is exactly the kind of thing that quietly sets an expectation the
+> data cannot meet. Both items corrected in the same commit. Do not requote 23x.
+>
+> Nothing else in EQUITIES-BASELINE-PORT changes: the net figures (+0.1866R equities,
+> -0.864R crypto), the sign flip, and the ~12%-vs->100% cost-erosion contrast were all
+> computed from the correctly-labeled per-family tables above and are unaffected.
+
 **Does the cost difference change the sign of anything — stated explicitly, both ways.**
 **Yes, for `breakout`: the sign flips.** Crypto's realistic cost (-0.864R net) turns a thin
 positive gross edge (+0.0091R) deeply negative; IBKR's realistic cost, applied to the *same*
