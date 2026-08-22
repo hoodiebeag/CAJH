@@ -4,10 +4,10 @@
   "status": "IDLE",
   "target_file": null,
   "objective": null,
-  "notes": "PER-EPOCH-GROSS-EDGE done (one work_queue item, per firing cap). New scripts/per-epoch-gross-edge.mjs (read-only diagnostic) combined SIGNAL-DECAY-TEMPORAL-STABILITYs 5 epoch boundaries (epochSlices, imported not re-derived) with COST-COMPONENT-ATTRIBUTIONs zero-cost gross re-derivation (feeRate=0, slipPct=0) for breakout/anticipate, full local history per asset (no holdout spent), 28/29 watchlist assets. Pre-registered gate reused verbatim from ZERO-COST-FLOOR-ALL-FAMILIES (avgR>0.10, trades>=150, positiveAssets/assets>=0.5), evaluated per epoch per family (10 sub-gates: 5 epochs x 2 families). Result: 0/10 cleared it. breakout epoch 3 nearest miss (+0.093 avgR, clears the other two clauses on its own). anticipate shows the largest swing (epoch1 +0.083 to epoch5 -0.159) but never crosses the meaningful-positive line. Confirms SIGNAL-DECAY-TEMPORAL-STABILITYs non-stationarity finding does not hide a working regime that pooling buried -- closes that specific hypothesis, not just the pooled-average question already closed separately. Economic-gate study (point-estimate/trade-count, no p-value) -- joins economic-gate-only counter (34->35) and overall study total (49->50) in MULTIPLE_COMPARISONS_AUDIT.md/AGENT_PROTOCOL.md, updated same commit. No VERDICTS.md row (no gate cleared), matching COST-COMPONENT-ATTRIBUTION/EQUITIES-BREAKOUT-SIGNIFICANCE/ZERO-COST-FLOOR-ALL-FAMILIES precedent for diagnostic re-derivation studies. No production file touched (backtest.js/strategy.js/tournament.mjs/signal-decay-temporal-stability.mjs/monitor.js/bot.js/trader.js/scanner.js all untouched). npm.cmd test 499/499 green before and after. Recorded in ROADMAP.md (2026-08-22 section). Committed 1aa349a, pushed to origin/main. Untracked universe.txt (not created by this run) left untouched. STEP 4: no notification needed -- not BLOCKED, 8 pending items remain in the queue (well above empty), no ROADMAP.md/TOURNAMENT_ROADMAP.md verdict newly reached PASS. STEP 5: 8 pending + 0 started = 8, above the <3 restock trigger, skipped as one-line check.",
+  "notes": "SEARCH-SPACE-EXHAUSTION-ASSESSMENT done (one work_queue item, per firing cap). New SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md (repo root, additive synthesis document, no strategy code touched) cites the existing record end-to-end: 50 studies/0 PASS (MULTIPLE_COMPARISONS_AUDIT.md), the formal-NHST family (only B5-REVERSAL L=3 survives BH-FDR q=0.05, economically dead), the Template-A gate-swap program closed by direct human decision 2026-08-19 (blackboard.template_a_exhausted, mean effect -0.008R over 11 instances), PAIRS-COINTEGRATION-STATARB (0/105 pairs) and CROSS-SECTIONAL-NONPRICE-RANK (wrong-signed train IC) as the two structural alternatives already tried and killed, SIGNAL-DECAY-TEMPORAL-STABILITY + PER-EPOCH-GROSS-EDGE together (non-stationary but no epoch ever meaningfully positive gross), COST-COMPONENT-ATTRIBUTION + ZERO-COST-FLOOR-ALL-FAMILIES + COST-SENSITIVITY-SURFACE together (0/12 families clear a meaningful zero-cost gross edge, fee eliminated entirely still does not rescue either baseline family), EXECUTION-DELAY-DECAY-CURVE (maker-execution thesis dead on mechanism), and EQUITIES-BASELINE-PORT + EQUITIES-BREAKOUT-SIGNIFICANCE (the one positive point estimate in project history, CI includes zero, does not survive BH-FDR). Section 2 lists 8 genuinely-untested directions (the 7 pending work_queue items plus an unqueued new-entry-mechanism-class line with no candidate yet proposed), each labelled why untested and its cost. Section 3 pre-registers a falsifiable continuation criterion (equities out-of-sample replication; any future economic-gate PASS + SEALED_SYMBOLS replication per the existing binding rule; or a specific new entry-mechanism clearing the same meaningfully-positive gross bar) BEFORE any of those items run, so it cannot be adjusted post-hoc. Section 4 gives an explicit recommendation: do not reopen the closed crypto price-structure/derivatives-gate program; do pursue the 3 queued equities due-diligence items (cheap, reuses existing harnesses) plus the negative-conclusion robustness checks (WALKFORWARD-REVALIDATION-OF-BASELINE, TIME-VARYING-COST-REPRICING, CANDLE-CORPUS-GAP-AUDIT, TEST-ISOLATION-DATADIR-LEAK); do not start a new entry-mechanism line speculatively with no candidate. No VERDICTS.md row (decision-support synthesis, not a hypothesis test with a gate outcome -- no gate was run). No production file touched (backtest.js/strategy.js/tournament.mjs/monitor.js/bot.js/trader.js/scanner.js/commands.js all untouched). npm.cmd test 499/499 green before and after. Recorded as its own document, not a ROADMAP.md section, per this item's own done_when (a synthesis document in the repo root). Committed 9d83610, pushed to origin/main. Untracked universe.txt (not created by this run) left untouched. STEP 4: no notification needed -- not BLOCKED, 7 pending items remain in the queue (well above empty), no ROADMAP.md/TOURNAMENT_ROADMAP.md verdict newly reached PASS (this item deliberately ran no gate).",
   "block_detail": null,
-  "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-08-22T06:15:00.000Z"
+  "updated_by": "executor",
+  "updated_at": "2026-08-22T07:06:59.337Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -526,7 +526,7 @@
    },
    {
     "id": "SEARCH-SPACE-EXHAUSTION-ASSESSMENT",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: synthesis document (additive) - no strategy code",
     "depends_on": [],
@@ -666,14 +666,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-09T23:04:39.781Z",
-   "agent": "cajh-loop-check",
-   "action": "commit",
-   "detail": "DOCS-COMPACT-RESOLVED-ONEOFFS: independently re-verified both facts before removing LOGIN_FIX_SPEC.md and DEPENDENCY_AUDIT.md - bot.js already implements (and exceeds) the login-fix spec via attachDiscordLifecycleGuards/loginDiscord, and a fresh npm audit still shows 0 vulnerabilities. Left a passing mention in ARCHITECT_DIRECTIVE.md Appendix B untouched (out of scope). Separately investigated ORCHESTRATOR-CLUSTER-CLEANUP and found its mcp-server premise inaccurate (.vscode/mcp.json + deploy.sh both live-reference it) - annotated that item with a note rather than acting on it. npm.cmd test 259/259 green. Commit b8ec21d.",
-   "commit": "b8ec21d",
-   "tests": "259/259"
-  },
   {
    "ts": "2026-08-10T00:06:33.579Z",
    "agent": "cajh-loop-check",
@@ -1461,6 +1453,14 @@
    "detail": "PER-EPOCH-GROSS-EDGE: per-epoch zero-cost gross avgR for breakout/anticipate on SIGNAL-DECAYs 5 epoch boundaries; 0/10 epoch-family cells clear the pre-registered meaningful-gate (reused from ZERO-COST-FLOOR-ALL-FAMILIES). breakout epoch3 nearest miss (+0.093). No epoch hides a working regime buried by pooling. Economic-gate counter 34->35, study total 49->50 (MULTIPLE_COMPARISONS_AUDIT.md/AGENT_PROTOCOL.md). No VERDICTS.md row. No production file touched.",
    "commit": "1aa349a",
    "tests": "499/499 pass"
+  },
+  {
+   "ts": "2026-08-22T07:06:59.338Z",
+   "agent": "cajh-loop-check",
+   "action": "SEARCH-SPACE-EXHAUSTION-ASSESSMENT",
+   "detail": "Wrote SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md (repo root, additive synthesis, no strategy code touched): cites 50 studies/0 PASS, formal-NHST family (only B5-REVERSAL L=3 survives BH-FDR, economically dead), Template-A gate-swap program closed by human decision, PAIRS-COINTEGRATION-STATARB + CROSS-SECTIONAL-NONPRICE-RANK as tried-and-failed structural alternatives, SIGNAL-DECAY-TEMPORAL-STABILITY + PER-EPOCH-GROSS-EDGE (non-stationary but never meaningfully positive gross per epoch), COST-COMPONENT-ATTRIBUTION + ZERO-COST-FLOOR-ALL-FAMILIES + COST-SENSITIVITY-SURFACE (0/12 families clear meaningful zero-cost gross edge), EXECUTION-DELAY-DECAY-CURVE, and EQUITIES-BASELINE-PORT + EQUITIES-BREAKOUT-SIGNIFICANCE (one positive point estimate, does not survive BH-FDR). Lists 8 genuinely-untested directions with cost/reason each, pre-registers a falsifiable continuation criterion before any are run, and gives an explicit recommendation (pursue queued equities due-diligence + negative-conclusion robustness checks; do not reopen the closed crypto price-structure program; do not start a new entry-mechanism line speculatively). No VERDICTS.md row (no gate run, by design). No production file touched.",
+   "commit": "9d83610",
+   "tests": "499/499"
   }
  ],
  "automation": {
