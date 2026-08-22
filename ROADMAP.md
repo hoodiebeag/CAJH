@@ -3159,3 +3159,107 @@ new exported logic to any library module — it only calls existing, already-tes
 — all untouched; grep-confirmed before commit that none of the protected trading-safety
 identifiers appear anywhere in this diff. `npm.cmd test`: 505/505 green before and after (no
 production file changed, no new test file expected on this precedent).
+
+## 2026-08-22 — EQUITIES-COST-ASSUMPTION-SENSITIVITY: `breakout`'s net-positive equities result survives every plausible slippage citation, breaks only past 45bps; the unmodeled $1 commission floor binds well within a realistic retail position size
+
+`EQUITIES-BASELINE-PORT` (2026-08-19) reported `breakout` net +0.1866R over 61 real-IBKR-cost
+holdout trades — this project's first net-positive real-cost result. That writeup flagged two
+components of its own cost basis as *assumptions*, not measurements: slippage/spread at 5bps/side
+("a deliberately conservative estimate," not measured from IBKR's own NBBO tick history), and the
+IBKR Fixed plan's USD 1.00/order commission minimum, which was not modeled at all because this
+backtest works in R-multiples with no share count to check a floor against. This item maps both,
+without touching the original headline number, its cost basis, or its data.
+
+**Scope: `breakout` only.** `anticipate` is already net negative (-0.0438R,
+`EQUITIES-BREAKOUT-SIGNIFICANCE`, 2026-08-21) — its sign is not in question here.
+
+**Method — the linear-cost identity, re-verified a third time.** `backtest.js`'s net-R formula is
+affine in `slipPct` with a per-trade coefficient independent of `slipPct`, and cost never changes
+which trades fire — established by `COST-COMPONENT-ATTRIBUTION`, re-verified per-symbol by
+`HOLDING-PERIOD-COST-AMORTIZATION-MAP`, reused for a 2-D grid by `COST-SENSITIVITY-SURFACE`. Same
+identity here, one axis: commission is held FIXED at `EQUITIES-BASELINE-PORT`'s own per-symbol
+rate (`commissionPerShare / thatSymbol'sOwnAvgHoldoutClose`, unchanged), only slippage varies.
+`netAvgR(slip) = feeOnlyAvgR - slipUnitDragAvgR * slip`, both terms derived from two backtest
+passes. Every one of the 10 grid points below was ALSO re-run directly through `backtest.js`
+(not just evaluated analytically) — max discrepancy between analytic and direct across all 10
+points: `5.6e-16`, floating-point noise, not a modeling gap.
+
+**Replication check.** `feeOnlyAvgR` (commission only, slip=0) = +0.2097R; `netDefaultAvgR` at the
+baseline's own 5bps slip = +0.18662R over 61 trades — matches `EQUITIES-BASELINE-PORT`'s recorded
++0.1866R bit-for-bit off the same cache before any new statistic is computed.
+
+**Slippage sensitivity grid** (same citations as `EQUITIES-BASELINE-PORT`'s own header — "penny
+wide" / ≤15bps commonly cited for large-cap spreads, 2024 Nasdaq Research institutional S&P 500
+impact ~4.5bps):
+
+| slip assumption | net avgR (61 trades) |
+|---|---:|
+| 0bps (idealized) | +0.2097 |
+| 2bps | +0.2005 |
+| 4.5bps (institutional impact citation) | +0.1889 |
+| 5bps (baseline default) | +0.1866 |
+| 10bps | +0.1635 |
+| 15bps (upper "penny wide" citation) | +0.1405 |
+| 20bps | +0.1174 |
+| 30bps | +0.0712 |
+| 50bps (pessimistic) | **-0.0211** |
+| 100bps (stress point, not a real large-cap estimate) | -0.2520 |
+
+**Break-even slippage: 45.42bps** (exact, from the linear formula — not an interpolation guess;
+confirmed bracketed by the direct 30bps/50bps grid points, which flip sign either side of it).
+That is roughly **9x the baseline's own 5bps assumption**, and well past every plausible-range
+citation in either this item's or `EQUITIES-BASELINE-PORT`'s header (≤15bps "penny wide," ~4.5bps
+institutional). **Verdict on this axis: the positive sign is robust to the slippage assumption
+across every citation this project has sourced — it only breaks under an assumption that has no
+supporting citation in this project's own record.**
+
+**Commission-floor reasoning (stated arithmetic against real cited figures, not simulated — this
+backtest has no share count to simulate against).** IBKR Fixed plan: USD 0.005/share, USD 1.00
+minimum per order. The floor binds whenever an order's share count is below `1.00/0.005 = 200`
+shares, regardless of price. Converted to a dollar position size using each of the 30 universe
+symbols' own holdout `avgClose` (reusing `EQUITIES-BASELINE-PORT`'s own per-symbol price
+convention): floor-binds-below ranges from **~$6,692 (DOW, the cheapest-priced name)** to
+**~$192,127 (GS, the priciest)**, median **~$47,928** across the 30-symbol universe. **Verdict on
+this axis: for a plausible retail or small-account position size — a few thousand to a few tens
+of thousands of dollars per trade, well under the ~$48k median threshold and under even the
+cheapest name's ~$6.7k threshold for anything but a near-full-account single position — the $1.00
+floor would very plausibly bind on most trades in this universe.** When it binds, the true
+commission paid exceeds the per-share rate this backtest modeled, meaning the reported net R is
+optimistic in that direction for any account trading below roughly the low tens of thousands of
+dollars per position; only an account sizing positions large enough to clear the ~$48k median
+threshold on most names would consistently avoid it. This is a real, unquantified (in R terms)
+downward pressure on the headline net figure that a full position-sizing model would need to
+capture — out of scope for this backtest's R-multiple design, stated here rather than silently
+absorbed into the +0.1866R figure as if it were already accounted for.
+
+**Combined verdict.** The positive sign survives every slippage citation this project has
+sourced, with a wide margin (9x) before it breaks — that axis is genuinely robust, not fragile.
+The commission-floor axis is not disprovable from this backtest's own data (no position sizing to
+check it against) but is not favorable either: the floor binds well within a realistic account's
+per-trade position size for most of the universe, meaning the reported net avgR is more likely
+optimistic than pessimistic once real order-level costs are fully modeled. Net read: the sign is
+not an artifact of the slippage assumption, but it is not fully cost-complete either — a genuine
+position-sizing-aware re-run (out of this item's scope) is the natural follow-on before this
+result is treated as more than a promising point estimate, especially given
+`EQUITIES-BREAKOUT-SIGNIFICANCE`'s own finding that the 95% CI already includes zero.
+
+**Not touched, exactly per this item's done_when.** `EQUITIES-BASELINE-PORT`'s original cost
+basis, headline number, and cache untouched — this item only reads the existing
+`research-cache/equities-1d/` cache (no egress, no live IBKR Gateway call). No VERDICTS.md row
+added or altered. No config, universe, or entry/exit parameter changed.
+
+**Multiple-comparisons discipline.** This item computes no p-value against a pre-registered gate —
+every number above is a deterministic backtest re-price or an analytic derivation from two
+backtest passes, not a hypothesis test — so `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family
+is untouched, matching this item's own note and `COST-SENSITIVITY-SURFACE`'s identical precedent.
+
+**Engineering note.** `scripts/equities-cost-assumption-sensitivity.mjs` (new file, additive,
+read-only diagnostic — same "not part of the app" convention as `cost-sensitivity-surface.mjs`,
+which also has no companion test file; this item follows that precedent, touching zero production
+files and adding no new exported logic to any library module — it only calls existing, already-
+tested `backtest.js`/`researchlab.mjs` exports and reads the existing equities cache).
+`equities-baseline-port.mjs`, `data.js`, `researchlib.mjs`, `researchlab.mjs`, `strategy.js`,
+`tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js` — all untouched;
+grep-confirmed before commit, against the actual staged diff, that none of the protected
+trading-safety identifiers appear anywhere in it. `npm.cmd test`: 505/505 green before and after
+(no production file changed, no new test file expected on this precedent).
