@@ -242,8 +242,23 @@ section is the binding rule; that document is the reasoning behind it. Update bo
 fail):**
 
 - Formal NHST studies (report a p-value against a pre-registered significance gate):
-  **14** sub-tests across 11 studies as of 2026-08-22 (see audit §2 for the list and p-values).
-  Updated by LOG-REGRESSION-BANDS-CRYPTO (2026-08-22): added a log-price-vs-log-time
+  **15** sub-tests across 12 studies as of 2026-08-22 (see audit §2 for the list and p-values).
+  Updated by EQUITIES-MADIP-OUT-OF-SAMPLE (2026-08-22): added `ma_dip`'s sign-flip permutation
+  p-value, recomputed on the same fresh DJTA-20 universe EQUITIES-BREAKOUT-OUT-OF-SAMPLE already
+  fetched (zero ticker overlap with the original DJIA-30) as the 15th entry — p=0.0116,
+  **correct sign, and a LARGER point estimate than the original** (+0.2994R out-of-sample vs
+  +0.1526R in-sample, 300 trades); family-wide BH-FDR recomputed across all 15 (q=0.0435 for
+  this entry, rank 4 of 15) — **formally survives**, the first equities or crypto result in this
+  project to combine BH-FDR survival with a stronger, not weaker, out-of-sample replication and
+  a net-of-real-cost positive point estimate. Does not itself authorize any live-promotion
+  consideration — `SEALED_SYMBOLS`-style independent re-validation is still required per the
+  rule below and was not attempted by this item. **Material side effect: none flip.**
+  `CLASSIFIER-FUNDING-FEATURE`'s rank-3 threshold tightens from 0.01071 (n=14) to 0.01000
+  (n=15) as the new entry is inserted directly below it, but its own unchanged p=0.0099 still
+  clears (q=0.0495, barely) — `LOG-REGRESSION-BANDS-CRYPTO` (q=0.0030) and `B5-REVERSAL L=3`
+  (q=0.0075) are essentially unaffected. Full writeup in `ROADMAP.md`'s 2026-08-22
+  EQUITIES-MADIP-OUT-OF-SAMPLE section and `MULTIPLE_COMPARISONS_AUDIT.md` §2. Updated by
+  LOG-REGRESSION-BANDS-CRYPTO (2026-08-22): added a log-price-vs-log-time
   regression-band exposure signal's sign-flip permutation p-value (per-asset holdout
   outperformance vs buy-and-hold, n=24 assets) as the 14th entry — p=0.0002, **correct sign**,
   the smallest raw p-value recorded in this family; family-wide BH-FDR recomputed across all 14

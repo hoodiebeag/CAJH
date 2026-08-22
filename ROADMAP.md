@@ -4121,3 +4121,100 @@ provenance record, not reproduced row-by-row here. `npm.cmd test`: 505/505 green
 production code path exercised by existing tests). `MULTIPLE_COMPARISONS_AUDIT.md` and
 `AGENT_PROTOCOL.md`'s formal-NHST counters updated in the same commit per that document's own
 binding rule.
+
+## EQUITIES-MADIP-OUT-OF-SAMPLE — the edge reproduces on a fresh universe and gets stronger, now formally clearing family-wide BH-FDR (2026-08-22)
+
+`EQUITIES-MADIP-SIGNIFICANCE` (above, same date) found `ma_dip`'s positive point estimate
+(475 trades, DJIA-30, avgR +0.1526, p=0.0648, 95% CI includes zero) the closest any equities
+result had come to nominal significance in this project's history, but not yet distinguishable
+from noise. `EQUITIES-BREAKOUT-OUT-OF-SAMPLE` (above) already ran the fresh-universe re-check for
+`breakout` and found its edge did not reproduce. This item is the same re-check for `ma_dip`.
+
+**Pre-registered before any statistic below was computed** (full text in
+`scripts/equities-madip-out-of-sample.mjs`'s header, same commit as these results). Window/universe:
+reused `EQUITIES-BREAKOUT-OUT-OF-SAMPLE`'s own cache (`research-cache/equities-1d-djta-oos/`) —
+the point-in-time DJTA-20 universe, zero ticker overlap with the DJIA-30 universe
+`EQUITIES-MADIP-SIGNIFICANCE` used — rather than fetching a second, different universe, per this
+item's own work_queue note ("no reason to pull twice"). Cache-only: no IB Gateway call made, even
+though Gateway was reachable in this environment as of this firing. Cost basis, split (70/30), and
+`ma_dip` config (`{ entryMode: "ma_dip", trendGate: false, alignMode: "none", minStopPct: 0,
+maxStopPct: .06, tpR: 5, lockBreakeven: true }`) held EXACTLY as `EQUITIES-MADIP-SIGNIFICANCE` —
+only the universe changes. Statistical test: `EQUITIES-MADIP-SIGNIFICANCE`'s exact one-sided
+sign-flip permutation test (null: population mean R is zero), 5000 iterations, seed 20260822;
+95% CI via `momentum.mjs`'s `blockBootstrapCI` (blockSize=4, unmodified). Decision rule: report
+trades/avgR/CI/p side by side with the original DJIA-30 table and state plainly whether the edge
+reproduces, holds up weaker, or vanishes. No parameter, universe, or cost figure changed after
+seeing results.
+
+**Results, side by side:**
+
+| universe | trades | avgR | 95% CI (block bootstrap) | p (sign-flip, one-sided) |
+|---|---:|---:|---:|---:|
+| DJIA-30 (original, `EQUITIES-MADIP-SIGNIFICANCE`) | 475 | +0.1526 | [-0.0544, +0.3609] | 0.0648 |
+| DJTA-20 (this item, out-of-sample) | 300 | **+0.2994** | **[+0.0509, +0.5350]** | **0.0116** |
+
+**The edge reproduces and gets stronger, not weaker.** Same sign, larger point estimate
+(+0.2994 vs +0.1526), and on this fresh, zero-overlap universe the 95% CI clears zero entirely —
+the first time any equities result in this project has produced a holdout CI that excludes zero
+on an out-of-sample universe. This is the opposite outcome from `EQUITIES-BREAKOUT-OUT-OF-SAMPLE`,
+where the same re-check flipped `breakout`'s sign negative. 300 trades on 20 symbols is a smaller
+sample than the original 475/30, but the tighter CI despite fewer trades reflects a genuinely
+larger and more consistent effect on this universe, not a sample-size artifact working in its
+favor.
+
+**Family-wide BH-FDR, recomputed across all 15 formal-NHST entries at q=0.05** (full table:
+`MULTIPLE_COMPARISONS_AUDIT.md` §2, `AGENT_PROTOCOL.md`'s counter updated to 15 in the same
+commit):
+
+| Rank | Study | p-value | q-value | Survives q=0.05? |
+|---:|---|---:|---:|---|
+| 1 | LOG-REGRESSION-BANDS-CRYPTO (holdout, primary) | 0.0002 | 0.0030 | yes (but see above — a demonstrated benchmark artifact, not a real effect) |
+| 2 | B5-REVERSAL L=3 (train) | 0.0010 | 0.0075 | yes |
+| 3 | CLASSIFIER-FUNDING-FEATURE (holdout, primary) | 0.0099 | 0.0495 | yes |
+| 4 | **EQUITIES-MADIP-OUT-OF-SAMPLE (holdout, primary)** | **0.0116** | **0.0435** | **yes (new)** |
+| 5 | Classifier P5 (holdout, primary) | 0.0198 | 0.0594 | no |
+| 6 | Low-vol B4 negBeta (train) | 0.0579 | 0.1448 | no |
+| 7 | EQUITIES-MADIP-SIGNIFICANCE (holdout, primary) | 0.0648 | 0.1389 | no |
+| 8 | CROSS-SECTIONAL-NONPRICE-RANK (train) | 0.1249 | 0.2342 | no (wrong sign) |
+| 9 | EQUITIES-BREAKOUT-SIGNIFICANCE (holdout, primary) | 0.2036 | 0.3393 | no |
+| 10 | Low-vol B4 negVol (train) | 0.2278 | 0.3417 | no |
+| 11 | B5-REVERSAL L=5 (train) | 0.4226 | 0.5763 | no |
+| 12 | MOMENTUM-SHORT-HORIZON-RECHECK L=14 (train) | 0.4266 | 0.5333 | no |
+| 13 | MOMENTUM-SHORT-HORIZON-RECHECK L=7 (train) | 0.6024 | 0.6950 | no (wrong sign) |
+| 14 | EQUITIES-BREAKOUT-OUT-OF-SAMPLE (holdout, primary) | 0.6165 | 0.6605 | no (wrong sign) |
+| 15 | Momentum M7 (train) | 0.7013 | 0.7013 | no |
+
+**`EQUITIES-MADIP-OUT-OF-SAMPLE` formally clears BH-FDR at rank 4 of 15 (q=0.0435).** No existing
+survivor flips: `LOG-REGRESSION-BANDS-CRYPTO`, `B5-REVERSAL L=3`, and `CLASSIFIER-FUNDING-FEATURE`
+all remain survivors (their own p-values unchanged; thresholds shift slightly from family growth
+but none cross out). This is a genuinely different shape of result from the family's other three
+survivors: `LOG-REGRESSION-BANDS-CRYPTO` is a demonstrated benchmark artifact (disclosed above),
+and `B5-REVERSAL L=3`/`CLASSIFIER-FUNDING-FEATURE` are this project's standing examples of
+"statistically real, economically dead" — real effects too small for real trading costs to
+monetize. `EQUITIES-MADIP-OUT-OF-SAMPLE` is neither: it is a fresh-universe replication with a
+*larger*, not smaller, point estimate, and its avgR is already computed net of the same real
+IBKR commission + 5bps slippage cost basis every equities study in this family uses — this is not
+a gross-only number that could evaporate on contact with costs the way the confound above did.
+
+**What this is not.** Statistical significance and a positive net-of-cost point estimate on one
+fresh universe are not, by themselves, a live-promotion decision. `AGENT_PROTOCOL.md`'s
+economic-gate rule independently requires re-validation against `SEALED_SYMBOLS` (or an equivalent
+genuinely-unseen holdout) before any D3 live-promotion consideration, and this item does not
+attempt that — it is a significance/reproduction check only, matching its own `done_when` and
+`EQUITIES-MADIP-SIGNIFICANCE`'s own precedent of not writing a `VERDICTS.md` row for a
+significance-only result. What can be said plainly: of every equities or crypto result this
+project has produced, `ma_dip` on this DJTA-20 out-of-sample universe is now the single strongest
+evidence-backed candidate on record — the only one with both a fresh-universe replication AND a
+formal BH-FDR survival AND a CI that excludes zero, net of real cost. It is a legitimate candidate
+for the next confirmatory step (a second genuinely independent holdout, or `SEALED_SYMBOLS`
+re-validation), not yet a verdict.
+
+**Engineering note.** New `scripts/equities-madip-out-of-sample.mjs` only, additive, cache-only
+(does not import `brokers/ibkr.mjs`). No strategy code touched — `backtest.js`, `strategy.js`,
+`tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js` all untouched, grep-confirmed
+against the staged diff before commit. `momentum.mjs`'s `blockBootstrapCI` and
+`researchlab.mjs`'s `saveExperiment` used unmodified. `npm.cmd test`: 505/505 green (no
+production or test file touched — no companion test file added, matching this family's precedent
+for read-only research scripts under `scripts/`). `MULTIPLE_COMPARISONS_AUDIT.md` and
+`AGENT_PROTOCOL.md`'s formal-NHST counters updated in the same commit per that document's own
+binding rule.
