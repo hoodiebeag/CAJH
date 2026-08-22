@@ -2230,6 +2230,32 @@ families, unchanged configs, ~1.7% round-trip crypto taker cost):
 | `breakout` | +0.0091 | -0.864 | +0.2110 | **+0.1866** |
 | `anticipate` | -0.1331 | -0.884 | -0.0019 | -0.0438 |
 
+> **CORRECTION, 2026-08-22 — the "crypto gross" column above is mislabeled, and the
+> 23x figure derived from it is wrong.** The crypto values in that column
+> (`breakout` +0.0091, `anticipate` -0.1331) are COST-COMPONENT-ATTRIBUTION's
+> **zero-FEE floor** — slippage still charged — not its zero-cost gross. That table's
+> true gross (zero-cost) row is `breakout` **+0.0637** and `anticipate` **-0.0861**.
+> So the row above compares crypto-at-zero-fee against equities-at-zero-cost under a
+> single "gross" header, which is not like-for-like. Corrected comparison:
+>
+> | family | crypto gross (0 cost) | equities gross (0 cost) | ratio |
+> |---|---:|---:|---:|
+> | `breakout` | +0.0637 | +0.2110 | **3.3x** |
+> | `anticipate` | -0.0861 | -0.0019 | sign unchanged, magnitude 45x smaller |
+>
+> **The cross-market gross-edge gap is 3.3x, not 23x.** The finding survives the
+> correction — a 3.3x difference in gross edge for byte-identical entry logic, with
+> zero cost charged on either side, is still large and still cost-independent, and it
+> still says the market matters more than this project assumed. But the 23x figure had
+> already propagated into two queue items' framing (`EQUITIES-ALL-FAMILIES-BASELINE`,
+> `LOG-REGRESSION-BANDS-EQUITIES`) as the headline motivation, and an inflated
+> motivating number is exactly the kind of thing that quietly sets an expectation the
+> data cannot meet. Both items corrected in the same commit. Do not requote 23x.
+>
+> Nothing else in EQUITIES-BASELINE-PORT changes: the net figures (+0.1866R equities,
+> -0.864R crypto), the sign flip, and the ~12%-vs->100% cost-erosion contrast were all
+> computed from the correctly-labeled per-family tables above and are unaffected.
+
 **Does the cost difference change the sign of anything — stated explicitly, both ways.**
 **Yes, for `breakout`: the sign flips.** Crypto's realistic cost (-0.864R net) turns a thin
 positive gross edge (+0.0091R) deeply negative; IBKR's realistic cost, applied to the *same*
@@ -3269,7 +3295,14 @@ trading-safety identifiers appear anywhere in it. `npm.cmd test`: 505/505 green 
 `EQUITIES-BASELINE-PORT` (2026-08-19) ran only two of `tournament.mjs`'s twelve families
 (`breakout`, `anticipate`) on the equity universe and found a striking gross-edge gap versus
 crypto — `breakout` gross +0.2110R on equities vs +0.0091R on crypto for identical, unmodified
-logic. It left the obvious question unasked: how do the other ten families behave on the same
+logic.
+
+> **Note added 2026-08-22 (same correction as the block under EQUITIES-BASELINE-PORT's own
+> table):** the "+0.0091R on crypto" in the sentence above is `COST-COMPONENT-ATTRIBUTION`'s
+> zero-**fee** floor, with slippage still charged — not its zero-**cost** gross, which is
+> **+0.0637R**. The like-for-like gross gap is **3.3x**, not the 23x that figure implies. This
+> section repeated the error because the correction was still sitting in an unmerged branch
+> when it was written; nothing in this study's own results depends on it. It left the obvious question unasked: how do the other ten families behave on the same
 data? This item answers it. **This is a breadth measurement to find where to look, not a
 promotion of whichever family scores highest** — running twelve families and reporting only the
 best would itself be exactly the twelve-test multiple-comparisons violation
