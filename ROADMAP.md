@@ -3295,7 +3295,14 @@ trading-safety identifiers appear anywhere in it. `npm.cmd test`: 505/505 green 
 `EQUITIES-BASELINE-PORT` (2026-08-19) ran only two of `tournament.mjs`'s twelve families
 (`breakout`, `anticipate`) on the equity universe and found a striking gross-edge gap versus
 crypto — `breakout` gross +0.2110R on equities vs +0.0091R on crypto for identical, unmodified
-logic. It left the obvious question unasked: how do the other ten families behave on the same
+logic.
+
+> **Note added 2026-08-22 (same correction as the block under EQUITIES-BASELINE-PORT's own
+> table):** the "+0.0091R on crypto" in the sentence above is `COST-COMPONENT-ATTRIBUTION`'s
+> zero-**fee** floor, with slippage still charged — not its zero-**cost** gross, which is
+> **+0.0637R**. The like-for-like gross gap is **3.3x**, not the 23x that figure implies. This
+> section repeated the error because the correction was still sitting in an unmerged branch
+> when it was written; nothing in this study's own results depends on it. It left the obvious question unasked: how do the other ten families behave on the same
 data? This item answers it. **This is a breadth measurement to find where to look, not a
 promotion of whichever family scores highest** — running twelve families and reporting only the
 best would itself be exactly the twelve-test multiple-comparisons violation
