@@ -2972,3 +2972,190 @@ threshold (matching SIGNAL-DECAY-TEMPORAL-STABILITY's own precedent) — does no
 `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family and does not trigger a BH-FDR
 recomputation, per this item's own scoping note. No VERDICTS.md row (no gate exists to record).
 `npm.cmd test`: 500/500 green before, 505/505 green after.
+
+## 2026-08-22 — CANDLE-CORPUS-GAP-AUDIT: 26 of 29 watchlist assets have not collected a new candle since 2026-03-31 — every "full local history" claim made by any study run after that date is silently truncated for everything but BTC/ETH/SOL
+
+**Never done before.** `researchlab.mjs`'s `loadResearchCandlesWithQuality` has computed a
+`gaps` array (via `data.js`'s `resampleBars`) at every one of this project's ~27 prior study
+invocations, with `gapPolicy` defaulting to `"allow"` at every call site. `loadResearchCandles`
+(the function every study actually imports) discards `gaps` and returns only `.candles`
+(`researchlab.mjs:92-93`) — grep-confirmed before this item started that no prior study has ever
+read the discarded array. This item is the first to look at what it contains.
+
+**Method.** New read-only diagnostic `scripts/candle-corpus-gap-audit.mjs` (not part of the app).
+For every symbol in the full 29-asset watchlist (`loadWatchlist()`, SEALED_SYMBOLS included —
+see "SEALED_SYMBOLS" below) and each of the three live entry timeframes (1h/4h/1d,
+`researchlib.mjs`'s `TFS`), calls `loadResearchCandlesWithQuality(pair, minutes, { gapPolicy:
+"allow" })` and reports gap count, largest gap, total missing bar-time as a fraction of the
+covered window, and a train/holdout (70/30 chronological, this project's standard split)
+distribution of gap-time. Full per-row JSON persisted via `saveExperiment`.
+
+**SEALED_SYMBOLS.** Included in this audit's universe, unlike every train/holdout performance
+sweep. `researchlib.mjs`'s own docstring reserves the seal specifically for "any train/holdout
+cycle" measuring *edge* — counting missing bars touches no strategy result and reveals nothing
+about performance on sealed symbols, so it does not spend the holdout in the sense that doc
+warns against. Flagged explicitly here as a judgment call rather than decided silently.
+
+**Finding 0 (methodological, not a data defect): raw gaps are timeframe-invariant.**
+`resampleBars` computes its `gaps` array by walking the sorted **1-minute** bars from `loadBars`
+*before* binning into the requested `minutes` — so the gap list itself (from/to/seconds) is
+byte-identical whether `loadResearchCandlesWithQuality` is called with `minutes=60`, `240`, or
+`1440` on the same pair. What genuinely differs per timeframe is how much a given raw gap costs
+that timeframe's own candle series (a 45-minute hole is invisible to a 1d candle, but can eat
+most of a 1h one) — reported per-row as `largestGapCandles`/`missingCandleEquivalent`
+(gap-seconds divided by that timeframe's own span). No prior study documented this.
+
+**Finding 1 — THE HEADLINE, and the most consequential of everything this item found: a live
+collection stall since 2026-04-01, affecting 26 of 29 watchlist assets.** `gaps[]` only diffs
+between bars that both already exist — it is structurally blind to the trailing edge between the
+last stored candle and wall-clock "now." A stalled collector produces *no* internal gap at all;
+it just produces a corpus that quietly stops. This item added a separate `stalenessDays` metric
+(now − last stored candle) specifically to see that edge, and it is not subtle:
+
+| Cohort | Last candle | Staleness (as of this run, 2026-08-22) |
+|---|---|---|
+| BTC, ETH, SOL | 2026-07-29/30/31 | ~23 days |
+| The other 26 watchlist assets | **2026-03-31 23:xx UTC**, all within the same minute-scale window | **~143 days** |
+| EOS | 2025-06-30 | **~417 days** |
+
+Every candle file's OS `mtime` is clustered around 2026-07-30/31 — the on-disk files *were*
+rewritten recently (a real archive-ingest ran three and a half weeks before this audit) — but for
+26 of 29 assets, whatever archive that ingest pulled only contained data through 2026-03-31.
+Read plainly: on 2026-07-30 the local collector/archive-ingest process successfully advanced
+BTC, ETH, and SOL through the end of July, and simultaneously failed to advance every other asset
+past the end of March — a four-month gap between "when the file was last touched" and "what the
+file actually contains," identical to the minute across 26 unrelated assets. This is exactly the
+"collection stall" scenario this item's own task text hypothesized going in, now confirmed with
+dates. It is a local-machine/collector-process fact, not a backtest bug: `loadResearchCandles`
+always returns whatever is actually on disk and never fabricates a bar, so no prior result is
+*numerically wrong*. But every recent study's own description of its window — "full local
+history," "through the present," "current holdout" — is true only for BTC/ETH/SOL. For the other
+26 assets it silently means "through 2026-03-31." **This affects every study run in this project
+since approximately April 2026**, including two from today: WALKFORWARD-REVALIDATION-OF-BASELINE
+and PER-EPOCH-GROSS-EDGE both describe their input as "full local history" for the 23/24-asset
+active pool — for all but BTC/ETH/SOL within that pool, that phrase silently means "history
+ending 2026-03-31," not "as of today." Nothing in either write-up disclosed this, because neither
+item (nor any prior one) had this measurement available. Re-running either study is not this
+item's job (measurement only, per its own task wording) — recorded here so the human/next study
+that touches "freshness" of any recent verdict has the real number instead of an assumed one.
+
+**Finding 2 — EOS: not stale, effectively stopped.** EOS's last stored candle is 2025-06-30,
+~417 days behind "now" — worse than the other 26 by a factor of ~3, and on a completely different
+ingest run (`mtime` 2026-07-16, not the 2026-07-30/31 cluster the rest share). This corroborates,
+with a concrete number for the first time, the exclusion `WALKFORWARD-REVALIDATION-OF-BASELINE`
+(same day, this session) applied on `EOS`'s "pre-existing candle-history shortfall" — that call
+was correct, and was made on qualitative knowledge; this item supplies the first quantification.
+Separately consistent with `WATCHLIST-LIQUIDITY-REALISM-AUDIT`'s (2026-08-20) finding that EOS
+has no Kraken Futures perpetual listing at all — two independent signals pointing at EOS as
+functionally delisted/discontinued for this project's purposes, not merely thin.
+
+**Finding 3 — a second, distinct short-history cohort, corroborating a prior study's own
+independent discovery.** Eight symbols (ETC, XTZ, BCH, ALGO, ZEC, TRX, XLM, XMR) have candle
+history starting **2025-01-22** rather than 2023-01-01/the asset's listing date — roughly 14
+months of history versus ~3.25 years for the rest of the majors cohort. This is not a gap inside
+a tracked window; it is a later collection start (the watchlist grew, and the collector began
+tracking these assets partway through the project's life). Seven of these eight
+(ALGO/BCH/ETC/TRX/XLM/XMR/XTZ) exactly match the list `PAIRS-COINTEGRATION-STATARB` (2026-08-19)
+independently found and excluded via its own ">=500-day overlap floor" ("160-434 days" —
+matches this item's per-asset `candleCount`/window figures exactly). This item's contribution is
+confirming that finding from the gap-audit side and extending the same observation to ZEC, which
+`PAIRS-COINTEGRATION-STATARB`'s own list did not name (ZEC's total local history, 434 daily
+candles from 2025-01-22, is short by the same 500-day floor that study used — worth the human
+checking whether ZEC was mis-scoped there or genuinely cleared some other overlap-history path
+this item didn't re-derive).
+
+**Finding 4 — five short, simultaneous, nearly-watchlist-wide outages, real collector downtime
+rather than per-asset illiquidity.** Cross-referencing each asset's single largest raw gap
+(independent of the timeframe tables — see `scripts/candle-corpus-gap-audit.mjs`'s own note on
+timeframe-invariance) shows five dates where 10-19 unrelated assets all show a multi-hour gap
+starting within minutes of each other:
+
+| Date (UTC) | Assets affected | Duration |
+|---|---|---|
+| 2024-01-20 ~15:57-16:00 | 19 assets (nearly the then-full watchlist) | ~5.6-5.7h |
+| 2024-04-14 ~02:57-03:00 | 17 assets | ~6.8-6.9h |
+| 2025-01-25 ~14:32-14:37 | 10 assets (the 2025-01-22 cohort's first week) | ~3.5h |
+| 2025-08-28 ~08:07-08:08 | 5 assets | ~1.9h |
+| 2025-11-01 ~14:31-15:02 | 23 assets (nearly the full current watchlist) | ~6.7-7.3h |
+
+Timestamps landing within a couple of minutes of each other across a dozen-plus unrelated
+symbols, each time, is not explainable by per-asset trading inactivity — it is direct evidence of
+five real collector/infra outages. All five are brief relative to the ~3-year history (under 2
+days total across the whole project when summed) and affect assets roughly uniformly, so a
+pooled cross-family/cross-strategy comparison run over the same corpus is unlikely to be
+differentially biased by them — but any single per-trade backtest silently steps over each one as
+if no time passed.
+
+**Finding 5 — POL: three multi-day blackouts totaling ~20 days in 2024, the one clearly
+asset-specific severe case beyond the two above.** Independent of the five shared-outage dates,
+POL alone has three much larger gaps nobody else shares: 2024-01-30→02-07 (199.9h, 8.3 days),
+2024-05-01→05-09 (204.5h, 8.5 days), 2024-07-13→07-21 (188.0h, 7.8 days) — roughly 20 cumulative
+days missing out of POL's ~850-day covered window (~2.4%, well under the diffuse-noise
+percentages below but concentrated in three real blackouts rather than smeared across thousands
+of short gaps). Worth a footnote against `PAIRS-COINTEGRATION-STATARB`: FIL/POL was one of that
+study's three closest non-surviving pairs (raw p=0.0050, corrected q=0.1741, more than 3x past
+the 0.05 threshold) — the gap does not change that pair's outcome (it failed BH-FDR regardless of
+data quality), but the human should know POL's own history carries real discontinuities before
+treating any future POL-specific finding as clean.
+
+**Finding 6 — the aggregate "missing fraction" figures are dominated by diffuse short-gap noise,
+most plausibly live-collector uptime rather than exchange unavailability.** Project-wide (all 29
+assets, raw 1-minute level, independent of the per-timeframe tables): 5,279,891 total gap events,
+totaling ~11,818 gap-days. 87.1% of gap *events* are ≤5 minutes, accounting for 50.2% of total
+missing *time*; 12.8% of events are 5min-1h (45.1% of missing time); only 0.1% of events are over
+an hour, but they still account for 4.7% of missing time (this is where Findings 4 and 5 live).
+Per-asset, on the 1d timeframe, missing fraction of the covered window ranges from BTC's 0.60%
+up to ETC's 85.43% — every asset except BTC/ETH/SOL exceeds this item's stated 1% flag threshold
+(84 of 87 asset/timeframe rows flagged in total). The dominant short-gap pattern (a two-minute
+average gap length, repeated hundreds of thousands of times over three years) is not consistent
+with real per-minute trading inactivity for actively-traded majors and mid-caps on a top-tier
+exchange; it is far more consistent with the live collector's own uptime having gaps between the
+quarterly archive top-ups `data.js`'s own archive-ingest docstring describes (deploys, restarts,
+transient errors) that later get partially but not fully backfilled. This item did not
+instrument the collector itself to confirm the mechanism directly — that would be a different,
+non-measurement task — so this is stated as the most plausible explanation, not a proven one.
+
+**Explicit call, per this item's own done_when.** Yes — coverage gaps are bad enough to matter,
+in four concrete, separable ways, not one diffuse blob:
+1. **The April 2026 collection stall (Finding 1) is new, unknown to any prior study, and affects
+   every recent verdict's implicit "how current is this" claim for every asset but BTC/ETH/SOL** —
+   the most consequential finding here. Not previously worked around by anything.
+2. **EOS's near-total staleness (Finding 2)** was already worked around (excluded) by
+   `WALKFORWARD-REVALIDATION-OF-BASELINE` on qualitative grounds; this item is the first to give
+   it a number and independently corroborate the decision.
+3. **The 2025-01-22 short-history cohort (Finding 3)** was already worked around (excluded via a
+   500-day floor) by `PAIRS-COINTEGRATION-STATARB` for its own purposes; this item corroborates
+   that list from a different angle and flags that other studies pooling "the watchlist" without
+   an equivalent floor carry a much smaller effective N for these eight symbols than for the
+   majors, undisclosed until now.
+4. **POL's three 2024 blackouts (Finding 5)** are a real, asset-specific discontinuity worth a
+   standing footnote against any current or future POL-specific finding, most immediately
+   `PAIRS-COINTEGRATION-STATARB`'s FIL/POL near-miss (outcome unchanged, correction still fails).
+
+Finding 4 (the five shared brief outages) and Finding 6 (diffuse short-gap noise) are real and
+now measured, but neither rises to "materially affected a specific existing verdict" on the
+evidence gathered here — they are close to uniform across assets and families, which is the
+condition under which a *relative* comparison (this project's dominant methodology: which family
+beats which, which epoch beats which) is least distorted by an *absolute* data-completeness
+issue.
+
+**Not touched, exactly per this item's done_when.** No candle file modified. No interpolation.
+No watchlist change (WATCHLIST/`config.json` untouched — POL/EOS/the 2025-01-22 cohort remain in
+the live watchlist; any exclusion decision is the human's, same standing rule as
+`WATCHLIST-LIQUIDITY-REALISM-AUDIT`). No existing VERDICTS.md row altered.
+
+**Multiple-comparisons discipline.** This item produces no p-value evaluated against a
+pre-registered pass/fail gate — every number above is a count, a duration, or a fraction, not a
+significance test — so `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family is untouched, per
+this item's own note and matching `WATCHLIST-LIQUIDITY-REALISM-AUDIT`'s identical precedent.
+
+**Engineering note.** `scripts/candle-corpus-gap-audit.mjs` (new file, additive, read-only
+diagnostic — same "not part of the app" convention as
+`scripts/watchlist-liquidity-realism-audit.mjs`, which also has no companion test file; this item
+follows that precedent rather than adding one, since it touches zero production files and adds no
+new exported logic to any library module — it only calls existing, already-tested
+`researchlib.mjs`/`researchlab.mjs` exports). `data.js`, `researchlib.mjs`, `researchlab.mjs`,
+`backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js`
+— all untouched; grep-confirmed before commit that none of the protected trading-safety
+identifiers appear anywhere in this diff. `npm.cmd test`: 505/505 green before and after (no
+production file changed, no new test file expected on this precedent).
