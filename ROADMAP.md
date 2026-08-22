@@ -3863,3 +3863,97 @@ no p-value and clears no gate, so it does not join `MULTIPLE_COMPARISONS_AUDIT.m
 family. `npm.cmd test`: 505/505 green (this item added no new production code path exercised by
 existing tests, so no new tests were required or added, matching the convention of prior
 diagnostic-only scripts like `candle-corpus-gap-audit.mjs`).
+
+
+## MACRO-REGIME-PRIMARY-SIGNAL — the first genuinely exogenous primary signal tested, closes as a sample-size non-verdict (2026-08-22)
+
+Every alt-data source tested in this project before this item — funding rate, open interest,
+basis, long/short ratio, top-trader positioning, aggressor order flow, liquidations, realized
+volatility — is **endogenous**: a transform of the same market's own price or positioning.
+`EXOGENOUS-DATA-ACCESS-AUDIT` confirmed FRED's public macro series (dollar index, Treasury
+yields, Fed funds) are free, deep, and reachable without a key — genuinely exogenous data,
+unblocked by this study.
+
+**Method, pre-registered before any crypto return was touched.** New
+`scripts/macro-regime-primary-signal.mjs` (additive). Regime = majority vote (≥2 of 3) of three
+conventional, untuned macro signals: (1) DTWEXBGS (Broad Dollar Index — ICE's own DXY ticker
+isn't on FRED) below its own trailing 200-session MA = favourable; (2) `DGS10 - DGS2` (10y-2y
+spread) positive = favourable, the standard curve-inversion recession indicator; (3) FEDFUNDS
+trailing 3-month change ≤0 (holding/cutting) = favourable. None of these thresholds were
+searched or fit against this project's own data — they are the conventional definitions used
+across macro finance generally, chosen specifically so this would not be another instance of
+fitting a rule to the series it gets scored against. `DGS2` was not one of the sources
+`EXOGENOUS-DATA-ACCESS-AUDIT` probed; reconfirmed reachable here (1976-present) before use.
+
+**Causal alignment.** Every macro lookup uses the latest published value strictly before
+(trading day − lag): 1 day for the two daily FRED series, 20 days for FEDFUNDS (a monthly
+average only fully known after month-end — 20 days is a deliberately conservative buffer past
+FRED's actual few-day publication lag).
+
+**Universe — a coverage decision made before any result existed, not a performance one.** Of the
+24 active (non-`SEALED_SYMBOLS`) watchlist assets, this project's local candle store holds full
+2023-01-01→2026-03-31 coverage for only 12: ADA, APT, ATOM, BTC, DOGE, DOT, ETH, FIL, INJ, LTC,
+SOL, XRP. The other 12 active assets start 2025-01-22 or later — 14 months or less, and this
+item's own task text explicitly warned that macro regimes turn over only a handful of times a
+year, making a short window the wrong choice on its face, before looking at anything else. Equal
+weight across the 12, 70/30 chronological split, this project's real cost basis (FEE_RATE 0.008 +
+SLIPPAGE_PCT 0.0005/side, ~1.7% round trip) charged once per regime flip (buy-and-hold gets one
+entry-cost and one exit-cost charge for a fair comparison, not a free ride).
+
+**A design defect caught and fixed before drawing any conclusion, disclosed rather than quietly
+corrected.** The first run's raw (bandless) threshold comparisons produced a regime series with
+repeated single-day episodes —
+`[326,1,31,1,6,1,13,1,34,1,97,1,22,1,14,1,54,1,4,1,1,1,1,215]` in train alone — a classic
+whipsaw at a raw MA/threshold crossing, exactly the failure mode this project's own
+`momentum.mjs::btcRegimeMap` already carries a dead-band for. A dead-band (hysteresis, prior
+value carried forward inside the band) was added to all three signals — DXY ±1% around its MA
+(matching `btcRegimeMap`'s own existing default exactly, not a new fit), curve ±10bp around
+zero, Fed funds change ±5bp around zero — **before** any return or verdict was computed from the
+corrected series. This is recorded as a methodology fix using an established project convention,
+not a threshold search against this run's own outcome; the raw, uncorrected episode list above is
+shown so that claim is checkable rather than asserted.
+
+**Results (post-fix), reported plainly — both segments compared to buy-and-hold on the identical
+window:**
+
+| segment | days | regime episodes | strategy return | buy-and-hold return | hit rate |
+|---|---:|---:|---:|---:|---:|
+| train (2023-01-02 → 2025-04-09) | 829 | 2 (628 + 201 days) | +9.19% | **+186.11%** | 47.4% |
+| holdout (2025-04-10 → 2026-03-31) | 356 | 1 (the whole window) | -46.92% | -47.37% | 50.3% |
+
+**Read plainly, not softened.** Train: the signal was flat through most of the second, 201-day
+episode of a strong bull run and missed nearly all of it — +9.19% against a +186.11% buy-and-hold
+benchmark on the same assets over the same window. Holdout: the entire 356-day window was one
+uninterrupted "favourable" call, so the strategy was effectively long-only here and simply
+tracked the benchmark down through a broad drawdown (-46.92% vs -47.37%) — not a case of the
+signal being "under-sampled," but of it being wrong for the whole period it was asked to call.
+
+**Why this is recorded as a non-verdict, not a kill.** This item's own task text pre-registered
+the escape hatch: "if effective n is too small to support any CI, that is the finding." Effective
+n here is regime EPISODES, not days — 2 in train, exactly 1 in holdout. A single 356-day episode
+cannot support a bootstrap CI or any permutation test; reporting one anyway would manufacture
+false precision from what is, mechanically, a sample size of one. This is the sample-size trap
+the task warned about, encountered exactly as described: 3.25 years of local crypto candle
+coverage is nowhere near enough to accumulate the "few dozen independent regime episodes" a real
+inferential claim over a slow-moving macro regime would need. No p-value is reported, and this
+item does **not** join `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family (nothing to correct
+for).
+
+**What would actually resolve this, stated for whoever picks it up next.** Not a different
+regime definition — a longer window. FRED's own series comfortably support decades; the
+constraint is this project's own crypto candle history (2023-01-01 is this store's earliest
+common coverage for the 12-asset universe used here). Either wait for more history to accumulate
+naturally, or re-run this identical, unmodified methodology against a market with deeper local
+history — equities, via `EQUITIES-MADIP-OUT-OF-SAMPLE`'s IBKR path, would give a hard test with
+years more coverage and a chance at the episode count this crypto window couldn't reach. Re-fit
+nothing if that happens — same three signals, same bands, same lag structure, only the asset
+universe and its longer window change.
+
+**Engineering note.** New `scripts/macro-regime-primary-signal.mjs` only. No strategy code
+touched — `backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`,
+`scanner.js` all untouched, grep-confirmed against the staged diff before commit. Reused
+`momentum.mjs`'s `blockBootstrapCI` (imported, unused on this run's path since the episode floor
+was never reached — kept imported rather than stripped, since a future re-run against a longer
+window is expected to use it) and `researchlib.mjs`'s `splitSealedSymbols`/`symbolToKrakenId`
+unmodified. `npm.cmd test`: 505/505 green (no new production code path exercised by existing
+tests).
