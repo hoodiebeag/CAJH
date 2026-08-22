@@ -3263,3 +3263,109 @@ tested `backtest.js`/`researchlab.mjs` exports and reads the existing equities c
 grep-confirmed before commit, against the actual staged diff, that none of the protected
 trading-safety identifiers appear anywhere in it. `npm.cmd test`: 505/505 green before and after
 (no production file changed, no new test file expected on this precedent).
+
+## 2026-08-22 — EQUITIES-ALL-FAMILIES-BASELINE: 10 of 12 unmodified families produce a positive net avgR on the equity universe, but sample size ranges from 475 trades down to 0 — this is a breadth measurement, not a promotion
+
+`EQUITIES-BASELINE-PORT` (2026-08-19) ran only two of `tournament.mjs`'s twelve families
+(`breakout`, `anticipate`) on the equity universe and found a striking gross-edge gap versus
+crypto — `breakout` gross +0.2110R on equities vs +0.0091R on crypto for identical, unmodified
+logic. It left the obvious question unasked: how do the other ten families behave on the same
+data? This item answers it. **This is a breadth measurement to find where to look, not a
+promotion of whichever family scores highest** — running twelve families and reporting only the
+best would itself be exactly the twelve-test multiple-comparisons violation
+`MULTIPLE_COMPARISONS_AUDIT.md` was written to prevent. Every family's number is reported below,
+including the bad ones and the unusably small ones.
+
+**Method — identical pipeline, only the config array widened.** New file
+`scripts/equities-all-families-baseline.mjs`, a straight extension of
+`equities-baseline-port.mjs`: same 30-symbol Dow-30-as-of-2024-08-19 universe (point-in-time
+membership, INTC/DOW included, Walgreens excluded — see that file's header), same 0.70
+train/holdout split, same cost basis (IBKR Fixed commission $0.005/share via each symbol's own
+holdout avgClose, 5bps/side slippage), same `research-cache/equities-1d/` cache (all 30 symbols
+already cached from prior equities studies — no live IBKR Gateway call needed for this run, 30/30
+datasets used). The only change: all 12 of `tournament.mjs`'s `families` array configs
+(duplicated verbatim, same convention as `equities-baseline-port.mjs` and
+`zero-cost-floor-all-families.mjs`) run through `backtestMultiTF` instead of just 2.
+
+**Replication check.** `breakout`: 61 trades, net avgR +0.1866 — matches `EQUITIES-BASELINE-PORT`
+and `EQUITIES-COST-ASSUMPTION-SENSITIVITY` bit-for-bit off the same cache. `anticipate`: 303
+trades, net avgR -0.0438 — matches the figure already on record from
+`EQUITIES-BREAKOUT-SIGNIFICANCE`. Both known-good before any new number is trusted.
+
+**Result — pooled, holdout, all 12 families, same equity universe and cost basis:**
+
+| family | trades | gross avgR | net avgR |
+|---|---:|---:|---:|
+| `ma_dip` | 475 | +0.3430 | +0.1526 |
+| `rsi` | 32 | +0.2934 | +0.2507 |
+| `bos` | 60 | +0.2035 | +0.1728 |
+| `breakout` | 61 | +0.2110 | +0.1866 |
+| `h3` | 106 | +0.1645 | +0.1178 |
+| `range_sweep_reclaim` | 3 | +1.0000 | +0.9656 |
+| `support` | 407 | +0.1003 | +0.0014 |
+| `sweep_reclaim` | 92 | +0.0761 | +0.0328 |
+| `rev` | 179 | +0.0613 | -0.0501 |
+| `anticipate` | 303 | -0.0019 | -0.0438 |
+| `trend_pullback` | 38 | -0.1721 | -0.2026 |
+| `vol_contraction` | 0 | 0 (no trades) | 0 (no trades) |
+
+**Trade counts, stated prominently as this item's done_when requires.** Sample size on this
+30-symbol daily universe ranges from `ma_dip`'s 475 down to `vol_contraction`'s **zero** —
+`vol_contraction` fired not one holdout trade on this universe, a config that produced 98 trades
+on the full crypto watchlist in `ZERO-COST-FLOOR-ALL-FAMILIES`. `range_sweep_reclaim`'s +0.9656
+net avgR is the most extreme number in the table and the least trustworthy: 3 trades is not a
+sample, it is 3 coin flips, and this figure should not be read as edge. `rsi` (32 trades) and
+`bos` (60 trades) are directionally interesting but still thin next to `ma_dip` (475),
+`support` (407), or `anticipate` (303).
+
+**8 of 12 families net-positive; only 2 (`rev`, `anticipate`) flip sign from gross to net; 1
+(`trend_pullback`) is negative both gross and net; `vol_contraction` produced no trades to
+sign at all.** `ma_dip` stands out as the one family combining both a large sample (475 trades,
+the second-largest in the table) and a comfortably net-positive avgR (+0.1526) — the strongest
+candidate this table surfaces for a next look, precisely because breadth of sample is what
+`breakout`'s own 61-trade result and `EQUITIES-BREAKOUT-SIGNIFICANCE`'s CI-includes-zero finding
+have both been missing. That is a pointer for future work, not a verdict: `ma_dip` has not been
+significance-tested, cost-sensitivity-mapped, or out-of-sample-checked the way `breakout` has,
+and doing so is explicitly out of this item's scope.
+
+**The twelve-test multiple-comparisons implication, stated explicitly per this item's own
+done_when.** Twelve families were run and reported here; picking `ma_dip` (or any single row)
+as "the" result because it looks best would be a twelve-test look-elsewhere problem, the same
+shape `ZERO-COST-FLOOR-ALL-FAMILIES` and `PER-EPOCH-GROSS-EDGE` already quantified for the
+crypto side of this project — nothing here computes a p-value or a pre-registered pass/fail
+gate, so there is no formal correction to apply, but the absence of a gate does not make the
+breadth-of-attempts problem disappear. No family is promoted by this study. Any future study
+that picks `ma_dip` (or any other row here) up for deeper testing must count this item's twelve
+looks as part of that family's own multiple-comparisons accounting, not treat it as a fresh
+start.
+
+**Not touched, exactly per this item's done_when.** No family promoted, no VERDICTS.md row
+added, no config, universe, or cost parameter changed anywhere. `EQUITIES-BASELINE-PORT`'s
+original headline number and cache untouched — this item only reads the existing
+`research-cache/equities-1d/` cache (all 30 symbols already present; no egress, no live IBKR
+Gateway call).
+
+**Multiple-comparisons discipline.** This item computes no p-value against a pre-registered
+gate and defines no promotion threshold — a plain descriptive report of gross/net avgR and
+trade count per family, matching `EQUITIES-COST-ASSUMPTION-SENSITIVITY`'s and
+`COST-SENSITIVITY-SURFACE`'s precedent for not joining the formal-NHST or economic-gate
+counters in `AGENT_PROTOCOL.md`. It does, however, consume the same equity holdout window
+already examined by three prior equities studies for ten families that had never been run on
+it before — per `MULTIPLE_COMPARISONS_AUDIT.md` §1's own treatment of
+`SEASONALITY-DAYOFWEEK-SESSION` ("a descriptive breakdown still consumes the same holdout
+window"), this is recorded there as the 51st study, in the Descriptive/no-gate bucket, not
+the economic-gate bucket — `MULTIPLE_COMPARISONS_AUDIT.md` updated in this commit accordingly.
+`AGENT_PROTOCOL.md`'s binding family-size counters (NHST, economic-gate) are unchanged — this
+study triggers neither.
+
+**Engineering note.** `scripts/equities-all-families-baseline.mjs` (new file, additive,
+read-only diagnostic — same "not part of the app" convention as
+`equities-baseline-port.mjs`/`zero-cost-floor-all-families.mjs`, no companion test file on that
+same precedent, zero production files touched, no new exported logic added to any library
+module — it only calls existing, already-tested `backtest.js`/`researchlab.mjs` exports and
+reads the existing equities cache). `equities-baseline-port.mjs`, `tournament.mjs`, `data.js`,
+`researchlib.mjs`, `researchlab.mjs`, `strategy.js`, `monitor.js`, `bot.js`, `trader.js`,
+`scanner.js` — all untouched; grep-confirmed before commit, against the actual staged diff,
+that none of the protected trading-safety identifiers appear anywhere in it. `npm.cmd test`:
+505/505 green before and after (no production file changed, no new test file expected on this
+precedent).
