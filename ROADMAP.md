@@ -4218,3 +4218,71 @@ production or test file touched — no companion test file added, matching this 
 for read-only research scripts under `scripts/`). `MULTIPLE_COMPARISONS_AUDIT.md` and
 `AGENT_PROTOCOL.md`'s formal-NHST counters updated in the same commit per that document's own
 binding rule.
+
+## OPTIONS-SKEW-PRIMARY-SIGNAL — closes as a data-availability non-verdict before any strategy code was written (2026-08-22)
+
+This item's own `done_when` requires data availability and history depth confirmed **before**
+any strategy code is written, with an explicit escape hatch: an honest non-verdict if the window
+cannot support a train/holdout split. `EXOGENOUS-DATA-ACCESS-AUDIT` had already flagged its own
+Deribit probe as inconclusive rather than final — its `get_historical_volatility` endpoint
+returned only ~16 days and the audit said explicitly this "is not sufficient on its own and
+should not be treated as 'options data is available' without \[a\] follow-up." This item is that
+follow-up, run via new `scripts/options-skew-data-depth-check.mjs` (additive, read-only, no
+strategy logic, no backtest, no order path — same shape as the audit script it extends).
+
+**Correction to the prior audit, found and disclosed rather than left standing.** Deribit exposes
+a *different* public endpoint, `get_volatility_index_data`, that serves DVOL — Deribit's own
+aggregate implied-volatility index, their VIX-equivalent — with genuinely deep history. Walking
+backward past the API's 1000-row page cap (paging `end_timestamp` to the prior page's earliest
+row rather than trusting the first page's window) found real data back to **2021-03-24**, ~1976
+days to today — nowhere near the 16-day figure the prior audit recorded, because that probe hit a
+different, more limited endpoint. This is corrected here rather than quietly carried forward.
+
+**Why that correction does not resolve this item anyway.** DVOL is an aggregate implied-volatility
+*level* — a single number per day, analogous to VIX. This item's pre-registered task asks for
+**25-delta put/call skew** and the **IV term structure (front vs. back month)** specifically,
+because the mechanism under test is about the shape of the vol surface (capitulation vs. euphoria
+priced asymmetrically into puts vs. calls), not the overall level. Substituting DVOL for skew now,
+after confirming DVOL has history and skew does not, would be exactly the after-the-fact
+hypothesis change this item's own note warns against ("pre-register which direction you are
+testing before looking, and test ONE formulation — testing both and reporting the better one is
+the look-elsewhere error the audit was written to prevent"). Swapping the *construct*, not just
+the direction, after seeing what data exists is the same error in a different disguise, so it is
+not taken here.
+
+**Skew/term-structure history was checked directly, not assumed absent.** A real call against
+`get_book_summary_by_currency` (currency=BTC, kind=option) confirmed the closest candidate
+endpoint returns a **live snapshot only** — 1,038 currently-listed contracts with current
+mark/bid/ask IV, and no start/end timestamp parameter on this or any other public Deribit option
+endpoint. There is no way to ask this API "what was the 25-delta skew on 2024-03-01"; that
+history exists only if a market participant recorded chain snapshots forward from some past date
+themselves, or holds a paid historical-options vendor (Amberdata/Genesis Volatility/Laevitas-class
+providers) — this project has neither. IBKR was checked too: `brokers/ibkr.mjs` today has zero
+options-related code (no `secType=OPT`, no chain request, no implied-vol handling anywhere in the
+module) — confirmed by reading the file, not assumed. Even with the Gateway reachable, building
+option-chain support from scratch — contract selection by delta, per-expiry historical bars, and
+splicing many expiring contracts into one continuous skew/term-structure series — is substantial
+new engineering, not a data-availability check, and is far outside this item's 30-60 min scope.
+
+**Why this is a non-verdict, not a kill.** No strategy return was ever computed, no direction was
+pre-registered against real data, and no train/holdout split was attempted — per this item's own
+`done_when`, that is the correct order of operations, not a shortcut skipped. This does **not**
+join `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family (no p-value was computed, nothing to
+correct for) and is deliberately not a `VERDICTS.md` row, matching `MACRO-REGIME-PRIMARY-SIGNAL`'s
+precedent for a data/sample-size non-verdict.
+
+**What would actually resolve this, stated for whoever picks it up next.** Not a different
+Deribit endpoint — there isn't one. Either (a) start recording live Deribit option-chain snapshots
+now and wait for enough history to accumulate before this can be tested at all (months, per this
+item's own original scoping note), or (b) confirm and budget for a paid historical-options vendor
+with real per-strike archive depth, which is a cost/access decision this run does not make
+unilaterally. `WHALE-WALLET-ACCUMULATION-PRIMARY` (next in the queue behind this one) faces a
+structurally similar decision per `EXOGENOUS-DATA-ACCESS-AUDIT`'s own on-chain findings and should
+be checked with the same discipline before any strategy code is written there either.
+
+**Engineering note.** New `scripts/options-skew-data-depth-check.mjs` only, additive, read-only.
+No strategy code touched — `backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`,
+`trader.js`, `scanner.js` all untouched, grep-confirmed against the staged diff before commit.
+`researchlab.mjs`'s `saveExperiment` used unmodified. `npm.cmd test`: 505/505 green (no production
+or test file touched — no companion test file added, matching this family's precedent for
+read-only research scripts under `scripts/`).
