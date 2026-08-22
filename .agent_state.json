@@ -4,10 +4,10 @@
   "status": "IDLE",
   "target_file": null,
   "objective": null,
-  "notes": "OPTIONS-SKEW-PRIMARY-SIGNAL done. New scripts/options-skew-data-depth-check.mjs (additive, read-only, no strategy code, no order path) - real-fetch follow-up to EXOGENOUS-DATA-ACCESS-AUDITs own flagged-as-inconclusive Deribit probe (16-day cap on get_historical_volatility). Found Deribit get_volatility_index_data (DVOL) actually has ~5.4 years of daily history (earliest 2021-03-24, walked backward past the APIs 1000-row page cap to confirm the true start, not just one pages earliest row) - a correction to the prior audits 16-day finding, which had hit a different, more limited endpoint. But DVOL is an aggregate implied-vol LEVEL index (Deribits own VIX-equivalent), not the 25-delta put/call SKEW or front-vs-back-month TERM STRUCTURE this items pre-registered task specifically requires - substituting DVOL for skew now, after seeing DVOL has history and skew doesnt, would be the same after-the-fact hypothesis-swap the tasks own note warns against (test ONE formulation, dont test multiple and report the better one). Checked directly rather than assumed: get_book_summary_by_currency (the closest candidate for historical option-chain data) returns a live snapshot only, 1038 currently-listed contracts, no start/end timestamp parameter on this or any other public Deribit option endpoint - there is no way to query historical skew through this API. brokers/ibkr.mjs read directly: zero options-related code today (no secType=OPT, no chain request, no implied-vol handling) - building that from scratch (contract selection by delta, per-expiry historical bars, splicing many expiring contracts into one continuous series) would be substantial new engineering, not a data-availability check, and is out of this items 30-60 min scope. Conclusion: honest non-verdict per this items own done_when escape hatch (no strategy code written, no p-value computed, no VERDICTS.md row) - matches MACRO-REGIME-PRIMARY-SIGNALs precedent for a data/sample-size non-verdict. Does not join MULTIPLE_COMPARISONS_AUDIT.mds formal-NHST family (nothing computed, nothing to correct for). ROADMAP.md full writeup (the DVOL correction disclosed plainly, the skew/term-structure gap checked with real fetches not assumed, IBKR options support checked by reading brokers/ibkr.mjs directly, and what would actually resolve this stated for whoever picks it up next: start recording live Deribit chain snapshots now and wait months, or budget for a paid historical-options vendor - a cost/access decision this run does not make unilaterally). backtest.js/strategy.js/tournament.mjs/monitor.js/bot.js/trader.js/scanner.js untouched, grep-confirmed against staged diff. npm.cmd test: 505/505 green. Committed and pushed a14aa4a. WHALE-WALLET-ACCUMULATION-PRIMARY (next in queue, same EXOGENOUS-DATA-ACCESS-AUDIT dependency) flagged in the writeup as facing a structurally similar on-chain data-depth question and should get the same real-fetch-before-strategy-code discipline when a future firing picks it up - not decided or pre-empted here, left for that firing. Untracked universe.txt (pre-existing, not created by this run) left untouched.",
+  "notes": "WHALE-WALLET-ACCUMULATION-PRIMARY done. Closed as a data-availability non-verdict per its own pre-registered done_when escape hatch (\"if unavailable, record an honest data non-verdict citing the audit and stop\") - EXOGENOUS-DATA-ACCESS-AUDIT already answered this items access question directly and was not flagged inconclusive the way its Deribit options probe was, so no new script/follow-up was needed this firing, unlike OPTIONS-SKEW-PRIMARY-SIGNAL. Re-verified rather than trusted from memory: GLASSNODE_API_KEY still unset (checked process.env fresh this run), no .env reference to it, no on-chain/whale research-cache directory exists - unchanged since TEST4-ONCHAIN-FLOW-GATE 2026-08-14. blockchain.com n-unique-addresses is free with real depth (daily since 2009) but is an address-COUNT series, not per-wallet accumulate/distribute behavior - substituting it for the pre-registered wallet-identity construct would repeat the after-the-fact hypothesis-swap OPTIONS-SKEW-PRIMARY-SIGNAL explicitly declined for the same reason. No wallet cohort selected, no holding-period threshold fit, no train/holdout split attempted, no strategy return computed - correct order of operations per this items own done_when, not a shortcut skipped. Does not join MULTIPLE_COMPARISONS_AUDIT.mds formal-NHST family (nothing computed, nothing to correct for); deliberately not a VERDICTS.md row, matching MACRO-REGIME-PRIMARY-SIGNAL and OPTIONS-SKEW-PRIMARY-SIGNALs precedent. ROADMAP.md full writeup added (what was checked, why the coarser proxy was not substituted, what would actually resolve this: a paid on-chain vendor, or staging the address-count proxy as its own distinctly-named hypothesis rather than silently swapping it in here). No new script added - closes entirely on EXOGENOUS-DATA-ACCESS-AUDITs existing findings. backtest.js/strategy.js/tournament.mjs/monitor.js/bot.js/trader.js/scanner.js untouched, grep-confirmed against staged diff (only ROADMAP.md changed). npm.cmd test: 505/505 green both before and after the edit. Committed and pushed 8743e79. Queue restock check: 4 pending+started items remain (SPECTRAL-CYCLE-DETECTION-CRYPTO, LOG-REGRESSION-BANDS-EQUITIES, SPECTRAL-CYCLE-DETECTION-EQUITIES, plus this one now done) - at or above the 3-item floor, so no restock needed this firing (one-line check-and-skip). No BLOCKED state, no empty queue, no new PASS verdict - no notification triggers fired this firing. Untracked universe.txt (pre-existing, not created by this run) left untouched.",
   "block_detail": null,
   "updated_by": "executor",
-  "updated_at": "2026-08-22T21:10:00.000Z"
+  "updated_at": "2026-08-22T22:03:33.000Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -677,7 +677,7 @@
    },
    {
     "id": "WHALE-WALLET-ACCUMULATION-PRIMARY",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: on-chain large-wallet behaviour study (additive) - primary signal",
     "depends_on": [
@@ -791,14 +791,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-13T19:45:00.000Z",
-   "agent": "cajh-loop-check",
-   "action": "commit",
-   "detail": "PHASE2-MAX-SURVIVABLE-COST done. scripts/phase2-triage.mjs re-derived each of the 4 cost-killed signals' post-cost result using each study's own real cost mechanism (classifier.mjs's provably-affine economicLiftNetOfCost, cross-checked to 2.8e-17 drift; momentum.mjs's turnover-scaled cost model with slopes derived from real reported points and cross-validated against the reported turnover range; portfolio.mjs's simulatePortfolio re-run directly, sanity-checked to reproduce T4-COVERAGE-FIX's exact figures first). Result: Classifier P5 and CLASSIFIER-FUNDING-FEATURE never cross positive at any of PHASE1's 7 cost scenarios, even futures maker (~6x cheaper than spot taker) - structural failure. B5-REVERSAL's top-3/top-5 (train leg) cross positive from spot maker onward - one real PHASE3 candidate. T4-PORTFOLIO-MOMENTUM never clears its own 3-clause gate but gets meaningfully closer as cost falls (Sharpe 0.244->0.493) - flagged as a judgment call, not resolved. Unplanned finding: T4-COVERAGE-FIX's recorded 2026-08-09 verdict used the stale 0.9% portfolio.mjs costRate default, never updated when FEE-SCHEDULE-REBASE corrected the real rate a day earlier - re-run at the real 1.7% cost, its one claimed-passing clause (drawdown) no longer actually clears (-35.2% vs -35% gate). Bottom-line FAIL unchanged; flagged for a follow-up to correct the recorded numbers, not fixed in this item's scope. Full writeup in ROADMAP.md. npm.cmd test 299/299 green (diagnostic script only, no new source). Unblocks PHASE3-RERUN-REAL-SIGNALS-NEW-COSTS next, scoped to B5-REVERSAL top-3/top-5.",
-   "commit": "040e5f6",
-   "tests": "299/299 pass"
-  },
   {
    "ts": "2026-08-13T20:00:00.000Z",
    "agent": "cajh-loop-check",
@@ -1585,6 +1577,14 @@
    "action": "research-non-verdict",
    "detail": "OPTIONS-SKEW-PRIMARY-SIGNAL closed as data-availability non-verdict: DVOL has ~5.4yr history (correcting prior 16-day audit finding) but is the wrong construct (level, not skew/term-structure); no Deribit endpoint exposes historical per-strike data; brokers/ibkr.mjs has zero options code. No strategy code written. ROADMAP.md updated.",
    "commit": "a14aa4a",
+   "tests": "505/505 green"
+  },
+  {
+   "ts": "2026-08-22T22:03:33.000Z",
+   "agent": "executor",
+   "action": "research-closed-non-verdict",
+   "detail": "WHALE-WALLET-ACCUMULATION-PRIMARY closed as data-availability non-verdict citing EXOGENOUS-DATA-ACCESS-AUDIT (Glassnode key unset, blockchain.com n-unique-addresses is a coarser address-count proxy not per-wallet behavior). No new script, no strategy code touched. ROADMAP.md section added, work_queue item marked done.",
+   "commit": "8743e79",
    "tests": "505/505 green"
   }
  ],
