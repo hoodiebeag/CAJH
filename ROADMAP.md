@@ -2560,3 +2560,78 @@ already handled correctly, all pre-existing tests unchanged and passing) and
 `derivatives.test.mjs` (one new test for the fixed shape). `backtest.js`, `strategy.js`,
 `tournament.mjs`, `cost-model.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js` — all
 untouched. Suite green before commit (see commit for exact count).
+
+## 2026-08-21 — EQUITIES-BREAKOUT-SIGNIFICANCE: the CI includes zero — the positive point estimate does not survive its own significance test
+
+EQUITIES-BASELINE-PORT (2026-08-19, above) reported `breakout` net +0.1866R over 61 holdout
+trades — the first net-positive real-cost result in this project's history — and stated plainly
+that no permutation test or significance check had been run. This item runs that check, and
+only that check: same cached candles (`research-cache/equities-1d/`, no live Gateway needed, no
+egress), same unmodified `breakout`/`anticipate` `tournament.mjs` configs, same cost model. No
+re-tuning, no symbol drops, no window extension.
+
+**Pre-registered before computing anything** (full text in
+`scripts/equities-breakout-significance.mjs`'s header, same commit as the results below): a
+one-sided sign-flip permutation test (null: each trade's R sign is an independent fair coin
+flip, i.e. population mean R is zero) on the pooled per-trade net-R series, statistic =
+mean(R), `p = (extreme + 1) / (iterations + 1)` — this project's own `permutationP` add-one
+convention, `momentum.mjs`, unmodified. 95% CI via `momentum.mjs`'s own `blockBootstrapCI`
+(blockSize=4, unmodified). Decision rule, fixed in advance per `AGENT_PROTOCOL.md`'s binding
+multiple-comparisons discipline: the raw p-value is **not** evaluated against alpha=0.05 in
+isolation — it joins `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family (10 entries as of
+2026-08-19) as an 11th entry, BH-FDR is recomputed across all 11 at q=0.05, and "significant" is
+only true if `breakout` clears the recomputed threshold at its rank. `anticipate` (net -0.0438R,
+303 trades, already known dead — see HOLDING-PERIOD-COST-AMORTIZATION-MAP) gets the identical
+statistic computed alongside as a negative control, a methodology sanity check only — its
+p-value gates no decision and does **not** join the formal-NHST family, since no candidate
+hypothesis is under evaluation for it.
+
+**Replication check, before trusting anything new:** the script reproduces
+EQUITIES-BASELINE-PORT's exact trade counts and avgR (`breakout`: 61 trades, avgR +0.186624;
+`anticipate`: 303 trades, avgR -0.043770) bit-for-bit off the same cached candles before any new
+statistic is computed — confirms the pooled per-trade R series feeding the new test is the same
+population the baseline reported, not a re-derivation error.
+
+**Results:**
+
+| family | trades | avgR | 95% CI (block bootstrap) | p (sign-flip, one-sided) |
+|---|---:|---:|---:|---:|
+| `breakout` (primary) | 61 | +0.1866 | **[-0.2700, +0.6192]** | 0.2036 |
+| `anticipate` (negative control) | 303 | -0.0438 | [-0.2442, +0.1360] | 0.6701 |
+
+**The honest outcome is the one this item's own note anticipated: "positive point estimate, CI
+includes zero."** `breakout`'s 95% CI spans from clearly negative to strongly positive — 61
+trades is not enough to distinguish this result from noise, well before any multiple-comparisons
+correction is applied. `anticipate`'s negative control behaves exactly as expected (large
+p-value, CI straddling zero around an already-known-negative point estimate), which is at least
+some evidence the test itself isn't miscalibrated.
+
+**Family-wide BH-FDR, recomputed across all 11 formal-NHST entries at q=0.05** (full table:
+`MULTIPLE_COMPARISONS_AUDIT.md` §2, `AGENT_PROTOCOL.md`'s counter updated to 11 in the same
+commit): `breakout` ranks 6th of 11 by raw p-value (0.2036), q=0.358 — nowhere near surviving.
+**A materially important side effect of growing the family from 10 to 11, stated because it
+would be dishonest not to:** `CLASSIFIER-FUNDING-FEATURE`'s own p-value (0.0099) does not move,
+but its BH-FDR threshold at rank 2 tightens from `2/10×0.05=0.0100` (survived, q=0.0495) to
+`2/11×0.05=0.00909` (does **not** survive, q=0.0545) purely because the family grew by one
+unrelated test. Nothing about `CLASSIFIER-FUNDING-FEATURE`'s own result changed — this is the
+look-elsewhere effect the audit warned about in section 2, now observed in practice for the
+first time in this project. `B5-REVERSAL (L=3)` remains the sole survivor at q=0.05 (q=0.0110,
+essentially unchanged).
+
+**Decision, per the pre-registered rule: `breakout` does NOT survive significance.** No
+VERDICTS.md row — per this item's own `done_when`, a row is only added if a pre-registered gate
+was actually cleared, and it wasn't. EQUITIES-BASELINE-PORT's +0.1866R remains on record exactly
+as it was reported: a real, real-cost point estimate on this window, now additionally known to
+be statistically indistinguishable from zero at 61 trades. This does not retroactively make the
+point estimate wrong or the baseline port invalid — it means the sample is too thin to call it
+an edge yet, which is precisely what a significance test is for. `EQUITIES-BREAKOUT-OUT-OF-SAMPLE`
+(queued, depends on this item) is the next legitimate way to get more evidence, not re-slicing
+this same 61-trade window.
+
+**Engineering note.** New: `scripts/equities-breakout-significance.mjs` (read-only, cache-only —
+does not import `brokers/ibkr.mjs`, cannot make a live Gateway call even accidentally).
+`momentum.mjs`'s `blockBootstrapCI`/`bhFdr` used unmodified, not edited. `MULTIPLE_COMPARISONS_AUDIT.md`
+and `AGENT_PROTOCOL.md` updated in the same commit per the binding rule (counters, table, both
+narrative sections). `backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`,
+`trader.js`, `scanner.js` — all untouched. Suite green before commit (see commit for exact
+count).

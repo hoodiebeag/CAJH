@@ -242,14 +242,20 @@ section is the binding rule; that document is the reasoning behind it. Update bo
 fail):**
 
 - Formal NHST studies (report a p-value against a pre-registered significance gate):
-  **10** sub-tests across 7 studies as of 2026-08-19 (see audit §2 for the list and p-values).
+  **11** sub-tests across 8 studies as of 2026-08-21 (see audit §2 for the list and p-values).
   Unchanged by PAIRS-COINTEGRATION-STATARB (2026-08-19): that study ran its own internal
   105-test Engle-Granger screen, already BH-FDR-corrected within the study (0/105 survived
   q=0.05) — it doesn't add a raw uncorrected p-value to this cross-study table the way
   Classifier P5's did. Updated by CROSS-SECTIONAL-NONPRICE-RANK (2026-08-19): added its own
   train-IC permutation p-value (p=0.1249, wrong sign vs pre-registered expectation) as the
-  10th entry; family-wide BH-FDR recomputed across all 10 (q=0.2498 for this entry) — does
-  not survive, same two survivors as before (B5-REVERSAL L=3, CLASSIFIER-FUNDING-FEATURE).
+  10th entry; family-wide BH-FDR recomputed across all 10 (q=0.2498 for this entry) — did
+  not survive. Updated by EQUITIES-BREAKOUT-SIGNIFICANCE (2026-08-21): added `breakout`'s
+  sign-flip permutation p-value (p=0.2036, correct sign, CI includes zero) as the 11th
+  entry; family-wide BH-FDR recomputed across all 11 (q=0.358 for this entry) — does not
+  survive. **Material side effect: CLASSIFIER-FUNDING-FEATURE now flips from survivor to
+  non-survivor** purely because the family grew (its own p=0.0099 is unchanged; the rank-2
+  threshold tightened from 0.0100 to 0.00909) — B5-REVERSAL L=3 is now the sole survivor at
+  q=0.05.
 - Economic-gate studies (point-estimate threshold, no p-value): **33** as of 2026-08-19
   (audit §1/§3). Unchanged by PAIRS-COINTEGRATION-STATARB — its holdout economic gate was
   never evaluated (0 pairs cleared the internal screen), same "screen/train-gate blocked,
