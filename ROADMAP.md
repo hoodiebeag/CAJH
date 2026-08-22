@@ -2849,3 +2849,126 @@ diagnostic script in this project already uses) plus `backtestMultiTF` read-only
 already-tested `backtest.js`/`epochSlices` code paths through their existing public interfaces).
 `backtest.js`, `strategy.js`, `tournament.mjs`, `signal-decay-temporal-stability.mjs`, `monitor.js`,
 `bot.js`, `trader.js`, `scanner.js` — all untouched. `npm.cmd test`: 499/499 green before and after.
+
+## 2026-08-22 — WALKFORWARD-REVALIDATION-OF-BASELINE: `anticipate`'s fold-to-fold drift is statistically significant, `breakout`'s isn't — the single split is not uniformly adequate
+
+**Question, never asked before this item.** Every one of the 45+ studies inventoried in
+`MULTIPLE_COMPARISONS_AUDIT.md` scored `breakout`/`anticipate` against a single chronological
+70/30 train/holdout split. SIGNAL-DECAY-TEMPORAL-STABILITY (2026-08-19, above) then showed the
+underlying baseline is non-stationary across 5 disjoint calendar epochs — which turns the single
+split from a stylistic choice into a methodological question: a threshold fitted (or in this
+project's case, pre-registered) once and scored on one fixed holdout drawn from a demonstrably
+drifting series conflates "no edge" with "regime changed during this particular holdout window,"
+and a single number can't tell the two apart. `researchlib.mjs`'s `walkForwardSeriesWindows` —
+built by JUDGE-WALKFORWARD-SYMBOL-HOLDOUT specifically for this and, per
+`MULTIPLE_COMPARISONS_AUDIT.md` §1, never invoked by any study before this one — exists
+precisely to answer it: does rolling re-scoring across successive out-of-sample slices change
+the picture, or is the single split an adequate summary?
+
+**Method.** `walkforward-revalidation.mjs` (new file). `walkForwardSeriesWindows(series, {folds:
+4, trainFraction: 0.5})` over each asset's full local candle history: train grows from the first
+half, holdout runs across 4 successive slices spanning the remaining half. Each fold's holdout is
+scored independently with the exact `breakout`/`anticipate` baseline configs from
+`tournament.mjs`'s `families` table (unmodified, `entryTf: "1h"`, duplicated locally — same
+convention `signal-decay-temporal-stability.mjs` already established, chosen there over exporting
+`tournament.mjs`'s internal `families` array). No parameter is fit per fold — these are fixed
+pre-registered hyperparameters, not thresholds tuned on train, so "walk-forward" here means
+re-scoring across successive slices, not re-fitting. Per-fold per-trade R values are pooled
+across assets (28 watchlist assets minus EOS's pre-existing candle-history shortfall, minus the
+5 `SEALED_SYMBOLS` — this item's own scoping note is explicit that the sealed pool is reserved
+for the eventual final validation, not spent here — leaving **23 eligible assets**). Dispersion
+across the 4 folds is tested with `oneWayAnovaF`/`permutationAnovaP`, imported directly from
+`signal-decay-temporal-stability.mjs` rather than re-derived (same purpose — is between-fold
+variance larger than within-fold sampling noise would explain — applied to a different partition
+of the same history: 4 rolling holdout slices instead of 5 disjoint epochs). The single-split
+comparison figure is recomputed over the SAME 23-asset eligible pool (not the previously
+published 28-asset pooled figure) at `tournament.mjs`'s own `split=0.70` default, so the two
+numbers are directly comparable rather than differing by asset-pool composition as well as by
+method.
+
+**Calendar-holdout disclosure (explicit, per `AGENT_PROTOCOL.md`'s binding rule).** This study
+uses each asset's full local history, which necessarily re-examines the 2025-06-01–present
+window already retired as a "fresh" holdout by ~27 prior studies. Disclosed here rather than
+silently — the same tradeoff SIGNAL-DECAY-TEMPORAL-STABILITY already made for the same reason:
+the question is about the existing baseline's behavior across its own available sample, not a
+fresh-holdout test of a new hypothesis.
+
+**Result — `breakout` (4 folds, pooled across 23 assets; single-split comparison also
+23-asset):**
+
+| Fold | trades | avgR | totalR | 95% CI |
+|---|---:|---:|---:|---|
+| 1 (earliest) | 1068 | -0.810 | -864.63 | [-0.909, -0.711] |
+| 2 | 999 | -0.779 | -778.37 | [-0.882, -0.676] |
+| 3 | 1036 | -0.944 | -978.46 | [-1.038, -0.851] |
+| 4 (most recent) | 939 | -0.897 | -842.64 | [-0.997, -0.798] |
+
+Single-split (70/30, same 23-asset pool): 2409 trades, avgR -0.893, totalR -2151.56.
+Fold dispersion (max-min avgR): 0.165. ANOVA F(3, 4038) = 2.331, permutation p = 0.076 (1000
+iterations). **NO SIGNIFICANT DISPERSION** at p<0.05 — fold-to-fold variation here is consistent
+with sampling noise around one underlying mean.
+
+**Result — `anticipate` (4 folds, pooled across 23 assets; single-split comparison also
+23-asset):**
+
+| Fold | trades | avgR | totalR | 95% CI |
+|---|---:|---:|---:|---|
+| 1 (earliest) | 1317 | -0.673 | -886.80 | [-0.768, -0.578] |
+| 2 | 1486 | -0.823 | -1223.61 | [-0.905, -0.742] |
+| 3 | 1258 | -0.910 | -1144.54 | [-0.997, -0.823] |
+| 4 (most recent) | 1134 | -0.974 | -1104.79 | [-1.061, -0.888] |
+
+Single-split (70/30, same 23-asset pool): 2924 trades, avgR -0.902, totalR -2638.30.
+Fold dispersion (max-min avgR): 0.301. ANOVA F(3, 5191) = 8.131, permutation p = 0.000999 (1000
+iterations — the floor at this iteration count). **SIGNIFICANT DISPERSION** at p<0.05.
+
+**Reading it.** The two families give different answers to this item's central question.
+`anticipate`'s 4 rolling folds decline monotonically and significantly (-0.673 → -0.823 → -0.910
+→ -0.974, a 0.30R swing on the identical unmodified config), and the ANOVA rejects the
+single-mean hypothesis at p=0.001 — for this family, a pooled 70/30 split genuinely does mask
+real fold-to-fold movement, in the same direction SIGNAL-DECAY-TEMPORAL-STABILITY's epoch table
+already found (worst in the most recent slice of history). `breakout` does not replicate that
+result under this partition: its 4 folds move within a narrower band (0.165R) that a permutation
+test can't distinguish from noise (p=0.076), even though SIGNAL-DECAY-TEMPORAL-STABILITY's
+5-epoch ANOVA on the *same* underlying `breakout` history called it non-stationary at p=0.001.
+That is not a contradiction — it is this item's own question answered concretely: **the choice
+of judge (disjoint fixed epochs vs. expanding-train rolling folds, 5 groups vs. 4) can itself
+flip a dispersion call** on identical underlying data. Neither number is "more correct" in the
+abstract; they test different things (fixed-epoch group means vs. rolling out-of-sample fold
+means), and this item's finding is that the two don't always agree. Both families, under every
+partition tried anywhere in this project, stay decisively negative in every fold and every
+epoch — nothing here surfaces a hidden profitable regime or approaches breakeven at any point.
+
+**What this changes, and what it does NOT change.** Per this item's own task wording, no
+existing verdict is reopened or altered — every pooled avgR figure already on record in
+VERDICTS.md/TOURNAMENT_ROADMAP.md/ROADMAP.md stands as written. What this item establishes:
+whether a single 70/30 split is an "adequate summary" of the underlying history is
+family-dependent, not a property of the harness in general — true (can't reject a single mean)
+for `breakout` under this test, false (rejects a single mean) for `anticipate`. This is a
+methodology finding about which judge to reach for, not a new positive signal and not grounds to
+revisit SIGNAL-DECAY-TEMPORAL-STABILITY's own (differently partitioned) non-stationarity call for
+`breakout`.
+
+**Recommendation (not an implementation, per this item's own done_when).** Written into
+`AGENT_PROTOCOL.md` below: future studies that need to characterize `anticipate`'s baseline
+reliability (as opposed to running a fresh pre-registered economic/NHST gate, which this item
+does not touch) should prefer per-fold walk-forward reporting
+(`walkForwardSeriesWindows`/`walkForwardWindows`, now that this item has exercised the harness
+end-to-end) or at minimum disclose per-fold dispersion alongside any single pooled avgR quoted
+for `anticipate`. `breakout`'s single split is not shown to be misleading by this test and does
+not need the same treatment on this evidence alone.
+
+**Engineering note.** `walkforward-revalidation.mjs` (new file, additive) and
+`walkforward-revalidation.test.mjs` (5 new tests: insufficient-coverage handling, SEALED_SYMBOLS
+exclusion, 4-fold shape/presence for both families, per-fold trade-count bookkeeping, and a
+real-candle non-zero-trade sanity check) — both new, zero production files touched. Imports
+`walkForwardSeriesWindows`/`splitSealedSymbols` from `researchlib.mjs` and
+`oneWayAnovaF`/`permutationAnovaP` from `signal-decay-temporal-stability.mjs` (both already
+independently tested there, reused rather than re-derived). `backtest.js`, `strategy.js`,
+`tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js` — all untouched; grep
+confirmed before commit that none of the protected trading-safety identifiers appear anywhere in
+this diff. Descriptive study, no pre-registered gate, no p-value evaluated against a pass/fail
+threshold (matching SIGNAL-DECAY-TEMPORAL-STABILITY's own precedent) — does not join
+`MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family and does not trigger a BH-FDR
+recomputation, per this item's own scoping note. No VERDICTS.md row (no gate exists to record).
+`npm.cmd test`: 500/500 green before, 505/505 green after.

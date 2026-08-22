@@ -293,6 +293,24 @@ judge for the 28-asset active watchlist. A new price-structure family study eith
 candle data collected after 2026-08-19 for its holdout, or explicitly discloses in its own
 result writeup that it is re-examining already-spent data — never silently.
 
+## Walk-forward judge recommendation (added 2026-08-22)
+
+WALKFORWARD-REVALIDATION-OF-BASELINE (`ROADMAP.md`, 2026-08-22) applied
+`researchlib.mjs`'s `walkForwardSeriesWindows` (4 rolling folds, 23-asset active pool, sealed
+pool untouched) to the `breakout`/`anticipate` baselines and found a family-dependent result:
+`anticipate`'s fold-to-fold avgR drift is statistically significant (permutation ANOVA
+p=0.000999 — folds decline monotonically from -0.673 to -0.974), `breakout`'s is not (p=0.076
+on the same partition style). This is a recommendation, not a harness change (that item's own
+done_when) — no existing study is required to adopt it retroactively.
+
+**Recommendation:** a future study that characterizes `anticipate`'s baseline reliability (as
+opposed to running a fresh pre-registered economic/NHST gate against it, which is unaffected)
+should prefer per-fold walk-forward reporting over a single pooled 70/30 split, or at minimum
+disclose per-fold dispersion alongside any single pooled avgR it quotes for `anticipate`. No
+equivalent recommendation applies to `breakout`: this test could not reject a single-mean
+summary for it, so its existing single-split figures stand without a walk-forward caveat on
+this evidence.
+
 ## Scheduling (updated 2026-08-07 — one task, not three)
 
 The loop originally ran as three independent scheduled tasks (`cajh-executor-check`,
