@@ -94,6 +94,9 @@ test("BOS mode: MAE/MFE track the worst/best unrealized R seen before a winning 
   assert.ok(Math.abs(x.r - netWinR(97.7, 2.7)) < 1e-9, "excursions[0].r must match results[0]");
   assert.equal(x.r, r.results[0]);
   assert.equal(x.barsHeld, 5, "bars from BOS entry (confirmed after swing-window delay) to the tp bar");
+  assert.equal(x.entry, 97.7);
+  assert.ok(Math.abs(x.risk - 2.7) < 1e-9);
+  assert.ok(Math.abs(x.exitPrice - 108.5) < 1e-9, "tp exit, no overshoot");
 });
 
 test("BOS mode: MAE/MFE on a stop-out — mae equals exactly 1R (stop is entry-risk by construction)", () => {
@@ -109,6 +112,8 @@ test("BOS mode: MAE/MFE on a stop-out — mae equals exactly 1R (stop is entry-r
   assert.ok(Math.abs(x.mfe - (99 - 97.7) / 2.7) < 1e-9, `mfe ${x.mfe} != expected`);
   assert.ok(x.r < 0, "stop-out must realize a loss");
   assert.equal(x.barsHeld, 1, "stopped out on the bar right after entry");
+  assert.equal(x.entry, 97.7);
+  assert.equal(x.exitPrice, 95, "stop-out exit price");
 });
 
 test("ANTICIPATE mode: MAE/MFE on the same-bar stop-out path (entry and stop hit in one bar)", () => {
@@ -126,6 +131,8 @@ test("ANTICIPATE mode: MAE/MFE on the same-bar stop-out path (entry and stop hit
   assert.ok(Math.abs(x.mfe - (97.8 - 97.6) / 2.6) < 1e-9, `mfe ${x.mfe} != expected`);
   assert.equal(x.r, r.results[0]);
   assert.equal(x.barsHeld, 0, "entered and stopped out within the same bar");
+  assert.ok(Math.abs(x.entry - 97.6) < 1e-9);
+  assert.equal(x.exitPrice, 95, "stop-out exit price");
 });
 
 // ── entryDelayBars (EXECUTION-DELAY-DECAY-CURVE) ───────────────────────────────

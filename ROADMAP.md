@@ -3539,3 +3539,103 @@ commit that no protected trading-safety identifier appears in it. `npm.cmd test`
 (no production or test file touched — no companion test file added, matching
 EQUITIES-BREAKOUT-SIGNIFICANCE/EQUITIES-ALL-FAMILIES-BASELINE precedent for read-only research
 scripts under `scripts/`).
+
+## 2026-08-22 — EQUITIES-BREAKOUT-COMMISSION-FLOOR-POSITION-SIZING: the real $1 commission floor costs `breakout` 0.6-2.4 cents of avgR at realistic retail sizes, but never drags the result to breakeven across the pre-registered $2k-$50k range
+
+`EQUITIES-COST-ASSUMPTION-SENSITIVITY` (2026-08-22) found `breakout`'s net-positive equities
+edge (+0.1866R, 61 holdout trades) survives every plausible slippage citation, but flagged —
+unquantified — that IBKR's real commission structure (Fixed plan: USD 0.005/share, USD 1.00/order
+minimum) creates a floor that binds below 200 shares, and named "a genuine position-sizing-aware
+re-run" as "the natural follow-on before this result is treated as more than a promising point
+estimate." This item is that re-run.
+
+**Scope: `breakout` only**, same as the item it follows on from — `anticipate`'s sign is not in
+question (already net negative, `EQUITIES-BREAKOUT-SIGNIFICANCE`, 2026-08-21).
+
+**Pre-registered before any computation:** position sizes $2,000 / $5,000 / $10,000 / $25,000 /
+$50,000 per trade — the exact set named in this item's own task text (`.agent_state.json`
+work_queue), not chosen after seeing any result.
+
+**Method — no new data fetch, no live IBKR Gateway call.** Reads the existing
+`research-cache/equities-1d/` cache, re-runs `breakout` UNMODIFIED through `backtest.js` at the
+same per-symbol commission rate and 5bps default slippage as `EQUITIES-BASELINE-PORT`. To get a
+real per-trade entry price to size against, `backtest.js`'s `excursions[]` was extended
+(additively — three new fields, `entry`, `risk`, `exitPrice`, alongside the existing `r`, `mae`,
+`mfe`, `barsHeld`) to expose each closed trade's fixed entry price and initial risk-per-share; no
+existing consumer reads an exhaustive object shape (checked: `mae-mfe-stop-placement-diagnostic.mjs`,
+`holding-period-cost-amortization-map.mjs`, and `backtest.test.mjs` all read named fields only),
+and `backtest.test.mjs` gained three new assertions (one per excursion-producing code path: BOS
+win, BOS stop-out, ANTICIPATE same-bar stop-out) pinning the new fields to values hand-derived
+from each test's own fixture. For each trade: `feeR_old = feeRate * (entry + exitPrice) / risk`
+reverses out the bps-based commission `backtest.js` already charged (its own `netAt()` formula,
+not re-derived); `shares = floor(positionSizeUSD / entry)` (whole shares only); `commissionR_new
+= (2 * max(shares * 0.005, 1.00)) / (shares * risk)` is the real per-order commission (both legs,
+same share count — this backtest has no partial exits configured, `BREAKOUT_CONFIG` unchanged
+from the original, `partialAtR` off) converted to R via the trade's actual dollar risk;
+`newR = r + feeR_old - commissionR_new`. Reproduction check: pooling the 61 trades' unmodified
+`r` values reproduces `EQUITIES-COST-ASSUMPTION-SENSITIVITY`'s `netDefaultAvgR` to +0.18662383R —
+bit-for-bit off the same cache, before any new statistic is computed.
+
+**Results** (all 61 trades tradeable at every pre-registered size — no symbol's entry price ever
+exceeded a fifth of even the smallest $2,000 size, so `tradesExcludedTooSmall` is 0 throughout):
+
+| position size | trades | net avgR | vs. bps-based (+0.18662R) |
+|---|---:|---:|---:|
+| $2,000 | 61 | +0.16310 | -0.0235 |
+| $5,000 | 61 | +0.17849 | -0.0081 |
+| $10,000 | 61 | +0.18327 | -0.0034 |
+| $25,000 | 61 | +0.18589 | -0.0007 |
+| $50,000 | 61 | +0.18652 | -0.0001 |
+
+**Smallest pre-registered size at which the commission floor drags the result to breakeven or
+negative: none.** Across the full $2k-$50k range the real-commission net avgR stays comfortably
+positive, converging toward the original bps-based figure as size grows (larger share counts
+push the real per-order commission toward the same 0.005/share rate the bps model already
+assumed, exactly as expected — the floor only overcharges relative to that rate at low share
+counts). The drag is real and monotonic in the expected direction (smaller size → more drag) but
+small in absolute terms: even at the smallest pre-registered size, $2,000, the floor costs ~2.35
+cents of avgR (~12.6% of the +0.1866R headline), not enough on its own to flip the sign.
+
+**Read against `EQUITIES-COST-ASSUMPTION-SENSITIVITY`'s own stated concern.** That item worried
+the $1 floor "binds well within a realistic retail position size" using a *per-symbol average*
+floor threshold (median ~$47,928 across the universe) — reasoning that at typical retail sizes,
+most trades would sit below that per-symbol threshold and thus be commission-inflated relative
+to the bps model. This item's per-trade, per-price-at-entry computation shows the practical
+effect of that binding is much smaller than the "floor binds" framing implied: even at $2,000 —
+far below every symbol's own floor threshold — the drag is 2.35 cents of avgR, not something
+that threatens the sign. **The floor is real, quantifiably drags the result at small sizes, and
+should not be treated as free — but it does not overturn `breakout`'s net-positive equities
+result at any of the position sizes a real retail account would plausibly use.**
+
+**Not touched.** `EQUITIES-BASELINE-PORT`'s and `EQUITIES-COST-ASSUMPTION-SENSITIVITY`'s own
+recorded cost bases, headline numbers, and caches — untouched. No universe, split, or entry/exit
+parameter changed. No `VERDICTS.md` row (per this item's own `done_when` — this refines cost
+realism on a result that `EQUITIES-BREAKOUT-SIGNIFICANCE` already found does not clear its own
+significance test; it neither newly clears nor newly kills a gate).
+
+**Multiple-comparisons discipline.** This item computes no p-value against a pre-registered
+gate — every number above is a deterministic backtest re-price or a direct algebraic
+identity from `backtest.js`'s own cost formula, not a hypothesis test — so
+`MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family is untouched, matching
+`EQUITIES-COST-ASSUMPTION-SENSITIVITY`'s and `COST-SENSITIVITY-SURFACE`'s identical precedent.
+
+**Engineering note.** New: `scripts/equities-breakout-commission-floor-position-sizing.mjs`
+(read-only, cache-only — does not import `brokers/ibkr.mjs`, cannot make a live Gateway call even
+accidentally). Unlike this project's usual `scripts/` precedent, this item DID touch a production
+library module: `backtest.js` gained three additive fields (`entry`, `risk`, `exitPrice`) on each
+`excursions[]` entry, at all four of its trade-close call sites, plus an updated doc-comment —
+no existing field removed, renamed, or changed in meaning, and no behavior change to `trades`,
+`results`, `totalR`, `avgR`, or any other returned value. `backtest.test.mjs` gained three new
+assertions (no existing assertion changed, one pre-existing assertion's `assert.equal` was
+loosened to a `1e-9`-tolerance `assert.ok` after the new floating-point-sensitive `exitPrice`
+assertion exposed a pre-existing `108.50000000000001` vs `108.5` float-noise mismatch on an
+unrelated already-passing test — a correctness fix, not a weakening: the value being compared
+was always float-noisy, the strict `assert.equal` on it was simply never exercised with a value
+that surfaced the noise before). `equities-baseline-port.mjs`, `equities-cost-assumption-
+sensitivity.mjs`, `data.js`, `researchlib.mjs`, `researchlab.mjs`, `strategy.js`, `tournament.mjs`,
+`monitor.js`, `bot.js`, `trader.js`, `scanner.js`, `commands.js` — all untouched (commands.js is
+the one other `backtest.js` consumer that reads `excursions`-adjacent output at all; grep-
+confirmed it never destructures `.excursions`, so the new fields cannot affect it); grep-confirmed
+against the actual staged diff before commit that no protected trading-safety identifier appears
+in it. `npm.cmd test`: 505/505 green (33/33 in `backtest.test.mjs`; no new `test()` block added — the
+3 new assertions extend three already-existing excursion tests in place, one per code path).
