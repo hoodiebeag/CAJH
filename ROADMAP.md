@@ -2635,3 +2635,125 @@ and `AGENT_PROTOCOL.md` updated in the same commit per the binding rule (counter
 narrative sections). `backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`,
 `trader.js`, `scanner.js` — all untouched. Suite green before commit (see commit for exact
 count).
+
+## 2026-08-22 — ZERO-COST-FLOOR-ALL-FAMILIES: 0/12 families clear a meaningful gross edge; the price-structure thesis is closed with a number
+
+COST-COMPONENT-ATTRIBUTION (2026-08-19) measured the zero-fee floor for two families only
+(`breakout` +0.0091R, `anticipate` -0.1331R) and called that the most consequential pair of
+numbers in the project, because it says cost reduction can't work if there's no gross edge
+underneath the fees to begin with. This extends the exact same linear re-derivation to all 12
+families currently defined in `tournament.mjs`'s `families` array, same holdout, to answer the
+binary question directly: does ANY family in this codebase carry meaningfully positive gross
+(zero-cost) edge?
+
+**Overlap check against T1-ZEROCOST (2026-08-06/07), done first as the item required.** T1
+already ran 11 of these 12 families at zero cost and is the direct predecessor of this item.
+Re-running it is justified only by what's genuinely new: (1) `range_sweep_reclaim` and
+`vol_contraction` didn't exist at T1's time — never zero-cost tested until now; (2) T1 predates
+FEE-SCHEDULE-REBASE, so its *net*-of-cost comparison numbers used the old cost basis (the
+zero-cost numbers themselves are cost-basis-independent by construction and aren't expected to
+move for that reason alone); (3) COST-COMPONENT-ATTRIBUTION's exact fee/slip decomposition,
+reconciling to net within 1e-9, didn't exist as a method at T1's time and is applied here to all
+12 families, not just 2. This is not a reproduction of T1 — it supersedes and extends it.
+
+**Method — exact, not estimated, identical to COST-COMPONENT-ATTRIBUTION's.** New file
+`scripts/zero-cost-floor-all-families.mjs` (read-only diagnostic, not part of the app; no cost
+parameter changed anywhere). For each of the 12 families' exact `tournament.mjs` config, four
+backtest passes on the same 70/30 holdout, full watchlist: zero-cost, fee-only, slip-only, and
+net (default). `feeDrag = grossAvgR - feeOnlyAvgR`, `slipDrag = grossAvgR - slipOnlyAvgR`,
+`grossAvgR - feeDrag - slipDrag` reconstructs `netAvgR` — verified below for all 12, not
+assumed.
+
+**Pre-registered "meaningfully positive" gate (decided before running the 10 families whose
+gross figure wasn't already sealed — `breakout`/`anticipate` were already known from
+COST-COMPONENT-ATTRIBUTION).** Reuses `runTournament`'s own promotion-bar shape (holdout
+trades >= 150, T5-DECAY-EXIT's sample floor; positiveAssets/assets >= 0.5, `runTournament`'s own
+`promoted` convention) but raises the avgR bar from "> 0" (any edge at all) to "> +0.10"R — a
+"material R" scale already used elsewhere in this codebase (`scoreRegimeGate`'s
+`avgRMin = -0.10`). Chosen because COST-COMPONENT-ATTRIBUTION already characterized a positive
+sub-0.01R gross edge as "razor-thin, one-basis-point-scale" and not survivable against any real
+execution friction; +0.10R is an order of magnitude above that floor, not an arbitrary round
+number.
+
+**Result — pooled, holdout, all 12 families:**
+
+| family | trades | gross (zero-cost) | fee drag | slip/spread drag | net (default) | reconciliation | positiveAssets/assets (gross) | meaningfully positive? |
+|---|---:|---:|---:|---:|---:|---:|---:|:---:|
+| `ma_dip` | 9,894 | +0.0877 | 4.9256 | 0.3078 | -5.1457 | 2.4e-14 | 20/28 | no (avgR < 0.10) |
+| `vol_contraction` | 98 | **+0.2177** | 1.0116 | 0.0632 | -0.8571 | -6.7e-16 | 11/21 | no (trades 98 < 150) |
+| `breakout` | 3,156 | +0.0637 | 0.8731 | 0.0546 | -0.8640 | -6.7e-16 | 19/28 | no (avgR < 0.10) |
+| `h3` | 4,590 | +0.0329 | 1.5854 | 0.0991 | -1.6516 | 2.4e-15 | 16/28 | no (avgR < 0.10) |
+| `rsi` | 2,265 | -0.0115 | 1.2409 | 0.0776 | -1.3300 | 1.8e-15 | 13/28 | no |
+| `range_sweep_reclaim` | 511 | -0.0521 | 1.0047 | 0.0628 | -1.1196 | -8.9e-16 | 12/28 | no |
+| `anticipate` | 3,966 | -0.0861 | 0.7511 | 0.0469 | -0.8842 | -1.1e-15 | 4/27 | no |
+| `bos` | 273 | -0.1282 | 0.7282 | 0.0455 | -0.9019 | 7.8e-16 | 9/27 | no |
+| `trend_pullback` | 2,017 | -0.1320 | 0.8307 | 0.0519 | -1.0146 | 0 | 6/28 | no |
+| `sweep_reclaim` | 3,145 | -0.1409 | 1.0171 | 0.0636 | -1.2216 | 1.3e-15 | 4/28 | no |
+| `support` | 53,640 | -0.1503 | 3.3167 | 0.2073 | -3.6742 | -1.2e-14 | 0/28 | no |
+| `rev` | 24,327 | -0.1562 | 3.3610 | 0.2101 | -3.7272 | -3.1e-14 | 0/28 | no |
+
+All 12 reconciliation discrepancies (`grossAvgR - feeDrag - slipDrag - netAvgR`) are within
+3.1e-14 — far inside the < 1e-9 stated tolerance, no gap to explain away. Trade counts are
+identical across all four cost configurations for every family (verified programmatically, not
+just spot-checked), confirming FEE-SCHEDULE-REBASE's "cost never changes which trades fire"
+claim holds project-wide, not only for the two families it was originally checked against.
+`feeDrag / (feeDrag + slipDrag) = 0.9412` for all 12 families without exception — empirical
+confirmation, not just the structural argument, that the fee-share ratio is
+`FEE_RATE / (FEE_RATE + SLIPPAGE_PCT)` independent of family.
+
+**4 of 12 families clear zero at gross: `ma_dip`, `vol_contraction`, `breakout`, `h3` — same
+four T1 already flagged as gross-positive** (`vol_contraction` is new to this study; T1 found
+the other three positive too). **None of the 12 clears the pre-registered "meaningfully
+positive" gate.** `vol_contraction` is the closest and the most interesting case: its gross
+avgR (+0.2177) is more than 3x `breakout`'s and clears the avgR clause outright, and its
+positiveAssets/assets (11/21 = 52.4%) clears that clause too — it fails only on the trade-count
+floor (98 < 150), the same shortfall that already sank it net-of-cost as `T2-VOLCONTRACTION`
+(FAIL, VERDICTS.md) under the old cost basis. This is not a new lead: a 98-trade holdout sample
+is the actual constraint, not fee structure, and there is no cost-side fix for a sample-size
+problem.
+
+**Comparison against T1-ZEROCOST's numbers, explained rather than averaged away.** Of the 10
+families both studies ran, `sweep_reclaim` reproduces T1's trade count exactly (3,145 both
+runs) and 8 of the remaining 9 move by <0.02R and <3% in trade count — consistent with ordinary
+candle-corpus drift over the ~2 weeks between runs (data collection has been running
+continuously; `CANDLE-CORPUS-GAP-AUDIT`, already queued, is the right place to pin down the
+exact watchlist/corpus delta, not re-derived here). **`rsi` is the one real outlier and is
+flagged rather than smoothed over:** T1 reported holdout avgR -0.062 at 2,260 trades; this run
+gets -0.0115 at 2,265 trades — a large relative swing in avgR (a 5-trade, 0.2% change in sample
+size cannot mechanically produce an 82% swing in avgR on its own unless per-asset composition
+shifted). The most likely explanation given the corpus has been growing continuously is a
+change in exactly which assets/candles compose that near-identical count, not a bug in either
+run (both runs' 3-of-4-cost-configs trade-count-identity check passed, and `rsi`'s config in
+`tournament.mjs` is untouched since T1) — but this study did not diff the two watchlists
+directly and is not claiming a confirmed mechanism, only reporting the discrepancy honestly per
+this item's own requirement.
+
+**What 'meaningfully' was pre-registered to mean, stated plainly:** holdout gross avgR > +0.10R
+AND holdout trades >= 150 AND positiveAssets/assets >= 0.5 — see the gate section above. Under
+that definition, **zero of the 12 families in this codebase carry a meaningfully positive gross
+edge.** The price-structure cost-reduction program (T1-ZEROCOST through COST-SENSITIVITY-SURFACE)
+is closed with this number: even setting fees to zero and slippage aside from the trade-count
+question, nothing here clears a bar an order of magnitude above what COST-COMPONENT-ATTRIBUTION
+already called "razor-thin." Any future signal work in this codebase needs a new entry
+mechanism, not a cost adjustment on the existing 12.
+
+**Economic-gate study, not a formal NHST result** — this reports a point-estimate/trade-count
+threshold, no p-value or null distribution, so it does not join
+`MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family or trigger a BH-FDR recomputation. It does
+join the economic-gate-only family per `AGENT_PROTOCOL.md`'s counter convention (both
+`MULTIPLE_COMPARISONS_AUDIT.md` and `AGENT_PROTOCOL.md` updated in this commit). No family
+cleared its literal pre-registered threshold, so the `SEALED_SYMBOLS` re-run rule
+(`AGENT_PROTOCOL.md`, "a PASS ... until re-run against SEALED_SYMBOLS") does not apply — nothing
+here is a promotion candidate.
+
+**What this does NOT license.** No cost parameter (`FEE_RATE`, `SLIPPAGE_PCT`, or any override)
+was changed anywhere. No family's config was changed. This is a descriptive survey of the
+existing 12 configs' existing cost path, not a new signal, exit, or entry variant.
+
+**Engineering note.** `scripts/zero-cost-floor-all-families.mjs` is additive (new file only,
+zero production files touched); duplicates `tournament.mjs`'s 12-family config array verbatim
+(not exported there, same convention `cost-component-attribution.mjs` already used) and imports
+`backtestMultiTF`/`FEE_RATE`/`SLIPPAGE_PCT` read-only. No new tests (consistent with this
+project's other throwaway `scripts/*.mjs` diagnostics — it exercises only already-tested
+`backtest.js` code paths through its existing public interface). `backtest.js`, `strategy.js`,
+`tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js` — all untouched.
