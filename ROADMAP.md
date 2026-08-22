@@ -3778,3 +3778,88 @@ unmodified. `backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.j
 no protected trading-safety identifier appears in it. `MULTIPLE_COMPARISONS_AUDIT.md` and
 `AGENT_PROTOCOL.md` updated in the same commit per the binding rule. `npm.cmd test`: 505/505
 green (this item added no new production code, so no new tests were required or added).
+
+
+## EXOGENOUS-DATA-ACCESS-AUDIT — measuring what's actually reachable before writing another hypothesis against it (2026-08-22)
+
+Every genuinely exogenous data source this project has tried so far died on **access**, not on
+hypothesis: `TEST4-ONCHAIN-FLOW-GATE`/`ONCHAIN-FLOW-GATE` (Glassnode, HTTP 401, no key held),
+`H11` (Binance funding, HTTP 451 geo-blocked, then Kraken funding's ~365-day rolling window
+against a 730-day requirement), and `ETF-FLOW-GATE` (cut before its Farside probe even ran).
+Three new primary-signal items were queued this run — `MACRO-REGIME-PRIMARY-SIGNAL`,
+`OPTIONS-SKEW-PRIMARY-SIGNAL`, `WHALE-WALLET-ACCUMULATION-PRIMARY` — each gated behind this
+item specifically to avoid repeating that pattern a third and fourth time. This measures, with a
+real fetch per candidate source and no reliance on documentation, what this research machine can
+actually reach today.
+
+**Method.** New `scripts/exogenous-data-access-audit.mjs` (additive, read-only, no strategy
+logic, no backtest, no order path). One real network call per source; "reachable" means an
+actual HTTP response was received and parsed, not that a vendor's docs page says so. Guarded
+explicitly against the mistake `H11` already made once (a sandbox's own egress block nearly
+recorded as a fact about an upstream API): this ran from the research machine itself, which has
+confirmed general egress (a throwaway `frankfurter.app` FX call succeeded before the audit ran).
+
+| category | source | reachable | auth held | measured earliest date | measured span | cost |
+|---|---|---|---|---|---|---|
+| options | Deribit public API (`get_historical_volatility`, BTC) | **yes** | n/a (public) | 2026-08-06 | only ~16 days (384 hourly points) — this endpoint is capped short, not a multi-year archive | free |
+| options | IBKR options chain (existing Gateway connection) | **intermittent** — see note | yes (existing subscription) | not probed | n/a | included, no incremental cost |
+| macro | FRED `DGS10` (10Y Treasury) via public CSV export | **yes** | not required for this access path | 1962-01-02 | 16,863 daily points to 2026-08-20 | free |
+| macro | FRED `DTWEXBGS` (Broad Dollar Index, ICE's own DXY ticker isn't on FRED) via public CSV export | **yes** | not required for this access path | 2006-01-02 | 5,380 daily points to 2026-08-14 | free |
+| macro | FRED `FEDFUNDS` (Fed funds effective rate) via public CSV export | **yes** | not required for this access path | 1954-07-01 | 865 points to 2026-07-01 | free |
+| text sentiment | GDELT 2.0 DOC API (news volume timeline) | **yes** — see note on measurement method | n/a (public) | not measured this run (rate-limited) | GDELT's own courtesy limit is 1 request/5s; this run's single call got the rate-limit notice, not data | free |
+| on-chain wallet | Glassnode `transfers_volume_exchanges_net` | **no** | **no** (`GLASSNODE_API_KEY` unset, unchanged since `TEST4-ONCHAIN-FLOW-GATE` 2026-08-14) | — | — | paid beyond limited free tier, free tier itself requires the key |
+| on-chain wallet | blockchain.com Charts API (`n-unique-addresses`, BTC only) | **yes** | n/a (public) | 2009-01-03 | 1,602 daily points to 2026-08-15 | free |
+
+**IBKR options access is intermittent, not a fixed capability — stated as such rather than
+resolved either way.** This run's own pre-check found `127.0.0.1:4002` refusing connections
+(`ECONNREFUSED`) minutes after the prior commit's control notes recorded a successful 20-symbol
+live fetch through it; a repeat check minutes later found it accepting connections again, and
+the audit script itself (run after that) recorded it reachable. The honest reading is "reachable
+when the Gateway process happens to be running on the research machine at the time," which any
+IBKR-dependent item must probe fresh at the time it runs rather than trust a prior firing's
+finding.
+
+**A client-library quirk worth recording so it isn't rediscovered the hard way.** Node's native
+`fetch()` (undici) hit a hard `UND_ERR_CONNECT_TIMEOUT` against `api.gdeltproject.org`
+specifically, on every attempt, while `curl` against the identical URL from the same machine in
+the same minute got a real HTTP response every time (a 429 courtesy-limit page, not a connection
+failure). Recording "unreachable" from the `fetch()` failure alone would have been exactly the
+sandbox-error-mistaken-for-upstream-fact mistake this audit exists to avoid, so the script shells
+out to `curl` for this one host. Any future GDELT integration should do the same, or add retry
+with backoff, rather than trust `fetch()`'s verdict on this host.
+
+**Which sources can support a genuine train+holdout window on this project's existing candle
+history, stated plainly:**
+- **Can, with real depth:** FRED `DGS10`/`DTWEXBGS`/`FEDFUNDS` (macro) — decades of daily data,
+  comfortably covers every window this project has ever used. `blockchain.com`'s
+  `n-unique-addresses` (on-chain, BTC-only) — daily since 2009, real depth, but it is an
+  address-count series, not wallet-level accumulation/distribution behavior; a materially
+  coarser proxy than `WHALE-WALLET-ACCUMULATION-PRIMARY`'s own stated hypothesis needs. True
+  large-wallet cohort tracking (balance-tier clustering over time) needs a paid provider
+  (Glassnode/Nansen/Chainalysis-class) or building clustering from raw block data — neither free,
+  so `WHALE-WALLET-ACCUMULATION-PRIMARY` as specified is **not supportable on free data** and
+  should be re-scoped around the coarser public proxy or closed as a data-availability
+  non-verdict before any backtest is attempted, not after.
+- **Cannot, as measured:** Deribit's `get_historical_volatility` only returns ~16 days —
+  nowhere near enough for a pre-registered train window on any timescale this project has used
+  elsewhere (its narrowest prior splits still run months). `OPTIONS-SKEW-PRIMARY-SIGNAL` would
+  need a different Deribit endpoint (e.g. building a daily archive going forward from
+  `get_tradingview_chart_data` per instrument, or IBKR's own options chain once the Gateway
+  connectivity is reliable enough to build history from) — the 16-day cap on the endpoint probed
+  here is not sufficient on its own and should not be treated as "options data is available"
+  without that follow-up.
+- **Unusable, recorded so it isn't re-proposed:** Glassnode on-chain flow data — no key held,
+  unchanged since `TEST4-ONCHAIN-FLOW-GATE`; registering one is outside this project's
+  unattended automation scope (creating third-party accounts is out of scope for this loop).
+  GDELT's query API is reachable but rate-limited to one request per 5 seconds per client,
+  making it usable only with a slow, paced ingestion script, not a single-shot fetch — feasible
+  for `MACRO-REGIME-PRIMARY-SIGNAL`/future sentiment work only if that constraint is designed in
+  from the start.
+
+**No strategy code touched.** `backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`,
+`bot.js`, `trader.js`, `scanner.js` — all untouched; grep-confirmed against the actual staged
+diff before commit that no protected trading-safety identifier appears in it. This item reports
+no p-value and clears no gate, so it does not join `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST
+family. `npm.cmd test`: 505/505 green (this item added no new production code path exercised by
+existing tests, so no new tests were required or added, matching the convention of prior
+diagnostic-only scripts like `candle-corpus-gap-audit.mjs`).
