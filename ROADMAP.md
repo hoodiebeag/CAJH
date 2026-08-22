@@ -3369,3 +3369,96 @@ reads the existing equities cache). `equities-baseline-port.mjs`, `tournament.mj
 that none of the protected trading-safety identifiers appear anywhere in it. `npm.cmd test`:
 505/505 green before and after (no production file changed, no new test file expected on this
 precedent).
+
+## 2026-08-22 — TIME-VARYING-COST-REPRICING: a real Kraken Tier-1 fee-schedule change is confirmed inside the sample window, but the pre-change rate could not be reliably sourced — honest non-verdict, no repricing performed
+
+**Question, never asked before this item.** `FEE-SCHEDULE-REBASE` (2026-08-08) verified
+Kraken's real Tier-1 taker rate live from the account (0.80%, vs. the repo's stale 0.40%
+assumption) and applied that single corrected rate retroactively across every backtest's
+entire history, as though 0.80% had always held. `SIGNAL-DECAY-TEMPORAL-STABILITY`
+(2026-08-19) then found both `breakout` and `anticipate` significantly non-stationary across
+5 epochs of the same full history, worst in the most recent epoch for both families. This
+item asks the question neither prior study asked: did Kraken's actual fee schedule change
+*within* the sample window, such that the flat 0.80% rate mispreices earlier history — and
+could that, not signal decay, explain part of the most-recent-epoch weakness? Per this item's
+own task wording, historical figures must be verified from a dated source, not reconstructed
+from memory or an unreliable citation — the exact failure mode `FEE-SCHEDULE-REBASE` exists to
+prevent.
+
+**Sample window.** `candles/XBTUSD.csv` (this project's longest local history): 2023-01-01T00:00Z
+through 2026-07-30T09:47Z, ~3.58 years. `breakout`/`anticipate`'s full-history baselines
+(`SIGNAL-DECAY-TEMPORAL-STABILITY`) run against this same window per asset.
+
+**What was checked, and how.** `WebSearch` + `WebFetch` against Kraken's own channels (no
+third-party aggregator trusted as a primary source, per this item's own instruction to verify
+rather than guess):
+
+1. `kraken.com/features/fee-schedule` (live, fetched directly): confirms **current** Tier 1
+   ($0+ 30-day volume) = Maker 0.40% / Taker 0.80% — matches `FEE-SCHEDULE-REBASE`'s
+   2026-08-08 account-verified figure exactly. The page carries no historical schedule or
+   effective-date record of its own.
+2. `support.kraken.com/articles/cross-platform-fee-tier-changes` (Kraken's own support
+   article, fetched directly): confirms a **real, dated fee-tier overhaul took effect
+   2026-07-09** — tiers became based on Spot volume *or* Assets-on-Platform, whichever is
+   better, and "some existing fees changed." This article states the **post**-change Tier 1
+   rate (0.40% / 0.80%, consistent with #1) but explicitly does not carry the **pre**-change
+   rate, and says finding it would require Kraken's archived fee schedule from before that
+   date.
+3. Wayback Machine (`web.archive.org`), the obvious source for that pre-2026-07-09 archived
+   page, is **blocked outright** for this environment's `WebFetch` tool (hard error, not a
+   fetch failure) — not accessible by any query form tried.
+4. Kraken's own blog post announcing the change (`blog.kraken.com/product/pro/new-kraken-pro-fee-tiers`)
+   returned **HTTP 403** on direct fetch.
+5. Kraken's other own support articles on general fee mechanics (`how-trading-fees-work-on-kraken`,
+   `overview-of-fees-on-kraken`) were checked and give only spot example rates at unrelated,
+   higher volume tiers ($125k+, $500k+) — none states the pre-2026-07-09 Tier 1 rate either.
+6. Third-party aggregator sites (cryptsy.com, swapverdict.com, and others surfaced by
+   `WebSearch`) *do* quote base-tier numbers, but **disagree with each other** — one gives
+   "0.25% maker / 0.40% taker under $10k," another "0.16% maker / 0.26% taker under $50k" —
+   for what each calls the current or base tier. Neither is Kraken's own page, neither cites
+   an effective date, and they contradict each other on the tier boundary itself. Treating
+   either as "the" pre-2026-07-09 rate would be exactly the guessed/unverified-citation
+   mistake this item's own task text warns against, and that `FEE-SCHEDULE-REBASE` already
+   burned this project on once (the repo's own stale in-code assumption).
+
+**Result: the pre-2026-07-09 Tier-1 rate cannot be reliably sourced from this environment.**
+Kraken's own primary sources (live fee page, the change's own announcement support article,
+the blog post) either omit it or are inaccessible; the one archive that would plausibly hold
+it (Wayback Machine) is blocked for this tool; secondary sources are mutually inconsistent
+and uncitable. Per this item's own done_when, this is recorded as an **honest non-verdict**,
+not a guess: no per-trade, date-appropriate repricing of `breakout`/`anticipate` was performed,
+and no side-by-side re-priced-vs-flat-rate table is produced, because doing so would require
+fabricating the one number (the old rate) this item was specifically designed to verify rather
+than assume.
+
+**What IS established, and what it means for `SIGNAL-DECAY-TEMPORAL-STABILITY`'s
+non-stationarity finding.** A real, officially-confirmed fee-schedule change did occur inside
+the sample window, dated 2026-07-09 — roughly the final 3 weeks of a ~3.58-year history, i.e.
+inside `SIGNAL-DECAY-TEMPORAL-STABILITY`'s epoch 5 (its "most recent," and for both families
+its worst-or-near-worst epoch). This means the flat-rate assumption underlying every study in
+this project's record — including the epoch table itself, which used the same single default
+`FEE_RATE`/`SLIPPAGE_PCT` for all 5 epochs — is now known to be provably wrong for at least
+part of the window, not merely a modeling simplification. Whether that misprice helped or hurt
+epoch 5's numbers depends entirely on the sign and magnitude of the 2026-07-09 change, which is
+exactly the number that could not be sourced. Directionally, every secondary source found
+(however individually unreliable) put the *pre*-change base-tier taker rate below today's 0.80%
+— which, if directionally correct even without a trustworthy exact figure, would mean epoch 5's
+brief post-change slice was actually costed *too generously low* by the flat 0.80% rate applied
+project-wide only from 2026-08-08 onward in current work, while epoch 5's much larger
+pre-2026-07-09 majority may have been *overcosted* by the same flat rate if the true pre-change
+number is materially lower than 0.80% — an ambiguous, non-quantifiable direction, not a
+confirmed alternative explanation. **This does not overturn `SIGNAL-DECAY-TEMPORAL-STABILITY`'s
+non-stationarity verdict** — the ANOVA result and its permutation p-value stand exactly as
+recorded — but it does mean that verdict's own methodological caveat (pooled avgR is a
+time-average over a non-constant baseline) now provably extends to the cost side of the ledger
+as well as the signal side, and should be read that way going forward. No existing verdict is
+rewritten, no VERDICTS.md row added or touched, per this item's own instruction.
+
+**Engineering note.** No new script and no companion test file were added — this item resolved
+to a sourcing/documentation question, not a computation, so there is nothing new for
+`cost-model.mjs` or any backtest path to compute against; the task's own done_when explicitly
+allows this outcome ("an explicit non-verdict if it cannot be [sourced]"). Zero production
+files touched (`strategy.js`, `backtest.js`, `cost-model.mjs`, `tournament.mjs`, `bot.js`,
+`monitor.js`, `trader.js`, `scanner.js` all untouched); grep-confirmed against the actual
+staged diff before commit that no protected trading-safety identifier appears in it. `npm.cmd
+test`: 505/505 green, unchanged (no production or test file touched).
