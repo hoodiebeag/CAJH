@@ -256,7 +256,7 @@ fail):**
   non-survivor** purely because the family grew (its own p=0.0099 is unchanged; the rank-2
   threshold tightened from 0.0100 to 0.00909) — B5-REVERSAL L=3 is now the sole survivor at
   q=0.05.
-- Economic-gate studies (point-estimate threshold, no p-value): **34** as of 2026-08-22
+- Economic-gate studies (point-estimate threshold, no p-value): **35** as of 2026-08-22
   (audit §1/§3). Unchanged by PAIRS-COINTEGRATION-STATARB — its holdout economic gate was
   never evaluated (0 pairs cleared the internal screen), same "screen/train-gate blocked,
   holdout never touched" bucket as H11/FUNDING-MEANREV/FIB-PULLBACK (audit §1 Non-verdict row,
@@ -265,7 +265,12 @@ fail):**
   positiveAssets/assets>=0.5) evaluated against all 12 `tournament.mjs` families at zero cost;
   0/12 cleared it (audit §3, `vol_contraction` nearest miss on avgR alone but short on trade
   count). No family cleared its literal threshold, so the `SEALED_SYMBOLS` re-run rule below
-  does not apply.
+  does not apply. Updated by PER-EPOCH-GROSS-EDGE (2026-08-22): added as the 35th — the same
+  gate reused verbatim, evaluated per epoch per family (5 epochs x 2 families, on
+  SIGNAL-DECAY-TEMPORAL-STABILITY's existing epoch boundaries, zero-cost gross) against
+  `breakout`/`anticipate`; 0/10 sub-gates cleared it, counted as one study per this counter's
+  own per-study (not per-sub-gate) granularity. No epoch cleared its literal threshold, so the
+  `SEALED_SYMBOLS` re-run rule below does not apply.
 
 **Rule for a new formal NHST result.** Do not evaluate it against `alpha=0.05` in isolation.
 Add its p-value to the family-size counter above, recompute Benjamini-Hochberg FDR across

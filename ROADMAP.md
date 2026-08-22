@@ -2757,3 +2757,95 @@ zero production files touched); duplicates `tournament.mjs`'s 12-family config a
 project's other throwaway `scripts/*.mjs` diagnostics — it exercises only already-tested
 `backtest.js` code paths through its existing public interface). `backtest.js`, `strategy.js`,
 `tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js` — all untouched.
+
+## 2026-08-22 — PER-EPOCH-GROSS-EDGE: no epoch, in either family, carries meaningfully positive gross edge — the non-stationarity SIGNAL-DECAY found never hides a working regime
+
+**Question, never asked before this item.** SIGNAL-DECAY-TEMPORAL-STABILITY (above) established
+both `breakout`/`anticipate` baselines are non-stationary across 5 chronological epochs of each
+asset's full local history (permutation ANOVA p=0.000999 both families), but reported per-epoch
+**NET** avgR (default fee+slip cost) and concluded no epoch approaches breakeven.
+COST-COMPONENT-ATTRIBUTION established the zero-cost **gross** floor, but only pooled across the
+whole sample, never broken out by epoch. Neither asked the combined question: was there ever an
+epoch where GROSS edge was meaningfully positive, later buried by pooling across epochs and/or
+erased by cost? A signal that worked in one regime and died would look identical, once pooled and
+charged full cost, to a signal that never worked at all — this item exists to tell those two cases
+apart.
+
+**Method.** Reuses SIGNAL-DECAY's exact epoch boundaries — `epochSlices` (imported from
+`signal-decay-temporal-stability.mjs`, not re-derived: picking new boundaries after seeing results
+would be the look-elsewhere error in its most tempting form), same 5 epochs, same full-local-history
+convention (not a holdout split — the calendar holdout and `SEALED_SYMBOLS` are both untouched, per
+this item's own scoping note), same `breakout`/`anticipate` configs from `tournament.mjs`'s
+`families` table, unmodified, `entryTf: "1h"`. Each epoch slice is re-run through `backtestMultiTF`
+at `feeRate: 0, slipPct: 0` — COST-COMPONENT-ATTRIBUTION's zero-cost re-derivation technique, the
+same `backtest.js` cost path every cost-diagnostic in this project already uses. Coverage 28/29
+watchlist assets (EOS excluded, the same pre-existing candle-history shortfall every study in this
+series hits).
+
+**Pre-registered "meaningfully positive" gate, decided before running:** reuses
+ZERO-COST-FLOOR-ALL-FAMILIES's own pre-registered bar verbatim — avgR > +0.10 (an order of
+magnitude above COST-COMPONENT-ATTRIBUTION's razor-thin floor) AND trades >= 150 AND
+positiveAssets/assets >= 0.5 — applied **per epoch per family** (10 sub-gates: 5 epochs x 2
+families), not pooled. This item deliberately reports a point-estimate/trade-count gate rather than
+computing a fresh p-value against SIGNAL-DECAY's already-reported ANOVA, so it stays in the
+economic-gate-only lane rather than entangling with the formal-NHST family/BH-FDR recomputation
+`AGENT_PROTOCOL.md`'s binding rule would otherwise require.
+
+**Result — `breakout` (full history, zero-cost gross, pooled per epoch across 28 assets):**
+
+| Epoch | trades | avgR | totalR | assets w/ trades | positive assets | meaningful? |
+|---|---:|---:|---:|---:|---:|:---:|
+| 1 (earliest) | 2016 | +0.0084 | 17.01 | 28 | 14 | no |
+| 2 | 2176 | +0.0384 | 83.52 | 28 | 15 | no |
+| 3 | 2150 | +0.0930 | 199.98 | 28 | 20 | no |
+| 4 | 2122 | +0.0832 | 176.57 | 28 | 19 | no |
+| 5 (most recent) | 2040 | -0.0217 | -44.36 | 28 | 11 | no |
+
+**Result — `anticipate` (full history, zero-cost gross, pooled per epoch across 28 assets):**
+
+| Epoch | trades | avgR | totalR | assets w/ trades | positive assets | meaningful? |
+|---|---:|---:|---:|---:|---:|:---:|
+| 1 (earliest) | 2346 | +0.0826 | 193.83 | 28 | 17 | no |
+| 2 | 2738 | +0.0500 | 137.01 | 27 | 16 | no |
+| 3 | 2746 | +0.0856 | 235.14 | 28 | 18 | no |
+| 4 | 3184 | -0.0499 | -158.92 | 28 | 11 | no |
+| 5 (most recent) | 2560 | -0.1590 | -407.12 | 27 | 3 | no |
+
+**Plain call: 0/10 epoch-family cells clear the pre-registered meaningfully-positive gross gate.**
+`breakout` epoch 3 is the closest (+0.093, just short of the +0.10 avgR bar, and it does clear both
+the trade-count and asset-share clauses on its own) — a near-miss, not a pass. The
+non-stationarity SIGNAL-DECAY found is real (epoch-to-epoch avgR swings up to ~0.24R for
+`anticipate`, epoch 1 vs. epoch 5), but it moves gross edge around within a band that never reaches
+the pre-registered "meaningfully positive" line, let alone survives cost on top of that. **A signal
+that worked in one regime and died pooled would have shown up here as a `meaningful: true` cell; none
+appeared.** This closes the specific hypothesis this item was pre-registered to test — not just the
+pooled-average question COST-COMPONENT-ATTRIBUTION and SIGNAL-DECAY's NET epoch table already
+closed separately.
+
+**What this does NOT license.** No cost parameter or family config was changed anywhere. This is a
+descriptive re-slice of already-fixed epoch boundaries through already-tested `backtest.js` code
+paths, not a new signal, exit, or entry variant, and not grounds to revisit SIGNAL-DECAY-TEMPORAL-STABILITY's
+or COST-COMPONENT-ATTRIBUTION's own conclusions.
+
+**Economic-gate study, not a formal NHST result** — reports a point-estimate/trade-count threshold,
+no p-value or null distribution, so it does not join `MULTIPLE_COMPARISONS_AUDIT.md`'s
+formal-NHST family or trigger a BH-FDR recomputation. It does join the economic-gate-only family
+per `AGENT_PROTOCOL.md`'s counter convention (34→35), counted as **one** study covering 10 sub-gates
+— matching ZERO-COST-FLOOR-ALL-FAMILIES's own precedent for a multi-sub-gate run (both
+`MULTIPLE_COMPARISONS_AUDIT.md` and `AGENT_PROTOCOL.md` updated in this commit, along with the
+overall study-count total, 49→50). No epoch-family cell cleared its literal pre-registered
+threshold, so the `SEALED_SYMBOLS` re-run rule does not apply — nothing here is a live promotion
+candidate. No VERDICTS.md row added, matching the precedent COST-COMPONENT-ATTRIBUTION,
+EQUITIES-BREAKOUT-SIGNIFICANCE, and ZERO-COST-FLOOR-ALL-FAMILIES already set for diagnostic
+studies that re-derive existing already-recorded families rather than introduce a new hypothesis
+needing duplicate-proposal protection.
+
+**Engineering note.** `scripts/per-epoch-gross-edge.mjs` is additive (new file only, zero
+production files touched); imports `epochSlices` directly from `signal-decay-temporal-stability.mjs`
+(exported there, reused rather than re-derived) and duplicates `tournament.mjs`'s
+`breakout`/`anticipate` config rows verbatim (not exported there, same convention every other
+diagnostic script in this project already uses) plus `backtestMultiTF` read-only. No new tests
+(consistent with this project's other throwaway `scripts/*.mjs` diagnostics — it exercises only
+already-tested `backtest.js`/`epochSlices` code paths through their existing public interfaces).
+`backtest.js`, `strategy.js`, `tournament.mjs`, `signal-decay-temporal-stability.mjs`, `monitor.js`,
+`bot.js`, `trader.js`, `scanner.js` — all untouched. `npm.cmd test`: 499/499 green before and after.

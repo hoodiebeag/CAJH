@@ -37,19 +37,26 @@ VERDICTS.md at all:**
   audit is about ("slicing seven ways and picking the best-looking cell is
   multiple-comparisons p-hacking almost by construction").
 
-**Total: 49 studies conducted to date** (updated 2026-08-22 by ZERO-COST-FLOOR-ALL-FAMILIES — a
-real point-estimate/trade-count gate, avgR>0.10 AND trades>=150 AND positiveAssets/assets>=0.5,
-against all 12 `tournament.mjs` families at zero cost, 0/12 cleared it; joins the
-economic-gate-only bucket below, a 49th study. Previously updated 2026-08-21 post-audit by
-EQUITIES-BREAKOUT-SIGNIFICANCE — see its own row in the Formal NHST table below and
-ROADMAP.md, not VERDICTS.md, since it cleared no gate — a 48th study; the prior post-audit
-update, CROSS-SECTIONAL-NONPRICE-RANK, brought the count to 47), not 14.
+**Total: 50 studies conducted to date** (updated 2026-08-22 by PER-EPOCH-GROSS-EDGE — a
+point-estimate/trade-count gate (avgR>0.10 AND trades>=150 AND positiveAssets/assets>=0.5,
+the same gate ZERO-COST-FLOOR-ALL-FAMILIES pre-registered, reused verbatim) evaluated per
+epoch per family (5 epochs x 2 families = 10 sub-gates, on SIGNAL-DECAY-TEMPORAL-STABILITY's
+existing epoch boundaries, zero-cost gross) against `breakout`/`anticipate`; 0/10 cleared it.
+Counted as one study, not ten, matching ZERO-COST-FLOOR-ALL-FAMILIES's own precedent of
+counting a multi-sub-gate run as a single entry — a 50th study. Previously updated 2026-08-22
+by ZERO-COST-FLOOR-ALL-FAMILIES — a real point-estimate/trade-count gate, avgR>0.10 AND
+trades>=150 AND positiveAssets/assets>=0.5, against all 12 `tournament.mjs` families at zero
+cost, 0/12 cleared it; joined the economic-gate-only bucket below, a 49th study. Previously
+updated 2026-08-21 post-audit by EQUITIES-BREAKOUT-SIGNIFICANCE — see its own row in the
+Formal NHST table below and ROADMAP.md, not VERDICTS.md, since it cleared no gate — a 48th
+study; the prior post-audit update, CROSS-SECTIONAL-NONPRICE-RANK, brought the count to 47),
+not 14.
 Breakdown by kind:
 
 | Kind | Count | What it means for this audit |
 |---|---:|---|
 | Formal NHST (reports a p-value against a pre-registered gate) | 8 studies / 11 sub-tests | Section 2 — a real FWER/FDR computation applies |
-| Economic-gate-only (point-estimate threshold, no p-value/null distribution) | 34 (see ZERO-COST-FLOOR-ALL-FAMILIES note above; §3's "33" below is pre-this-study and not rewritten here — see that section's own staleness framing) | Section 3 — classical alpha math doesn't transfer cleanly; discussed qualitatively |
+| Economic-gate-only (point-estimate threshold, no p-value/null distribution) | 35 (see PER-EPOCH-GROSS-EDGE note above; §3's "33" below is pre-this-study and not rewritten here — see that section's own staleness framing) | Section 3 — classical alpha math doesn't transfer cleanly; discussed qualitatively |
 | Non-verdict (a gate failed before holdout was ever examined) | 6 (H11, FUNDING-MEANREV, ONCHAIN-FLOW-GATE, FIB-PULLBACK, VOL-CONFIRM-BREAKOUT, PAIRS-COINTEGRATION-STATARB) | Consumed zero holdout looks — train-gate, data-gate, or (new with PAIRS-COINTEGRATION-STATARB) internal-screen-gate failures, holdout never examined. Not part of either look-elsewhere pool. PAIRS-COINTEGRATION-STATARB differs from the other five: its gate wasn't missing data, it was its own internal, ALREADY BH-FDR-corrected 105-pair Engle-Granger screen (0/105 survived q=0.05) — a self-contained formal-NHST family that doesn't feed Section 2's 9-sub-test table, since it was corrected within the study rather than needing retroactive cross-study correction. |
 | Descriptive / no gate at all | 2 (T1-ZEROCOST informal 8-family screen, SEASONALITY-DAYOFWEEK-SESSION) | No pass/fail claim was ever made, so nothing to correct — but the holdout window was looked at, which matters for Section 4 |
 | Informal, pre-dates any written protocol (pre-2026-08-04) | 3 (Trade intensity, Order-flow pooled, MR1) | No p-value, no formal gate on record; included for honesty, excluded from every quantitative computation below |
