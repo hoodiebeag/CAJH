@@ -4286,3 +4286,63 @@ No strategy code touched — `backtest.js`, `strategy.js`, `tournament.mjs`, `mo
 `researchlab.mjs`'s `saveExperiment` used unmodified. `npm.cmd test`: 505/505 green (no production
 or test file touched — no companion test file added, matching this family's precedent for
 read-only research scripts under `scripts/`).
+
+
+## WHALE-WALLET-ACCUMULATION-PRIMARY — closes as a data-availability non-verdict, per its own pre-registered escape hatch (2026-08-22)
+
+This item's own `done_when` states the order of operations explicitly: "Access confirmed by the
+audit before any work begins; if unavailable, record an honest data non-verdict citing the audit
+and stop, as `TEST4-ONCHAIN-FLOW-GATE` should have." `EXOGENOUS-DATA-ACCESS-AUDIT` already ran that
+check for this exact item — with a real fetch per candidate source, not documentation — and its
+conclusion was not flagged inconclusive the way its Deribit options probe was. No follow-up script
+was needed here; the existing audit answers this item directly.
+
+**What the audit found, re-verified fresh rather than trusted from memory.** Two on-chain wallet
+sources were probed: Glassnode's `transfers_volume_exchanges_net` returned **no** — `HTTP 401`,
+`GLASSNODE_API_KEY` unset. Re-checked this run: still unset (`process.env.GLASSNODE_API_KEY` is
+`undefined`), no reference to it in any `.env` file, and no on-chain/whale research-cache directory
+exists — nothing has changed since the audit or since `TEST4-ONCHAIN-FLOW-GATE` first hit this same
+wall on 2026-08-14. Registering a Glassnode key is a third-party account creation, which is outside
+this loop's unattended automation scope regardless of cost. The other candidate, `blockchain.com`'s
+Charts API `n-unique-addresses`, **is** reachable and free with real depth (daily since
+2009-01-03) — but the audit is explicit that it is an address-*count* series, not wallet-level
+accumulation/distribution behavior, and calls it "a materially coarser proxy than
+`WHALE-WALLET-ACCUMULATION-PRIMARY`'s own stated hypothesis needs."
+
+**Why the coarser proxy is not substituted here.** This item's task requires linking transactions to
+the *same actor* across weeks — a per-wallet accumulate-then-distribute holding-period profile,
+with exchange/custodial addresses excluded by labelling and the cohort fixed on train before
+holdout. An address-count time series carries none of that: it cannot identify individual wallets,
+cannot measure a holding period per actor, and cannot separate custodial flow from directional
+conviction. Swapping the pre-registered construct (persistent large-actor identity) for a
+population-level count series after confirming the real construct has no free data source would be
+the identical after-the-fact hypothesis-swap that `OPTIONS-SKEW-PRIMARY-SIGNAL` (the item
+immediately preceding this one in the queue) declined to make for the same reason, and that this
+item's own note warns against directly by name-checking `TEST4-ONCHAIN-FLOW-GATE`. True wallet-level
+balance-tier clustering needs a paid provider (Glassnode/Nansen/Chainalysis-class) or building
+address clustering from raw block data — this project holds neither, and building clustering from
+raw Bitcoin block data is a research infrastructure project on its own, far outside this item's
+30-60 min scope.
+
+**Why this is a non-verdict, not a kill.** No wallet cohort was selected, no holding-period
+threshold was fit, no train/holdout split was attempted, and no strategy return was computed — per
+this item's own `done_when`, checking access first and stopping cleanly when it's absent is the
+correct order of operations, not a shortcut skipped. This does **not** join
+`MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family (no p-value computed, nothing to correct for)
+and is deliberately not a `VERDICTS.md` row, matching `MACRO-REGIME-PRIMARY-SIGNAL`'s and
+`OPTIONS-SKEW-PRIMARY-SIGNAL`'s precedent for a data/sample-size non-verdict.
+
+**What would actually resolve this, stated for whoever picks it up next.** Not a different free
+endpoint — there isn't one with per-wallet identity. Either (a) budget for a paid on-chain analytics
+vendor with real balance-tier/entity-clustering data (Glassnode, Nansen, Chainalysis-class — a
+cost/access decision this run does not make unilaterally), or (b) accept the `n-unique-addresses`
+proxy as a deliberately different, pre-registered hypothesis in its own right (e.g. "does a rise in
+active address count predict returns" — a population-behavior question, not a whale-tracking one)
+and stage it as a new, distinctly-named work-queue item rather than silently substituting it here.
+
+**Engineering note.** No new file added — this closes entirely on the existing
+`EXOGENOUS-DATA-ACCESS-AUDIT` findings, re-verified rather than re-measured. No strategy code
+touched — `backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`,
+`scanner.js` all untouched, grep-confirmed against the actual staged diff before commit (only this
+`ROADMAP.md` section and `.agent_state.json` change). `npm.cmd test`: 505/505 green (no production
+or test file touched, so no new tests were required or added).
