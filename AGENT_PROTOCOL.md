@@ -242,7 +242,7 @@ section is the binding rule; that document is the reasoning behind it. Update bo
 fail):**
 
 - Formal NHST studies (report a p-value against a pre-registered significance gate):
-  **11** sub-tests across 8 studies as of 2026-08-21 (see audit §2 for the list and p-values).
+  **12** sub-tests across 9 studies as of 2026-08-22 (see audit §2 for the list and p-values).
   Unchanged by PAIRS-COINTEGRATION-STATARB (2026-08-19): that study ran its own internal
   105-test Engle-Granger screen, already BH-FDR-corrected within the study (0/105 survived
   q=0.05) — it doesn't add a raw uncorrected p-value to this cross-study table the way
@@ -255,7 +255,11 @@ fail):**
   survive. **Material side effect: CLASSIFIER-FUNDING-FEATURE now flips from survivor to
   non-survivor** purely because the family grew (its own p=0.0099 is unchanged; the rank-2
   threshold tightened from 0.0100 to 0.00909) — B5-REVERSAL L=3 is now the sole survivor at
-  q=0.05.
+  q=0.05. Updated by EQUITIES-MADIP-SIGNIFICANCE (2026-08-22): added `ma_dip`'s sign-flip
+  permutation p-value (p=0.0648, correct sign, 475 trades — the largest-sample entry in this
+  family, CI includes zero) as the 12th entry; family-wide BH-FDR recomputed across all 12
+  (q=0.1555 for this entry, rank 5 of 12) — does not survive. No prior survivor flips this
+  time: B5-REVERSAL L=3 remains the sole survivor at q=0.05.
 - Economic-gate studies (point-estimate threshold, no p-value): **35** as of 2026-08-22
   (audit §1/§3). Unchanged by PAIRS-COINTEGRATION-STATARB — its holdout economic gate was
   never evaluated (0 pairs cleared the internal screen), same "screen/train-gate blocked,

@@ -3462,3 +3462,80 @@ files touched (`strategy.js`, `backtest.js`, `cost-model.mjs`, `tournament.mjs`,
 `monitor.js`, `trader.js`, `scanner.js` all untouched); grep-confirmed against the actual
 staged diff before commit that no protected trading-safety identifier appears in it. `npm.cmd
 test`: 505/505 green, unchanged (no production or test file touched).
+
+## 2026-08-22 — EQUITIES-MADIP-SIGNIFICANCE: `ma_dip`'s positive point estimate is closer to nominal significance than `breakout`'s, on 7x the sample — but still does not clear BH-FDR
+
+EQUITIES-ALL-FAMILIES-BASELINE (2026-08-22, above) found `ma_dip` combining the largest usable
+holdout sample of the twelve `tournament.mjs` families (475 trades) with a comfortably
+net-positive avgR (+0.1526) — the first equities family candidate with real sample size behind
+its positive sign, unlike `breakout` (61 trades, already significance-tested and CI-includes-zero
+per EQUITIES-BREAKOUT-SIGNIFICANCE). This item runs that same significance check against `ma_dip`,
+and only that check: same cached candles (`research-cache/equities-1d/`, no live Gateway needed,
+no egress), same unmodified `ma_dip` config and cost basis EQUITIES-ALL-FAMILIES-BASELINE
+established. No re-tuning, no symbol drops, no window change.
+
+**Pre-registered before computing anything** (full text in
+`scripts/equities-madip-significance.mjs`'s header, same commit as the results below):
+EQUITIES-BREAKOUT-SIGNIFICANCE's exact one-sided sign-flip permutation test (null: each trade's R
+sign is an independent fair coin flip, i.e. population mean R is zero) on the pooled per-trade
+net-R series, statistic = mean(R), `p = (extreme + 1) / (iterations + 1)` — this project's own
+`permutationP` add-one convention, `momentum.mjs`, unmodified. 95% CI via `momentum.mjs`'s own
+`blockBootstrapCI` (blockSize=4, unmodified). Decision rule, fixed in advance per
+`AGENT_PROTOCOL.md`'s binding multiple-comparisons discipline: the raw p-value is **not**
+evaluated against alpha=0.05 in isolation — it joins `MULTIPLE_COMPARISONS_AUDIT.md`'s
+formal-NHST family (11 entries as of 2026-08-21) as a 12th entry, BH-FDR is recomputed across all
+12 at q=0.05, and "significant" is only true if `ma_dip` clears the recomputed threshold at its
+rank. Also pre-registered: EQUITIES-ALL-FAMILIES-BASELINE's own twelve-family look-elsewhere
+exposure applies here too — `ma_dip` was the best-looking of twelve rows in that breadth run, not
+a pre-registered single hypothesis, so this test is conditioned on having been selected, not run
+blind, and is reported as such regardless of outcome.
+
+**Replication check, before trusting anything new:** the script reproduces
+EQUITIES-ALL-FAMILIES-BASELINE's exact trade count and avgR (475 trades, avgR +0.152634)
+bit-for-bit off the same cached candles before any new statistic is computed — confirms the
+pooled per-trade R series feeding the new test is the same population the baseline reported, not
+a re-derivation error.
+
+**Results:**
+
+| family | trades | avgR | 95% CI (block bootstrap) | p (sign-flip, one-sided) |
+|---|---:|---:|---:|---:|
+| `ma_dip` (primary) | 475 | +0.1526 | **[-0.0544, +0.3609]** | 0.0648 |
+
+**The CI includes zero, and the point estimate is not yet distinguishable from noise — but this
+is a materially closer call than `breakout`'s.** 475 trades narrows the CI substantially versus
+`breakout`'s 61-trade [-0.27, +0.62] span, and the raw p-value (0.0648) sits just above the
+uncorrected 0.05 line — the closest any equities result has come to nominal significance in this
+project's history. That is worth stating plainly. It is also, on its own, not enough: the CI still
+straddles zero, and a single family selected as the best of twelve candidates does not get to
+skip the correction that selection implies.
+
+**Family-wide BH-FDR, recomputed across all 12 formal-NHST entries at q=0.05** (full table:
+`MULTIPLE_COMPARISONS_AUDIT.md` §2, `AGENT_PROTOCOL.md`'s counter updated to 12 in the same
+commit): `ma_dip` ranks 5th of 12 by raw p-value (0.0648), q=0.1555 — the rank-5 BH-FDR threshold
+is 0.02083, less than a third of its raw p-value, so it does not survive. No prior survivor flips
+this time (unlike the previous update, where growing the family from 10 to 11 flipped
+`CLASSIFIER-FUNDING-FEATURE` from survivor to non-survivor): `CLASSIFIER-FUNDING-FEATURE` was
+already a non-survivor at n=11 (q=0.0545) and stays one at n=12 (q=0.0594); `B5-REVERSAL (L=3)`
+remains the sole survivor at q=0.05 (q=0.0120, essentially unchanged).
+
+**Decision, per the pre-registered rule: `ma_dip` does NOT survive significance.** No VERDICTS.md
+row — per this item's own `done_when`, a cleared BH-FDR alone does not promote anything, and this
+one didn't clear it anyway. EQUITIES-ALL-FAMILIES-BASELINE's +0.1526 avgR remains on record
+exactly as it was reported: a real, real-cost point estimate on this window, now additionally
+known to be statistically indistinguishable from zero at 475 trades, though closer to that line
+than any other equities result tested so far. If a genuinely fresh holdout ever becomes available
+(`SEALED_SYMBOLS`, or equity candle data collected after 2026-08-19), `ma_dip` — not `breakout` —
+is the more evidence-backed candidate for a confirmatory re-test; this item does not run one, and
+no config, universe, or cost parameter was changed after seeing results.
+
+**Engineering note.** New: `scripts/equities-madip-significance.mjs` (read-only, cache-only —
+does not import `brokers/ibkr.mjs`, cannot make a live Gateway call even accidentally).
+`momentum.mjs`'s `blockBootstrapCI` used unmodified, not edited. `MULTIPLE_COMPARISONS_AUDIT.md`
+and `AGENT_PROTOCOL.md` updated in the same commit per the binding rule (counters, table, both
+narrative sections). `backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`,
+`trader.js`, `scanner.js` — all untouched; grep-confirmed against the actual staged diff before
+commit that no protected trading-safety identifier appears in it. `npm.cmd test`: 505/505 green
+(no production or test file touched — no companion test file added, matching
+EQUITIES-BREAKOUT-SIGNIFICANCE/EQUITIES-ALL-FAMILIES-BASELINE precedent for read-only research
+scripts under `scripts/`).

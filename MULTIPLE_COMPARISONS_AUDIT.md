@@ -37,12 +37,20 @@ VERDICTS.md at all:**
   audit is about ("slicing seven ways and picking the best-looking cell is
   multiple-comparisons p-hacking almost by construction").
 
-**Total: 51 studies conducted to date** (updated 2026-08-22 by EQUITIES-ALL-FAMILIES-BASELINE
+**Total: 52 studies conducted to date** (updated 2026-08-22 by EQUITIES-MADIP-SIGNIFICANCE —
+a formal one-sided sign-flip permutation test of `ma_dip`'s pooled per-trade net R on the same
+30-symbol equity universe/cost basis EQUITIES-ALL-FAMILIES-BASELINE established, reusing
+EQUITIES-BREAKOUT-SIGNIFICANCE's exact methodology; p=0.0648, 95% block-bootstrap CI
+[-0.054, 0.361] (includes zero). Joins the Formal NHST bucket below as the 12th sub-test
+(9th study) — see §2 for the full recomputation; ranks 5th of 12 by raw p-value and does not
+survive BH-FDR at q=0.05 (adjusted q=0.1555). No VERDICTS.md row per its own done_when (a
+cleared BH-FDR alone does not promote anything, and this one didn't clear it anyway) — a 52nd
+study. Previously updated 2026-08-22 by EQUITIES-ALL-FAMILIES-BASELINE
 — all 12 `tournament.mjs` families run unmodified against the same cached equity universe
 already examined by `EQUITIES-BASELINE-PORT`/`EQUITIES-BREAKOUT-SIGNIFICANCE`/
 `EQUITIES-COST-ASSUMPTION-SENSITIVITY`; no p-value, no pre-registered gate, no pass/fail
 claim of any kind — a breadth measurement only, reported gross/net avgR and trade count per
-family with none promoted. Joins the Descriptive/no-gate bucket below (now 3), not the
+family with none promoted. Joined the Descriptive/no-gate bucket below (now 3), not the
 economic-gate bucket, per its own done_when's explicit "no family promoted" constraint — a
 51st study. Previously updated 2026-08-22 by PER-EPOCH-GROSS-EDGE — a
 point-estimate/trade-count gate (avgR>0.10 AND trades>=150 AND positiveAssets/assets>=0.5,
@@ -62,7 +70,7 @@ Breakdown by kind:
 
 | Kind | Count | What it means for this audit |
 |---|---:|---|
-| Formal NHST (reports a p-value against a pre-registered gate) | 8 studies / 11 sub-tests | Section 2 — a real FWER/FDR computation applies |
+| Formal NHST (reports a p-value against a pre-registered gate) | 9 studies / 12 sub-tests | Section 2 — a real FWER/FDR computation applies |
 | Economic-gate-only (point-estimate threshold, no p-value/null distribution) | 35 (see PER-EPOCH-GROSS-EDGE note above; §3's "33" below is pre-this-study and not rewritten here — see that section's own staleness framing) | Section 3 — classical alpha math doesn't transfer cleanly; discussed qualitatively |
 | Non-verdict (a gate failed before holdout was ever examined) | 6 (H11, FUNDING-MEANREV, ONCHAIN-FLOW-GATE, FIB-PULLBACK, VOL-CONFIRM-BREAKOUT, PAIRS-COINTEGRATION-STATARB) | Consumed zero holdout looks — train-gate, data-gate, or (new with PAIRS-COINTEGRATION-STATARB) internal-screen-gate failures, holdout never examined. Not part of either look-elsewhere pool. PAIRS-COINTEGRATION-STATARB differs from the other five: its gate wasn't missing data, it was its own internal, ALREADY BH-FDR-corrected 105-pair Engle-Granger screen (0/105 survived q=0.05) — a self-contained formal-NHST family that doesn't feed Section 2's 9-sub-test table, since it was corrected within the study rather than needing retroactive cross-study correction. |
 | Descriptive / no gate at all | 3 (T1-ZEROCOST informal 8-family screen, SEASONALITY-DAYOFWEEK-SESSION, EQUITIES-ALL-FAMILIES-BASELINE) | No pass/fail claim was ever made, so nothing to correct — but the holdout window was looked at, which matters for Section 4 |
@@ -75,7 +83,7 @@ study by `B5-REVERSAL-PHASE4-PORTFOLIO-SIM`'s FAIL under a stricter, more realis
 
 ## 2. The formal-significance subfamily: a real FWER/FDR computation
 
-Eleven sub-tests across eight studies report an actual p-value against the project's
+Twelve sub-tests across nine studies report an actual p-value against the project's
 pre-registered `p<0.05` significance gate (`MOMENTUM_SPEC.md §6` clause 1, and the
 classifier spec's equivalent permutation-null clause). These are the only results in this
 project where classical multiple-comparisons math applies without qualification, because
@@ -87,72 +95,76 @@ they're the only ones with an actual null distribution behind them.
 | 2 | CLASSIFIER-FUNDING-FEATURE (holdout, primary) | 0.0099 | yes |
 | 3 | Classifier P5 (holdout, primary) | 0.0198 | yes |
 | 4 | Low-vol B4 negBeta (train) | 0.0579 | yes |
-| 5 | CROSS-SECTIONAL-NONPRICE-RANK (train, OI-change primary IC) | 0.1249 | **no** (wrong sign) |
-| 6 | EQUITIES-BREAKOUT-SIGNIFICANCE (holdout, primary) | 0.2036 | yes |
-| 7 | Low-vol B4 negVol (train) | 0.2278 | yes |
-| 8 | B5-REVERSAL L=5 (train) | 0.4226 | yes |
-| 9 | MOMENTUM-SHORT-HORIZON-RECHECK L=14 (train) | 0.4266 | yes |
-| 10 | MOMENTUM-SHORT-HORIZON-RECHECK L=7 (train) | 0.6024 | **no** (wrong sign) |
-| 11 | Momentum M7 (train, residual IC) | 0.7013 | yes |
+| 5 | EQUITIES-MADIP-SIGNIFICANCE (holdout, primary) | 0.0648 | yes |
+| 6 | CROSS-SECTIONAL-NONPRICE-RANK (train, OI-change primary IC) | 0.1249 | **no** (wrong sign) |
+| 7 | EQUITIES-BREAKOUT-SIGNIFICANCE (holdout, primary) | 0.2036 | yes |
+| 8 | Low-vol B4 negVol (train) | 0.2278 | yes |
+| 9 | B5-REVERSAL L=5 (train) | 0.4226 | yes |
+| 10 | MOMENTUM-SHORT-HORIZON-RECHECK L=14 (train) | 0.4266 | yes |
+| 11 | MOMENTUM-SHORT-HORIZON-RECHECK L=7 (train) | 0.6024 | **no** (wrong sign) |
+| 12 | Momentum M7 (train, residual IC) | 0.7013 | yes |
 
-**Naive FWER, k=11, alpha=0.05:** 1 − (1 − 0.05)^11 = **0.431** (assuming independence,
-which these tests only partially satisfy — see caveat below). Over a family this size, more
-than a 2-in-5 chance of at least one nominal "significant" hit existed even if every single
+**Naive FWER, k=12, alpha=0.05:** 1 − (1 − 0.05)^12 = **0.460** (assuming independence,
+which these tests only partially satisfy — see caveat below). Over a family this size, close
+to a coin-flip chance of at least one nominal "significant" hit existed even if every single
 underlying effect were exactly zero. Three did clear p<0.05 (ranks 1–3 above) — informative,
 but this alone doesn't say anything about which are real.
 
-**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 11 is `(i/11)×0.05`):
+**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 12 is `(i/12)×0.05`):
 
-| Rank *i* | p-value | Threshold (i/11)×0.05 | Survives? |
+| Rank *i* | p-value | Threshold (i/12)×0.05 | Survives? |
 |---:|---:|---:|---|
-| 1 | 0.0010 | 0.00455 | **yes** |
-| 2 | 0.0099 | 0.00909 | no — 0.0099 > 0.00909 |
-| 3 | 0.0198 | 0.01364 | no |
-| 4–11 | 0.0579–0.7013 | 0.01818–0.05 | no |
+| 1 | 0.0010 | 0.00417 | **yes** |
+| 2 | 0.0099 | 0.00833 | no — 0.0099 > 0.00833 |
+| 3 | 0.0198 | 0.01250 | no |
+| 4–12 | 0.0579–0.7013 | 0.01667–0.05 | no |
 
 **Only B5-REVERSAL (L=3) survives family-wise BH-FDR correction at q=0.05 now that the
-family has grown to 11.** `EQUITIES-BREAKOUT-SIGNIFICANCE` (2026-08-21) added `breakout`'s
-sign-flip permutation p-value (0.2036, correct sign — the point estimate is positive as
-pre-registered) as the 11th test; it ranks 6th by raw p-value and comes nowhere close to
-surviving (q=0.358). **The material side effect, stated because it would be dishonest not
-to: `CLASSIFIER-FUNDING-FEATURE` flips from survivor to non-survivor purely because the
-family grew.** Its own p-value (0.0099) is unchanged — but the rank-2 BH-FDR threshold
-tightens from `2/10×0.05=0.0100` (it survived, by 0.0001) to `2/11×0.05=0.00909` (it no
-longer does). This is not new information about `CLASSIFIER-FUNDING-FEATURE` itself; it is
-the look-elsewhere effect this section warned about in the abstract, now observed in
-practice for the first time in this project's history — exactly why the binding rule is
-"recompute across the whole family," not "grandfather in prior survivors." Unchanged by
-CROSS-SECTIONAL-NONPRICE-RANK (already the 10th test, 2026-08-19): its own train IC came
-back wrong-signed and nowhere near p<0.05 in isolation (p=0.1249; q=0.2748 after this
-recomputation), so it doesn't get close to surviving either bar — one more non-hit, not a
-new near-miss. Classifier P5's originally-reported "clears p<0.05" result (p=0.0198) still
-does **not** survive correction — unchanged from the prior recomputation: P5 was already
-KILLED on the separate, independently-required economic clause (its best-scoring subset
-still nets -0.46R/trade after cost), so this correction doesn't flip any verdict, it just
-keeps removing a claim ("statistically significant") that shouldn't have been read as
-surviving multiple comparisons in isolation.
+family has grown to 12.** `EQUITIES-MADIP-SIGNIFICANCE` (2026-08-22) added `ma_dip`'s
+sign-flip permutation p-value (0.0648, correct sign — the point estimate is positive as
+pre-registered, 475 trades, the largest-sample formal-NHST entry to date) as the 12th test;
+it ranks 5th by raw p-value, close enough to nominal p<0.05 to be worth stating plainly, but
+does not survive BH-FDR (q=0.1555 — the rank-5 threshold is 0.02083, less than a third of its
+raw p-value). No prior survivor flips: `CLASSIFIER-FUNDING-FEATURE` was already a
+non-survivor at n=11 (q=0.0545 there) and stays one at n=12 (q=0.0594 — the rank-2 threshold
+tightens from `2/11×0.05=0.00909` to `2/12×0.05=0.00833`, moving the adjusted p-value but not
+the pass/fail outcome this time, unlike the previous update). Unchanged by
+CROSS-SECTIONAL-NONPRICE-RANK (train IC wrong-signed, q=0.2748 at n=11 to q=0.2498 at n=12)
+and `EQUITIES-BREAKOUT-SIGNIFICANCE` (q=0.3580 at n=11 to q=0.3417 at n=12) — neither gets
+close to surviving either bar. Classifier P5's
+originally-reported "clears p<0.05" result (p=0.0198) still does **not** survive correction —
+unchanged from the prior recomputation: P5 was already KILLED on the separate,
+independently-required economic clause (its best-scoring subset still nets -0.46R/trade
+after cost), so this correction doesn't flip any verdict, it just keeps removing a claim
+("statistically significant") that shouldn't have been read as surviving multiple comparisons
+in isolation.
 
 **A genuinely surprising pattern, stated with its caveat.** Under a null of "no real effect
-anywhere in this family," P(at least 3 of 11 independent trials clear p<0.05) ≈ **1.44%**
-(exact binomial, n=11, p=0.05, updated from the prior n=10 figure of 1.15% now that
-EQUITIES-BREAKOUT-SIGNIFICANCE has added an 11th, non-hit, test) — getting 3 hits by pure
+anywhere in this family," P(at least 3 of 12 independent trials clear p<0.05) ≈ **1.96%**
+(exact binomial, n=12, p=0.05, updated from the prior n=11 figure of 1.44% now that
+EQUITIES-MADIP-SIGNIFICANCE has added a 12th, non-hit, test) — getting 3 hits by pure
 chance alone is still unlikely. Read at face value this would suggest at least one of these
-three signals is real. **The caveat that matters:** these eleven tests are not independent
+three signals is real. **The caveat that matters:** these twelve tests are not independent
 draws. B5-REVERSAL L=3/L=5 share the same underlying reversal mechanism and overlapping
 data; CLASSIFIER-FUNDING-FEATURE is P5's own model plus one covariate, built on the same
 classifier and much of the same holdout rows. Correlated tests cluster hits and misses
 together more than independent ones do, which makes "3 hits" less surprising than the naive
-binomial number suggests — the 1.44% figure is a useful anchor, not a rigorous p-value for
+binomial number suggests — the 1.96% figure is a useful anchor, not a rigorous p-value for
 the meta-question. **The honest reading:** this project has three separate lines of evidence
 (a short-horizon reversal signal, an entry-time classifier, and a funding-augmented version
 of that classifier) that are *statistically real and economically dead* — not noise, not a
 coding bug, but real effects too small for this project's actual trading costs (~1.7%
 round-trip) to ever monetize. That is a materially different, more informative conclusion
 than "still no edge," and it is consistent with every one of these three rows' own
-individually-recorded verdicts. `EQUITIES-BREAKOUT-SIGNIFICANCE` adds a fourth, differently
-shaped data point: a positive point estimate on a real-cost, real-data holdout that is
-*not yet distinguishable from noise* at all (CI includes zero, p=0.2036) — thinner sample,
-not (yet) a confirmed effect of any kind, real or dead.
+individually-recorded verdicts. `EQUITIES-BREAKOUT-SIGNIFICANCE` and
+`EQUITIES-MADIP-SIGNIFICANCE` add two further, differently shaped data points: positive point
+estimates on real-cost, real-data holdouts that are *not yet distinguishable from noise* at
+all (CI includes zero for both; p=0.2036 and p=0.0648 respectively) — thinner-evidence
+positives, not (yet) confirmed effects of any kind, real or dead. `ma_dip`'s p-value is
+noticeably closer to nominal significance than `breakout`'s, on more than 7x the trade count
+(475 vs 61) — worth tracking if a genuinely fresh holdout (`SEALED_SYMBOLS` or post-2026-08-19
+equity data) ever becomes available for a confirmatory re-test, but not, on its own, grounds
+for anything beyond that.
 
 ## 3. The economic-gate subfamily: why classical FWER doesn't transfer, and what does
 
@@ -236,9 +248,9 @@ The concrete, binding rule (not just narrative here) is written into
 
 - **Formal NHST studies** (anything reporting a p-value against a pre-registered
   significance gate): a new result is only credible as "statistically significant" if it
-  survives a **BH-FDR recomputation across all NHST p-values to date (this document's 11),
+  survives a **BH-FDR recomputation across all NHST p-values to date (this document's 12),
   at q=0.05** — not evaluated against alpha=0.05 in isolation. The family-size
-  counter (currently 11) must be updated in that section every time a new NHST test is added,
+  counter (currently 12) must be updated in that section every time a new NHST test is added,
   whether it passes or fails.
 - **Economic-gate studies**: no p-value exists to correct, so the discipline is structural
   instead — (a) the family-size counter (currently 33) is kept current in the same section so
