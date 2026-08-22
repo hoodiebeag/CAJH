@@ -3672,3 +3672,109 @@ confirmed it never destructures `.excursions`, so the new fields cannot affect i
 against the actual staged diff before commit that no protected trading-safety identifier appears
 in it. `npm.cmd test`: 505/505 green (33/33 in `backtest.test.mjs`; no new `test()` block added — the
 3 new assertions extend three already-existing excursion tests in place, one per code path).
+
+## 2026-08-22 — EQUITIES-BREAKOUT-OUT-OF-SAMPLE: on a fresh universe, the edge does not reproduce — it flips negative
+
+`EQUITIES-BASELINE-PORT` (2026-08-19) reported `breakout` net +0.1866R over 61 DJIA-30 holdout
+trades, and `EQUITIES-BREAKOUT-SIGNIFICANCE` (2026-08-21) found that point estimate's 95% CI
+includes zero — 61 trades wasn't enough to call it distinguishable from noise. Both items named
+the same next step: an out-of-sample re-check on genuinely new data. This item is that check.
+
+**Pre-registered before any data was fetched** (full text in
+`scripts/equities-breakout-out-of-sample.mjs`'s header, same commit as the results below).
+
+**Window.** `IBKRBroker.fetchOHLC(symbol, 1440)` — the exact function `EQUITIES-BASELINE-PORT`
+used — has no `endDateTime` parameter; it always requests IBKR's "2 Y" duration ending now.
+Fetching fresh today (2026-08-22) therefore yields a window (~2024-08-22 to ~2026-08-22) barely
+3 days shifted from the original (~2024-08-19 to ~2026-08-19) — re-running the same DJIA-30
+universe on it would not be a genuine out-of-sample test. Widening `fetchOHLC` to accept a
+historical end date would move the window, but that function is also `trader.js`'s live data
+path, and widening it was judged out of scope for an additive research script. So this item
+holds the window mechanism fixed as given and changes the **universe** instead, which
+`fetchOHLC` already supports per-symbol with zero production-code changes. This also satisfies
+`AGENT_PROTOCOL.md`'s calendar-holdout rule directly (candle data collected after 2026-08-19 for
+a price-structure family holdout), no disclosure-of-reuse needed.
+
+**Universe.** Dow Jones Transportation Average, 20 components, fixed at window start
+(2024-08-22) with the same point-in-time discipline `EQUITIES-BASELINE-PORT` applied to
+DJIA-30 (INTC/DOW kept despite later removal, not excluded with hindsight) — zero ticker
+overlap with the original DJIA-30, so this is a genuinely different set of 20 companies, not a
+re-slice of the same 30. Sourced from Wikipedia's "Dow Jones Transportation Average" article and
+cross-checked against independent primary sources for both membership changes near the window:
+Uber Technologies replaced JetBlue Airways effective 2024-02-26 (already in effect by window
+start — UBER included, JetBlue not: [PR Newswire](https://www.prnewswire.com/news-releases/amazoncom-set-to-join-dow-jones-industrial-average-uber-to-join-dow-jones-transportation-average-302066705.html));
+FedEx Freight Holding replaced American Airlines Group effective 2026-06-01 — after the window
+start, so per point-in-time discipline this universe uses American Airlines (AAL), not FedEx
+Freight, even though AAL was later dropped for underperformance
+([S&P Global](https://press.spglobal.com/2026-05-27-FedEx-Freight-Holding-Set-to-Join-Dow-Jones-Transportation-Average)).
+Final list: ALK, CAR, CHRW, CSX, DAL, EXPD, FDX, AAL, JBHT, KEX, LSTR, MATX, NSC, ODFL, R, LUV,
+UBER, UNP, UAL, UPS.
+
+**Cost basis, family configs, split — exactly `EQUITIES-BASELINE-PORT`'s, unmodified.** IBKR
+Fixed plan $0.005/share commission (converted per-symbol via that symbol's own holdout
+`avgClose`), 5bps/side slippage, 70/30 train/holdout split, `breakout`/`anticipate` configs
+verbatim from `tournament.mjs`. No parameter, universe, or cost figure changed after seeing
+results.
+
+**Statistical test — `EQUITIES-BREAKOUT-SIGNIFICANCE`'s exact methodology, duplicated
+verbatim**: one-sided sign-flip permutation test (null: population mean R is zero) on the
+pooled per-trade net-R series, 5000 iterations; 95% CI via `momentum.mjs`'s `blockBootstrapCI`
+(blockSize=4). `anticipate` runs alongside as the same negative-control sanity check.
+`breakout`'s p-value joins `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family (12 entries as
+of 2026-08-22) as the 13th entry; BH-FDR recomputed across all 13 in the same commit
+(`MULTIPLE_COMPARISONS_AUDIT.md` §2, `AGENT_PROTOCOL.md`'s counter updated to 13).
+
+**Results, side by side with the original DJIA-30 run (`EQUITIES-BREAKOUT-SIGNIFICANCE`,
+2026-08-21):**
+
+| family | universe | trades | avgR | 95% CI (block bootstrap) | p (sign-flip, one-sided) |
+|---|---|---:|---:|---:|---:|
+| `breakout` — original | DJIA-30 | 61 | +0.1866 | [-0.2700, +0.6192] | 0.2036 |
+| `breakout` — out-of-sample | DJTA-20 | 33 | **-0.0854** | [-0.4052, +0.3313] | 0.6165 |
+| `anticipate` — original | DJIA-30 | 303 | -0.0438 | [-0.2442, +0.1360] | 0.6701 |
+| `anticipate` — out-of-sample (negative control) | DJTA-20 | 188 | +0.1619 | [-0.0749, +0.4364] | 0.1310 |
+
+**The edge does not reproduce — it vanishes, and the sign flips.** `breakout`'s point estimate
+goes from a real-cost +0.1866R (thin, CI-includes-zero) to a real-cost -0.0854R on a
+non-overlapping universe with the identical entry/exit logic and cost model. This is not "holds
+up weaker" — the sign itself flips, and the p-value moves from a middling 0.2036 to a
+thoroughly unremarkable 0.6165. Per the pre-registered decision rule, this is read as the edge
+vanishing under out-of-sample scrutiny, not as noise around a real positive mean. It joins the
+formal-NHST family as a clean non-hit (wrong sign), not as a second thin positive.
+
+**A caveat that cuts the other way, stated plainly rather than buried: `anticipate` — the
+already-known-dead family that served as this study's own negative control — came back
+*positive* on this same DJTA-20 universe** (+0.1619R, 188 trades, CI includes zero, p=0.1310),
+inverting its DJIA-30 sign too. Taken together, both families flipped sign between universes.
+The most parsimonious reading is not "breakout is secretly dead and anticipate is secretly
+alive" — `anticipate` has been killed independently and repeatedly by
+`HOLDING-PERIOD-COST-AMORTIZATION-MAP` and other studies on much larger samples — but that
+**33-188 trades on one 20-symbol universe is simply not enough to pin down either family's true
+mean, and both point estimates here should be read as noisy**, consistent with
+`EQUITIES-BREAKOUT-SIGNIFICANCE`'s own finding that 61 DJIA-30 trades already couldn't
+distinguish `breakout`'s mean from zero. The honest overall conclusion is not "breakout's edge
+is confirmed dead" (that would overclaim from a second thin sample) but "the one out-of-sample
+check run so far found no supporting evidence, and found some evidence pointing the other way" —
+exactly the outcome `EQUITIES-BREAKOUT-SIGNIFICANCE`'s own writeup said this check might honestly
+produce.
+
+**Decision, per the pre-registered rule.** No VERDICTS.md row — no pre-registered gate was
+cleared (the opposite: the family-wide BH-FDR table shows `breakout`'s out-of-sample entry
+ranking 12th of 13, q=0.6679, not remotely close to surviving). `EQUITIES-MADIP-OUT-OF-SAMPLE`
+(queued, depends on `EQUITIES-MADIP-SIGNIFICANCE`) remains the next legitimate piece of
+out-of-sample evidence in this line — for `ma_dip`, not `breakout` — and per its own note should
+reuse this item's live IBKR connection window/fetch mechanics rather than opening a second one,
+though `ma_dip`'s own universe choice is a separate pre-registration this item does not make.
+
+**Engineering note.** New: `scripts/equities-breakout-out-of-sample.mjs` (additive, live IBKR
+fetch — read-only historical data requests only, confirmed by inspection: it calls
+`IBKRBroker.fetchOHLC` and nothing else on that broker interface — no order-placement path of
+any kind). Candles cached to
+`research-cache/equities-1d-djta-oos/` (a new directory, kept separate from
+`EQUITIES-BASELINE-PORT`'s `research-cache/equities-1d/` so it's unambiguous which candles fed
+which universe — no ticker collision either way). `momentum.mjs`'s `blockBootstrapCI` used
+unmodified. `backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`,
+`scanner.js` — all untouched; grep-confirmed against the actual staged diff before commit that
+no protected trading-safety identifier appears in it. `MULTIPLE_COMPARISONS_AUDIT.md` and
+`AGENT_PROTOCOL.md` updated in the same commit per the binding rule. `npm.cmd test`: 505/505
+green (this item added no new production code, so no new tests were required or added).

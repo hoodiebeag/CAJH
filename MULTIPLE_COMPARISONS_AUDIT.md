@@ -83,7 +83,7 @@ study by `B5-REVERSAL-PHASE4-PORTFOLIO-SIM`'s FAIL under a stricter, more realis
 
 ## 2. The formal-significance subfamily: a real FWER/FDR computation
 
-Twelve sub-tests across nine studies report an actual p-value against the project's
+Thirteen sub-tests across ten studies report an actual p-value against the project's
 pre-registered `p<0.05` significance gate (`MOMENTUM_SPEC.md §6` clause 1, and the
 classifier spec's equivalent permutation-null clause). These are the only results in this
 project where classical multiple-comparisons math applies without qualification, because
@@ -102,69 +102,69 @@ they're the only ones with an actual null distribution behind them.
 | 9 | B5-REVERSAL L=5 (train) | 0.4226 | yes |
 | 10 | MOMENTUM-SHORT-HORIZON-RECHECK L=14 (train) | 0.4266 | yes |
 | 11 | MOMENTUM-SHORT-HORIZON-RECHECK L=7 (train) | 0.6024 | **no** (wrong sign) |
-| 12 | Momentum M7 (train, residual IC) | 0.7013 | yes |
+| 12 | EQUITIES-BREAKOUT-OUT-OF-SAMPLE (holdout, primary) | 0.6165 | **no** (wrong sign) |
+| 13 | Momentum M7 (train, residual IC) | 0.7013 | yes |
 
-**Naive FWER, k=12, alpha=0.05:** 1 − (1 − 0.05)^12 = **0.460** (assuming independence,
+**Naive FWER, k=13, alpha=0.05:** 1 − (1 − 0.05)^13 = **0.4867** (assuming independence,
 which these tests only partially satisfy — see caveat below). Over a family this size, close
-to a coin-flip chance of at least one nominal "significant" hit existed even if every single
-underlying effect were exactly zero. Three did clear p<0.05 (ranks 1–3 above) — informative,
-but this alone doesn't say anything about which are real.
+to an even-money chance of at least one nominal "significant" hit existed even if every
+single underlying effect were exactly zero. Three did clear p<0.05 (ranks 1–3 above) —
+informative, but this alone doesn't say anything about which are real.
 
-**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 12 is `(i/12)×0.05`):
+**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 13 is `(i/13)×0.05`):
 
-| Rank *i* | p-value | Threshold (i/12)×0.05 | Survives? |
+| Rank *i* | p-value | Threshold (i/13)×0.05 | Survives? |
 |---:|---:|---:|---|
-| 1 | 0.0010 | 0.00417 | **yes** |
-| 2 | 0.0099 | 0.00833 | no — 0.0099 > 0.00833 |
-| 3 | 0.0198 | 0.01250 | no |
-| 4–12 | 0.0579–0.7013 | 0.01667–0.05 | no |
+| 1 | 0.0010 | 0.00385 | **yes** |
+| 2 | 0.0099 | 0.00769 | no — 0.0099 > 0.00769 |
+| 3 | 0.0198 | 0.01154 | no |
+| 4–13 | 0.0579–0.7013 | 0.01538–0.05 | no |
 
 **Only B5-REVERSAL (L=3) survives family-wise BH-FDR correction at q=0.05 now that the
-family has grown to 12.** `EQUITIES-MADIP-SIGNIFICANCE` (2026-08-22) added `ma_dip`'s
-sign-flip permutation p-value (0.0648, correct sign — the point estimate is positive as
-pre-registered, 475 trades, the largest-sample formal-NHST entry to date) as the 12th test;
-it ranks 5th by raw p-value, close enough to nominal p<0.05 to be worth stating plainly, but
-does not survive BH-FDR (q=0.1555 — the rank-5 threshold is 0.02083, less than a third of its
-raw p-value). No prior survivor flips: `CLASSIFIER-FUNDING-FEATURE` was already a
-non-survivor at n=11 (q=0.0545 there) and stays one at n=12 (q=0.0594 — the rank-2 threshold
-tightens from `2/11×0.05=0.00909` to `2/12×0.05=0.00833`, moving the adjusted p-value but not
-the pass/fail outcome this time, unlike the previous update). Unchanged by
-CROSS-SECTIONAL-NONPRICE-RANK (train IC wrong-signed, q=0.2748 at n=11 to q=0.2498 at n=12)
-and `EQUITIES-BREAKOUT-SIGNIFICANCE` (q=0.3580 at n=11 to q=0.3417 at n=12) — neither gets
-close to surviving either bar. Classifier P5's
-originally-reported "clears p<0.05" result (p=0.0198) still does **not** survive correction —
-unchanged from the prior recomputation: P5 was already KILLED on the separate,
-independently-required economic clause (its best-scoring subset still nets -0.46R/trade
-after cost), so this correction doesn't flip any verdict, it just keeps removing a claim
-("statistically significant") that shouldn't have been read as surviving multiple comparisons
-in isolation.
+family has grown to 13.** `EQUITIES-BREAKOUT-OUT-OF-SAMPLE` (2026-08-22) added `breakout`'s
+sign-flip permutation p-value, recomputed on a genuinely fresh, non-overlapping universe
+(DJTA-20 vs the original DJIA-30 — see `ROADMAP.md`), as the 13th test: p=0.6165, **wrong
+sign** — the point estimate flipped from `EQUITIES-BASELINE-PORT`'s original +0.1866R to
+-0.0854R on this holdout, so unlike the prior update this entry is a clean miss, not a thin
+positive. It ranks 12th of 13 by raw p-value, nowhere near nominal significance. No prior
+survivor flips: `CLASSIFIER-FUNDING-FEATURE` was already a non-survivor at n=12 (q=0.0594
+there) and stays one at n=13 (q=0.0644 — the rank-2 threshold tightens from
+`2/12×0.05=0.00833` to `2/13×0.05=0.00769`, moving the adjusted p-value but not the pass/fail
+outcome). `EQUITIES-BREAKOUT-SIGNIFICANCE`'s own adjusted p-value moves from q=0.3417 (n=12)
+to q=0.3702 (n=13) purely from family growth — its own p-value (0.2036) is unchanged.
+Classifier P5's originally-reported "clears p<0.05" result (p=0.0198) still does **not**
+survive correction — unchanged from the prior recomputation: P5 was already KILLED on the
+separate, independently-required economic clause (its best-scoring subset still nets
+-0.46R/trade after cost), so this correction doesn't flip any verdict, it just keeps removing
+a claim ("statistically significant") that shouldn't have been read as surviving multiple
+comparisons in isolation.
 
 **A genuinely surprising pattern, stated with its caveat.** Under a null of "no real effect
-anywhere in this family," P(at least 3 of 12 independent trials clear p<0.05) ≈ **1.96%**
-(exact binomial, n=12, p=0.05, updated from the prior n=11 figure of 1.44% now that
-EQUITIES-MADIP-SIGNIFICANCE has added a 12th, non-hit, test) — getting 3 hits by pure
+anywhere in this family," P(at least 3 of 13 independent trials clear p<0.05) ≈ **2.45%**
+(exact binomial, n=13, p=0.05, updated from the prior n=12 figure of 1.96% now that
+EQUITIES-BREAKOUT-OUT-OF-SAMPLE has added a 13th, non-hit, test) — getting 3 hits by pure
 chance alone is still unlikely. Read at face value this would suggest at least one of these
-three signals is real. **The caveat that matters:** these twelve tests are not independent
+three signals is real. **The caveat that matters:** these thirteen tests are not independent
 draws. B5-REVERSAL L=3/L=5 share the same underlying reversal mechanism and overlapping
 data; CLASSIFIER-FUNDING-FEATURE is P5's own model plus one covariate, built on the same
 classifier and much of the same holdout rows. Correlated tests cluster hits and misses
 together more than independent ones do, which makes "3 hits" less surprising than the naive
-binomial number suggests — the 1.96% figure is a useful anchor, not a rigorous p-value for
+binomial number suggests — the 2.45% figure is a useful anchor, not a rigorous p-value for
 the meta-question. **The honest reading:** this project has three separate lines of evidence
 (a short-horizon reversal signal, an entry-time classifier, and a funding-augmented version
 of that classifier) that are *statistically real and economically dead* — not noise, not a
 coding bug, but real effects too small for this project's actual trading costs (~1.7%
 round-trip) to ever monetize. That is a materially different, more informative conclusion
 than "still no edge," and it is consistent with every one of these three rows' own
-individually-recorded verdicts. `EQUITIES-BREAKOUT-SIGNIFICANCE` and
-`EQUITIES-MADIP-SIGNIFICANCE` add two further, differently shaped data points: positive point
-estimates on real-cost, real-data holdouts that are *not yet distinguishable from noise* at
-all (CI includes zero for both; p=0.2036 and p=0.0648 respectively) — thinner-evidence
-positives, not (yet) confirmed effects of any kind, real or dead. `ma_dip`'s p-value is
-noticeably closer to nominal significance than `breakout`'s, on more than 7x the trade count
-(475 vs 61) — worth tracking if a genuinely fresh holdout (`SEALED_SYMBOLS` or post-2026-08-19
-equity data) ever becomes available for a confirmatory re-test, but not, on its own, grounds
-for anything beyond that.
+individually-recorded verdicts. `EQUITIES-MADIP-SIGNIFICANCE` adds a further, differently
+shaped data point: a positive point estimate on a real-cost, real-data holdout that is *not
+yet distinguishable from noise* at all (CI includes zero, p=0.0648, 475 trades) —
+thinner-evidence positive, not (yet) a confirmed effect of any kind, real or dead.
+`EQUITIES-BREAKOUT-SIGNIFICANCE`'s own thin positive (+0.1866R, p=0.2036, 61 trades on
+DJIA-30) did **not** hold up out-of-sample: `EQUITIES-BREAKOUT-OUT-OF-SAMPLE`'s fresh DJTA-20
+universe put the same unmodified `breakout` config at -0.0854R over 33 trades, p=0.6165 — the
+one out-of-sample check completed so far in this family, and it points toward noise rather
+than toward a signal that just needed more data.
 
 ## 3. The economic-gate subfamily: why classical FWER doesn't transfer, and what does
 
