@@ -4,10 +4,10 @@
   "status": "IDLE",
   "target_file": null,
   "objective": null,
-  "notes": "No-op firing: work_queue independently re-confirmed genuinely empty (46/46 done, 0 pending, 0 started/in_progress, nothing with unmet depends_on). git pull --rebase reported already up to date - no foreign commits since prior firing, nothing new to skim. State file health check passed (control object, work_queue array of 46, ledger array of 109 present, no BOM issue). Verified via git log that ROADMAP.md (last touch 2026-08-20T11:12:01-04:00), TOURNAMENT_ROADMAP.md (2026-08-19T12:09:39-04:00), and VERDICTS.md (2026-08-20T01:09:10-04:00) are all unchanged since the prior firing checked them - no new PASS verdict, no D3 human gate newly triggered. Nothing legitimate to restock without a human-supplied next hypothesis, so STEP 5 did not add queue items. STEP 4: empty-queue notification last sent 2026-08-21T19:05:00.000Z by the prior firing, this firing at 2026-08-21T20:01:01Z is under 1h later, well inside the 6h dedup window - not resent. npm.cmd test 494/494 green (baseline unchanged, run at 20:01:17Z). No code changes this firing. Untracked universe.txt in the working tree was not created by this run and was left untouched. Ledger intentionally NOT trimmed again this firing, continuing prior firings guidance that trimming risks a pre-commit protected-logic-scan collision on historical prose text - left for a human with the override marker to prune.",
+  "notes": "Completed EQUITIES-BREAKOUT-SIGNIFICANCE (one work_queue item, per firing cap). EQUITIES-BASELINE-PORT (2026-08-19) reported breakout net +0.1866R/61 trades, first net-positive real-cost result in project history, but explicitly ran no significance check. Pre-registered (written into scripts/equities-breakout-significance.mjs header BEFORE computing anything, same commit) a one-sided sign-flip permutation test + block-bootstrap CI, reusing momentum.mjs blockBootstrapCI/bhFdr unmodified, cache-only (no IBKR egress, research-cache/equities-1d/ already populated). Replication check passed first: script reproduced EQUITIES-BASELINE-PORT exact trade counts/avgR (61/+0.1866, 303/-0.0438) off the same cache before trusting the new stats. Result: breakout p=0.2036, 95% CI [-0.270, +0.619] (includes zero) - the honest outcome its own note anticipated (\"positive point estimate, CI includes zero\"). anticipate run alongside as negative control, p=0.6701, behaves as expected. Per AGENT_PROTOCOL.md binding rule, added as 11th entry to the formal-NHST family (was 10); BH-FDR recomputed across all 11 in the SAME commit (MULTIPLE_COMPARISONS_AUDIT.md + AGENT_PROTOCOL.md both updated together). Material honest finding: CLASSIFIER-FUNDING-FEATURE flips from BH-FDR survivor to non-survivor purely because the family grew (its own p=0.0099 unchanged; rank-2 threshold tightened 0.0100->0.00909 at n=11) - B5-REVERSAL L=3 is now the sole survivor at q=0.05, stated plainly in both docs, not buried. Decision: breakout does NOT survive significance -> no VERDICTS.md row added (done_when: row only if gate cleared), recorded honestly in ROADMAP.md as an unconfirmed point estimate; EQUITIES-BASELINE-PORT's +0.1866R stands unchanged, this doesn't invalidate it, just means 61 trades isn't enough yet. EQUITIES-BREAKOUT-OUT-OF-SAMPLE (queued, depends_on this item) is now unblocked as the legitimate next step. npm.cmd test 494/494 green both before and after the doc edits. Committed af555ef, pushed to origin/main. No touch to backtest.js/strategy.js/tournament.mjs/monitor.js/bot.js/trader.js/scanner.js or any protected trading-safety surface. Untracked universe.txt (not created by this run) left untouched. STEP 4: no notification needed this firing - not BLOCKED, queue has 11 pending items remaining (well above empty), no VERDICTS.md PASS newly reached. STEP 5: 11 pending + 0 started = 11, well above the <3 restock trigger, skipped as one-line check.",
   "block_detail": null,
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-08-21T20:02:44.626Z"
+  "updated_at": "2026-08-22T03:45:00.000Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -474,7 +474,7 @@
    },
    {
     "id": "EQUITIES-BREAKOUT-SIGNIFICANCE",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: significance test for the equities breakout result (additive), reuses momentum.mjs's existing blockBootstrapCI / permutation machinery",
     "depends_on": [],
@@ -1528,6 +1528,14 @@
    "action": "no-op firing",
    "detail": "Queue re-confirmed empty (46/46 done). ROADMAP/TOURNAMENT_ROADMAP/VERDICTS unchanged since prior firing. empty-queue notification deduped (last sent 19:05:00Z, well within 6h window). 494/494 tests green. No code or queue changes.",
    "commit": null,
+   "tests": "494/494"
+  },
+  {
+   "ts": "2026-08-22T03:45:00.000Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "completed_work_item",
+   "detail": "EQUITIES-BREAKOUT-SIGNIFICANCE: breakout significance test (sign-flip permutation + block-bootstrap CI on pooled per-trade net-R, cache-only) does NOT survive - p=0.2036, 95% CI [-0.270,+0.619] includes zero. anticipate negative control p=0.6701 as expected. Formal-NHST family 10->11, BH-FDR recomputed; CLASSIFIER-FUNDING-FEATURE flips survivor->non-survivor purely from family growth (documented honestly). No VERDICTS.md row (gate not cleared). New: scripts/equities-breakout-significance.mjs. Updated: ROADMAP.md, MULTIPLE_COMPARISONS_AUDIT.md, AGENT_PROTOCOL.md.",
+   "commit": "af555ef",
    "tests": "494/494"
   }
  ],
