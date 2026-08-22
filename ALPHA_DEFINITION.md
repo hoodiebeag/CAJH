@@ -149,11 +149,81 @@ would not.
 
 ---
 
+## 4b. Applied to the candidate that changed the picture (added 2026-08-22)
+
+`EQUITIES-MADIP-OUT-OF-SAMPLE`: `ma_dip`, point-in-time DJTA-20 universe with **zero ticker
+overlap** with the DJIA-30 it was fitted and first scored on, real IBKR costs, **net +0.2994R
+over 300 holdout trades**, 95% CI **[+0.0509, +0.5350]**, p=0.0116, **q=0.0435 — survives
+family-wide BH-FDR across all 15 formal-NHST entries**.
+
+| test | required | observed | verdict |
+|---|---|---|---|
+| 1. positive net expectancy | `E > 0` | **+0.2994R** net of real cost | **pass** |
+| 2. win rate margin | > `1/(1+R)` on **realised** R | not computed | **not evaluated** |
+| 3. CI excludes zero **and** survives BH-FDR | both | **[+0.0509, +0.5350]**, q=0.0435 | **pass** |
+| 4. sample adequate | ~401 for 80% power at this effect | **300** | **marginal** |
+| 5. survivable | drawdown ceiling + streak stated | not computed | **not evaluated** |
+| 6. reproduced out-of-sample | yes | **yes — larger on the fresh universe** | **pass** |
+
+**Three of six pass, two are uncomputed, one is marginal. That is further than anything else
+has ever got here, and it is not an alpha yet.** The distinction matters: this document exists
+precisely so that "the best result we have" and "clears the bar" stay separate ideas.
+
+### What is genuinely new
+
+Conditions **1, 3 and 6 hold simultaneously** — positive net expectancy, statistical
+separability surviving correction, and out-of-sample reproduction. §5 below was written on
+2026-08-21 stating that conditions 1 and 3 had **never** been met by the same candidate across
+~46 studies. **That claim is now false**, and it was falsified in the strongest available way:
+not by a bigger number on the same data, but by a replication on a non-overlapping universe
+where the point estimate got *larger* (+0.1526R → +0.2994R) rather than decaying.
+
+The contrast with `EQUITIES-BREAKOUT-OUT-OF-SAMPLE`, run the same day on the same fresh
+universe with the same method, is the reason this reads as signal rather than luck: `breakout`
+went the other way, +0.1866R → −0.0854R, sign flipped.
+
+### What is not established, stated as plainly as the pass is
+
+- **Condition 5 is the one that killed the closest prior counterexample.** `B5-REVERSAL`
+  cleared a pre-registered gate at PHASE3 and died at PHASE4 on a **−79% to −90%** max drawdown.
+  Nothing here has computed `ma_dip`'s drawdown, its expected worst losing streak, or the
+  capital impact of that streak at the intended risk fraction. Until that exists, condition 5
+  is not "probably fine" — it is unknown, and it is historically where things die.
+- **The interval is thin where it matters.** The lower bound `+0.0509` is **17% of the point
+  estimate**. The result is significant, not comfortably so.
+- **The CI may be optimistic for a reason unrelated to the signal.** `blockBootstrapCI`
+  resamples contiguous blocks **by position in the flat trade array**; it has no notion of a
+  calendar day. 300 trades across 20 transport names means signals fired by one sector-wide
+  move are counted as independent observations. `DATE-CLUSTERED-RESAMPLING-AUDIT` (queued)
+  recomputes this by date, and **can only widen the interval**. Given a lower bound of +0.0509,
+  it is entirely possible for that audit to push this result back across zero. It should be run
+  before any confirmatory step, not after.
+- **Every result here is long-only** (`blackboard.engine_is_long_only`): the backtest engine has
+  no short path. This is a long-only result measured over one window on one sector index, and
+  it has not been separated from that sector's own drift.
+- **Condition 2 needs realised R, not `ma_dip`'s `tpR: 5` target.** Breakeven at a true R of 5
+  is a 16.7% win rate, but breakeven locks and timeouts truncate winners, so realised R is
+  systematically lower and the real breakeven is higher. The margin is uncomputed.
+
+**The right next step is not promotion and not a third universe.** It is closing conditions 2
+and 5 on the evidence that already exists, and running the resampling audit that could
+invalidate condition 3. All three are cheap relative to what they protect against.
+
+---
+
 ## 5. Applied retrospectively to the whole record
 
 Asked directly: does anything this project has already run meet the bar?
 
-**No. Nothing does.** And the way things fail is more informative than the count.
+> **SUPERSEDED IN PART, 2026-08-22.** This section's central claim — that conditions 1 and 3
+> have never been met by the same candidate — was true when written and is **no longer true**.
+> See §4b above: `EQUITIES-MADIP-OUT-OF-SAMPLE` clears 1, 3 and 6 together. The section is left
+> standing rather than rewritten, because the *pattern* it names remains the correct prior for
+> every other candidate in the record, and because a document that quietly edits away its own
+> falsified claims is worth less than one that shows where it was wrong.
+
+**No — with one exception found on 2026-08-22, recorded in §4b.** And the way things fail is
+still more informative than the count.
 
 | candidate | 1. net E>0 | 3. CI excl. 0 + FDR | 5. survivable | 6. out-of-sample | verdict |
 |---|---|---|---|---|---|
@@ -165,7 +235,7 @@ Asked directly: does anything this project has already run meet the bar?
 
 ### The pattern worth naming
 
-**No candidate has ever cleared conditions 1 and 3 at the same time.** Every result
+**Until 2026-08-22, no candidate had ever cleared conditions 1 and 3 at the same time** (`EQUITIES-MADIP-OUT-OF-SAMPLE` now does — §4b). Every other result
 in this project's history is one of two shapes:
 
 - **Statistically real, economically dead.** `CLASSIFIER-FUNDING-FEATURE` survives
@@ -176,9 +246,11 @@ in this project's history is one of two shapes:
   PHASE3 (+0.0048R, CI [−0.0064, 0.0142]) both sit on the right side of zero with
   intervals that comfortably contain it.
 
-That these two sets have never intersected across ~46 studies is the single most
-useful summary of the research record, and it is not visible from any individual
-verdict.
+That these two sets did not intersect across the first ~46 studies remains the single most
+useful summary of the research record, and it is not visible from any individual verdict. The
+first intersection, when it finally came, did not come from tuning either shape closer to the
+other — it came from a different market, a different family, and a replication on a universe
+the strategy had never seen.
 
 ### On `B5-REVERSAL` specifically
 
