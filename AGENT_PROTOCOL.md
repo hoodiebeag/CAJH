@@ -242,8 +242,39 @@ section is the binding rule; that document is the reasoning behind it. Update bo
 fail):**
 
 - Formal NHST studies (report a p-value against a pre-registered significance gate):
-  **15** sub-tests across 12 studies as of 2026-08-22 (see audit §2 for the list and p-values).
-  Updated by EQUITIES-MADIP-OUT-OF-SAMPLE (2026-08-22): added `ma_dip`'s sign-flip permutation
+  **16** sub-tests across 13 studies as of 2026-08-22 (see audit §2 for the list and p-values).
+  Updated by LOG-REGRESSION-BANDS-EQUITIES (2026-08-22): added the equities companion to
+  `LOG-REGRESSION-BANDS-CRYPTO` — identical method (byte-identical OLS/band/hysteresis
+  specification), fixed 30-symbol DJIA universe, IBKR-realistic per-share commission cost model
+  (the one disclosed, unavoidable difference from crypto's flat-percentage cost) — as the 16th
+  entry: p=0.9750, **wrong sign** (mean outperformance vs buy-and-hold is NEGATIVE, -0.0994).
+  Family-wide BH-FDR recomputed across all 16 (q=0.9750 for this entry, rank 16 of 16, last
+  place) — does not survive, unsurprising given the wrong sign. **This is not a null result in
+  isolation: the equities holdout window was broadly BULLISH (21/30 assets positive
+  buy-and-hold, median +7.6%), the mirror image of crypto's broadly bearish holdout — and the
+  band signal underperforms buy-and-hold there too, for the same structural reason
+  `LOG-REGRESSION-BANDS-CRYPTO`'s own always-flat control exposed: exposure-reducing signals are
+  punished by a rising benchmark exactly as they were rewarded by a falling one.** The
+  always-flat control here also underperforms buy-and-hold (mean -0.1247, worse than the
+  signal's -0.0994), and signal-minus-flat is small, positive, and CI-includes-zero (mean
+  +0.0253, 95% CI [-0.017, 0.063], p=0.118) — i.e. the band adds no detectable information over
+  either extreme (always-long-buy-and-hold or always-flat) in either market. Median ΔR² (log-log
+  vs drift model) is **-0.1184**, same qualitative finding as crypto: the power-law framing
+  fits worse than plain drift. The cross-market gap seen in `EQUITIES-BASELINE-PORT` (equities'
+  gross edge structurally larger than crypto's) does **not** reproduce for this method — instead
+  both markets show the same benchmark-direction artifact in opposite directions, which is a
+  more useful finding than either a clean replication or a clean non-replication would have
+  been. Full writeup in `ROADMAP.md`'s 2026-08-22 LOG-REGRESSION-BANDS-EQUITIES section and
+  `MULTIPLE_COMPARISONS_AUDIT.md` §2. **Material side effect: `CLASSIFIER-FUNDING-FEATURE` flips
+  from survivor back to non-survivor** purely because the family grew (its own p=0.0099 is
+  unchanged; its rank-3 threshold tightens from `3/15×0.05=0.01000` (n=15, where it barely
+  cleared) to `3/16×0.05=0.009375` (n=16), and 0.0099 now exceeds that threshold) —
+  `LOG-REGRESSION-BANDS-CRYPTO` (q=0.0032) and `B5-REVERSAL L=3` (q=0.0080) are essentially
+  unaffected; `EQUITIES-MADIP-OUT-OF-SAMPLE` remains a survivor but tightens (q=0.0435→0.0464,
+  threshold `4/16×0.05=0.0125` vs its unchanged p=0.0116). Three sub-tests formally survive at
+  n=16, down from four at n=15 — pure family-size arithmetic, not a re-examination of
+  `CLASSIFIER-FUNDING-FEATURE`'s own already-KILLED economic-gate verdict. Updated by
+  EQUITIES-MADIP-OUT-OF-SAMPLE (2026-08-22): added `ma_dip`'s sign-flip permutation
   p-value, recomputed on the same fresh DJTA-20 universe EQUITIES-BREAKOUT-OUT-OF-SAMPLE already
   fetched (zero ticker overlap with the original DJIA-30) as the 15th entry — p=0.0116,
   **correct sign, and a LARGER point estimate than the original** (+0.2994R out-of-sample vs

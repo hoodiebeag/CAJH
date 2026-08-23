@@ -4412,3 +4412,172 @@ exports). No strategy code touched — `backtest.js`, `strategy.js`, `tournament
 `bot.js`, `trader.js`, `scanner.js` all untouched, grep-confirmed against the actual staged diff
 before commit. Raw output saved to `research-runs/` (gitignored, not committed). `npm.cmd test`:
 505/505 green.
+
+## LOG-REGRESSION-BANDS-EQUITIES — the equities companion reverses sign, and its own control shows why: the same benchmark-direction artifact as crypto, running in the opposite direction (2026-08-22)
+
+Companion to `LOG-REGRESSION-BANDS-CRYPTO` (above, same date). That study's pre-registered
+primary test nominally survived family-wide BH-FDR (p=0.0002) but was recorded KILLED because
+its own always-flat (never-trade) control beat buy-and-hold by *more* than the real signal did —
+a benchmark artifact of a near-uniformly bearish crypto holdout, not a real effect. This item's
+own work_queue note requires reusing that method **unchanged** — "same fitting procedure, same
+band multiples, same train/holdout convention... or the comparison is worthless" — so that any
+difference in outcome is attributable to the market, not to a silently different method.
+
+**Method: byte-identical to `LOG-REGRESSION-BANDS-CRYPTO`.** Per symbol, OLS
+`log(close) ~ a + b*log(t)` (`t` = local day index) fit on TRAIN ONLY (first 70% of history),
+frozen coefficients applied unchanged to the whole series, standardized residual `z` vs the
+train residual SE, `BAND_K=1.5` fixed (not searched): long when `z<=-1.5`, flat when `z>=+1.5`,
+hysteresis carry-forward inside the band, start flat. Exposure computed from day 1; returns/cost
+counted from the holdout cut onward only. Model-form diagnostic (log-log vs raw-`t` drift OLS,
+same train segment) also carried over unchanged. Full pre-registration text (written before any
+statistic below was computed) is in `scripts/log-regression-bands-equities.mjs`'s header.
+
+**The one disclosed, unavoidable difference: cost model.** Crypto uses a flat percentage
+(`FEE_RATE` 0.008 + `SLIPPAGE_PCT` 0.0005/side, ~1.7% round trip). This project has never used a
+flat percentage for equities — every existing equities script converts a fixed
+`COMMISSION_PER_SHARE` ($0.005, IBKR-realistic) to a percentage via that symbol's average
+holdout close, plus 0.0005/side slippage — reused verbatim from
+`equities-madip-significance.mjs` rather than inventing a third convention. This makes equities'
+round-trip cost price-dependent (a few bps for a high-priced stock, more for a low-priced one)
+instead of crypto's flat ~1.7% — a real, disclosed difference in market structure, not a
+methodological choice that could bias the comparison in either direction.
+
+**Universe: the standing 30-symbol DJIA panel**, not a fresh re-application of crypto's
+`>=150 candles` filter — reused from `equities-madip-significance.mjs` /
+`equities-all-families-baseline.mjs` / `equities-baseline-port.mjs` so this result is comparable
+to every other equities study in this project, cache-only (`research-cache/equities-1d/`, no IB
+Gateway call). All 30 symbols hold 501 cached daily candles, clearing the 150-candle floor by a
+wide margin — nothing excluded.
+
+**Always-flat control, pre-registered here rather than added after the fact.** The crypto study
+discovered its confound only after running the primary test; here it is built in from the start,
+since the confound is a property of the METHOD (comparing an exposure-reducing signal against a
+directional benchmark), not of crypto specifically.
+
+**Primary result:**
+
+| test | n | mean | 95% CI | p (one-sided sign-flip) |
+|---|---:|---:|---|---:|
+| Signal outperformance vs buy-and-hold (pre-registered primary) | 30 | **-0.0994** | [-0.199, -0.011] | 0.9750 (wrong sign) |
+
+CI excludes zero, entirely on the negative side. This is the opposite sign from the
+pre-registered H1 (a mean-reversion exposure signal was hypothesized to help by avoiding
+overextended trends) — a clean, unambiguous non-hit, not a near-miss.
+
+**Why, and the check that matters (same study, same commit — not a later follow-up).** 21 of
+the 30 symbols' holdout windows had POSITIVE buy-and-hold return (median +7.6%) — the mirror
+image of the crypto study's holdout, where 23/24 assets were negative. This equities window is
+broadly bullish. Against a benchmark that is rising almost everywhere, ANY exposure-*reducing*
+strategy looks like it "underperforms" close to automatically — the same mechanism that made
+crypto's signal look artificially good in a falling market makes this signal look artificially
+bad in a rising one. 13 of the 30 symbols (GS, AMGN, AAPL, INTC, TRV, BA, CAT, JNJ, JPM, CSCO,
+WMT, KO, MRK — 43%, versus crypto's 3/24 or 12.5%) never triggered a single long entry across
+their entire holdout (`z` never crossed -1.5) and simply posted 0% — INTC is the starkest case:
+buy-and-hold +110.4% while the flat-the-whole-time strategy earned 0%, an outperformance of
+-1.10 on its own. The always-flat control, computed against the SAME 30 per-asset buy-and-hold
+series with the identical test, isolates the effect directly:
+
+| test | n | mean | 95% CI | p (one-sided sign-flip, "beats buy-and-hold") |
+|---|---:|---:|---|---:|
+| Always-flat (cash) outperformance vs buy-and-hold | 30 | -0.1247 | [-0.226, -0.036] | 0.9926 |
+| Signal outperformance vs buy-and-hold (primary, for comparison) | 30 | -0.0994 | [-0.199, -0.011] | 0.9750 |
+| **Signal minus always-flat** (the only fair test of whether the BAND itself adds information) | 30 | **+0.0253** | **[-0.017, 0.063]** | 0.1180 (one-sided "signal beats cash") |
+
+The always-flat control underperforms buy-and-hold by even more than the real signal does
+(-0.1247 vs -0.0994) — consistent with the band occasionally catching real entries the pure-cash
+control cannot. But signal-minus-flat is small, its CI includes zero, and its one-sided p=0.118
+does not clear even an uncorrected 0.05 gate — there is no detectable band information here
+either, just a smaller version of the same directional-benchmark drag every reduced-exposure
+strategy suffers in a rising market. Put plainly: on this universe and window, the band signal
+is statistically indistinguishable from sitting mostly in cash, exactly as it was on the crypto
+universe — the two studies reach the identical qualitative conclusion (no real timing
+information in the band) via opposite raw signs, because the raw sign in both cases is explained
+by the holdout window's direction, not by the method.
+
+**Model-form diagnostic (same ask as crypto: state plainly whether the fit is even stable, and
+whether it beats a naive drift baseline).** Median across the 30 symbols:
+
+| diagnostic | median across symbols (equities) | median across assets (crypto, for comparison) |
+|---|---:|---:|
+| log-log slope | 0.0515 | 0.0144 |
+| log-log slope SE | 0.0042 | 0.0108 |
+| slope / SE (rough t-stat) | ≈12.4 | ≈1.34 |
+| ΔR² (log-log R² − drift R²) | **-0.1184** | -0.0533 |
+
+Equities' log-log slope is far more precisely estimated than crypto's (t≈12.4 vs ≈1.34) — this
+project's shorter, choppier crypto history genuinely cannot pin down a growth-rate slope the way
+501 days of large-cap equity history can. But that precision does not translate into a better
+*functional form*: ΔR² is negative and, in relative terms, more negative than crypto's — the
+log-log (power-law) framing fits the median equity symbol *worse* than a plain constant-growth
+drift line, by more than it did for crypto. Both markets tell the same story at the model-form
+level even though the slope-precision story differs sharply: the elaborate "rainbow chart"
+transform adds no information over "price went up at a roughly constant rate," in either asset
+class.
+
+**Cross-market comparison — does the gap seen in `EQUITIES-BASELINE-PORT` reproduce here?
+No — for a reason more informative than either a clean replication or a clean non-replication
+would have been.**
+
+| | Crypto (n=24) | Equities (n=30) |
+|---|---:|---:|
+| Signal outperformance vs buy-and-hold, mean | +0.1446 | -0.0994 |
+| 95% CI | [0.068, 0.232] | [-0.199, -0.011] |
+| p (one-sided sign-flip) | 0.0002 | 0.9750 |
+| Always-flat control outperformance, mean | +0.4337 | -0.1247 |
+| Signal minus always-flat, mean | -0.2892 | +0.0253 |
+| Signal minus always-flat, CI | [-0.415, -0.164] (excludes zero, negative) | [-0.017, 0.063] (includes zero) |
+| % of universe with negative buy-and-hold over holdout | 96% (23/24) | 30% (9/30) |
+| % of universe that never triggered a long entry | 12.5% (3/24) | 43% (13/30) |
+| Median ΔR² (log-log vs drift) | -0.0533 | -0.1184 |
+
+`EQUITIES-BASELINE-PORT`'s finding was that `breakout`'s GROSS edge is structurally larger on
+equities than crypto (a ~3.3x like-for-like gap at zero cost, per that section's own correction)
+— a claim about the *magnitude* of an edge that exists in both markets. This method has no edge
+in either market, so there is no magnitude to compare: what reproduces instead is the mechanism
+behind BOTH results being untrustworthy — a reduced-exposure signal's apparent
+outperformance-or-underperformance is dominated by which direction the holdout window happened
+to move, not by anything the band itself detects. The signal-minus-flat row is the cleanest
+single number for this: negative and CI-excludes-zero on crypto (the band actively hurts
+relative to cash), small-positive and CI-includes-zero on equities (indistinguishable from cash)
+— neither is a usable edge, and the *direction* of each raw result is now demonstrated, not
+merely suspected, to be an artifact of holdout-window direction rather than of the market family.
+Buy-and-hold itself is exactly the confound this item's own task text asked to be made visible
+rather than hidden: equities' median holdout buy-and-hold (+7.6%) reflects real, if
+short-window, upward drift that crypto's holdout did not share (median crypto buy-and-hold was
+negative) — the band signal's negative outperformance here is not evidence the signal shorts a
+rising market on purpose, it is evidence that being flat 43% of the time in a rising market costs
+return, exactly as being flat in a falling market saved it on the crypto side.
+
+**MULTIPLE_COMPARISONS_AUDIT.md update, same commit.** Adds this study's p=0.9750 as the 16th
+sub-test (13th study) to the formal-NHST family (15 sub-tests / 12 studies prior to this item).
+Ranks dead last by raw p-value and does not survive BH-FDR (unsurprising, given the wrong sign).
+Family-wide BH-FDR recomputed across all 16 at q=0.05 — full table in
+`MULTIPLE_COMPARISONS_AUDIT.md` §2. **Material side effect: `CLASSIFIER-FUNDING-FEATURE` flips
+from survivor back to non-survivor** — the mirror image of the flip `LOG-REGRESSION-BANDS-CRYPTO`
+caused two studies ago: that update added a very small p-value at rank 1, loosening every lower
+rank's threshold; this update adds a very large p-value at rank 16 (the bottom), which tightens
+every rank's threshold above it purely by growing the family size. `CLASSIFIER-FUNDING-FEATURE`'s
+rank-3 threshold tightens from `3/15×0.05=0.01000` (where its unchanged p=0.0099 barely cleared)
+to `3/16×0.05=0.009375` (where it no longer does). Its own economic-gate verdict (KILLED —
+best-scoring subset still nets -0.24R/trade after cost) is untouched — a purely statistical side
+effect of family size. `LOG-REGRESSION-BANDS-CRYPTO`, `B5-REVERSAL L=3`, and
+`EQUITIES-MADIP-OUT-OF-SAMPLE` remain survivors, essentially unaffected. Three sub-tests now
+formally survive at n=16, down from four at n=15.
+
+**Verdict: KILLED — wrong sign, and the study's own control shows the wrong sign is itself a
+benchmark artifact rather than evidence of a real (negative) effect.** No promotion
+consideration, no `SEALED_SYMBOLS` re-run — a wrong-signed primary result with a CI-excludes-zero
+signal-vs-flat delta near zero gives nothing to promote.
+
+**Engineering note.** New file: `scripts/log-regression-bands-equities.mjs` only, additive. No
+strategy code touched — `backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`,
+`trader.js`, `scanner.js` all untouched, grep-confirmed against the staged diff before commit.
+Reused `momentum.mjs`'s `bootstrapCI` and `researchlab.mjs`'s `saveExperiment` unmodified; the
+equities candle loader is a local `loadCached` reading `research-cache/equities-1d/*.json`,
+matching `equities-madip-significance.mjs`'s own convention rather than inventing a new one.
+Full per-symbol breakdown (all 30 rows: slope, SE, R² both models, episodes, strategy/buy-hold/
+flat return, outperformance) is in the saved
+`research-runs/*-log-regression-bands-equities.json` provenance record, not reproduced row-by-row
+here. `npm.cmd test`: 505/505 green (no new production code path exercised by existing tests).
+`MULTIPLE_COMPARISONS_AUDIT.md` and `AGENT_PROTOCOL.md`'s formal-NHST counters updated in the
+same commit per that document's own binding rule.

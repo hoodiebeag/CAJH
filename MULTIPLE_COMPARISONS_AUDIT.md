@@ -37,7 +37,25 @@ VERDICTS.md at all:**
   audit is about ("slicing seven ways and picking the best-looking cell is
   multiple-comparisons p-hacking almost by construction").
 
-**Total: 53 studies conducted to date** (updated 2026-08-22 by LOG-REGRESSION-BANDS-CRYPTO —
+**Total: 54 studies conducted to date** (updated 2026-08-22 by LOG-REGRESSION-BANDS-EQUITIES —
+the equities companion to LOG-REGRESSION-BANDS-CRYPTO below, identical method (byte-identical
+OLS log-log-vs-drift regression bands, hysteresis, cost charged on every flip), fixed 30-symbol
+DJIA universe, IBKR-realistic per-share commission cost (the one disclosed, unavoidable
+difference from crypto's flat-percentage cost). Pre-registered one-sided sign-flip permutation
+test on per-asset holdout outperformance vs buy-and-hold (n=30 assets), p=0.9750 (**wrong
+sign** — observed mean outperformance -0.0994), 95% bootstrap CI [-0.199, -0.011] (excludes
+zero, on the negative side). Joins the Formal NHST bucket as the 16th sub-test (13th study),
+ranking dead last by raw p-value — does not survive BH-FDR. Not a bare null: the equities
+holdout window was broadly BULLISH (21/30 assets positive buy-and-hold, median +7.6%), the
+mirror image of `LOG-REGRESSION-BANDS-CRYPTO`'s broadly bearish holdout, and the band signal
+underperforms buy-and-hold here for the same structural reason that study's always-flat control
+exposed — exposure-reducing signals are punished by a rising benchmark exactly as they were
+rewarded by a falling one. The always-flat control underperforms buy-and-hold even more than
+the signal does here (-0.1247 vs -0.0994); signal-minus-flat is small, positive, and
+CI-includes-zero (+0.0253, CI [-0.017, 0.063]) — no detectable band information in either
+market. Median ΔR² (log-log vs drift) -0.1184, same qualitative finding as crypto (power-law
+framing fits worse than plain drift). Recorded a plain KILLED verdict in VERDICTS.md — a 54th
+study. Previously updated 2026-08-22 by LOG-REGRESSION-BANDS-CRYPTO —
 a primary market-exposure signal (log-price vs log-time regression bands, never attempted before
 in this project), pre-registered one-sided sign-flip permutation test on per-asset holdout
 outperformance vs buy-and-hold (n=24 assets), p=0.0002, 95% bootstrap CI [0.068, 0.232]
@@ -82,7 +100,7 @@ Breakdown by kind:
 
 | Kind | Count | What it means for this audit |
 |---|---:|---|
-| Formal NHST (reports a p-value against a pre-registered gate) | 11 studies / 14 sub-tests (this row lagged the real count before this update — see §1's own "the count is stale" framing; corrected here to match §2/AGENT_PROTOCOL.md's current totals as of LOG-REGRESSION-BANDS-CRYPTO) | Section 2 — a real FWER/FDR computation applies |
+| Formal NHST (reports a p-value against a pre-registered gate) | 13 studies / 16 sub-tests (this row lagged the real count before this update — see §1's own "the count is stale" framing; corrected here to match §2/AGENT_PROTOCOL.md's current totals as of LOG-REGRESSION-BANDS-EQUITIES) | Section 2 — a real FWER/FDR computation applies |
 | Economic-gate-only (point-estimate threshold, no p-value/null distribution) | 35 (see PER-EPOCH-GROSS-EDGE note above; §3's "33" below is pre-this-study and not rewritten here — see that section's own staleness framing) | Section 3 — classical alpha math doesn't transfer cleanly; discussed qualitatively |
 | Non-verdict (a gate failed before holdout was ever examined) | 6 (H11, FUNDING-MEANREV, ONCHAIN-FLOW-GATE, FIB-PULLBACK, VOL-CONFIRM-BREAKOUT, PAIRS-COINTEGRATION-STATARB) | Consumed zero holdout looks — train-gate, data-gate, or (new with PAIRS-COINTEGRATION-STATARB) internal-screen-gate failures, holdout never examined. Not part of either look-elsewhere pool. PAIRS-COINTEGRATION-STATARB differs from the other five: its gate wasn't missing data, it was its own internal, ALREADY BH-FDR-corrected 105-pair Engle-Granger screen (0/105 survived q=0.05) — a self-contained formal-NHST family that doesn't feed Section 2's 9-sub-test table, since it was corrected within the study rather than needing retroactive cross-study correction. |
 | Descriptive / no gate at all | 3 (T1-ZEROCOST informal 8-family screen, SEASONALITY-DAYOFWEEK-SESSION, EQUITIES-ALL-FAMILIES-BASELINE) | No pass/fail claim was ever made, so nothing to correct — but the holdout window was looked at, which matters for Section 4 |
@@ -95,7 +113,7 @@ study by `B5-REVERSAL-PHASE4-PORTFOLIO-SIM`'s FAIL under a stricter, more realis
 
 ## 2. The formal-significance subfamily: a real FWER/FDR computation
 
-Fifteen sub-tests across twelve studies report an actual p-value against the project's
+Sixteen sub-tests across thirteen studies report an actual p-value against the project's
 pre-registered `p<0.05` significance gate (`MOMENTUM_SPEC.md §6` clause 1, and the
 classifier spec's equivalent permutation-null clause). These are the only results in this
 project where classical multiple-comparisons math applies without qualification, because
@@ -118,30 +136,30 @@ they're the only ones with an actual null distribution behind them.
 | 13 | MOMENTUM-SHORT-HORIZON-RECHECK L=7 (train) | 0.6024 | **no** (wrong sign) |
 | 14 | EQUITIES-BREAKOUT-OUT-OF-SAMPLE (holdout, primary) | 0.6165 | **no** (wrong sign) |
 | 15 | Momentum M7 (train, residual IC) | 0.7013 | yes |
+| 16 | LOG-REGRESSION-BANDS-EQUITIES (holdout, primary) | 0.9750 | **no** (wrong sign) |
 
-**Naive FWER, k=15, alpha=0.05:** 1 − (1 − 0.05)^15 = **0.5367** (assuming independence,
+**Naive FWER, k=16, alpha=0.05:** 1 − (1 − 0.05)^16 = **0.5599** (assuming independence,
 which these tests only partially satisfy — see caveat below). Over a family this size, better
 than even odds of at least one nominal "significant" hit existed even if every single
-underlying effect were exactly zero. Five now clear raw p<0.05 (ranks 1–5 above) —
-informative, but this alone doesn't say anything about which are real, and this update adds a
-rare counter-example: a raw hit (rank 4, this update's own study) that reproduces stronger, not
-weaker, on a fresh out-of-sample universe.
+underlying effect were exactly zero. Five clear raw p<0.05 (ranks 1–5 above, unchanged by this
+update — the new entry lands at the opposite end of the table) — informative, but this alone
+doesn't say anything about which are real.
 
-**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 15 is `(i/15)×0.05`):
+**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 16 is `(i/16)×0.05`):
 
 | Rank *i* | Study | p-value | q-value | Survives? |
 |---:|---|---:|---:|---|
-| 1 | LOG-REGRESSION-BANDS-CRYPTO | 0.0002 | 0.0030 | **yes** (nominally — see caveat) |
-| 2 | B5-REVERSAL L=3 | 0.0010 | 0.0075 | **yes** |
-| 3 | CLASSIFIER-FUNDING-FEATURE | 0.0099 | 0.0495 | **yes** (flipped back from non-survivor — see below) |
-| 4 | EQUITIES-MADIP-OUT-OF-SAMPLE | 0.0116 | 0.0435 | **yes** (new — see below) |
-| 5 | Classifier P5 | 0.0198 | 0.0594 | no |
-| 6–15 | (remaining 10, see full table above) | 0.0579–0.7013 | 0.1389–0.7013 | no |
+| 1 | LOG-REGRESSION-BANDS-CRYPTO | 0.0002 | 0.0032 | **yes** (nominally — see caveat) |
+| 2 | B5-REVERSAL L=3 | 0.0010 | 0.0080 | **yes** |
+| 3 | CLASSIFIER-FUNDING-FEATURE | 0.0099 | 0.0528 | **no** (flipped from survivor — see below) |
+| 4 | EQUITIES-MADIP-OUT-OF-SAMPLE | 0.0116 | 0.0464 | **yes** |
+| 5 | Classifier P5 | 0.0198 | 0.0634 | no |
+| 6–16 | (remaining 11, see full table above) | 0.0579–0.9750 | 0.1481–0.9750 | no |
 
-**Four sub-tests formally survive family-wise BH-FDR correction at q=0.05 now that the
-family has grown to 15 — one is a demonstrated benchmark artifact (rank 1, see below), and a
-new one (rank 4) is this update's own study, which is the opposite failure mode: a genuine
-fresh-universe replication that got stronger, not an artifact caught by its own control.**
+**Three sub-tests formally survive family-wise BH-FDR correction at q=0.05 now that the
+family has grown to 16 — down from four, purely from this update's own entry landing at the
+bottom of the table and tightening every rank above it. One survivor is a demonstrated
+benchmark artifact (rank 1, see below).**
 `LOG-REGRESSION-BANDS-CRYPTO`
 (2026-08-22, `ROADMAP.md`) tested a log-price-vs-log-time regression-band exposure signal
 against crypto buy-and-hold: p=0.0002, the smallest raw p-value ever recorded in this family,
@@ -188,12 +206,53 @@ than the original DJIA-30 estimate (+0.1526), not smaller — the opposite of wh
 look-elsewhere-inflated result would be expected to do on honest replication. Full writeup:
 `ROADMAP.md`'s 2026-08-22 `EQUITIES-MADIP-OUT-OF-SAMPLE` section.
 
+**This update (n=15→n=16): `LOG-REGRESSION-BANDS-EQUITIES` joins as the 16th entry, landing
+dead last (rank 16, p=0.9750, wrong sign).** The equities companion to
+`LOG-REGRESSION-BANDS-CRYPTO` — byte-identical method (OLS log-log-vs-drift regression bands,
+BAND_K=1.5, 70/30 train/holdout, hysteresis, cost charged on every exposure flip), fixed
+30-symbol DJIA universe, the one disclosed unavoidable difference being an IBKR-realistic
+per-share commission cost model in place of crypto's flat percentage. Mean holdout
+outperformance vs buy-and-hold is **negative** (-0.0994, 95% CI [-0.199, -0.011], entirely below
+zero) — the opposite sign from the pre-registered H1. This is not a bare null result: the
+equities holdout window was broadly BULLISH (21/30 assets positive buy-and-hold, median
++7.6%), the mirror image of the crypto study's broadly bearish holdout, and this study's own
+always-flat control (carried over from the crypto study, pre-registered here rather than
+added after the fact) underperforms buy-and-hold by even more than the signal does (-0.1247 vs
+-0.0994) — signal-minus-flat is small, positive, and CI-includes-zero (+0.0253, CI
+[-0.017, 0.063], p=0.118 one-sided). Read together, the two studies show the SAME artifact in
+opposite directions: a benchmark falling almost everywhere rewards any reduced-exposure
+strategy (crypto); a benchmark rising almost everywhere punishes one (equities). Neither result
+is evidence the band itself carries information. Median ΔR² (log-log vs drift model) -0.1184 —
+same qualitative finding as crypto, the power-law framing fits worse than plain drift. Recorded
+a plain KILLED verdict (wrong sign, no benchmark-artifact caveat needed since it never cleared
+raw significance). Full writeup: `ROADMAP.md`'s 2026-08-22 `LOG-REGRESSION-BANDS-EQUITIES`
+section.
+
+**Material side effect: `CLASSIFIER-FUNDING-FEATURE` flips from survivor back to
+non-survivor** — the reverse of the flip the crypto study caused, and for the mirror-image
+reason: that update ADDED a very small p-value at rank 1 (loosening every lower rank's
+threshold); this update adds a very large p-value at rank 16 (the bottom), which tightens every
+rank's threshold above it purely by growing the denominator `n`. `CLASSIFIER-FUNDING-FEATURE`'s
+rank-3 threshold tightens from `3/15×0.05=0.01000` (where its unchanged p=0.0099 barely
+cleared, q=0.0495) to `3/16×0.05=0.009375` (where it no longer does, q=0.0528). Its own
+economic-gate verdict (KILLED — best-scoring subset nets -0.24R/trade after cost) is untouched
+— this is a purely statistical side effect of family size, not a re-examination of that study.
+`LOG-REGRESSION-BANDS-CRYPTO` (q=0.0030→0.0032) and `B5-REVERSAL L=3` (q=0.0075→0.0080) are
+essentially unaffected; `EQUITIES-MADIP-OUT-OF-SAMPLE` remains a survivor but tightens
+(q=0.0435→0.0464, its own p=0.0116 unchanged). Three sub-tests now formally survive at n=16,
+down from four at n=15 — this is the same mechanical, family-size-driven flip this document has
+now recorded in both directions (a strong new hit loosening thresholds; a weak new hit
+tightening them), which is itself the clearest illustration this project has produced of why a
+single study's BH-FDR status should never be treated as a fixed property of that study.
+
 **A genuinely surprising pattern, stated with its caveat — and now with a concrete
 counter-example on each side.** Under a null of "no real effect anywhere in this family,"
-P(at least 5 of 15 independent trials clear p<0.05) ≈ **0.06%** (exact binomial, n=15, p=0.05,
-updated from the prior n=14 figure of 0.42% now that a 5th raw hit — `EQUITIES-MADIP-OUT-OF-SAMPLE`
-— has joined the top of the table). Read at face value this would suggest real effects are
-present. **The caveat that mattered before still matters:** these fifteen tests are not
+P(at least 5 of 16 independent trials clear p<0.05) ≈ **0.09%** (exact binomial, n=16, p=0.05,
+updated from the prior n=15 figure of 0.06% — this update adds a raw non-hit at the bottom of
+the table, so the hit count is unchanged at 5 (the 5th raw hit, `EQUITIES-MADIP-OUT-OF-SAMPLE`,
+joined the top of the table the prior update), but the larger family size alone raises the
+probability of seeing that many hits by chance). Read at face value this would suggest real
+effects are present. **The caveat that mattered before still matters:** these sixteen tests are not
 independent draws — B5-REVERSAL L=3/L=5 share a mechanism and overlapping data;
 CLASSIFIER-FUNDING-FEATURE is P5's own model plus one covariate on much of the same holdout
 rows — which makes any raw hit-count less surprising than the naive binomial number suggests.
