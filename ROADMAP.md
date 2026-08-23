@@ -4346,3 +4346,69 @@ touched — `backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.j
 `scanner.js` all untouched, grep-confirmed against the actual staged diff before commit (only this
 `ROADMAP.md` section and `.agent_state.json` change). `npm.cmd test`: 505/505 green (no production
 or test file touched, so no new tests were required or added).
+
+## SPECTRAL-CYCLE-DETECTION-CRYPTO — periodogram scan against an AR(1) red-noise null finds no periodicity that survives correction (2026-08-22)
+
+Never attempted here before this item — zero prior hits for `fourier`/`spectral`/`periodogram`/
+`cycle` anywhere in `VERDICTS.md`/`ROADMAP.md`. Distinct from `SEASONALITY-DAYOFWEEK-SESSION`, which
+tested fixed calendar buckets (day-of-week, session): this searches for periodicity at whatever
+frequency the data actually contains, without assuming one in advance. STRUCTURAL REQUIREMENT (this
+item's own work_queue note): a found cycle must generate market EXPOSURE directly, never a
+gate/filter on `breakout`/`anticipate` — Template A is retired. Because the result below is a
+complete null, that structural requirement was never reached.
+
+**Method, pre-registered before any statistic was computed** (full text in
+`scripts/spectral-cycle-detection-crypto.mjs`'s header, same commit as these results). Per asset:
+log return `r_t`, TRAIN-segment mean (first 70% of that asset's local history) subtracted —
+log returns are already close to stationary, so no further detrending is applied. Direct O(n²) DFT
+periodogram (not FFT — TRAIN segments run to a few hundred points, so the direct sum is cheap and
+avoids FFT zero-padding distortion) over frequencies `f_k = k/n`, `k = 1..floor(n/2)`. Null model is
+AR(1) red noise, not white noise — financial returns are autocorrelated, and a white-noise null
+manufactures spurious peaks out of that autocorrelation alone (Torrence & Compo 1998, eq. 16 for the
+theoretical red-noise shape; the resulting `J_k/P_k ~ Exponential(mean 1)` large-sample result gives
+a closed-form per-frequency p-value `p_k = exp(-J_k/P_k)`, e.g. Percival & Walden 1993 §6.6).
+Universe: 24 active (non-`SEALED_SYMBOLS`) watchlist assets with >=150 local daily candles — reused
+from `LOG-REGRESSION-BANDS-CRYPTO`'s floor rather than inventing a second, spectral-specific one.
+All 24 active assets cleared it; nothing was skipped.
+
+**Multiple-comparisons correction, pre-registered.** This item's own note requires correcting across
+frequencies within the study, or reporting the tallest peak uncorrected repeats the exact
+look-elsewhere error already documented elsewhere in this project. Every `(asset, frequency)`
+p-value produced by every asset was pooled into ONE family — **7,150 tests** — and corrected
+together with a single Benjamini-Hochberg pass at q=0.05, a deliberately more conservative reading
+than correcting per-asset and leaving the cross-asset axis uncorrected (disclosed in the script
+header rather than silently assumed).
+
+**Result:**
+
+| metric | value |
+|---|---:|
+| Assets tested | 24 (0 skipped) |
+| Total (asset, frequency) pairs pooled | 7,150 |
+| BH-FDR q | 0.05 |
+| Smallest raw p-value in the pool | 0.0000237 |
+| BH-FDR rank-1 threshold (`q/m`) | 0.0000070 |
+| (asset, frequency) pairs surviving correction | **0** |
+| Median per-asset AR(1) φ | -0.0184 |
+
+**NO-SIGNIFICANT-PERIODICITY.** Zero of the 7,150 pooled p-values survived Benjamini-Hochberg at
+q=0.05. The smallest raw p-value found (0.0000237) is not a near-miss dressed up as a clean null —
+it is roughly **3.4x** the rank-1 survival threshold (0.0000070), i.e. even the single strongest
+peak in the entire pooled universe falls short of what the correction requires by a real margin, not
+a rounding one. Per this study's own pre-registered decision rule, no phase-based entry logic was
+built on a null result — `scoreFrequency`/the sign-flip permutation test/the bootstrap CI were never
+invoked, because the branch that calls them is gated on at least one surviving `(asset, frequency)`
+pair. This matches the honest prior stated in the item's own task text: financial return series are
+close to spectrally flat, and apparent cycles in short train samples (median asset AR(1) φ ≈ -0.02,
+essentially no persistence to speak of) are overwhelmingly finite-sample noise. No p-value is
+reported for a strategy return, so this does **not** join `MULTIPLE_COMPARISONS_AUDIT.md`'s
+formal-NHST cross-study family — the within-study frequency correction above is a separate
+correction from that family's, per the script header's own disclosure, and there is nothing here to
+add to it.
+
+**Engineering note.** New file: `scripts/spectral-cycle-detection-crypto.mjs` (additive, local
+candles only, no egress — reads `researchlib.mjs`/`researchlab.mjs`/`momentum.mjs`, all pre-existing
+exports). No strategy code touched — `backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`,
+`bot.js`, `trader.js`, `scanner.js` all untouched, grep-confirmed against the actual staged diff
+before commit. Raw output saved to `research-runs/` (gitignored, not committed). `npm.cmd test`:
+505/505 green.
