@@ -4581,3 +4581,78 @@ flat return, outperformance) is in the saved
 here. `npm.cmd test`: 505/505 green (no new production code path exercised by existing tests).
 `MULTIPLE_COMPARISONS_AUDIT.md` and `AGENT_PROTOCOL.md`'s formal-NHST counters updated in the
 same commit per that document's own binding rule.
+
+## SPECTRAL-CYCLE-DETECTION-EQUITIES — pre-registered earnings/expiry frequencies and an unrestricted scan both find nothing that survives correction (2026-08-22)
+
+Companion to `SPECTRAL-CYCLE-DETECTION-CRYPTO` (above, same date, closed
+`NO-SIGNIFICANT-PERIODICITY`). That study was a pure fishing expedition — crypto has no strong
+a-priori reason to expect periodicity at any particular frequency. Equities are different:
+quarterly earnings releases, monthly options expiry, and periodic index rebalancing are real,
+documented mechanisms that could imprint periodicity at specific, predictable frequencies. That
+gives this run a genuine pre-registered hypothesis instead of an unrestricted scan, so this study
+runs and reports **two separate families**, each corrected on its own, rather than filtering one
+family's output after the fact:
+
+- **Family A (unrestricted)** — every `(asset, frequency)` pair from the full periodogram, exactly
+  `SPECTRAL-CYCLE-DETECTION-CRYPTO`'s pool, BH-FDR'd on its own size.
+- **Family B (pre-registered)** — only two target frequencies per asset, fixed **before** the
+  periodogram was computed: ~63 trading days (quarterly earnings cycle) and ~21 trading days
+  (monthly options-expiry cycle), converted to the nearest tested DFT bin per asset and BH-FDR'd on
+  its own much smaller size (60 tests, not blended into family A's 5,222).
+
+**Method, data, null model:** byte-identical to `spectral-cycle-detection-crypto.mjs` (per-asset
+log returns, TRAIN-mean subtracted only, direct O(n²) DFT periodogram, AR(1) red-noise null,
+closed-form per-frequency p-value) — reused verbatim per this item's own instruction to change
+nothing about the method between markets. Universe: the same fixed 30-symbol DJIA panel as
+`LOG-REGRESSION-BANDS-EQUITIES` (`research-cache/equities-1d`, cache-only, no re-fetch), all 30
+symbols holding 501 cached daily candles, none skipped.
+
+**Calendar/sampling-artifact check, pre-registered before any survivor was known** (this item's own
+instruction: a strong clean peak on an older, better-studied market should raise suspicion of a
+data artifact before being reported as signal). Any surviving `(asset, k)` is flagged
+suspected-artifact if either `k<=2` (near-DC — more parsimoniously explained as residual drift
+leaking through mean-only detrending than as periodicity) or its period rounds to a trading-week
+multiple that is not itself one of this study's two pre-registered periods (already covered by
+`SEASONALITY-DAYOFWEEK-SESSION` under a different name). Moot this run — neither family produced a
+survivor to check.
+
+**Result:**
+
+| metric | Family A (unrestricted) | Family B (pre-registered) |
+|---|---:|---:|
+| (asset, frequency) pairs tested | 5,222 | 60 |
+| BH-FDR q | 0.05 | 0.05 |
+| Smallest raw p-value | 0.0007334 | 0.0099017 |
+| BH-FDR rank-1 threshold (`q/m`) | 0.0000096 | 0.0008333 |
+| Smallest p vs. threshold | 76.6x over | 11.9x over |
+| Survivors | **0** | **0** |
+| Finding | NO-SIGNIFICANT-PERIODICITY | NO-SIGNIFICANT-PERIODICITY |
+
+Median per-asset AR(1) φ = -0.0256 (essentially no persistence, consistent with both this
+project's crypto run, φ≈-0.018, and the honest prior that financial return series are close to
+spectrally flat).
+
+**Both families are complete nulls, and the pre-registered family is the more informative result of
+the two.** The pre-registered scan is the real test this item asked for — if earnings/expiry cycles
+imprinted detectable periodicity on daily equity returns, a targeted 60-test family with a far more
+permissive BH-FDR threshold (0.000833 vs. the unrestricted scan's 0.0000096, a 87x-looser bar) is
+exactly where it would show up. It didn't: the single best pre-registered hit (p=0.0099) still
+misses its own family's threshold by nearly 12x. This is a meaningfully stronger negative than the
+unrestricted scan alone would give, because it directly addresses the mechanism-based hypothesis
+this item was designed to test, not just "no periodicity anywhere in an uncorrected search." Per
+this study's own pre-registered decision rule, no phase-based entry logic was built from either
+family — `scoreFrequency`/the sign-flip permutation test/the bootstrap CI were never invoked for
+either, because both branches are gated on at least one surviving pair. No p-value is reported for
+a strategy return in either family, so this does **not** join `MULTIPLE_COMPARISONS_AUDIT.md`'s
+formal-NHST cross-study family — same as the crypto companion, and for the same reason (the
+within-study frequency corrections above are separate from that family's, and there is nothing here
+to add to it).
+
+**Engineering note.** New file: `scripts/spectral-cycle-detection-equities.mjs` (additive,
+cache-only, no egress — reads `momentum.mjs`/`researchlab.mjs`, both pre-existing exports, plus a
+local `research-cache/equities-1d` loader matching `log-regression-bands-equities.mjs`'s own
+convention). No strategy code touched — `backtest.js`, `strategy.js`, `tournament.mjs`,
+`monitor.js`, `bot.js`, `trader.js`, `scanner.js` all untouched, grep-confirmed against the actual
+staged diff before commit. Raw output (including the full per-family survivor lists, empty in this
+run) saved to `research-runs/` (gitignored, not committed). `npm.cmd test`: 505/505 green (no new
+production code path exercised by existing tests).
