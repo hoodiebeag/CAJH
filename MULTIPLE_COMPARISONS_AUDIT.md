@@ -37,15 +37,42 @@ VERDICTS.md at all:**
   audit is about ("slicing seven ways and picking the best-looking cell is
   multiple-comparisons p-hacking almost by construction").
 
-**Total: 54 studies conducted to date** (updated 2026-08-22 by LOG-REGRESSION-BANDS-EQUITIES —
+**Total: 55 studies conducted to date** (updated 2026-08-23 by GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL
+— a GDELT news-volume/tone regime exposure signal on crypto, genuinely exogenous data, same
+family as MACRO-REGIME-PRIMARY-SIGNAL, on the identical 12-asset universe/window that study used
+(and where it closed as a sample-size non-verdict). Unlike that study, this one measured 65
+holdout regime episodes — comfortably clearing its own pre-registered n>=8 floor — so a real
+significance test was possible. Pre-registered one-sided sign-flip permutation test on per-holdout-episode
+(strategy day return − buy-and-hold day return) spread (n=65 episodes, this study's own
+effective-n unit), p=0.7113 (**wrong sign** — observed mean episode spread -0.00594), 95%
+block-bootstrap CI on holdout daily strategy returns [-0.00415, -0.00054] (excludes zero, on the
+negative side, corroborating from a second angle). Joins the Formal NHST bucket as the 17th
+sub-test (14th study), landing second-to-last by raw p-value (just ahead of
+LOG-REGRESSION-BANDS-EQUITIES) — does not survive BH-FDR. Not a bare null: hit rate ~50.5% in
+both train and holdout (indistinguishable from chance), and the strategy underperforms
+buy-and-hold by 8.7 points in holdout despite correctly measuring much faster regime turnover
+than macro data (65 episodes vs MACRO-REGIME-PRIMARY-SIGNAL's 1 on the identical window) — ~64
+holdout flips at this project's real per-side cost (~0.85%) plausibly account for most of that
+gap as cumulative transaction-cost drag, not a benchmark-direction artifact (holdout buy-and-hold
+here is negative and the strategy is MORE negative, the opposite of the log-regression pair's
+falling-benchmark-rewards-any-exit-signal confound). **Material side effect: none flip.**
+CLASSIFIER-FUNDING-FEATURE was already a non-survivor at n=16 (this update's new entry lands near
+the bottom of the ranking, not near the top, so it only tightens thresholds further, it doesn't
+reorder the top ranks) — its q tightens from 0.0528 (n=16) to 0.0561 (n=17), still non-surviving.
+EQUITIES-MADIP-OUT-OF-SAMPLE remains a survivor but tightens (q=0.0464→0.0493, threshold
+`4/17×0.05=0.01176` vs its unchanged p=0.0116). LOG-REGRESSION-BANDS-CRYPTO (q=0.0032→0.0034) and
+B5-REVERSAL L=3 (q=0.0080→0.0085) are essentially unaffected. Three sub-tests still formally
+survive at n=17, unchanged from n=16. Full writeup: ROADMAP.md's 2026-08-23
+GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL section. Previously updated 2026-08-22 by
+LOG-REGRESSION-BANDS-EQUITIES —
 the equities companion to LOG-REGRESSION-BANDS-CRYPTO below, identical method (byte-identical
 OLS log-log-vs-drift regression bands, hysteresis, cost charged on every flip), fixed 30-symbol
 DJIA universe, IBKR-realistic per-share commission cost (the one disclosed, unavoidable
 difference from crypto's flat-percentage cost). Pre-registered one-sided sign-flip permutation
 test on per-asset holdout outperformance vs buy-and-hold (n=30 assets), p=0.9750 (**wrong
 sign** — observed mean outperformance -0.0994), 95% bootstrap CI [-0.199, -0.011] (excludes
-zero, on the negative side). Joins the Formal NHST bucket as the 16th sub-test (13th study),
-ranking dead last by raw p-value — does not survive BH-FDR. Not a bare null: the equities
+zero, on the negative side). Joined the Formal NHST bucket as the 16th sub-test (13th study),
+ranking dead last by raw p-value at the time — does not survive BH-FDR. Not a bare null: the equities
 holdout window was broadly BULLISH (21/30 assets positive buy-and-hold, median +7.6%), the
 mirror image of `LOG-REGRESSION-BANDS-CRYPTO`'s broadly bearish holdout, and the band signal
 underperforms buy-and-hold here for the same structural reason that study's always-flat control
@@ -100,7 +127,7 @@ Breakdown by kind:
 
 | Kind | Count | What it means for this audit |
 |---|---:|---|
-| Formal NHST (reports a p-value against a pre-registered gate) | 13 studies / 16 sub-tests (this row lagged the real count before this update — see §1's own "the count is stale" framing; corrected here to match §2/AGENT_PROTOCOL.md's current totals as of LOG-REGRESSION-BANDS-EQUITIES) | Section 2 — a real FWER/FDR computation applies |
+| Formal NHST (reports a p-value against a pre-registered gate) | 14 studies / 17 sub-tests (this row lagged the real count before this update — see §1's own "the count is stale" framing; corrected here to match §2/AGENT_PROTOCOL.md's current totals as of GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL) | Section 2 — a real FWER/FDR computation applies |
 | Economic-gate-only (point-estimate threshold, no p-value/null distribution) | 35 (see PER-EPOCH-GROSS-EDGE note above; §3's "33" below is pre-this-study and not rewritten here — see that section's own staleness framing) | Section 3 — classical alpha math doesn't transfer cleanly; discussed qualitatively |
 | Non-verdict (a gate failed before holdout was ever examined) | 6 (H11, FUNDING-MEANREV, ONCHAIN-FLOW-GATE, FIB-PULLBACK, VOL-CONFIRM-BREAKOUT, PAIRS-COINTEGRATION-STATARB) | Consumed zero holdout looks — train-gate, data-gate, or (new with PAIRS-COINTEGRATION-STATARB) internal-screen-gate failures, holdout never examined. Not part of either look-elsewhere pool. PAIRS-COINTEGRATION-STATARB differs from the other five: its gate wasn't missing data, it was its own internal, ALREADY BH-FDR-corrected 105-pair Engle-Granger screen (0/105 survived q=0.05) — a self-contained formal-NHST family that doesn't feed Section 2's 9-sub-test table, since it was corrected within the study rather than needing retroactive cross-study correction. |
 | Descriptive / no gate at all | 3 (T1-ZEROCOST informal 8-family screen, SEASONALITY-DAYOFWEEK-SESSION, EQUITIES-ALL-FAMILIES-BASELINE) | No pass/fail claim was ever made, so nothing to correct — but the holdout window was looked at, which matters for Section 4 |
@@ -113,7 +140,7 @@ study by `B5-REVERSAL-PHASE4-PORTFOLIO-SIM`'s FAIL under a stricter, more realis
 
 ## 2. The formal-significance subfamily: a real FWER/FDR computation
 
-Sixteen sub-tests across thirteen studies report an actual p-value against the project's
+Seventeen sub-tests across fourteen studies report an actual p-value against the project's
 pre-registered `p<0.05` significance gate (`MOMENTUM_SPEC.md §6` clause 1, and the
 classifier spec's equivalent permutation-null clause). These are the only results in this
 project where classical multiple-comparisons math applies without qualification, because
@@ -136,30 +163,32 @@ they're the only ones with an actual null distribution behind them.
 | 13 | MOMENTUM-SHORT-HORIZON-RECHECK L=7 (train) | 0.6024 | **no** (wrong sign) |
 | 14 | EQUITIES-BREAKOUT-OUT-OF-SAMPLE (holdout, primary) | 0.6165 | **no** (wrong sign) |
 | 15 | Momentum M7 (train, residual IC) | 0.7013 | yes |
-| 16 | LOG-REGRESSION-BANDS-EQUITIES (holdout, primary) | 0.9750 | **no** (wrong sign) |
+| 16 | GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL (holdout, primary) | 0.7113 | **no** (wrong sign) |
+| 17 | LOG-REGRESSION-BANDS-EQUITIES (holdout, primary) | 0.9750 | **no** (wrong sign) |
 
-**Naive FWER, k=16, alpha=0.05:** 1 − (1 − 0.05)^16 = **0.5599** (assuming independence,
+**Naive FWER, k=17, alpha=0.05:** 1 − (1 − 0.05)^17 = **0.5819** (assuming independence,
 which these tests only partially satisfy — see caveat below). Over a family this size, better
 than even odds of at least one nominal "significant" hit existed even if every single
 underlying effect were exactly zero. Five clear raw p<0.05 (ranks 1–5 above, unchanged by this
-update — the new entry lands at the opposite end of the table) — informative, but this alone
+update — the new entry lands near the opposite end of the table) — informative, but this alone
 doesn't say anything about which are real.
 
-**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 16 is `(i/16)×0.05`):
+**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 17 is `(i/17)×0.05`):
 
 | Rank *i* | Study | p-value | q-value | Survives? |
 |---:|---|---:|---:|---|
-| 1 | LOG-REGRESSION-BANDS-CRYPTO | 0.0002 | 0.0032 | **yes** (nominally — see caveat) |
-| 2 | B5-REVERSAL L=3 | 0.0010 | 0.0080 | **yes** |
-| 3 | CLASSIFIER-FUNDING-FEATURE | 0.0099 | 0.0528 | **no** (flipped from survivor — see below) |
-| 4 | EQUITIES-MADIP-OUT-OF-SAMPLE | 0.0116 | 0.0464 | **yes** |
-| 5 | Classifier P5 | 0.0198 | 0.0634 | no |
-| 6–16 | (remaining 11, see full table above) | 0.0579–0.9750 | 0.1481–0.9750 | no |
+| 1 | LOG-REGRESSION-BANDS-CRYPTO | 0.0002 | 0.0034 | **yes** (nominally — see caveat) |
+| 2 | B5-REVERSAL L=3 | 0.0010 | 0.0085 | **yes** |
+| 3 | CLASSIFIER-FUNDING-FEATURE | 0.0099 | 0.0561 | no (already a non-survivor going into this update) |
+| 4 | EQUITIES-MADIP-OUT-OF-SAMPLE | 0.0116 | 0.0493 | **yes** |
+| 5 | Classifier P5 | 0.0198 | 0.0673 | no |
+| 6–17 | (remaining 12, see full table above) | 0.0579–0.9750 | 0.1574–0.9750 | no |
 
-**Three sub-tests formally survive family-wise BH-FDR correction at q=0.05 now that the
-family has grown to 16 — down from four, purely from this update's own entry landing at the
-bottom of the table and tightening every rank above it. One survivor is a demonstrated
-benchmark artifact (rank 1, see below).**
+**Three sub-tests formally survive family-wise BH-FDR correction at q=0.05 at the current
+n=17 — unchanged from n=16, since `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL`'s addition (p=0.7113)
+lands near the bottom of the table (rank 16 of 17) and only tightens thresholds further, it does
+not reorder or flip anything (`CLASSIFIER-FUNDING-FEATURE` was already a non-survivor going into
+this update). One survivor is a demonstrated benchmark artifact (rank 1, see below).**
 `LOG-REGRESSION-BANDS-CRYPTO`
 (2026-08-22, `ROADMAP.md`) tested a log-price-vs-log-time regression-band exposure signal
 against crypto buy-and-hold: p=0.0002, the smallest raw p-value ever recorded in this family,
@@ -284,6 +313,52 @@ trades on DJIA-30) did **not** hold up out-of-sample:
 config at -0.0854R over 33 trades, p=0.6165 — the one other out-of-sample check completed so far in
 this family, and it points toward noise rather than toward a signal that just needed more
 data.
+
+**This update (n=16→n=17): `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL` joins as the 17th entry,
+landing second-to-last (rank 16, p=0.7113, wrong sign).** A GDELT news-volume/tone regime
+exposure signal on crypto (genuinely exogenous data, same family as
+`MACRO-REGIME-PRIMARY-SIGNAL`), run on that exact study's own 12-asset universe and
+train/holdout window — the one difference being that this signal's regime turns over fast
+enough (65 holdout episodes vs macro's 1 on the identical window) to actually clear the
+pre-registered n>=8 episode floor and produce a real test, where `MACRO-REGIME-PRIMARY-SIGNAL`
+itself closed as a sample-size non-verdict. Pre-registered primary test: one-sided sign-flip
+permutation on per-holdout-episode (strategy day return − buy-and-hold day return) spread
+(n=65 episodes, this study's own effective-n unit — there is no per-asset panel here, so the
+independent unit is episodes rather than assets), observed mean spread -0.00594 (wrong sign),
+p=0.7113. 95% block-bootstrap CI on holdout daily strategy returns [-0.00415, -0.00054]
+(excludes zero, negative) corroborates from a second angle. Not a bare null: hit rate ~50.5% in
+both train and holdout (indistinguishable from chance), and unlike the log-regression pair this
+is not a falling/rising-benchmark artifact — holdout buy-and-hold here is already negative
+(-47.37%) and the strategy is MORE negative (-56.06%), so a reduced-exposure signal is not being
+rewarded by a one-directional benchmark. The likely driver instead: ~64 holdout exposure flips
+at this project's real per-side cost (~0.85%) is roughly 54% of cumulative cost drag alone —
+the pre-registered ±1%/±0.1 hysteresis bands slowed but did not eliminate whipsaw against
+GDELT's noisy daily series. Recorded a plain KILLED verdict (wrong sign, no benchmark-artifact
+caveat needed — the loss is not explained by benchmark direction). Full writeup: `ROADMAP.md`'s
+2026-08-23 `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL` section.
+
+**Material side effect: none flip.** `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL`'s p=0.7113 inserts
+between `Momentum M7` (rank 15, p=0.7013) and `LOG-REGRESSION-BANDS-EQUITIES` (now rank 17,
+p=0.9750) — near the bottom, not the top, so it only tightens every threshold above it by
+growing the denominator `n`, the same mechanical direction `LOG-REGRESSION-BANDS-EQUITIES`'s own
+addition caused. `CLASSIFIER-FUNDING-FEATURE` was already a non-survivor at n=16 (q=0.0528) and
+tightens further (q=0.0561) — no flip, since it had nothing to flip from this time.
+`EQUITIES-MADIP-OUT-OF-SAMPLE` remains a survivor but tightens (q=0.0464→0.0493, threshold
+`4/17×0.05=0.011765` vs its unchanged p=0.0116 — a narrow clear). `LOG-REGRESSION-BANDS-CRYPTO`
+(q=0.0032→0.0034) and `B5-REVERSAL L=3` (q=0.0080→0.0085) are essentially unaffected. Three
+sub-tests still formally survive at n=17, unchanged from n=16.
+
+**The binomial-surprise figure, updated once more.** Under a null of "no real effect anywhere
+in this family," P(at least 5 of 17 independent trials clear p<0.05) ≈ **0.12%** (exact
+binomial, n=17, p=0.05, up from the n=16 figure of 0.09% — this update adds a raw non-hit near
+the bottom of the table, so the hit count is unchanged at 5, but the larger family size alone
+raises the probability of seeing that many hits by chance). The same independence caveat applies
+unchanged: these seventeen tests are not independent draws, and `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL`
+adds a genuinely new information source (GDELT news data, never used in any prior test in this
+family) rather than a correlated re-run of an existing one — if anything this addition is
+evidence *against* the correlated-near-null concern that discounts the raw hit-count, not
+evidence for it, since an independent source landing as a clean non-hit is exactly what a
+family with real isolated effects and mostly-null everything-else would look like.
 
 ## 3. The economic-gate subfamily: why classical FWER doesn't transfer, and what does
 

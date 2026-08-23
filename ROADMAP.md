@@ -4656,3 +4656,127 @@ convention). No strategy code touched — `backtest.js`, `strategy.js`, `tournam
 staged diff before commit. Raw output (including the full per-family survivor lists, empty in this
 run) saved to `research-runs/` (gitignored, not committed). `npm.cmd test`: 505/505 green (no new
 production code path exercised by existing tests).
+
+## GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL — a genuinely exogenous news-attention regime signal, killed on wrong sign and cost drag from fast episode turnover (2026-08-23)
+
+Sourced directly from `EXOGENOUS-DATA-ACCESS-AUDIT` (2026-08-22), which confirmed the GDELT 2.0
+DOC API news-volume/tone timeline is reachable (public, free, no key) but courtesy-rate-limited to
+roughly one request per 5s per client, and flagged undici `fetch()` hitting
+`UND_ERR_CONNECT_TIMEOUT` against `api.gdeltproject.org` on every attempt while `curl` succeeded —
+so this item's own task text required the ingestion script to be paced from the start and to shell
+out to `curl` rather than trust `fetch()` on this host. Same family as
+`MACRO-REGIME-PRIMARY-SIGNAL`: genuinely exogenous to this market's own price/positioning history,
+unlike every derivatives-based source already exhausted in `TOURNAMENT_ROADMAP.md`.
+
+**Access/depth measured first, before any construct was designed, per this item's own done_when.**
+New `scripts/gdelt-news-sentiment-primary-signal.mjs` (additive). A paced real pull of both
+`timelinevol` (query=`bitcoin`, mode=`timelinevol`) and `timelinetone` (mode=`timelinetone`),
+`timespan=FULL`, paced 15s between attempts (3x GDELT's stated courtesy floor), shelling out to
+`curl` per the audit's workaround. This run: `timelinevol` returned a real 200 on attempt 12
+(~3 minutes, prior 11 attempts either a courtesy rate-limit page or a `curl` connect timeout),
+`timelinetone` on attempt 3 (~45s). Both series returned 3,497 real daily datapoints each,
+2017-01-01 through the request date (2026-08-23) — genuinely deep enough for a real train/holdout
+split against this project's own (much shorter) local crypto candle history, so this is **not** a
+data non-verdict; the depth constraint here is candle coverage, not GDELT's.
+
+**Construct — pre-registered before any crypto return was touched, deliberately reusing this
+project's own existing conventions rather than inventing a new mechanism shape.** (1) Volume
+signal: GDELT "Volume Intensity" (fraction of all monitored articles mentioning "bitcoin" that
+day) above its own trailing 200-session MA = favourable, ±1% hysteresis band — the identical
+signal SHAPE and band width as `MACRO-REGIME-PRIMARY-SIGNAL`'s DXY-vs-its-own-200dma convention,
+different input. (2) Tone signal: GDELT "Average Tone" above its own trailing 200-session MA =
+favourable, ±0.1 absolute tone-point band (an absolute rather than relative band, since Average
+Tone is signed and frequently near zero — the same asymmetry reason `MACRO-REGIME-PRIMARY-SIGNAL`
+used an absolute band for the yield-curve spread). (3) Composite regime: favourable only when
+BOTH sub-signals are favourable (AND, mechanically majority-of-2). Each sub-signal carries its
+prior value forward inside its own band. Causal alignment: every lookup uses the latest GDELT
+point dated strictly before (crypto trading day − 1 day) — no lookahead. **Structural requirement
+met**: generates exposure directly, never a gate/filter on `breakout`/`anticipate` (Template A
+retired).
+
+**Universe and window — reused verbatim from `MACRO-REGIME-PRIMARY-SIGNAL`, not chosen after
+seeing a result.** Of the active (non-`SEALED_SYMBOLS`) watchlist, 12 assets hold full
+2023-01-01+ local daily candle coverage — ADA, APT, ATOM, BTC, DOGE, DOT, ETH, FIL, INJ, LTC,
+SOL, XRP. Equal-weight, 70/30 chronological split — train 2023-01-02→2025-04-09, holdout
+2025-04-10→2026-03-31, the **identical dates** `MACRO-REGIME-PRIMARY-SIGNAL` used on the same
+universe, which makes the two studies a direct comparison on the same market history. This
+project's real crypto cost basis (FEE_RATE 0.008 + SLIPPAGE_PCT 0.0005/side, ~1.7% round trip)
+charged once per regime flip; buy-and-hold gets one matching entry-cost and one exit-cost charge
+(`MACRO-REGIME-PRIMARY-SIGNAL`'s convention, reused verbatim).
+
+**Results, reported plainly:**
+
+| segment | days | regime episodes | strategy return | buy-and-hold return | hit rate |
+|---|---:|---:|---:|---:|---:|
+| train (2023-01-02 → 2025-04-09) | 829 | 147 | -77.33% | **+186.11%** | 50.42% |
+| holdout (2025-04-10 → 2026-03-31) | 356 | 65 | -56.06% | -47.37% | 50.56% |
+
+**Read plainly, not softened.** Train: the signal was flat or wrong-sided through nearly the
+entire bull run — -77.33% against a +186.11% buy-and-hold benchmark on the same assets/window.
+Holdout: the strategy underperforms buy-and-hold by 8.7 points even though both are negative
+(-56.06% vs -47.37%). Holdout buy-and-hold return here is **identical** to
+`MACRO-REGIME-PRIMARY-SIGNAL`'s own holdout buy-and-hold return (-47.37%), confirming the two
+studies share the same underlying market window exactly as intended — the difference in outcome
+is entirely attributable to the two signals' behavior, not to a different benchmark.
+
+**Sample-size honesty and the pre-registered significance test.** This item's own task text
+pre-registered a floor: if holdout regime-episode count (this study's effective n, not day count)
+falls below 8, this is recorded as a non-verdict. News-sentiment/attention plausibly turns over
+far faster than Fed policy or the yield curve, so this was measured rather than assumed — it did:
+65 holdout episodes, comfortably clearing the floor (unlike `MACRO-REGIME-PRIMARY-SIGNAL`'s single
+356-day holdout episode, which is exactly why that study closed as a sample-size non-verdict on
+the same window). With a real n available, this item's done_when requires "one-sided significance
+test with multiple-comparisons correction stated." This project's established convention for that
+is a one-sided sign-flip permutation test on one scalar per independent unit
+(`log-regression-bands-crypto.mjs`/`equities-madip-significance.mjs` use one value per asset,
+n=assets). This study has a single pooled-universe time series rather than a per-asset panel, so
+the independent unit is this study's own effective-n definition instead: holdout regime episodes.
+Per episode, the scalar is that episode's summed (strategy day return − buy-and-hold day return),
+additive, matching the per-asset studies' additive convention exactly. H1 (mean spread > 0, i.e.
+the regime signal outperforms buy-and-hold) was pre-registered on the construct's own economic
+rationale — favourable (elevated attention + improving sentiment) should coincide with rising, not
+falling, prices — the same one-sided-direction logic `LOG-REGRESSION-BANDS-CRYPTO` and
+`EQUITIES-MADIP-SIGNIFICANCE` used. Result: n=65 holdout episodes, observed mean episode spread
+**-0.00594** (wrong sign), one-sided p=**0.7113**, nowhere close to significant in the
+pre-registered direction. 95% block-bootstrap CI on holdout daily strategy returns (blockSize=20,
+matching `MACRO-REGIME-PRIMARY-SIGNAL`'s convention) is [-0.00415, -0.00054] — excludes zero, on
+the negative side, corroborating the permutation result from a second angle. This joins
+`MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family as the 17th sub-test (14th study) — see that
+document's §2 and `AGENT_PROTOCOL.md`'s counter for the full recomputation.
+
+**Why the signal loses even though it correctly captures faster regime turnover than
+macro data.** ~64 holdout exposure flips (episodes-1) at this project's real per-side cost
+(~0.85%) is on the order of 54% of cumulative cost drag alone over the 356-day holdout window —
+the likely dominant driver of the 8.7-point underperformance versus buy-and-hold, despite the
+pre-registered ±1%/±0.1 hysteresis bands specifically designed to prevent single-day whipsaw. The
+bands slowed but did not eliminate churn against GDELT's noisy daily news-volume/tone series. This
+is a genuinely different failure mode from `MACRO-REGIME-PRIMARY-SIGNAL`'s (too few episodes to
+say anything) and from `LOG-REGRESSION-BANDS-CRYPTO`/`-EQUITIES`'s (a benchmark-direction
+artifact) — here the signal actually delivers a testable sample size, and still loses, primarily
+to transaction cost from its own turnover rate rather than to a benchmark confound. No always-flat
+control was computed for this study: unlike the log-regression-bands pair, holdout buy-and-hold
+here is negative but the strategy is MORE negative, so there is no risk of a falling-benchmark
+artifact inflating an apparent edge — the result already reads as a clean loss without one.
+
+**Verdict: KILLED (wrong sign).** Recorded in `VERDICTS.md` — a strategy return was actually
+computed (unlike `OPTIONS-SKEW-PRIMARY-SIGNAL`/`WHALE-WALLET-ACCUMULATION-PRIMARY`'s pure
+data-non-verdicts), so this item's own done_when requires a row.
+
+**What would actually resolve this, stated for whoever picks it up next.** Not a different
+sentiment threshold search against this run's own outcome — the failure mode here is turnover
+cost, not signal direction (hit rate ~50.5% in both segments, indistinguishable from chance). A
+wider hysteresis band (tested against a fresh, not-yet-examined window, to avoid fitting the band
+to this run's own holdout) or a minimum-holding-period floor before the next allowed flip would be
+the natural next lever, if this line is revisited — not attempted here since it would require a
+second holdout look at data this run has already spent.
+
+**Engineering note.** New `scripts/gdelt-news-sentiment-primary-signal.mjs` only, additive — no
+strategy code touched (`backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`,
+`trader.js`, `scanner.js` untouched, grep-confirmed against the staged diff before commit). Reused
+`momentum.mjs`'s `blockBootstrapCI` (unmodified) and `researchlib.mjs`'s
+`loadWatchlist`/`symbolToKrakenId`/`splitSealedSymbols` (unmodified). The one-sided sign-flip
+permutation test (`signFlipP`) is a small local function, mirroring the unexported `seeded()` LCG
+convention `log-regression-bands-crypto.mjs`/`equities-madip-significance.mjs` already duplicate
+locally rather than exporting from `momentum.mjs`. Raw output (full attempt log, per-episode
+lengths) saved to `research-runs/` (gitignored, not committed). `npm.cmd test`: 505/505 green (no
+new production code path exercised by existing tests).

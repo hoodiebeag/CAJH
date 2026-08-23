@@ -242,8 +242,35 @@ section is the binding rule; that document is the reasoning behind it. Update bo
 fail):**
 
 - Formal NHST studies (report a p-value against a pre-registered significance gate):
-  **16** sub-tests across 13 studies as of 2026-08-22 (see audit §2 for the list and p-values).
-  Updated by LOG-REGRESSION-BANDS-EQUITIES (2026-08-22): added the equities companion to
+  **17** sub-tests across 14 studies as of 2026-08-23 (see audit §2 for the list and p-values).
+  Updated by GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL (2026-08-23): added a GDELT news-volume/tone
+  regime exposure signal on crypto — genuinely exogenous data, same family as
+  `MACRO-REGIME-PRIMARY-SIGNAL`, run on that study's own 12-asset universe/window, but with a
+  regime that turns over fast enough (65 holdout episodes vs macro's 1 on the identical window)
+  to actually clear the pre-registered n>=8 episode floor — as the 17th entry: one-sided
+  sign-flip permutation on per-holdout-episode (strategy − buy&hold) spread, n=65 episodes
+  (this study's own effective-n unit, since there is no per-asset panel here), p=0.7113, **wrong
+  sign** (observed mean episode spread -0.00594). Family-wide BH-FDR recomputed across all 17
+  (q=0.7558 for this entry, rank 16 of 17) — does not survive, unsurprising given the wrong
+  sign. Not a bare null: hit rate ~50.5% in both train and holdout (indistinguishable from
+  chance), and holdout underperforms buy-and-hold (-56.06% vs -47.37%) despite the signal
+  correctly measuring much faster regime turnover than macro data — unlike the log-regression
+  pair, this is not a benchmark-direction artifact (holdout buy-and-hold is already negative and
+  the strategy is MORE negative); the likely driver is transaction-cost drag from ~64 holdout
+  exposure flips at this project's real per-side cost (~0.85%), roughly 54% of cumulative cost
+  alone, despite the pre-registered hysteresis bands. **Material side effect: none flip.**
+  `CLASSIFIER-FUNDING-FEATURE` was already a non-survivor at n=16 (its rank-3 threshold tightens
+  from `3/16×0.05=0.009375` to `3/17×0.05=0.008824`, its own unchanged p=0.0099 still exceeds
+  it, q=0.0528→0.0561) — nothing to flip this time, since the new entry lands near the bottom of
+  the ranking (rank 16 of 17), not the top. `EQUITIES-MADIP-OUT-OF-SAMPLE` remains a survivor
+  but tightens (q=0.0464→0.0493, its own p=0.0116 unchanged); `LOG-REGRESSION-BANDS-CRYPTO`
+  (q=0.0032→0.0034) and `B5-REVERSAL L=3` (q=0.0080→0.0085) are essentially unaffected. Three
+  sub-tests still formally survive at n=17, unchanged from n=16 — this update tightens
+  thresholds without reordering the top of the table, unlike either of the two prior updates
+  (one loosened via a very small p-value at rank 1, one tightened via a very large p-value that
+  displaced the prior last-place entry). Full writeup in `ROADMAP.md`'s 2026-08-23
+  GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL section and `MULTIPLE_COMPARISONS_AUDIT.md` §2. Updated by
+  LOG-REGRESSION-BANDS-EQUITIES (2026-08-22): added the equities companion to
   `LOG-REGRESSION-BANDS-CRYPTO` — identical method (byte-identical OLS/band/hysteresis
   specification), fixed 30-symbol DJIA universe, IBKR-realistic per-share commission cost model
   (the one disclosed, unavoidable difference from crypto's flat-percentage cost) — as the 16th
