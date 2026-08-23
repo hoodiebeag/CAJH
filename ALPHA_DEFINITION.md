@@ -191,6 +191,35 @@ went the other way, +0.1866R → −0.0854R, sign flipped.
   is not "probably fine" — it is unknown, and it is historically where things die.
 - **The interval is thin where it matters.** The lower bound `+0.0509` is **17% of the point
   estimate**. The result is significant, not comfortably so.
+- **Condition 3 is now hanging by 0.0007, and not for any reason to do with `ma_dip`.**
+  Its raw p-value has never moved from `0.0116`. Its BH-FDR q-value has: `0.0435` at 15 family
+  members, `0.0464` at 16, **`0.0493` at 17**, against a `0.05` threshold. That drift is
+  entirely the family growing around it.
+
+  | family size | ma_dip q (rank 4, p=0.0116) | survives at q=0.05 |
+  |---|---:|---|
+  | 15 | 0.0435 | yes |
+  | 16 | 0.0464 | yes |
+  | **17 (current)** | **0.0493** | **yes, by 0.0007** |
+  | 18 | 0.0522 | **no** |
+
+  Concretely: **the next formal-NHST test this project runs removes `ma_dip` from the survivor
+  list — unless that test comes in at `p < 0.0116`, i.e. is itself more significant than
+  `ma_dip`.** In that case `ma_dip` drops to rank 5 and its q falls to `0.0418`. Nothing else
+  saves it. There are currently a dozen queued items, several of which will report p-values.
+
+  `CLASSIFIER-FUNDING-FEATURE` has already crossed this threshold twice, in both directions,
+  on exactly this mechanism.
+
+  **The correct response to this is more evidence, not a smaller family.** Narrowing the
+  correction family — on the grounds that these 17 tests span different markets, mechanisms and
+  data, or that `ma_dip` was pre-registered and replicated rather than selected as the best of
+  the set — would be a defensible statistical argument made at precisely the moment it happens
+  to rescue the favoured result. `MULTIPLE_COMPARISONS_AUDIT.md` exists to prevent that. The
+  legitimate route to a durable pass is a lower p-value from a larger sample, which drops
+  `ma_dip`'s rank and buys real margin. If the family framing genuinely warrants revisiting,
+  that case must be argued on its own terms, in advance, and never in response to a candidate
+  being about to fall out.
 - **The CI may be optimistic for a reason unrelated to the signal.** `blockBootstrapCI`
   resamples contiguous blocks **by position in the flat trade array**; it has no notion of a
   calendar day. 300 trades across 20 transport names means signals fired by one sector-wide
