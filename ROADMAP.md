@@ -4780,3 +4780,82 @@ convention `log-regression-bands-crypto.mjs`/`equities-madip-significance.mjs` a
 locally rather than exporting from `momentum.mjs`. Raw output (full attempt log, per-episode
 lengths) saved to `research-runs/` (gitignored, not committed). `npm.cmd test`: 505/505 green (no
 new production code path exercised by existing tests).
+
+## MACRO-REGIME-PRIMARY-SIGNAL-EQUITIES — the deeper-history re-run still lands on 1 holdout episode; the constraint was the split, not the market (2026-08-25)
+
+`MACRO-REGIME-PRIMARY-SIGNAL` closed as a sample-size non-verdict on crypto (2 train / 1 holdout
+regime episode over a 3.25-year window) and named its own fix explicitly: "re-run this identical,
+unmodified methodology against a market with deeper local history... equities... would give a hard
+test with years more coverage and a chance at the episode count this crypto window couldn't
+reach." This item is that re-run, method held fixed exactly as instructed.
+
+**Method — byte-identical to the crypto version, zero re-fitting.** New
+`scripts/macro-regime-primary-signal-equities.mjs` (additive). Same regime definition (majority
+vote of DTWEXBGS-vs-own-200d-MA / DGS10-DGS2 sign / FEDFUNDS trailing-3-month-change sign), same
+hysteresis bands (±1% / ±10bp / ±5bp), same causal lags (1 day / 1 day / 20 days), same 70/30
+chronological split, same `MIN_HOLDOUT_EPISODES_FOR_CI=8` pre-registered floor. Only the asset
+universe, its window, and the cost model changed, per the crypto item's own explicit instruction.
+
+**IBKR reachability checked fresh, not assumed.** This item's own task note flagged that a live
+Gateway pull, if reachable, should be preferred over the shorter existing cache. Ran
+`node scripts/ibkr-smoke.mjs` before writing any strategy code: `ECONNREFUSED 127.0.0.1:4002` —
+consistent with `EXOGENOUS-DATA-ACCESS-AUDIT`'s already-documented intermittent-IBKR-connectivity
+finding. Fell back to the existing `research-cache/equities-1d/` cache (30/30 DJIA symbols, all
+501-502 daily candles, 2024-08-19/20 → 2026-08-19 — the standing universe from
+`equities-all-families-baseline.mjs`/`equities-madip-significance.mjs`), not a re-fetch attempt.
+
+**Cost model — the one disclosed departure from a byte-identical re-run, per this item's own task
+text.** `equities-madip-significance.mjs`'s convention (commission-per-share ÷ a symbol's own
+average holdout close, converted to a percentage) is defined per-symbol per-trade there; this
+signal moves one equal-weight portfolio in or out on a regime flip, so the per-flip cost used here
+is the equal-weight mean of each universe symbol's own feeRate (computed the same way, over that
+symbol's holdout segment) plus the same 0.0005/side slippage — a direct, disclosed extension of
+the per-symbol convention to a portfolio-level flip (0.0535% one-side, vs crypto's flat 0.85%).
+
+**Results, reported plainly — both segments compared to buy-and-hold on the identical window, next
+to crypto's own numbers for the comparison this item exists to make:**
+
+| segment | market | days | regime episodes | strategy return | buy-and-hold return | hit rate |
+|---|---|---:|---:|---:|---:|---:|
+| train | crypto (2023-01-02→2025-04-09) | 829 | 2 | +9.19% | +186.11% | 47.4% |
+| train | equities (2024-08-21→2026-01-13) | 350 | **4** | +17.08% | +22.44% | 50.6% |
+| holdout | crypto (2025-04-10→2026-03-31) | 356 | 1 | -46.92% | -47.37% | 50.3% |
+| holdout | equities (2026-01-14→2026-08-19) | 150 | **1** | +13.87% | +13.81% | 56.0% |
+
+**Did the deeper-history fix work? Partially, and not on the dimension that decides this.** Train
+episode count improved 2→4 — a genuine, real increase from the longer/different window, not
+noise. But holdout is still exactly 1 episode: the entire 150-day holdout segment sits inside one
+continuous "favourable" call, the same shape as crypto's holdout, for a mechanically different
+reason — crypto's holdout was long enough (356 days) to plausibly contain a transition but simply
+didn't see one; equities' holdout is short (150 days, 30% of only 501 total cached days) and a
+slow-moving macro regime realistically only turns over a handful of times a year, so 150 days is
+not enough calendar time to expect a transition regardless of how deep the underlying history is.
+The fix targeted the wrong constraint: crypto's shortfall was market history, but the binding
+constraint turned out to be the FIXED 70/30 SPLIT FRACTION applied to whatever window is
+available — a longer total window still yields a short holdout under a fixed split ratio unless
+the split itself is widened or a larger total window is fetched. Per the pre-registered escape
+hatch (same one crypto's item used), this is reported as a non-verdict rather than manufacturing
+a CI or p-value from a single holdout episode.
+
+**Verdict: NON-VERDICT** (holdout regime-episode count, 1, remains below the pre-registered floor
+of 8). Recorded in `VERDICTS.md`.
+
+**What would actually resolve this, stated for whoever picks it up next.** Not another re-run of
+this same method — the fix that would matter is either (a) a genuinely longer equities window
+(IBKR Gateway access, when reachable, or a larger cache pull) so a fixed 70/30 split still leaves
+enough holdout calendar time, or (b) revisiting the split fraction itself for macro-regime studies
+specifically, since regime episodes are calendar-rare events and a 30% holdout of even a multi-year
+window can land entirely inside one. Re-fit nothing else — same three signals, same bands, same
+lag structure.
+
+**Engineering note.** New `scripts/macro-regime-primary-signal-equities.mjs` only, additive — no
+strategy code touched (`backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`,
+`trader.js`, `scanner.js` untouched, grep-confirmed against the staged diff before commit). Reused
+`momentum.mjs`'s `blockBootstrapCI` (imported, unused on this run's path since the episode floor
+was never reached, same as the crypto version) and `researchlab.mjs`'s `saveExperiment`
+(unmodified). `fetchFredSeries`/`lookupLagged`/`trailingMA`/`contiguousEpisodes` duplicated
+verbatim from `macro-regime-primary-signal.mjs` rather than imported, since that script does not
+export them (same un-exported-helper-duplication pattern `equities-madip-significance.mjs` already
+used for `momentum.mjs`'s `seeded()`). Raw output saved to `research-runs/` (gitignored, not
+committed). `npm.cmd test`: 505/505 green (no new production code path exercised by existing
+tests).
