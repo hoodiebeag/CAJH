@@ -242,8 +242,39 @@ section is the binding rule; that document is the reasoning behind it. Update bo
 fail):**
 
 - Formal NHST studies (report a p-value against a pre-registered significance gate):
-  **17** sub-tests across 14 studies as of 2026-08-23 (see audit §2 for the list and p-values).
-  Updated by GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL (2026-08-23): added a GDELT news-volume/tone
+  **18** sub-tests across 15 studies as of 2026-08-27 (see audit §2 for the list and p-values).
+  Updated by ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL (2026-08-27): added a BTC-only active-address-count
+  exposure signal (blockchain.com Charts API `n-unique-addresses`, genuinely exogenous data),
+  staged per `WHALE-WALLET-ACCUMULATION-PRIMARY`'s own named escape hatch — a deliberately
+  different population-usage-momentum hypothesis, not a second whale-cohort-tracking attempt —
+  as the 18th entry: one-sided sign-flip permutation on per-holdout-episode (strategy − buy&hold)
+  spread, n=107 episodes (single-asset study, BTC only — this study's own effective-n unit),
+  p=0.9990, **wrong sign** (observed mean episode spread -0.006973). Family-wide BH-FDR
+  recomputed across all 18 (q=0.9990 for this entry, rank 18 of 18, last place) — does not
+  survive, unsurprising given the wrong sign. Not a bare null: hit rate ~50-51% in both train and
+  holdout (indistinguishable from chance), and 107 holdout exposure flips at this project's real
+  per-side cost (~0.85%) is ~91% cumulative cost drag on its own, comfortably exceeding the entire
+  strategy-vs-buy-hold gap — the likely driver is a ±1% hysteresis band too narrow to suppress
+  whipsaw against this series' natural daily volatility, the same failure mode
+  `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL` diagnosed under an identical band convention on a
+  different exogenous input. **Material side effect: one flip, and it is a new kind — the first
+  time a still-live, un-killed survivor (not an already-KILLED result) flips out of the formal
+  family.** `EQUITIES-MADIP-OUT-OF-SAMPLE` (this project's strongest surviving evidence result —
+  net-of-cost positive, replicated stronger out-of-sample) moves from formal BH-FDR survivor
+  (q=0.0493 at n=17, its own rank-4 threshold `4/17×0.05=0.011765` narrowly cleared by its
+  unchanged p=0.0116) to non-survivor (q=0.0522 at n=18, threshold tightens to
+  `4/18×0.05=0.011111`, no longer cleared) — purely from the family growing, its own point
+  estimate/CI/replication result untouched. `CLASSIFIER-FUNDING-FEATURE` was already a
+  non-survivor at n=17 (its rank-3 threshold tightens from `3/17×0.05=0.008824` to
+  `3/18×0.05=0.008333`, its own unchanged p=0.0099 still exceeds it, q=0.0561→0.0594) — nothing
+  further to flip. `LOG-REGRESSION-BANDS-CRYPTO` (q=0.0034→0.0036) and `B5-REVERSAL L=3`
+  (q=0.0085→0.0090) are essentially unaffected. Two sub-tests now formally survive at n=18, down
+  from three at n=17 — the same mechanical, family-size-driven flip pattern this document has
+  now recorded across three separate updates, this time landing on a still-live result rather
+  than an already-KILLED one, which is exactly the scenario this discipline exists to catch
+  before anyone treats a marginal formal survival as a permanent property of a study. Full
+  writeup in `ROADMAP.md`'s 2026-08-27 ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL section and
+  `MULTIPLE_COMPARISONS_AUDIT.md` §2. Updated by GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL (2026-08-23): added a GDELT news-volume/tone
   regime exposure signal on crypto — genuinely exogenous data, same family as
   `MACRO-REGIME-PRIMARY-SIGNAL`, run on that study's own 12-asset universe/window, but with a
   regime that turns over fast enough (65 holdout episodes vs macro's 1 on the identical window)

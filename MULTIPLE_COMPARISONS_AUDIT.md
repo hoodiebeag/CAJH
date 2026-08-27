@@ -37,7 +37,30 @@ VERDICTS.md at all:**
   audit is about ("slicing seven ways and picking the best-looking cell is
   multiple-comparisons p-hacking almost by construction").
 
-**Total: 55 studies conducted to date** (updated 2026-08-23 by GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL
+**Total: 56 studies conducted to date** (updated 2026-08-27 by ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL
+— a BTC-only active-address-count exposure signal, genuinely exogenous data (blockchain.com Charts
+API `n-unique-addresses`), staged per `WHALE-WALLET-ACCUMULATION-PRIMARY`'s own named escape hatch.
+Construct: active-address count above its own trailing 200-session MA (±1% hysteresis band) =
+favourable, 1-day causal lag, same signal shape as `MACRO-REGIME-PRIMARY-SIGNAL`/`GDELT-NEWS-
+SENTIMENT-PRIMARY-SIGNAL`. n=1 asset (BTC), 70/30 split. Measured 107 holdout regime episodes —
+comfortably clearing the pre-registered n>=8 floor — so a real significance test was possible.
+Pre-registered one-sided sign-flip permutation test on per-holdout-episode (strategy day return −
+buy-and-hold day return) spread (n=107 episodes), p=0.9990 (**wrong sign** — observed mean episode
+spread -0.006973), 95% block-bootstrap CI on holdout daily strategy returns [-0.004357, -0.001993]
+(excludes zero, negative, corroborating from a second angle). Joins the Formal NHST bucket as the
+18th sub-test (15th study), landing dead last by raw p-value (just past LOG-REGRESSION-BANDS-
+EQUITIES) — does not survive BH-FDR, and its addition to the family causes a real, family-size-
+driven flip: `EQUITIES-MADIP-OUT-OF-SAMPLE` (own p=0.0116 unchanged) moves from formal BH-FDR
+survivor (q=0.0493 at n=17) to non-survivor (q=0.0522 at n=18) purely because the family grew —
+see §2 below. Not a bare null: hit rate ~50-51% in both train and holdout (indistinguishable from
+chance), and 107 holdout exposure flips at this project's real per-side cost (~0.85%) is ~91%
+cumulative cost drag on its own, comfortably exceeding the entire strategy-vs-buy-hold gap — the
+likely driver is a ±1% band too narrow to suppress whipsaw on this series' natural daily
+volatility, the same failure mode `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL` diagnosed under an
+identical band convention on a different exogenous input. **Material side effect: one flip**
+(`EQUITIES-MADIP-OUT-OF-SAMPLE`, survivor→non-survivor, detailed in §2).
+
+**Superseded — total prior to this update: 55 studies** (updated 2026-08-23 by GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL
 — a GDELT news-volume/tone regime exposure signal on crypto, genuinely exogenous data, same
 family as MACRO-REGIME-PRIMARY-SIGNAL, on the identical 12-asset universe/window that study used
 (and where it closed as a sample-size non-verdict). Unlike that study, this one measured 65
@@ -140,7 +163,7 @@ study by `B5-REVERSAL-PHASE4-PORTFOLIO-SIM`'s FAIL under a stricter, more realis
 
 ## 2. The formal-significance subfamily: a real FWER/FDR computation
 
-Seventeen sub-tests across fourteen studies report an actual p-value against the project's
+Eighteen sub-tests across fifteen studies report an actual p-value against the project's
 pre-registered `p<0.05` significance gate (`MOMENTUM_SPEC.md §6` clause 1, and the
 classifier spec's equivalent permutation-null clause). These are the only results in this
 project where classical multiple-comparisons math applies without qualification, because
@@ -165,30 +188,31 @@ they're the only ones with an actual null distribution behind them.
 | 15 | Momentum M7 (train, residual IC) | 0.7013 | yes |
 | 16 | GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL (holdout, primary) | 0.7113 | **no** (wrong sign) |
 | 17 | LOG-REGRESSION-BANDS-EQUITIES (holdout, primary) | 0.9750 | **no** (wrong sign) |
+| 18 | ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL (holdout, primary) | 0.9990 | **no** (wrong sign) |
 
-**Naive FWER, k=17, alpha=0.05:** 1 − (1 − 0.05)^17 = **0.5819** (assuming independence,
-which these tests only partially satisfy — see caveat below). Over a family this size, better
-than even odds of at least one nominal "significant" hit existed even if every single
-underlying effect were exactly zero. Five clear raw p<0.05 (ranks 1–5 above, unchanged by this
-update — the new entry lands near the opposite end of the table) — informative, but this alone
-doesn't say anything about which are real.
+**Naive FWER, k=18, alpha=0.05:** 1 − (1 − 0.05)^18 = **0.6028** (assuming independence,
+which these tests only partially satisfy — see caveat below). Over a family this size, roughly
+60% odds of at least one nominal "significant" hit existed even if every single underlying
+effect were exactly zero. Five clear raw p<0.05 (ranks 1–5 above, unchanged by this update — the
+new entry lands at the very bottom of the table) — informative, but this alone doesn't say
+anything about which are real.
 
-**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 17 is `(i/17)×0.05`):
+**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 18 is `(i/18)×0.05`):
 
 | Rank *i* | Study | p-value | q-value | Survives? |
 |---:|---|---:|---:|---|
-| 1 | LOG-REGRESSION-BANDS-CRYPTO | 0.0002 | 0.0034 | **yes** (nominally — see caveat) |
-| 2 | B5-REVERSAL L=3 | 0.0010 | 0.0085 | **yes** |
-| 3 | CLASSIFIER-FUNDING-FEATURE | 0.0099 | 0.0561 | no (already a non-survivor going into this update) |
-| 4 | EQUITIES-MADIP-OUT-OF-SAMPLE | 0.0116 | 0.0493 | **yes** |
-| 5 | Classifier P5 | 0.0198 | 0.0673 | no |
-| 6–17 | (remaining 12, see full table above) | 0.0579–0.9750 | 0.1574–0.9750 | no |
+| 1 | LOG-REGRESSION-BANDS-CRYPTO | 0.0002 | 0.0036 | **yes** (nominally — see caveat) |
+| 2 | B5-REVERSAL L=3 | 0.0010 | 0.0090 | **yes** |
+| 3 | CLASSIFIER-FUNDING-FEATURE | 0.0099 | 0.0594 | no (already a non-survivor going into this update) |
+| 4 | EQUITIES-MADIP-OUT-OF-SAMPLE | 0.0116 | 0.0522 | **no (newly flipped this update — see below)** |
+| 5 | Classifier P5 | 0.0198 | 0.0713 | no |
+| 6–18 | (remaining 13, see full table above) | 0.0579–0.9990 | 0.1666–0.9990 | no |
 
-**Three sub-tests formally survive family-wise BH-FDR correction at q=0.05 at the current
-n=17 — unchanged from n=16, since `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL`'s addition (p=0.7113)
-lands near the bottom of the table (rank 16 of 17) and only tightens thresholds further, it does
-not reorder or flip anything (`CLASSIFIER-FUNDING-FEATURE` was already a non-survivor going into
-this update). One survivor is a demonstrated benchmark artifact (rank 1, see below).**
+**Two sub-tests formally survive family-wise BH-FDR correction at q=0.05 at the current
+n=18 — down from three at n=17, because `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL`'s addition
+(p=0.9990, dead last) grows the family denominator enough to flip `EQUITIES-MADIP-OUT-OF-SAMPLE`
+out (see the dedicated paragraph below). One of the two remaining survivors is a demonstrated
+benchmark artifact (rank 1, see below).**
 `LOG-REGRESSION-BANDS-CRYPTO`
 (2026-08-22, `ROADMAP.md`) tested a log-price-vs-log-time regression-band exposure signal
 against crypto buy-and-hold: p=0.0002, the smallest raw p-value ever recorded in this family,
@@ -303,11 +327,19 @@ dead* — not noise, not a coding bug, but real effects too small for this proje
 trading costs (~1.7% round-trip crypto; equities costs are far lower) to ever monetize. It has
 one concrete case of a result that is *statistically nominal and not real at all* — a
 materially different failure mode from either "real and dead" or "noise." And it now has one
-result, `EQUITIES-MADIP-OUT-OF-SAMPLE`, that is *statistically real, net-of-cost positive, and
-replicated stronger out-of-sample* — the first equities or crypto result in this project's
-history to clear all three of those bars simultaneously, though still short of the independent
-`SEALED_SYMBOLS`-style re-validation `AGENT_PROTOCOL.md` requires before any live-promotion
-consideration. `EQUITIES-BREAKOUT-SIGNIFICANCE`'s own thin positive (+0.1866R, p=0.2036, 61
+result, `EQUITIES-MADIP-OUT-OF-SAMPLE`, that is *net-of-cost positive and replicated stronger
+out-of-sample* — the first equities or crypto result in this project's history to clear those
+bars simultaneously, though still short of the independent `SEALED_SYMBOLS`-style re-validation
+`AGENT_PROTOCOL.md` requires before any live-promotion consideration. **Update (n=18, this
+document's `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL` section above): its own p=0.0116 no longer
+formally survives family-wide BH-FDR** (q=0.0522, flipped from q=0.0493's narrow survival at
+n=17) — a purely mechanical consequence of family growth, not a change to its point estimate, CI,
+or replication. The "statistically real" characterization above describes this result's status as
+of when it was written (n=15); as of n=18 it is more precisely: a raw hit whose 95% CI still
+excludes zero and which still replicated stronger on a fresh universe, but which no longer clears
+this project's own formal multiple-comparisons bar. Both readings are stated here rather than
+silently updating the earlier one, since the point of this document is to make exactly this kind
+of status drift visible. `EQUITIES-BREAKOUT-SIGNIFICANCE`'s own thin positive (+0.1866R, p=0.2036, 61
 trades on DJIA-30) did **not** hold up out-of-sample:
 `EQUITIES-BREAKOUT-OUT-OF-SAMPLE`'s fresh DJTA-20 universe put the same unmodified `breakout`
 config at -0.0854R over 33 trades, p=0.6165 — the one other out-of-sample check completed so far in
@@ -348,8 +380,8 @@ tightens further (q=0.0561) — no flip, since it had nothing to flip from this 
 (q=0.0032→0.0034) and `B5-REVERSAL L=3` (q=0.0080→0.0085) are essentially unaffected. Three
 sub-tests still formally survive at n=17, unchanged from n=16.
 
-**The binomial-surprise figure, updated once more.** Under a null of "no real effect anywhere
-in this family," P(at least 5 of 17 independent trials clear p<0.05) ≈ **0.12%** (exact
+**The binomial-surprise figure, updated once more (n=17).** Under a null of "no real effect
+anywhere in this family," P(at least 5 of 17 independent trials clear p<0.05) ≈ **0.12%** (exact
 binomial, n=17, p=0.05, up from the n=16 figure of 0.09% — this update adds a raw non-hit near
 the bottom of the table, so the hit count is unchanged at 5, but the larger family size alone
 raises the probability of seeing that many hits by chance). The same independence caveat applies
@@ -359,6 +391,74 @@ family) rather than a correlated re-run of an existing one — if anything this 
 evidence *against* the correlated-near-null concern that discounts the raw hit-count, not
 evidence for it, since an independent source landing as a clean non-hit is exactly what a
 family with real isolated effects and mostly-null everything-else would look like.
+
+**This update (n=17→n=18): `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL` joins as the 18th entry,
+landing dead last (rank 18, p=0.9990, wrong sign).** A BTC-only active-address-count exposure
+signal (blockchain.com Charts API `n-unique-addresses`, genuinely exogenous data), staged per
+`WHALE-WALLET-ACCUMULATION-PRIMARY`'s own named escape hatch — a deliberately different
+population-usage-momentum hypothesis, not a second whale-cohort-tracking attempt. Construct:
+active-address count above its own trailing 200-session MA (±1% relative hysteresis band,
+matching GDELT's Volume Intensity band shape) = favourable, 1-day causal lag, same "level vs own
+trailing MA" mechanism as `MACRO-REGIME-PRIMARY-SIGNAL`/`GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL`.
+Single-asset study (n=1, BTC) — the independent unit is regime episodes on BTC's own history
+(107 holdout episodes, comfortably clearing the pre-registered n>=8 floor), not a cross-sectional
+asset panel. Pre-registered primary test: one-sided sign-flip permutation on per-holdout-episode
+(strategy day return − buy-and-hold day return) spread, observed mean spread -0.006973 (wrong
+sign), p=0.9990. 95% block-bootstrap CI on holdout daily strategy returns [-0.004357, -0.001993]
+(excludes zero, negative) corroborates from a second angle. Not a bare null: hit rate ~50-51% in
+both train and holdout (indistinguishable from chance), and the holdout loss is far larger than a
+coin-flip signal alone would produce — 107 episodes over 392 holdout days (≈3.7-day average
+episode length) means ≈107 exposure flips at this project's real per-side cost (~0.85%), roughly
+91% cumulative cost drag on its own, comfortably exceeding the entire strategy-vs-buy-hold gap.
+The likely driver: a ±1% band too narrow to suppress whipsaw against this series' natural daily
+volatility — the same failure mode `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL` diagnosed for its Volume
+Intensity signal under an identical band convention, now reproduced on a structurally different
+exogenous input. Recorded a plain KILLED verdict (wrong sign, no benchmark-artifact caveat
+needed — holdout buy-and-hold here is already negative, -42.14%, and the strategy is MORE
+negative, -71.46%, so this is not a falling-benchmark-rewards-any-exit-signal confound). Full
+writeup: `ROADMAP.md`'s 2026-08-27 `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL` section.
+
+**Material side effect: `EQUITIES-MADIP-OUT-OF-SAMPLE` flips from survivor to non-survivor —
+purely from family-size growth, its own p-value unchanged.** This is the first flip this document
+has recorded that touches a result outside the log-regression/GDELT KILLED cluster —
+`EQUITIES-MADIP-OUT-OF-SAMPLE` is this project's strongest surviving evidence result (the only
+one that is statistically real, net-of-cost positive, and replicated stronger on a fresh
+zero-overlap universe; see §2's earlier discussion). At n=17 its rank-4 threshold was
+`4/17×0.05=0.011765`, and its own p=0.0116 cleared it narrowly (q=0.0493). Adding
+`ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL`'s p=0.9990 at the bottom of the table (rank 18) grows the
+denominator without changing any rank above it, which tightens the rank-4 threshold to
+`4/18×0.05=0.011111` — and `EQUITIES-MADIP-OUT-OF-SAMPLE`'s unchanged p=0.0116 now sits just
+above that line (q=0.0522, no longer surviving). **This is not a re-examination of that study.**
+Nothing about `EQUITIES-MADIP-OUT-OF-SAMPLE`'s own data, method, or economic result has changed —
+its point estimate (+0.2994, 95% CI [0.0509, 0.5350] excluding zero), its out-of-sample
+replication on a fresh universe, and its net-of-cost economics all stand exactly as recorded in
+`ROADMAP.md`'s 2026-08-22 section. What changed is purely mechanical: BH-FDR's rejection region
+depends on the full family's size, and a large p-value added anywhere in the family tightens
+every threshold above it, with no floor on how close to the boundary a prior survivor can be
+sitting. `EQUITIES-MADIP-OUT-OF-SAMPLE` was already the family's most marginal survivor (q=0.0493
+of 0.05, the tightest margin of the three) going into this update, which is exactly why it was the
+one to flip rather than `LOG-REGRESSION-BANDS-CRYPTO` or `B5-REVERSAL L=3` (q=0.0034 and 0.0090
+respectively, comfortably unaffected). This is the same mechanical, family-size-driven flip
+pattern this document has now recorded three times (`CLASSIFIER-FUNDING-FEATURE` flipped in both
+directions across two earlier updates; this is the first time the flipped result is a still-live,
+un-killed finding rather than an already-KILLED one) — it is disclosed here in the correction math
+itself precisely because a marginal formal survivor's status should never be read as a permanent
+property of that study, and this document exists to make that visible rather than let it go
+unnoticed. `CLASSIFIER-FUNDING-FEATURE` was already a non-survivor at n=17 (q=0.0561) and
+tightens further (q=0.0594) — nothing to flip. `LOG-REGRESSION-BANDS-CRYPTO` (q=0.0034→0.0036)
+and `B5-REVERSAL L=3` (q=0.0085→0.0090) are essentially unaffected. Two sub-tests now formally
+survive at n=18, down from three at n=17.
+
+**The binomial-surprise figure, updated once more (n=18).** Under a null of "no real effect
+anywhere in this family," P(at least 5 of 18 independent trials clear p<0.05) ≈ **0.15%** (exact
+binomial, n=18, p=0.05, up from the n=17 figure of 0.12% — this update adds a raw non-hit at the
+very bottom of the table, so the hit count is unchanged at 5, but the larger family size alone
+raises the probability of seeing that many hits by chance). The same independence caveat applies
+unchanged: these eighteen tests are not independent draws, and `ACTIVE-ADDRESS-COUNT-PRIMARY-
+SIGNAL` adds a genuinely new information source (blockchain.com on-chain address-count data,
+never used in any prior test in this family) rather than a correlated re-run of an existing one —
+the same "independent source landing as a clean non-hit" reading `GDELT-NEWS-SENTIMENT-PRIMARY-
+SIGNAL`'s addition supported applies here too.
 
 ## 3. The economic-gate subfamily: why classical FWER doesn't transfer, and what does
 

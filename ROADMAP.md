@@ -4859,3 +4859,94 @@ export them (same un-exported-helper-duplication pattern `equities-madip-signifi
 used for `momentum.mjs`'s `seeded()`). Raw output saved to `research-runs/` (gitignored, not
 committed). `npm.cmd test`: 505/505 green (no new production code path exercised by existing
 tests).
+
+
+## ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL — KILLED, wrong sign in both train and holdout, high-turnover cost drag the likely driver (2026-08-27)
+
+**Scoping, per this item's own note.** Sourced directly from `WHALE-WALLET-ACCUMULATION-PRIMARY`'s
+own writeup (2026-08-22), which closed as a data-availability non-verdict for true wallet-level
+accumulation tracking but named its own escape hatch: accept blockchain.com's `n-unique-addresses`
+as a deliberately DIFFERENT, pre-registered hypothesis (population address-count momentum, not
+whale-cohort identity) and stage it as a new, distinctly-named item rather than silently
+substituting it there. This is that staging, not a second attempt at whale tracking under a new
+name.
+
+**Access/depth re-measured fresh this run, before any construct was designed, per this item's own
+done_when — and it corrects a granularity claim from `EXOGENOUS-DATA-ACCESS-AUDIT`.** That audit's
+`?timespan=all&format=json` query (no `sampled` parameter) returns 1,603 points and called this
+"daily since 2009-01-03." Re-fetched the identical query fresh this run: same 1,603 points, but the
+real per-point spacing is NOT daily — the last five points before the request date landed
+2026-08-03/07/11/15/26. blockchain.info's Charts API silently auto-downsamples a `timespan=all`
+request. Adding `&sampled=false` returns the genuine full-resolution series: **6,409 points,
+2009-01-03 → 2026-08-26, only 24 non-1-day gaps (max 8 days) across 17.6 years** — real depth, just
+not the query the audit used. This script uses `sampled=false` throughout; disclosed here rather
+than silently correcting the earlier claim without comment.
+
+**Construct — pre-registered before any BTC return was touched**, reusing this project's own
+existing "level vs its own trailing MA" signal shape (`MACRO-REGIME-PRIMARY-SIGNAL`'s
+DXY-vs-200dma, `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL`'s Volume-Intensity-vs-200dma) rather than
+inventing a new mechanism: active-address count above its own trailing 200-session MA =
+favourable (rising usage/adoption momentum predicts positive forward returns — the pre-registered
+economic rationale). ±1% relative hysteresis band, matching GDELT's Volume Intensity band exactly
+(both positive-magnitude, trending series). 1-day causal publication lag, matching this family's
+convention. Generates exposure directly (long BTC when favourable, flat otherwise) — never a
+gate/filter, per this item's own structural requirement.
+
+**Universe: BTC only, n=1 asset**, per this item's own scoping note — statistical power comes from
+regime-episode count on BTC's own history, not cross-sectional asset count, stated explicitly
+rather than implying power that doesn't exist. Local daily candle coverage
+(`research-cache/daily/XBTUSD.json`): 2023-01-01 → 2026-07-30, 1,307 candles — the binding depth
+constraint is candle coverage, not address-count data (its 200-session MA is fully seeded decades
+before 2023). 70/30 chronological split. Real crypto cost basis (FEE_RATE 0.008 + SLIPPAGE_PCT
+0.0005/side, ~1.7% round trip), charged per exposure flip; buy-and-hold gets matching entry/exit
+cost.
+
+**Results:**
+
+| segment | window | days | episodes | strategy | buy-hold | hit rate |
+|---|---|---:|---:|---:|---:|---:|
+| train | 2023-01-02→2025-07-03 | 914 | 204 | -34.10% | +548.72% | 49.9% |
+| holdout | 2025-07-04→2026-07-30 | 392 | **107** | -71.46% | -42.14% | 51.3% |
+
+Holdout episode count (107) clears the pre-registered `MIN_HOLDOUT_EPISODES_FOR_CI=8` floor by a
+wide margin — this is a real test, not a non-verdict. Pre-registered primary test: one-sided
+sign-flip permutation on per-holdout-episode (strategy day return − buy-and-hold day return)
+spread (n=107 episodes, this study's own effective-n unit), 1000 iterations, seed 20260827.
+Observed mean episode spread **-0.006973 (wrong sign)**, **p=0.9990**. 95% block-bootstrap CI on
+holdout daily strategy returns [-0.004357, -0.001993] (excludes zero, negative) corroborates from
+a second angle.
+
+**Not a bare null — the signal is actively harmful, and turnover cost plausibly explains most of
+why.** Hit rate ~50-51% in both segments, indistinguishable from chance (the address-count-vs-MA
+comparison carries no directional information about next-day BTC returns on this data). But the
+holdout loss is far larger than a coin-flip signal alone would produce: 107 holdout episodes over
+392 days is an average episode length of 3.7 days — roughly 107 exposure flips at this project's
+real per-side cost (~0.85%) is **~91% cumulative cost drag** on its own, comfortably exceeding the
+entire -29.3-point gap between strategy and buy-and-hold in holdout. The likely mechanism: BTC's
+active-address count is itself a noisy daily series, and a ±1% band around its own 200-day MA is
+not wide enough to suppress whipsaw at this series' natural volatility — the same failure mode
+`GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL` diagnosed for its Volume Intensity signal, now reproduced on
+a structurally different exogenous input under an identical band convention. This is stated as the
+likely driver, not proven by a band-width sweep (out of this item's scope) — the wrong-sign result
+stands regardless of mechanism.
+
+**Verdict: KILLED — wrong sign, p=0.9990, holdout underperforms buy-and-hold by 29.3 points.**
+Recorded in `VERDICTS.md`. Joins `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family as the 18th
+sub-test (15th study) — does not survive BH-FDR (see that document's §2 for the full table,
+including a real, family-size-driven flip this addition causes: `EQUITIES-MADIP-OUT-OF-SAMPLE`
+moves from formal survivor to non-survivor purely from the family growing to n=18, its own p=0.0116
+unchanged).
+
+**What would actually resolve this, stated for whoever picks it up next.** Not a re-run of this
+same construct — a wider hysteresis band (matching the GDELT signal's own unresolved whipsaw
+diagnosis) is the most plausible next lever if anyone wants to test whether cost drag alone
+explains the loss, but that is a new pre-registered study, not a fix to bolt onto this one's
+already-drawn conclusion.
+
+**Engineering note.** New `scripts/active-address-count-primary-signal.mjs` only, additive — no
+strategy code touched (`backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`,
+`trader.js`, `scanner.js` untouched, grep-confirmed against the staged diff before commit).
+`researchlab.mjs`'s `loadDailyCandles`/`saveExperiment` and `momentum.mjs`'s `blockBootstrapCI`
+used unmodified. `npm.cmd test`: 505/505 green (no production or test file touched — no companion
+test file added, matching this family's precedent for read-only research scripts under
+`scripts/`).
