@@ -4,10 +4,10 @@
   "status": "IDLE",
   "target_file": null,
   "objective": null,
-  "notes": "ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL done: staged per WHALE-WALLET-ACCUMULATION-PRIMARY's own named escape hatch (population address-count momentum, deliberately distinct from whale-cohort identity tracking). Built scripts/active-address-count-primary-signal.mjs (new, additive): blockchain.com Charts API n-unique-addresses (BTC only) vs its own trailing 200-session MA, +-1% relative hysteresis band (matching GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL's Volume Intensity band shape), 1-day causal lag, generates exposure directly (never a gate). Re-verified access/depth fresh before designing the construct, per this item's own done_when: EXOGENOUS-DATA-ACCESS-AUDIT's default query (?timespan=all, no sampled param) is silently downsampled by the API to 1,603 points despite being called \"daily\" - &sampled=false gives the genuine full-resolution series (6,409 points, 2009-01-03 to 2026-08-26, only 24 non-1-day gaps). Disclosed this correction in the writeup rather than silently using the deeper series without comment. n=1 asset (BTC), local candle coverage 2023-01-01 to 2026-07-30 (1,307 candles) is the binding depth constraint (address-count MA fully seeded decades earlier). 70/30 split, real crypto cost basis (FEE_RATE 0.008 + SLIPPAGE_PCT 0.0005/side). Holdout: 392 days, 107 regime episodes - comfortably clears the pre-registered MIN_HOLDOUT_EPISODES_FOR_CI=8 floor, so this is a real test, not a non-verdict (unlike this family's two prior single-asset/macro non-verdicts). Pre-registered one-sided sign-flip permutation test on per-holdout-episode (strategy - buy&hold) spread: observed mean -0.006973 (wrong sign), p=0.9990. 95% block-bootstrap CI on holdout daily strategy returns [-0.004357,-0.001993] (excludes zero, negative) corroborates. Strategy -71.46% vs buy-hold -42.14% in holdout, hit rate ~51% (indistinguishable from chance) - not a bare null though: ~107 holdout flips at real per-side cost (~0.85%) is ~91% cumulative cost drag alone, exceeding the entire strategy-vs-buyhold gap, plausibly the dominant driver (same failure mode GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL diagnosed for its own +-1% band on a different exogenous input). Verdict: KILLED, recorded in VERDICTS.md. Joins MULTIPLE_COMPARISONS_AUDIT.md's formal-NHST family as the 18th sub-test (15th study) - does not survive BH-FDR - and this addition causes a real, disclosed family-size-driven flip: EQUITIES-MADIP-OUT-OF-SAMPLE (this project's strongest surviving evidence result, own p=0.0116 unchanged) moves from formal BH-FDR survivor (q=0.0493 at n=17) to non-survivor (q=0.0522 at n=18) purely because the family grew - documented in ROADMAP.md, MULTIPLE_COMPARISONS_AUDIT.md Sections 1 and 2 (including a caveat added to that document's own earlier \"statistically real\" characterization of EQUITIES-MADIP-OUT-OF-SAMPLE, not silently rewritten), and AGENT_PROTOCOL.md's formal-NHST counter, all three updated together per that section's own binding rule. No strategy code touched (backtest.js/strategy.js/tournament.mjs/monitor.js/bot.js/trader.js/scanner.js untouched, grep-confirmed against staged diff before commit - also grep-confirmed clean of every protected-logic identifier the pre-commit hook scans for). Untracked universe.txt (pre-existing, not created by this run) left untouched. npm.cmd test: 505/505 green. Committed and pushed 44aa42f. Queue restock: pending+started after this item is 3 (C1, C2, C3) - at the 3-item floor exactly, so STEP 5 was a one-line check-and-skip, no real restock work this firing. No BLOCKED state, no empty queue, no new PASS verdict in ROADMAP.md/TOURNAMENT_ROADMAP.md this firing (this item closed KILLED, not PASS) - no notification triggers fired.",
+  "notes": "C1 was already fully implemented, not new work: verified scanner.js.logAssetDecision (called from every evaluateAsset exit path in runScannerUnsafe/scanSymbol) -> logger.recordDecision (try/catch-wrapped sink call, log-only, no control-flow impact) -> storage.appendDecisionEvent (JSON-Lines decision journal, fsynced on write). context.js.buildLiveContext already exposes getRecentDecisions, halt state via describeHaltCause, latest ROADMAP verdict, and buildMissionDigest (C2/C3 scope) - all read-only, dynamically pulled. Test coverage exists: decision-log.test.mjs, context.test.mjs. npm.cmd test: 505/505 green (no code changed this firing). Root cause traced via git log -- .agent_state.json: C1/C2/C3 were genuinely completed at dfb915e/0c1b387/59b2f76 (59b2f76 explicitly recorded queue honestly empty, followed by 19 no-op firings re-confirming empty), then commit c47a764 (2026-08-23, GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL firing) restocked C1/C2/C3 back into the queue from SELF_AWARENESS_SPEC.md Phase 1-2 table without checking prior completion - that table carried no done-marker, so it read as open work. Two firings since then (MACRO-REGIME-PRIMARY-SIGNAL-EQUITIES, ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL) left the queue unchanged at this duplicate state without investigating C1 itself. Fix applied this firing: (1) marked C1/C2/C3 done in work_queue with this explanation, (2) added a STATUS: COMPLETE banner + explicit git-log-check instruction to SELF_AWARENESS_SPEC.md so a future restock cannot repeat this - referencing the actual closing commits and implementation file/function names (committed separately as f53616e). No protected-logic files touched (bot.js/monitor.js/trader.js untouched); grep-confirmed clean of every protected-logic identifier. STEP 5 restock: pending was 0 after the C1/C2/C3 fix (below the 3-item floor), so this was real restock work, not a skip. Checked TOURNAMENT_ROADMAP (T1-T4 fully done), template_a_exhausted (explicit human-decided stop on the gate-swap template, not applicable here since this is a primary-signal band-width diagnostic, not a gate), FOLLOWON_SPECS.md/SIGNAL3_CLASSIFIER_SPEC.md (neither exists), SELF_AWARENESS_SPEC.md (now complete). Added exactly one new item, WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC, sourced directly from ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL's own named next-lever text in ROADMAP.md - a wider-band A/B on the same construct to isolate cost drag from signal-direction as the KILLED verdict's driver. Did not invent a second item; did not re-open anything settled. Committed and pushed.",
   "block_detail": null,
   "updated_by": "executor",
-  "updated_at": "2026-08-27T15:12:46.444Z"
+  "updated_at": "2026-08-27T16:07:59.717Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -767,7 +767,7 @@
    },
    {
     "id": "C1",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "scanner.js",
     "depends_on": [],
@@ -777,7 +777,7 @@
    },
    {
     "id": "C2",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "context.js",
     "depends_on": [
@@ -789,7 +789,7 @@
    },
    {
     "id": "C3",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "context.js",
     "depends_on": [
@@ -798,6 +798,16 @@
     "note": "Sourced directly from SELF_AWARENESS_SPEC.md's Phase 2 queue table (C3 row). Carries that document's own explicit honesty note forward: this is accurate context about the system, not persistent self-awareness - the AI reasons over what it is given each query, it does not continuously 'know itself'. Build the useful thing; do not market the romantic one, and have the AI itself be straight about this if asked.",
     "task": "Give the chat AI a concise, accurate self-description: what cajh is, its current strategy, that live trading defaults OFF and why (the break-even / no-edge findings this project has accumulated), and a short digest of ROADMAP verdicts. Pull dynamically so it stays true as findings change.",
     "done_when": "@cajh what are you for? / what have you learned? answer accurately from live config + ROADMAP, not from a hardcoded blurb."
+   },
+   {
+    "id": "WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC",
+    "state": "pending",
+    "owner": "executor",
+    "file": "new: scripts/wider-hysteresis-band-cost-drag-diagnostic.mjs (additive), reuses active-address-count-primary-signal.mjs's construct unmodified except band width",
+    "depends_on": [],
+    "note": "Sourced directly from ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL's own writeup (2026-08-27, ROADMAP.md), which named this explicitly as 'the most plausible next lever if anyone wants to test whether cost drag alone explains the loss' after diagnosing ~91% cumulative cost drag from ~107 holdout exposure flips on a +-1% band (same whipsaw failure mode GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL diagnosed for its own +-1% Volume Intensity band). This is a new, distinctly-named diagnostic study on the SAME address-count-vs-200d-MA construct, not a re-run of the already-KILLED +-1%-band study bolted onto its drawn conclusion. Pre-register the wider band width(s) (e.g. +-3% and/or +-5%) BEFORE running, before touching any BTC return - do not tune the band by peeking at holdout performance. Reuse active-address-count-primary-signal.mjs's data access (blockchain.com n-unique-addresses, &sampled=false for genuine full resolution - the audit-corrected query), cost basis (FEE_RATE 0.008 + SLIPPAGE_PCT 0.0005/side), 70/30 split, and permutation+block-bootstrap methodology unmodified - only the band width changes, so the two studies are a clean A/B on the cost-drag mechanism. Per MULTIPLE_COMPARISONS_AUDIT.md's own discipline: this adds a 19th sub-test to the formal-NHST family - update that document's Section 1/2 table and AGENT_PROTOCOL.md's counter in the same commit as the verdict, same as every prior item in this family has done, and disclose the resulting family-size effect on other results (e.g. another possible BH-FDR flip) rather than omitting it.",
+    "task": "Re-run the ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL construct (BTC-only, n-unique-addresses vs its own trailing 200-session MA, 1-day causal lag, direct exposure never a gate) with a wider hysteresis band (pre-registered before running, e.g. +-3% and/or +-5% instead of the killed study's +-1%) to test whether reducing exposure-flip frequency (and thus turnover cost) changes the verdict, isolating cost drag from signal-direction as the failure's driver.",
+    "done_when": "Pre-registered band width(s) tested on the same train/holdout split with the same one-sided sign-flip permutation test and block-bootstrap CI methodology as ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL; verdict (still net-negative -> cost drag isn't the whole story; turnover reduced but still fails -> partial explanation; flips to a real positive with holdout episode count clearing MIN_HOLDOUT_EPISODES_FOR_CI=8 -> real finding, not yet a live-promotion case) recorded in VERDICTS.md and ROADMAP.md; MULTIPLE_COMPARISONS_AUDIT.md family table and AGENT_PROTOCOL.md formal-NHST counter updated in the same commit; npm.cmd test green."
    }
   ],
   "strategy_router": "strategy-registry.mjs decides HOW cajh trades, never whether. selectStrategy({asset,regime,timeframe}) ALWAYS returns a strategy; confidence is expressed as POSITION SIZE (validated 1.0x / relative 0.5x / uncovered 0.25x), so weak evidence shrinks exposure instead of blocking a trade. No PASS exists yet, so nothing sizes above 0.5x and expectedEdge reads negative - tests assert both, so a future edit claiming a positive edge without new sealed evidence FAILS the suite rather than quietly trading on it. Adding a PASS entry requires a genuine sealed verdict plus the D3 human gate.",
@@ -859,14 +869,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-14T02:02:14.906Z",
-   "agent": "cajh-loop-check",
-   "action": "blocked-checked",
-   "detail": "Routine unattended firing. State file healthy (control object, blackboard.work_queue array, ledger array). git pull --rebase: already up to date, no new commits to skim. control.status remains BLOCKED on RISK-SURFACE-TEST-COVERAGE - correctly classified as a HARD block (pre-commit protected-logic hook refusal on new trader.test.mjs/commands.test.mjs tests that call order-placement/validation functions by name); per this run's instructions, not something to guess past, retry with a different approach, or work around. Diff remains stashed (stash@{0}), working tree otherwise clean, git status confirmed clean before and after. Sent PushNotification for reasonKey unresolvable-blocked (top-level notifications map had no entry for this specific block; the most recent entry there was 2026-08-10 for a different item, outside the 6h dedup window regardless) - not delivered (terminal active) but recorded per dedup protocol. First write attempt this firing mistakenly targeted blackboard.notifications instead of the top-level map (same mistake an earlier firing flagged as a process error in notifications.empty-queue.note); caught before committing (commit refused anyway by the protected-logic hook on an unrelated frozen_paths_note comma-only diff line, false positive from full-file JSON reformat), reset/reverted cleanly via git reset+checkout of this firing's own uncommitted edit only, and redone correctly. Active work_queue items (pending/started) = 9, above STEP 5 restock threshold of 3, no restock performed. No code changes this firing.",
-   "commit": "none (state-only firing)",
-   "tests": "not run (no code changed)"
-  },
   {
    "ts": "2026-08-14T04:01:32.000Z",
    "agent": "cajh-loop-check",
@@ -1653,6 +1655,14 @@
    "action": "research-closed-killed",
    "detail": "ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL: BTC active-address-count exposure signal vs its own trailing 200-session MA - KILLED, wrong sign (p=0.9990, 107 holdout episodes), ~91% cost-drag from high turnover the likely driver. Joins formal-NHST family as 18th sub-test; causes EQUITIES-MADIP-OUT-OF-SAMPLE to flip from BH-FDR survivor to non-survivor at n=18 (family-size effect, own p unchanged). New scripts/active-address-count-primary-signal.mjs only, additive.",
    "commit": "44aa42f",
+   "tests": "505/505 green"
+  },
+  {
+   "ts": "2026-08-27T16:07:59.717Z",
+   "agent": "executor",
+   "action": "state-fix",
+   "detail": "Traced C1/C2/C3 in work_queue to a duplicate restock (c47a764, 2026-08-23) of already-completed SELF_AWARENESS_SPEC.md Phase 1-2 work (closed at dfb915e/0c1b387/59b2f76 with 19 subsequent no-op confirmations of an empty queue). Verified in code: scanner.js logAssetDecision -> logger.recordDecision -> storage.appendDecisionEvent (decision journal), context.js buildLiveContext/buildMissionDigest/describeHaltCause all present and covered by decision-log.test.mjs/context.test.mjs. No code changed. Marked C1/C2/C3 done in work_queue; added a STATUS banner to SELF_AWARENESS_SPEC.md instructing future restocks to check git history first (f53616e). Also restocked queue (0 pending after the fix, below the 3-item floor): added WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC, sourced from ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL's own named next-step in ROADMAP.md.",
+   "commit": "f53616e",
    "tests": "505/505 green"
   }
  ],
