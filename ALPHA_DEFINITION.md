@@ -160,18 +160,19 @@ family-wide BH-FDR across all 15 formal-NHST entries**.
 |---|---|---|---|
 | 1. positive net expectancy | `E > 0` | **+0.2994R** net of real cost | **pass** |
 | 2. win rate margin | > `1/(1+R)` on **realised** R | not computed | **not evaluated** |
-| 3. CI excludes zero **and** survives BH-FDR | both | **[+0.0509, +0.5350]**, q=0.0435 | **pass** |
+| 3. CI excludes zero **and** survives BH-FDR | both | CI **[+0.0509, +0.5350]** holds; **q=0.0522 at n=18** | **FAIL as of 2026-08-27** |
 | 4. sample adequate | ~401 for 80% power at this effect | **300** | **marginal** |
 | 5. survivable | drawdown ceiling + streak stated | not computed | **not evaluated** |
 | 6. reproduced out-of-sample | yes | **yes — larger on the fresh universe** | **pass** |
 
-**Three of six pass, two are uncomputed, one is marginal. That is further than anything else
-has ever got here, and it is not an alpha yet.** The distinction matters: this document exists
+**Two of six pass as of 2026-08-27, two are uncomputed, one is marginal, and condition 3 —
+which passed when this section was written on 2026-08-22 — has since failed.** It got further
+than anything else ever has here, and it is not an alpha. The distinction matters: this document exists
 precisely so that "the best result we have" and "clears the bar" stay separate ideas.
 
 ### What is genuinely new
 
-Conditions **1, 3 and 6 hold simultaneously** — positive net expectancy, statistical
+Conditions **1, 3 and 6 held simultaneously** (3 has since failed — see the condition-3 note below) — positive net expectancy, statistical
 separability surviving correction, and out-of-sample reproduction. §5 below was written on
 2026-08-21 stating that conditions 1 and 3 had **never** been met by the same candidate across
 ~46 studies. **That claim is now false**, and it was falsified in the strongest available way:
@@ -200,8 +201,35 @@ went the other way, +0.1866R → −0.0854R, sign flipped.
   |---|---:|---|
   | 15 | 0.0435 | yes |
   | 16 | 0.0464 | yes |
-  | **17 (current)** | **0.0493** | **yes, by 0.0007** |
-  | 18 | 0.0522 | **no** |
+  | 17 | 0.0493 | yes, by 0.0007 |
+  | **18 (current)** | **0.0522** | **NO — flipped 2026-08-27** |
+
+  **It happened, and it happened exactly as written above.** `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL`
+  closed on 2026-08-27 with **p=0.9990** — dead last in the family, wrong sign, KILLED on its own
+  terms. It has no relationship to `ma_dip` beyond both being entries in the same correction
+  family. Adding it grew the denominator from 17 to 18, and that alone moved `ma_dip` from
+  survivor to non-survivor. **`ma_dip`'s own p-value has never changed from 0.0116, and its
+  confidence interval [+0.0509, +0.5350] still excludes zero.** What changed is the number of
+  looks the project has taken.
+
+  The project is therefore back to **zero candidates clearing conditions 1 and 3 together**. The
+  exception recorded in §4b lasted five days, from 2026-08-22 to 2026-08-27. Of the two entries
+  that still formally survive at n=18, one (`LOG-REGRESSION-BANDS-CRYPTO`, rank 1) is a
+  demonstrated benchmark artifact its own study disproved, and the other (`B5-REVERSAL L=3`) was
+  killed on a −79% to −90% drawdown. Neither is a candidate.
+
+  **This is the moment §4b's warning was written for, so it is restated here rather than
+  quietly dropped:** the argument that the correction family is drawn too wide — that it spans
+  different markets, mechanisms and datasets, and that `ma_dip` was pre-registered and replicated
+  rather than selected as the family's best — is now exactly the argument that would restore the
+  favoured result. It was foreseeable, it was written down in advance, and it must not be adopted
+  now on the strength of having become convenient. If the family framing genuinely warrants
+  revisiting, that case has to be made on its own merits, in a document that does not have a
+  candidate riding on the answer.
+
+  **What legitimately restores condition 3 is a smaller p-value from a larger sample**, which
+  lowers `ma_dip`'s rank and buys real margin. At rank 3 of 18 it would need p < 0.0083; at rank
+  2, p < 0.0056. Nothing else.
 
   Concretely: **the next formal-NHST test this project runs removes `ma_dip` from the survivor
   list — unless that test comes in at `p < 0.0116`, i.e. is itself more significant than
