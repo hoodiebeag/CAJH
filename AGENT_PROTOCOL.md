@@ -242,8 +242,45 @@ section is the binding rule; that document is the reasoning behind it. Update bo
 fail):**
 
 - Formal NHST studies (report a p-value against a pre-registered significance gate):
-  **19** sub-tests across 16 studies as of 2026-08-27 (see audit §2 for the list and p-values).
-  Updated by WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC (2026-08-27): a follow-on to
+  **20** sub-tests across 17 studies as of 2026-08-27 (see audit §2 for the list and p-values).
+  Updated by STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC (2026-08-27): a third,
+  distinctly-named diagnostic in the same band-width A/B/C chain on ACTIVE-ADDRESS-COUNT-PRIMARY-
+  SIGNAL's construct (±1% KILLED → ±3% WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC partial
+  explanation → ±5% this item), sourced directly from that study's own "still-wider ±5% band is
+  the next diagnostic step" text. Byte-identical construct/data/cost basis/split/methodology to
+  both predecessors, only change: pre-registered ±5% relative hysteresis band (5x the killed
+  study's ±1%) — a single primary width, not a further sweep — as the 20th entry: one-sided
+  sign-flip permutation on per-holdout-episode (strategy − buy&hold) spread, n=68 episodes (down
+  from 88 at ±3%, a *larger* relative cut than the ±1%→±3% step — contrary to that study's own
+  stated expectation of sub-linear further cuts), p=0.7183, **wrong sign** (observed mean episode
+  spread -0.002973), continuing the trend toward significance across all three widths
+  (0.9990→0.9251→0.7183) but nowhere close to p<0.05. Family-wide BH-FDR recomputed across all 20
+  (q≈0.8450 at rank 17 of 20) — does not survive. **Result: continued partial explanation, not a
+  resolution.** Holdout episode count drops 88→68 (-22.7%), and the strategy-vs-buy-hold gap
+  shrinks sharply from -19.75 points (±3%) to -7.74 points (±5%) — cumulative cost drag falls from
+  ~74.8% to ~57.8%, genuinely declining alongside turnover. The cost-drag/gap ratio nonetheless
+  rises from 3.8x to ~7.5x, disclosed as an artifact of dividing a still-substantial (declining)
+  cost figure by a gap approaching zero, not evidence cost drag's absolute contribution grew. Hit
+  rate (48.2% train, 52.8% holdout) remains indistinguishable from chance at this band width too —
+  no width tested has produced real directional information; widening the band converges the
+  strategy toward buy-and-hold rather than uncovering a real edge cost drag was masking.
+  **Material side effect: none flip** — this addition lands near the bottom of the ranking (rank
+  17 of 20), not high enough to loosen thresholds at the top or tighten a marginal survivor past
+  the line; `EQUITIES-MADIP-OUT-OF-SAMPLE` and `CLASSIFIER-FUNDING-FEATURE` were already
+  non-survivors going into this update and simply tighten further (q=0.0551→0.0580,
+  q=0.0627→0.0660); `LOG-REGRESSION-BANDS-CRYPTO` (q=0.0038→0.0040) and `B5-REVERSAL L=3`
+  (q=0.0095→0.0100) are essentially unaffected. Two sub-tests still formally survive at n=20,
+  unchanged from n=19. No further band-width follow-on staged — three widths spanning a 5x range
+  all show the same ~50% hit rate and non-significant wrong-signed result; this A/B/C chain is
+  treated as closed per the audit's own discipline against open-ended parameter sweeps. Worth
+  flagging for the independence caveat this section's own discipline exists to surface: this is
+  the third sub-test in a row reusing the predecessor's exact data/cost basis/holdout window,
+  differing only in band width, so its p-value is substantially correlated with both
+  `WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC`'s and `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL`'s
+  rather than an independent draw — three correlated sub-tests now sit near the bottom of the
+  ranking. Full writeup in `ROADMAP.md`'s 2026-08-27
+  STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC section and `MULTIPLE_COMPARISONS_AUDIT.md`
+  §2. Updated by WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC (2026-08-27): a follow-on to
   ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL, sourced directly from that study's own named next lever —
   does widening the hysteresis band (reducing exposure-flip turnover) change the verdict, isolating
   cost drag from signal-direction as the failure's driver? Byte-identical construct/data/cost

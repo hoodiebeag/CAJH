@@ -5030,3 +5030,95 @@ no strategy code touched (`backtest.js`, `strategy.js`, `tournament.mjs`, `monit
 used unmodified — same imports as the predecessor script, unchanged. `npm.cmd test`: 505/505 green
 (no production or test file touched — no companion test file added, matching this family's
 precedent for read-only research scripts under `scripts/`).
+
+## STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC — a third band width shrinks the loss most of the way to zero and pushes the sign-flip p-value close to 0.72, but the signal remains wrong-signed and non-significant (2026-08-27)
+
+**Scoping, per this item's own note.** Sourced directly from
+`WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC`'s own writeup (2026-08-27, immediately above), which
+named a still-wider ±5% band as "the next diagnostic step if anyone wants to keep isolating cost
+drag" after the ±3% band cut holdout episodes only 107→88 (-17.8%) for a 3x width increase, with
+cost drag remaining 3.8x the size of the shrunken strategy-vs-buy-hold gap. That writeup's own
+stated expectation, disclosed in advance so this result is read against it rather than as a
+surprise either way: "a ±5% band (5x) should be expected to cut turnover further only
+sub-linearly, and the construct's ~50% hit rate means no band width can produce a real signal from
+directionless noise." This is a third, distinctly-named diagnostic in the same band-width A/B/C
+chain (±1% KILLED → ±3% partial explanation → ±5% this item), not a re-run of either predecessor
+bolted onto its drawn conclusion.
+
+**Construct — byte-identical to the two predecessors except band width, pre-registered before any
+BTC return was touched.** Same data source (blockchain.com Charts API `n-unique-addresses`,
+`&sampled=false`), same cost basis (FEE_RATE 0.008 + SLIPPAGE_PCT 0.0005/side, ~1.7% round trip),
+same 1-day causal publication lag, same 70/30 chronological split, same permutation +
+block-bootstrap significance methodology. Only change: **±5% relative hysteresis band** (5x the
+killed study's ±1%, up from the partial-explanation study's ±3%) around active-address count's own
+trailing 200-session MA. Pre-registered as the single primary width to test — not a further sweep
+— per `MULTIPLE_COMPARISONS_AUDIT.md`'s own discipline against a garden-of-forking-paths
+band-width search.
+
+**Results:**
+
+| segment | window | days | episodes | strategy | buy-hold | hit rate |
+|---|---|---:|---:|---:|---:|---:|
+| train | 2023-01-02→2025-07-03 | 914 | 122 | -18.48% | +548.72% | 48.2% |
+| holdout | 2025-07-04→2026-07-30 | 392 | **68** | -49.87% | -42.14% | 52.8% |
+
+Same windows and buy-hold path as both predecessor studies (identical candle data), so this
+remains a clean A/B/C: holdout episode count drops 107→88→**68**, and train episode count drops
+204→160→**122**. The ±3%→±5% holdout cut (88→68, -22.7%) is actually *larger* in relative terms
+than the ±1%→±3% cut (107→88, -17.8%) — the opposite of the pre-registered expectation that
+further widening would cut turnover only "sub-linearly." Holdout episode count (68) still
+comfortably clears the pre-registered `MIN_HOLDOUT_EPISODES_FOR_CI=8` floor. Pre-registered
+primary test: one-sided sign-flip permutation on per-holdout-episode (strategy day return −
+buy-and-hold day return) spread (n=68 episodes), 1000 iterations, seed 20260827. Observed mean
+episode spread **-0.002973 (still wrong sign)**, **p=0.7183** — continuing the trend toward
+significance across all three band widths (0.9990 → 0.9251 → 0.7183), but still nowhere near
+p<0.05. 95% block-bootstrap CI on holdout daily strategy returns [-0.002804, -0.000617] (excludes
+zero, negative) corroborates from a second angle.
+
+**The gap shrinks most of the way to zero, but the cost-drag/gap ratio is not a reliable read on
+"how much of the loss is cost" at this band width — disclosed honestly rather than touted.** The
+holdout strategy-vs-buy-hold gap shrinks from -29.32 points (±1%) to -19.75 points (±3%) to
+**-7.74 points (±5%)** — a much sharper drop than the prior step, continuing the direction cost
+drag would predict. Cumulative holdout cost drag (episodes × real per-side cost ~0.85%) falls from
+~91% (±1%) to ~74.8% (±3%) to **~57.8% (±5%)** — cost drag itself is genuinely shrinking as
+turnover falls, exactly as the mechanism predicts. But the *ratio* of cost drag to the remaining
+gap rises sharply, from 3.1x (±1%) to 3.8x (±3%) to **~7.5x (±5%)**, because the gap in the
+denominator is shrinking faster than cost drag itself — this is arithmetic (dividing a shrinking
+but still-substantial cost figure by a gap approaching zero inflates the ratio), not evidence that
+cost drag is becoming a *larger* absolute problem, and should not be read as such. Hit rate
+(48.2% train, 52.8% holdout) remains indistinguishable from chance at this band width too, exactly
+as at ±1% and ±3% — this construct shows no sign of carrying real directional information about
+next-day BTC returns at any band width tested so far.
+
+**Verdict: continued partial explanation, not a resolution.** Turnover reduced further (and by
+more than the pre-registered expectation predicted), and the loss shrank sharply toward
+buy-and-hold — but the signal remains wrong-signed and non-significant (p=0.7183, holdout episode
+count of 68 comfortably clears the CI floor so this is a real test, not a non-verdict). Per this
+item's own pre-registered done_when: this is the "turnover reduced further but still fails →
+continued partial explanation" outcome, not the "flips to a real positive" outcome. Given the
+construct's ~50% hit rate holds steady across all three band widths, the honest reading is that no
+band width fixes a signal that never had directional information to begin with — band-widening
+converges the strategy toward buy-and-hold (fewer flips means longer holds means the path
+increasingly resembles the benchmark itself) rather than uncovering a real edge that cost drag was
+masking. Recorded in `VERDICTS.md`.
+
+**Joins `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family as the 20th sub-test (17th study)** —
+does not survive BH-FDR (see that document's §2 for the full table; no material side effect — the
+new entry lands at rank 17 of 20, not high enough to flip either current survivor's status).
+
+**No further band-width follow-on staged.** Three widths (±1%, ±3%, ±5%) now span a 5x range on
+the same construct, each showing the same ~50% hit rate and the same wrong-signed, non-significant
+holdout result — continuing to widen the band would keep shrinking the measured gap toward zero
+without ever producing a real signal, since the underlying series carries no directional
+information at this MA/lag/lookback specification. Per `MULTIPLE_COMPARISONS_AUDIT.md`'s own
+discipline against open-ended parameter sweeps, this A/B/C chain is treated as closed rather than
+staging a ±7% or ±10% fourth diagnostic that would add another highly-correlated sub-test to the
+formal-NHST family for a predictable non-result.
+
+**Engineering note.** New `scripts/still-wider-hysteresis-band-active-address-diagnostic.mjs`
+only, additive — no strategy code touched (`backtest.js`, `strategy.js`, `tournament.mjs`,
+`monitor.js`, `bot.js`, `trader.js`, `scanner.js` untouched, grep-confirmed against the staged
+diff before commit). `researchlab.mjs`'s `loadDailyCandles`/`saveExperiment` and `momentum.mjs`'s
+`blockBootstrapCI` used unmodified — same imports as both predecessor scripts, unchanged.
+`npm.cmd test`: 505/505 green (no production or test file touched — no companion test file added,
+matching this family's precedent for read-only research scripts under `scripts/`).
