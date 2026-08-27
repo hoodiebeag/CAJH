@@ -242,8 +242,38 @@ section is the binding rule; that document is the reasoning behind it. Update bo
 fail):**
 
 - Formal NHST studies (report a p-value against a pre-registered significance gate):
-  **18** sub-tests across 15 studies as of 2026-08-27 (see audit §2 for the list and p-values).
-  Updated by ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL (2026-08-27): added a BTC-only active-address-count
+  **19** sub-tests across 16 studies as of 2026-08-27 (see audit §2 for the list and p-values).
+  Updated by WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC (2026-08-27): a follow-on to
+  ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL, sourced directly from that study's own named next lever —
+  does widening the hysteresis band (reducing exposure-flip turnover) change the verdict, isolating
+  cost drag from signal-direction as the failure's driver? Byte-identical construct/data/cost
+  basis/split/methodology to the predecessor, only change: pre-registered ±3% relative hysteresis
+  band (3x the killed study's ±1%), a single primary width rather than a multi-width sweep — as the
+  19th entry: one-sided sign-flip permutation on per-holdout-episode (strategy − buy&hold) spread,
+  n=88 episodes (single-asset study, BTC only, down from the predecessor's 107 at the narrower
+  band), p=0.9251, **wrong sign** (observed mean episode spread -0.005302). Family-wide BH-FDR
+  recomputed across all 19 (raw q≈1.034 at rank 17 of 19, nowhere close to the 0.05 threshold) —
+  does not survive. **Result: partial explanation, not a resolution.** Holdout
+  episode count drops 107→88 (-17.8%) purely from tripling the band width, and the
+  strategy-vs-buy-hold gap shrinks from -29.3 points (±1%) to -19.75 points (±3%) — consistent with
+  cost drag being part of the story. But ~88 holdout flips at real per-side cost (~0.85%) is still
+  ~74.8% cumulative cost drag, 3.8x the size of the remaining gap (up from 3.1x at ±1%) — cost-drag
+  dominance relative to the shrunken gap did not decrease. Hit rate (49-53% in both segments)
+  remains indistinguishable from chance at both band widths — widening the band reduces how often a
+  directionless signal gets acted on, it cannot supply direction the underlying comparison never
+  had. **Material side effect: none flip** — this addition lands near the bottom of the ranking
+  (rank 17 of 19), not high enough to loosen thresholds at the top or tighten a marginal survivor
+  past the line; `EQUITIES-MADIP-OUT-OF-SAMPLE` and `CLASSIFIER-FUNDING-FEATURE` were already
+  non-survivors going into this update and simply tighten further (q=0.0522→0.0551,
+  q=0.0594→0.0627); `LOG-REGRESSION-BANDS-CRYPTO` (q=0.0036→0.0038) and `B5-REVERSAL L=3`
+  (q=0.0090→0.0095) are essentially unaffected. Two sub-tests still formally survive at n=19,
+  unchanged from n=18 — the first update in this family's history to cause no flip in either
+  direction. Worth flagging for the independence caveat this section's own discipline exists to
+  surface: unlike prior additions, this one is NOT a new information source — it reuses the
+  predecessor's exact data/cost basis/holdout window, differing only in band width, so its p-value
+  is substantially correlated with ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL's rather than an independent
+  draw. Full writeup in `ROADMAP.md`'s 2026-08-27 WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC section
+  and `MULTIPLE_COMPARISONS_AUDIT.md` §2. Updated by ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL (2026-08-27): added a BTC-only active-address-count
   exposure signal (blockchain.com Charts API `n-unique-addresses`, genuinely exogenous data),
   staged per `WHALE-WALLET-ACCUMULATION-PRIMARY`'s own named escape hatch — a deliberately
   different population-usage-momentum hypothesis, not a second whale-cohort-tracking attempt —

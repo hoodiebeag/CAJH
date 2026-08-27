@@ -163,7 +163,7 @@ study by `B5-REVERSAL-PHASE4-PORTFOLIO-SIM`'s FAIL under a stricter, more realis
 
 ## 2. The formal-significance subfamily: a real FWER/FDR computation
 
-Eighteen sub-tests across fifteen studies report an actual p-value against the project's
+Nineteen sub-tests across sixteen studies report an actual p-value against the project's
 pre-registered `p<0.05` significance gate (`MOMENTUM_SPEC.md §6` clause 1, and the
 classifier spec's equivalent permutation-null clause). These are the only results in this
 project where classical multiple-comparisons math applies without qualification, because
@@ -187,32 +187,34 @@ they're the only ones with an actual null distribution behind them.
 | 14 | EQUITIES-BREAKOUT-OUT-OF-SAMPLE (holdout, primary) | 0.6165 | **no** (wrong sign) |
 | 15 | Momentum M7 (train, residual IC) | 0.7013 | yes |
 | 16 | GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL (holdout, primary) | 0.7113 | **no** (wrong sign) |
-| 17 | LOG-REGRESSION-BANDS-EQUITIES (holdout, primary) | 0.9750 | **no** (wrong sign) |
-| 18 | ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL (holdout, primary) | 0.9990 | **no** (wrong sign) |
+| 17 | WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC (holdout, primary) | 0.9251 | **no** (wrong sign) |
+| 18 | LOG-REGRESSION-BANDS-EQUITIES (holdout, primary) | 0.9750 | **no** (wrong sign) |
+| 19 | ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL (holdout, primary) | 0.9990 | **no** (wrong sign) |
 
-**Naive FWER, k=18, alpha=0.05:** 1 − (1 − 0.05)^18 = **0.6028** (assuming independence,
+**Naive FWER, k=19, alpha=0.05:** 1 − (1 − 0.05)^19 = **0.6226** (assuming independence,
 which these tests only partially satisfy — see caveat below). Over a family this size, roughly
-60% odds of at least one nominal "significant" hit existed even if every single underlying
+62% odds of at least one nominal "significant" hit existed even if every single underlying
 effect were exactly zero. Five clear raw p<0.05 (ranks 1–5 above, unchanged by this update — the
-new entry lands at the very bottom of the table) — informative, but this alone doesn't say
-anything about which are real.
+new entry lands near the bottom of the table, above only the two already-last entries) —
+informative, but this alone doesn't say anything about which are real.
 
-**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 18 is `(i/18)×0.05`):
+**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 19 is `(i/19)×0.05`):
 
 | Rank *i* | Study | p-value | q-value | Survives? |
 |---:|---|---:|---:|---|
-| 1 | LOG-REGRESSION-BANDS-CRYPTO | 0.0002 | 0.0036 | **yes** (nominally — see caveat) |
-| 2 | B5-REVERSAL L=3 | 0.0010 | 0.0090 | **yes** |
-| 3 | CLASSIFIER-FUNDING-FEATURE | 0.0099 | 0.0594 | no (already a non-survivor going into this update) |
-| 4 | EQUITIES-MADIP-OUT-OF-SAMPLE | 0.0116 | 0.0522 | **no (newly flipped this update — see below)** |
-| 5 | Classifier P5 | 0.0198 | 0.0713 | no |
-| 6–18 | (remaining 13, see full table above) | 0.0579–0.9990 | 0.1666–0.9990 | no |
+| 1 | LOG-REGRESSION-BANDS-CRYPTO | 0.0002 | 0.0038 | **yes** (nominally — see caveat) |
+| 2 | B5-REVERSAL L=3 | 0.0010 | 0.0095 | **yes** |
+| 3 | CLASSIFIER-FUNDING-FEATURE | 0.0099 | 0.0627 | no (already a non-survivor going into this update) |
+| 4 | EQUITIES-MADIP-OUT-OF-SAMPLE | 0.0116 | 0.0551 | no (already a non-survivor going into this update — tightens further) |
+| 5 | Classifier P5 | 0.0198 | 0.0752 | no |
+| 6–19 | (remaining 14, see full table above) | 0.0579–0.9990 | 0.1759–0.9990 | no |
 
 **Two sub-tests formally survive family-wise BH-FDR correction at q=0.05 at the current
-n=18 — down from three at n=17, because `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL`'s addition
-(p=0.9990, dead last) grows the family denominator enough to flip `EQUITIES-MADIP-OUT-OF-SAMPLE`
-out (see the dedicated paragraph below). One of the two remaining survivors is a demonstrated
-benchmark artifact (rank 1, see below).**
+n=19 — unchanged from n=18. No material side effect this update:
+`WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC`'s addition (p=0.9251) lands at rank 17 of 19, low
+enough in the ranking that it only tightens thresholds already above 0.05 for the existing
+non-survivors — nothing flips in either direction. One of the two remaining survivors is a
+demonstrated benchmark artifact (rank 1, see below).**
 `LOG-REGRESSION-BANDS-CRYPTO`
 (2026-08-22, `ROADMAP.md`) tested a log-price-vs-log-time regression-band exposure signal
 against crypto buy-and-hold: p=0.0002, the smallest raw p-value ever recorded in this family,
@@ -449,7 +451,7 @@ tightens further (q=0.0594) — nothing to flip. `LOG-REGRESSION-BANDS-CRYPTO` (
 and `B5-REVERSAL L=3` (q=0.0085→0.0090) are essentially unaffected. Two sub-tests now formally
 survive at n=18, down from three at n=17.
 
-**The binomial-surprise figure, updated once more (n=18).** Under a null of "no real effect
+**The binomial-surprise figure, prior update (n=18).** Under a null of "no real effect
 anywhere in this family," P(at least 5 of 18 independent trials clear p<0.05) ≈ **0.15%** (exact
 binomial, n=18, p=0.05, up from the n=17 figure of 0.12% — this update adds a raw non-hit at the
 very bottom of the table, so the hit count is unchanged at 5, but the larger family size alone
@@ -459,6 +461,63 @@ SIGNAL` adds a genuinely new information source (blockchain.com on-chain address
 never used in any prior test in this family) rather than a correlated re-run of an existing one —
 the same "independent source landing as a clean non-hit" reading `GDELT-NEWS-SENTIMENT-PRIMARY-
 SIGNAL`'s addition supported applies here too.
+
+**This update (n=18→n=19): `WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC` joins as the 19th
+entry, landing second-to-last of the newly-added position (rank 17, p=0.9251, wrong sign).** A
+follow-on to `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL`, sourced directly from that study's own
+"what would actually resolve this" section: does widening the hysteresis band (reducing
+exposure-flip turnover) change the verdict, isolating cost drag from signal-direction as the
+failure's driver? Byte-identical construct/data/cost basis/split/methodology to the predecessor,
+only change: pre-registered ±3% relative hysteresis band (3x the killed study's ±1%) — a single
+primary width, not a multi-width sweep, per this document's own discipline (one new sub-test per
+diagnostic, not several). Pre-registered primary test: one-sided sign-flip permutation on
+per-holdout-episode (strategy day return − buy-and-hold day return) spread, observed mean spread
+-0.005302 (still wrong sign), p=0.9251 — closer to significance than the predecessor's p=0.9990,
+but nowhere near p<0.05. 95% block-bootstrap CI on holdout daily strategy returns
+[-0.003625, -0.001224] (excludes zero, negative) corroborates. **Result: partial explanation, not
+a resolution.** Holdout episode count drops 107→88 (-17.8%) purely from tripling the band width,
+and the strategy-vs-buy-hold gap shrinks from -29.3 points (±1%) to -19.75 points (±3%) —
+consistent with cost drag being part of the story. But ~88 holdout flips at real per-side cost
+(~0.85%) is still ~74.8% cumulative cost drag, 3.8x the size of the remaining gap (up from 3.1x at
+±1%) — cost-drag dominance relative to the (shrunken) gap did not decrease. Hit rate (49-53% in
+both segments) remains indistinguishable from chance in both band widths — widening the band
+reduces how often a directionless signal gets acted on, it cannot supply direction the underlying
+comparison never had. Recorded a partial-explanation verdict (not KILLED, not a real finding) in
+`VERDICTS.md`. Full writeup: `ROADMAP.md`'s 2026-08-27 `WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC`
+section.
+
+**Material side effect: none flip.** `WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC`'s p=0.9251
+inserts between `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL` (rank 16, p=0.7113) and
+`LOG-REGRESSION-BANDS-EQUITIES` (now rank 18, p=0.9750) — near the bottom, not the top, so it only
+tightens every threshold above it by growing the denominator `n`, the same mechanical direction
+every near-bottom addition to this family has caused. `EQUITIES-MADIP-OUT-OF-SAMPLE` was already a
+non-survivor at n=18 (q=0.0522) and tightens further (its rank-4 threshold moves from
+`4/18×0.05=0.011111` to `4/19×0.05=0.010526`, its own unchanged p=0.0116 still exceeds it,
+q=0.0551) — nothing to flip, since it had already flipped out the prior update.
+`CLASSIFIER-FUNDING-FEATURE` was already a non-survivor at n=18 (q=0.0594) and tightens further
+(q=0.0627) — same, nothing to flip. `LOG-REGRESSION-BANDS-CRYPTO` (q=0.0036→0.0038) and
+`B5-REVERSAL L=3` (q=0.0090→0.0095) are essentially unaffected. Two sub-tests still formally
+survive at n=19, unchanged from n=18 — the first update in this family's history where the new
+entry causes no flip at all in either direction, because it landed neither at the very top
+(loosening thresholds) nor tightly behind an already-marginal survivor (tightening one across the
+line).
+
+**The binomial-surprise figure, updated once more (n=19).** Under a null of "no real effect
+anywhere in this family," P(at least 5 of 19 independent trials clear p<0.05) ≈ **0.20%** (exact
+binomial, n=19, p=0.05, up from the n=18 figure of 0.15% — this update adds a raw non-hit near the
+bottom of the table, so the hit count is unchanged at 5, but the larger family size alone raises
+the probability of seeing that many hits by chance). The same independence caveat applies with an
+added wrinkle this time: `WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC` is NOT an independent new
+information source — it reuses `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL`'s exact data, cost basis, and
+90%+ of its holdout window, differing only in band width, so its p-value is substantially
+correlated with rank 19's. Unlike `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL` and
+`ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL` (each a genuinely new data source whose clean non-hit
+statuses were read as mild evidence against the correlated-near-null concern), this addition is
+better read as reinforcing that same caveat: two highly correlated sub-tests both landing near the
+bottom of the ranking is closer to what a family with one real correlated null cluster would
+produce than what five independent draws hitting by chance would look like — a reminder that this
+document's raw hit-count and binomial figure should be read with the family's actual independence
+structure in mind, not taken as five independent pieces of evidence.
 
 ## 3. The economic-gate subfamily: why classical FWER doesn't transfer, and what does
 
