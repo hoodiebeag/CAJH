@@ -203,7 +203,8 @@ went the other way, +0.1866R → −0.0854R, sign flipped.
   | 16 | 0.0464 | yes |
   | 17 | 0.0493 | yes, by 0.0007 |
   | 18 | 0.0522 | **NO — flipped 2026-08-27** |
-  | **19 (current)** | **0.0551** | no — drifting further out |
+  | 19 | 0.0551 | no — drifting further out |
+  | **20 (current)** | **0.0580** | no |
 
   **It happened, and it happened exactly as written above.** `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL`
   closed on 2026-08-27 with **p=0.9990** — dead last in the family, wrong sign, KILLED on its own
@@ -229,9 +230,10 @@ went the other way, +0.1866R → −0.0854R, sign flipped.
   candidate riding on the answer.
 
   **What legitimately restores condition 3 is a smaller p-value from a larger sample**, which
-  lowers `ma_dip`'s rank and buys real margin. At rank 3 of 19 it would need p < 0.0079; at rank
-  2, p < 0.0053. Nothing else — and both thresholds tighten every time the family grows,
-  which it has done five times since this candidate was first scored.
+  lowers `ma_dip`'s rank and buys real margin. At rank 3 of 20 it would need p < 0.0075; at rank
+  2, p < 0.0050. Nothing else — and both thresholds tighten every time the family grows,
+  which it has now done six times since this candidate was first scored. The bar for rescuing
+  this candidate moves away from it on its own, whatever the project does next.
 
   Concretely: **the next formal-NHST test this project runs removes `ma_dip` from the survivor
   list — unless that test comes in at `p < 0.0116`, i.e. is itself more significant than
