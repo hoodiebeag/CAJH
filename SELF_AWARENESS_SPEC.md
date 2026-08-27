@@ -6,6 +6,20 @@ strict order of both value and safety. **Phases 1–2 are buildable now, in para
 momentum research, and carry near-zero risk. Phase 3 is gated and mostly already built —
 read its hard rule before touching it.**_
 
+> **STATUS: Phases 1–2 (C1, C2, C3) are COMPLETE — do not re-queue.** Closed at commits
+> `dfb915e` (C1, decision log — verified already-implemented), `0c1b387` (C2, live-context
+> R/reason + halt-cause heuristic), `59b2f76` (C3, dynamic mission/purpose digest; "queue
+> honestly empty" recorded at the time). Implementation lives in `logger.js`
+> (`recordDecision`/`getRecentDecisions`), `storage.js` (`appendDecisionEvent`,
+> JSON-Lines decision journal), `scanner.js` (`logAssetDecision`, called from every
+> `evaluateAsset` exit path), and `context.js` (`buildLiveContext`, `buildMissionDigest`,
+> `describeHaltCause`), with coverage in `decision-log.test.mjs` and `context.test.mjs`.
+> The table below is left as a historical record of what was asked for and delivered — it
+> is **not** a live queue. A restock (`c47a764`, 2026-08-23) re-added C1/C2/C3 as pending
+> without checking this history first; that was a mistake, corrected 2026-08-27. If you are
+> about to restock from this table, don't — check `git log --oneline -- .agent_state.json`
+> for "C1"/"C2"/"C3" first.
+
 ---
 
 ## Phase 1 — Self-knowledge (build first; it is the substrate for everything else)
