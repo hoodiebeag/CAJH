@@ -5122,3 +5122,81 @@ diff before commit). `researchlab.mjs`'s `loadDailyCandles`/`saveExperiment` and
 `blockBootstrapCI` used unmodified — same imports as both predecessor scripts, unchanged.
 `npm.cmd test`: 505/505 green (no production or test file touched — no companion test file added,
 matching this family's precedent for read-only research scripts under `scripts/`).
+
+
+## MACRO-REGIME-EQUITIES-SPLIT-FRACTION-DIAGNOSTIC — 50/50 split still lands on 1 holdout episode; the split fraction was never the real constraint (2026-08-27)
+
+**Scoping, per this item's own note.** Sourced directly from `MACRO-REGIME-PRIMARY-SIGNAL-EQUITIES`'s
+own "what would actually resolve this" writeup (2026-08-25), which named two levers: (a) a
+genuinely longer equities window via IBKR Gateway, and (b) revisiting the fixed 70/30 split
+fraction itself, since "regime episodes are calendar-rare events and a 30% holdout of even a
+multi-year window can land entirely inside one." Lever (a) remains blocked — a fresh
+`node scripts/ibkr-smoke.mjs` check this run again returned `ECONNREFUSED 127.0.0.1:4002`,
+consistent with `EXOGENOUS-DATA-ACCESS-AUDIT`'s documented intermittent-IBKR finding — so this item
+pursues lever (b), the agent-actionable one.
+
+**Pre-registration, before touching any equities return.** `TRAIN_FRACTION = 0.5` (50/50), the
+single alternative split named in this item's own work_queue note ("e.g. 50/50, giving ~250/250
+days") — one value, not a sweep, per `MULTIPLE_COMPARISONS_AUDIT.md`'s discipline against
+open-ended parameter search. Everything else byte-identical to the 70/30 study: new
+`scripts/macro-regime-equities-split-fraction-diagnostic.mjs` (additive), same regime
+definition/hysteresis bands/causal lags, same 30-symbol DJIA universe from the same unchanged
+`research-cache/equities-1d/` cache (2024-08-20→2026-08-19, 501 candles — no new fetch attempted,
+window identical to the prior study's), same cost model, same `MIN_HOLDOUT_EPISODES_FOR_CI=8`
+floor.
+
+**Result: still exactly 1 holdout episode — and the train-segment episode breakdown shows why.**
+
+| segment | split | days | regime episodes | episode lengths | strategy return | buy-and-hold return | hit rate |
+|---|---|---:|---:|---|---:|---:|---:|
+| train | 70/30 (prior study) | 350 | 4 | — | +17.08% | +22.44% | 50.6% |
+| holdout | 70/30 (prior study) | 150 | 1 | [150] | +13.87% | +13.81% | 56.0% |
+| train | 50/50 (this study) | 250 | 4 | [8, 1, 12, 229] | +5.81% | +10.65% | 50.0% |
+| holdout | 50/50 (this study) | 250 | 1 | [250] | +25.99% | +25.93% | 54.4% |
+
+The 50/50 train segment's own episode lengths are the diagnosis: the last of its 4 episodes runs
+229 days (day 21 through day 249 of 250), and that single "favourable" call then continues,
+unbroken, through the entire 250-day holdout. In other words, essentially the whole back half of
+this cached window — roughly the last 479 of 500 total days — is one continuous regime with no
+recorded flip. Moving the split point from 70% to 50% didn't add a transition to the holdout
+because there was no transition anywhere in that stretch of the window to catch; it only moved
+where inside that one long episode the arbitrary cut line falls. A 30/70 or even 10/90 split would
+land in the same trap unless it cut early enough to fall inside the *first* 21 days, at which point
+there would be no meaningful train segment left.
+
+**This closes lever (b), not just this data point.** The prior study's diagnosis — "the binding
+constraint was the fixed 70/30 split, not market history depth" — is now shown to have the wrong
+mechanism: it isn't the split *ratio* that's binding, it's that the cached window's second half
+contains only one regime episode, full stop. No re-split of this same 501-candle cache can produce
+a holdout with more than 1 episode once the split point falls anywhere in that one long episode's
+229+250=479-day span (all but the first ~21 days of the window). This is a stronger, more useful
+negative result than "still short of the floor" — it identifies that lever (a) (more window depth,
+i.e. IBKR access or a larger cache pull reaching further back than 2024-08-20) is the only lever
+that can actually fix this, and rules out lever (b) as a dead end on this cache rather than leaving
+it looking like an under-tried option.
+
+**Verdict: NON-VERDICT** (holdout regime-episode count, 1, remains below the pre-registered floor
+of 8; no NHST test run, no CI computed). Recorded in `VERDICTS.md`. Does not join
+`MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family — no real test occurred, matching the prior
+70/30 study's own precedent for a non-verdict.
+
+**What would actually resolve this, stated for whoever picks it up next.** Only lever (a): a
+materially longer equities window than this cache's 2024-08-20→2026-08-19 span, via IBKR Gateway
+(when reachable) or a larger historical pull from whatever data source is available, long enough
+to have captured more than one macro-regime transition in its second half regardless of where a
+train/holdout split lands. Re-splitting this same cache again (e.g. 30/70, 90/10) is not worth
+staging — the 229+250-day single-episode span this run measured makes the outcome predictable
+without running it, and `MULTIPLE_COMPARISONS_AUDIT.md`'s discipline argues against spending a
+correlated sub-test slot on a predictable non-result. Do not re-open this or the 70/30 study
+without genuinely deeper history, not another split-ratio variant on the same 501-candle cache.
+
+**Engineering note.** New `scripts/macro-regime-equities-split-fraction-diagnostic.mjs` only,
+additive — no strategy code touched (`backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`,
+`bot.js`, `trader.js`, `scanner.js` untouched, grep-confirmed against the staged diff before
+commit). Reused `momentum.mjs`'s `blockBootstrapCI` (imported, unused on this run's path since the
+episode floor was never reached) and `researchlab.mjs`'s `saveExperiment` (unmodified).
+`fetchFredSeries`/`lookupLagged`/`trailingMA`/`contiguousEpisodes`/`scoreSegment` duplicated
+verbatim from `macro-regime-primary-signal-equities.mjs` (same un-exported-helper-duplication
+pattern used throughout this family). Raw output saved to `research-runs/` (gitignored, not
+committed). `npm.cmd test`: 505/505 green (no production/test file touched, no companion test
+added, matching this family's read-only-research-script precedent).
