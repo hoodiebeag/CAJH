@@ -4,10 +4,10 @@
   "status": "BLOCKED",
   "target_file": "scripts/gdelt-wider-hysteresis-band-diagnostic.mjs",
   "objective": "GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC",
-  "notes": "8th consecutive cheap-probe reconfirmation that the GDELT DOC API endpoint (api.gdeltproject.org) is unreachable from this host -- curl with a 20s timeout returned HTTP_CODE:000, while a control curl to blockchain.info in the same session returned HTTP_CODE:200 in 0.79s, again ruling out a general network problem. Same exogenous outage first found 2026-08-27T21:05:00Z, now spanning just under 8 hours (probe run at 2026-08-28T05:02Z). Per this scheduled task family precedent, did not re-run the expensive paced script against a freshly-reconfirmed-down endpoint -- the cheap probe is sufficient evidence the outage persists, and the pre-registration constraint requires reusing the GDELT DOC API construct unmodified, so there is no genuinely different agent-actionable approach available. GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC remains the only work_queue item not done (78 done, 1 pending). STEP 0.4: git pull --rebase brought no new commits (already up to date) -- nothing to skim. STEP 5 restock check: git log -3 on ROADMAP.md/TOURNAMENT_ROADMAP.md/VERDICTS.md/SELF_AWARENESS_SPEC.md/FOLLOWON_SPECS.md/SIGNAL3_CLASSIFIER_SPEC.md still shows ff9ef70 as the most recent touching commit (unchanged since the 7th-reconfirmation firing) -- conclusions unchanged, no new agent-actionable lever, did not invent a queue item to hit the 3-item floor. STEP 4 notification: notifications[unresolvable-blocked] was sent at 2026-08-28T04:02:07.000Z, ~1h ago, well inside the 6h dedup window on both the top-level notifications map and blackboard.notifications (kept in sync since the prior firing's convergence) -- correctly skipped sending a duplicate this firing per notification_policy.dedup. No code, strategy, or protected-logic files touched this firing (pure state-file update, no notification); npm.cmd test not run since nothing changed that could affect it, matching this family precedent for no-code-change firings. Untracked universe.txt present in working tree at firing start, not created by this run, left untouched per hygiene rules.",
-  "block_detail": "GDELT DOC API unreachable (curl HTTP_CODE:000, 20s timeout) -- 8th reconfirmation of the same exogenous outage since 2026-08-27T21:05:00Z, now spanning just under 8 hours. No agent-actionable retry differs from what already failed. Needs the outage to clear on GDELT own end, not a code or design change.",
+  "notes": "9th consecutive cheap-probe reconfirmation that the GDELT DOC API endpoint (api.gdeltproject.org) is unreachable from this host -- curl with a 20s timeout returned HTTP_CODE:000 (exit 28, connect timeout), while a control curl to blockchain.info in the same session returned HTTP_CODE:200 in 0.42s, again ruling out a general network problem. Same exogenous outage first found 2026-08-27T21:05:00Z, now spanning just under 9 hours (probe run at 2026-08-28T06:01:55.000Z). Per this scheduled task family precedent (8 prior identical reconfirmations), this is a repeat failure of the identical cheap probe, not a new attempt -- stating plainly per STEP 3 guidance: there is no genuinely different agent-actionable approach available while GDELT stays down, since the pre-registration constraint requires reusing the GDELT DOC API construct unmodified and the outage is external/exogenous (not a bug in our code, nothing to fix or route around). GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC remains the only work_queue item not done (78 done, 1 pending). STEP 0.4: git pull --rebase brought no new commits (already up to date, only a force-updated remote-tracking ref for main-eqhe6g noted, no local branch impact) -- nothing to skim. STEP 5 restock check: git log -1 on ROADMAP.md/TOURNAMENT_ROADMAP.md/VERDICTS.md/SELF_AWARENESS_SPEC.md/FOLLOWON_SPECS.md/SIGNAL3_CLASSIFIER_SPEC.md/MULTIPLE_COMPARISONS_AUDIT.md/AGENT_PROTOCOL.md still shows ff9ef70 as the most recent touching commit (unchanged since the 8th-reconfirmation firing) -- conclusions unchanged, no new agent-actionable lever, did not invent a queue item to hit the 3-item floor. STEP 4 notification: notifications[unresolvable-blocked] was sent at 2026-08-28T04:02:07.000Z, ~2h ago, well inside the 6h dedup window on both the top-level notifications map and blackboard.notifications (kept in sync since the prior firing) -- correctly skipped sending a duplicate this firing per notification_policy.dedup. No code, strategy, or protected-logic files touched this firing (pure state-file update, no notification); npm.cmd test not run since nothing changed that could affect it, matching this family precedent for no-code-change firings. Untracked universe.txt present in working tree at firing start, not created by this run, left untouched per hygiene rules.",
+  "block_detail": "GDELT DOC API unreachable (curl HTTP_CODE:000, 20s timeout, exit 28) -- 9th reconfirmation of the same exogenous outage since 2026-08-27T21:05:00Z, now spanning just under 9 hours. No agent-actionable retry differs from what already failed. Needs the outage to clear on GDELT own end, not a code or design change.",
   "updated_by": "executor",
-  "updated_at": "2026-08-28T05:02:08.000Z"
+  "updated_at": "2026-08-28T06:01:55.000Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -901,14 +901,6 @@
  },
  "ledger": [
   {
-   "ts": "2026-08-14T12:18:11.366Z",
-   "agent": "cajh-loop-check",
-   "action": "TEST1-FIB-PULLBACK done (TRAIN-GATE-FAIL, both levels)",
-   "detail": "New fib_pullback entryMode (backtest.js): rests a limit order at a 50%/61.8% Fib retracement of the leg completed by bos mode's own confirmed-BOS event (swing low close breaking its own high), stop below the originating low, TP 3R. Pre-registered interpretation of underspecified task terms documented in TOURNAMENT_ROADMAP.md. Fixed calendar-date split (to 2025-06-01 / from 2025-06-01), full 28-asset watchlist. Both levels TRAIN-GATE-FAIL on avgR (50%: -0.907, 61.8%: -0.770; gate >-0.50), trade counts cleared (362/225 >= 200). Holdout not examined either level. VERDICTS.md/TOURNAMENT_ROADMAP.md updated, two decision journal entries saved.",
-   "commit": "1e75217",
-   "tests": "339/339 green"
-  },
-  {
    "ts": "2026-08-14T13:12:12.040Z",
    "agent": "scheduled-loop",
    "action": "TEST2-VOL-CONFIRMED-BREAKOUT completed",
@@ -1693,6 +1685,14 @@
    "agent": "executor",
    "action": "reconfirm-blocked",
    "detail": "GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC: 8th consecutive cheap-probe reconfirmation of GDELT DOC API outage (HTTP_CODE:000 vs control blockchain.info HTTP_CODE:200 in 0.79s), now ~7h57m since first detection at 21:05:00Z 2026-08-27. No code change. Pull brought no new commits. Restock check unchanged (ff9ef70 still latest). Notification skipped -- unresolvable-blocked sent 04:02:07Z, ~1h ago, within 6h dedup window.",
+   "commit": null,
+   "tests": "not run (no code change)"
+  },
+  {
+   "ts": "2026-08-28T06:01:55.000Z",
+   "agent": "executor",
+   "action": "reconfirm-blocked",
+   "detail": "GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC: 9th consecutive cheap-probe reconfirmation of GDELT DOC API outage (HTTP_CODE:000/exit 28 vs control blockchain.info HTTP_CODE:200 in 0.42s), now ~8h57m since first detection at 21:05:00Z 2026-08-27. No code change. Pull brought no new commits. Restock check unchanged (ff9ef70 still latest touching commit). Notification skipped -- unresolvable-blocked sent 04:02:07Z, ~2h ago, within 6h dedup window.",
    "commit": null,
    "tests": "not run (no code change)"
   }
