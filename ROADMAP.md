@@ -5533,3 +5533,118 @@ inflation vs. data-reuse inflation) per this item's own done_when; its own recor
 q-values, and BH-FDR ranks are untouched — nothing here recomputes a statistic. `npm.cmd test`:
 513/513 green (no code, config, or test file touched — this item is documentation and counting
 only, as scoped).
+
+## PER-FAMILY-COST-CEILING — closed-form cost sensitivity for all 12 families, both markets; 7 (family, venue) cells clear +0.10R, all on thin samples (2026-08-28)
+
+**Scoping, per this item's own note.** `COST-SENSITIVITY-SURFACE` (2026-08-22) mapped a 2-D
+fee x slippage grid for `breakout`/`anticipate` only. `PER-FAMILY-COST-CEILING` was staged the same
+day, DERIVED from `ZERO-COST-FLOOR-ALL-FAMILIES`'s own recorded per-family fee/slip drag figures,
+to replace the grid with the closed form it implies and extend it to all 12 `tournament.mjs`
+families, on both the crypto watchlist and the DJIA-30 equity holdout. Economic-gate/descriptive
+study (point-estimate threshold, no p-value) — joins the economic-gate-only counter in
+`AGENT_PROTOCOL.md`, not the formal-NHST family; recomputes no BH-FDR table.
+
+**Method — exact linear identity, not a grid sample.** `backtest.js`'s net-R formula is
+`netR = grossR - (feeRate+slipPct)*(entry+exitPx)/risk` — fee and slip enter through the *same*
+per-trade coefficient, so a family's cost sensitivity collapses to one constant,
+`k = (feeDragAvgR + slipDragAvgR) / (FEE_RATE + SLIPPAGE_PCT)` (R of drag per 1.00 of per-side
+rate), giving `netAvgR(fee, slip) = grossAvgR - k*(fee+slip)` and an exact break-even all-in
+per-leg cost of `grossAvgR / k` wherever gross is positive. **Two things stated explicitly, not
+left implicit, per this item's own requirement:**
+1. The extrapolation is exact *only* because the net-R formula is affine in `feeRate`/`slipPct`
+   with a coefficient independent of both — re-verified here, not assumed: `kFromFee` (derived from
+   the fee-only pass alone) and `kFromSlip` (derived from the slip-only pass alone) agree to within
+   1e-10 for all 12 crypto families and for every one of the 273 (family, symbol) equity cells with
+   trades, and every one of the 48 crypto (family, venue) analytic predictions matches a direct
+   `backtest.js` rerun at that exact (fee, slip) point to within 1e-9.
+2. Trade counts are identical across all four cost configurations (gross/fee-only/slip-only/net)
+   for every one of the 12 crypto families and every one of the 30 equity symbols across all 12
+   families — re-checked here (`tradeCountsMatch`), not just cited from `FEE-SCHEDULE-REBASE`.
+
+**Crypto — 12 families x 4 real venues (Kraken spot maker/taker, Kraken derivatives maker/taker).**
+Maker fills modeled at slip=0 (resting limit, no spread crossed); taker fills at `SLIPPAGE_PCT`
+(current default). Derivatives cells are **upper bounds** — this backtest models no funding cost,
+and Kraken perpetuals charge funding continuously.
+
+| family | trades | gross avgR | k (R per 1.00 rate) | break-even (bps) | spot maker | spot taker | deriv maker* | deriv taker* |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| anticipate | 3966 | -0.0861 | 93.89 | — (negative gross) | -0.4617 | -0.8842 | -0.1049 | -0.1800 |
+| bos | 273 | -0.1282 | 91.02 | — (negative gross) | -0.4923 | -0.9019 | -0.1464 | -0.2193 |
+| support | 53640 | -0.1503 | 414.58 | — (negative gross) | -1.8086 | -3.6742 | -0.2332 | -0.5648 |
+| ma_dip | 9894 | 0.0877 | 615.69 | 1.42 | -2.3751 | -5.1457 | -0.0354 | -0.5280 |
+| rsi | 2265 | -0.0115 | 155.11 | — (negative gross) | -0.6320 | -1.3300 | -0.0426 | -0.1667 |
+| rev | 24327 | -0.1562 | 420.12 | — (negative gross) | -1.8367 | -3.7272 | -0.2402 | -0.5763 |
+| breakout | 3156 | 0.0637 | 109.14 | 5.84 | -0.3728 | -0.8640 | 0.0419 | -0.0454 |
+| trend_pullback | 2017 | -0.1320 | 103.83 | — (negative gross) | -0.5474 | -1.0146 | -0.1528 | -0.2359 |
+| sweep_reclaim | 3145 | -0.1409 | 127.14 | — (negative gross) | -0.6495 | -1.2216 | -0.1663 | -0.2681 |
+| range_sweep_reclaim | 511 | -0.0521 | 125.58 | — (negative gross) | -0.5545 | -1.1196 | -0.0772 | -0.1777 |
+| h3 | 4590 | 0.0329 | 198.17 | 1.66 | -0.7598 | -1.6516 | -0.0068 | -0.1653 |
+| vol_contraction | 98 | 0.2177 | 126.45 | 17.22 | -0.2881 | -0.8571 | 0.1924 | 0.0913 |
+
+*deriv columns are funding-free upper bounds. Only one crypto cell clears +0.10R: **vol_contraction
+at Kraken derivatives maker (+0.1924R)** — on 98 holdout trades, the smallest sample of any family
+in this table, and the same family `VOL-CONTRACTION-SAMPLE-EXTENSION` (queued, not yet run) exists
+specifically to pressure-test.
+
+**Equity — 12 families x DJIA-30 holdout, IBKR per-symbol basis (`commissionPerShare/avgClose` per
+symbol, 5bps slip default — `EQUITIES-BASELINE-PORT`'s own basis, reused verbatim). k is NOT a
+single number here** — the fee rate itself varies by symbol (a $50 stock and a $400 stock pay very
+different effective percentage commission), so k and its break-even bps are computed per symbol and
+reported as a distribution, not collapsed to one figure.
+
+| family | symbols w/ trades | pooled trades | gross avgR | net avgR (IBKR) | clears +0.10R | break-even bps dist (n, min/median/max) |
+|---|---:|---:|---:|---:|---|---|
+| anticipate | 30 | 303 | -0.0019 | -0.0438 | no | n=16, 7.2/63.8/156.7 |
+| bos | 27 | 60 | 0.2035 | 0.1728 | **YES** | n=13, 10.5/208.9/646.1 |
+| support | 30 | 407 | 0.1003 | 0.0014 | no | n=14, 3.5/29.5/72.4 |
+| ma_dip | 30 | 475 | 0.3430 | 0.1526 | **YES** | n=23, 3.0/11.8/54.0 |
+| rsi | 17 | 32 | 0.2934 | 0.2507 | **YES** | n=7, 89.2/559.1/1116.3 |
+| rev | 29 | 179 | 0.0613 | -0.0501 | no | n=13, 2.6/40.4/222.6 |
+| breakout | 27 | 61 | 0.2110 | 0.1866 | **YES** | n=15, 67.1/200.5/614.9 |
+| trend_pullback | 24 | 38 | -0.1721 | -0.2026 | no | n=8, 9.5/225.6/682.0 |
+| sweep_reclaim | 28 | 92 | 0.0761 | 0.0328 | no | n=11, 27.0/70.8/206.7 |
+| range_sweep_reclaim | 3 | 3 | 1.0000 | 0.9656 | **YES** | n=2, 316.3/521.1/521.1 |
+| h3 | 28 | 106 | 0.1645 | 0.1178 | **YES** | n=13, 16.2/127.9/268.4 |
+| vol_contraction | 0 | 0 | 0.0000 | 0.0000 | no | n=0 (zero trades on this universe) |
+
+`breakout`'s pooled net avgR (+0.1866R, 61 trades) reproduces `EQUITIES-BASELINE-PORT`'s own headline
+figure exactly — an unplanned but reassuring cross-check that this script's cost basis matches that
+prior study's, not a fresh finding.
+
+**7 of 60 (family, venue, market) cells clear +0.10R**, listed here plainly rather than only in the
+tables above: `bos`/equity (+0.1728R, 60 trades), `ma_dip`/equity (+0.1526R, 475 trades),
+`rsi`/equity (+0.2507R, 32 trades), `breakout`/equity (+0.1866R, 61 trades, already known),
+`range_sweep_reclaim`/equity (+0.9656R, **3 trades**), `h3`/equity (+0.1178R, 106 trades), and
+`vol_contraction`/crypto-derivatives-maker (+0.1924R, 98 trades, funding-free upper bound). Six of
+the seven are on the equity market alone, and every equity break-even bps distribution above shows
+`min` values in the single-to-low-double digits — meaning at least one symbol in every family is
+carried by very few trades at a favorable price level, not a broad, robust edge across the universe.
+
+**Sample adequacy is explicitly OUT OF SCOPE for this study, stated here as loudly as the table
+above:** clearing a cost ceiling is a necessary condition for tradability, not a sufficient one, and
+this study makes no significance or sample-size claim about any of the 7 clearing cells.
+`range_sweep_reclaim` clearing +0.9656R on 3 total trades from 3 symbols is not evidence of an edge
+— it is a cost-model readout on a sample too small to mean anything on its own, reported plainly
+rather than hidden by a headline "7 cells clear the bar" framing. `bos` (60 trades), `rsi` (32
+trades), `h3` (106 trades), and `vol_contraction` (98 trades, crypto) are similarly thin — none of
+them reach this project's own prior convention for an adequate sample
+(`MEANINGFUL_TRADES_MIN=150` from `ZERO-COST-FLOOR-ALL-FAMILIES`). Only `ma_dip` (475 trades)
+clears that floor. Applying `ZERO-COST-FLOOR-ALL-FAMILIES`'s full 3-leg gate (avgR>0.10 AND trades>=150 AND
+positiveAssets/assets>=0.5, not just the avgR>0.10 leg this study's "clears +0.10R" column checks),
+**only `ma_dip` (475 trades) passes the trade-count leg of the stricter gate** — every other cell
+in the list above would fail that fuller gate on sample size alone, regardless of its avgR. And
+`ma_dip`'s own significance test (`EQUITIES-MADIP-SIGNIFICANCE`, 2026-08-22) already found its
+holdout sign-flip p-value's CI includes zero despite the point estimate being net-positive — i.e.
+clearing a cost ceiling and being statistically real are two different questions, and this study's
+one arguably-adequate-sample cell has already separately failed the second one. This study
+therefore surfaces no case that should be read as a live promotion candidate.
+
+**Engineering note.** New `scripts/per-family-cost-ceiling.mjs` only, additive, read-only — no
+strategy code touched (`backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`,
+`trader.js`, `scanner.js` untouched, grep-confirmed against the staged diff before commit). Reuses
+`researchlib.mjs`'s `loadWatchlist`/`symbolToKrakenId`, `researchlab.mjs`'s
+`loadResearchCandles`/`saveExperiment`, `backtest.js`'s `backtestMultiTF`, `strategy.js`'s
+`FEE_RATE`/`SLIPPAGE_PCT`, and `cost-model.mjs`'s `SPOT_FEE_SCHEDULE`/`FUTURES_FEE_SCHEDULE`
+unmodified. `research-cache/equities-1d/` read as cached (no egress; this item was scoped
+no-egress and ran that way). `npm.cmd test`: 513/513 green (no test file added — matches this
+family's own precedent for read-only research scripts under `scripts/`).

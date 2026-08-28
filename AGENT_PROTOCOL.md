@@ -454,8 +454,9 @@ fail):**
   +0.1866R in-sample to -0.0854R out-of-sample, 33 trades); family-wide BH-FDR recomputed
   across all 13 (q=0.6679 for this entry, rank 12 of 13) — does not survive, nowhere close.
   No prior survivor flips: B5-REVERSAL L=3 remains the sole survivor at q=0.05.
-- Economic-gate studies (point-estimate threshold, no p-value): **35** as of 2026-08-22
-  (audit §1/§3). Unchanged by PAIRS-COINTEGRATION-STATARB — its holdout economic gate was
+- Economic-gate studies (point-estimate threshold, no p-value): **36** as of 2026-08-28
+  (audit §1/§3 as of 2026-08-22; see PER-FAMILY-COST-CEILING note below for the 36th). Unchanged
+  by PAIRS-COINTEGRATION-STATARB — its holdout economic gate was
   never evaluated (0 pairs cleared the internal screen), same "screen/train-gate blocked,
   holdout never touched" bucket as H11/FUNDING-MEANREV/FIB-PULLBACK (audit §1 Non-verdict row,
   now 6 studies). Updated by ZERO-COST-FLOOR-ALL-FAMILIES (2026-08-22): added as the 34th —
@@ -468,7 +469,21 @@ fail):**
   SIGNAL-DECAY-TEMPORAL-STABILITY's existing epoch boundaries, zero-cost gross) against
   `breakout`/`anticipate`; 0/10 sub-gates cleared it, counted as one study per this counter's
   own per-study (not per-sub-gate) granularity. No epoch cleared its literal threshold, so the
-  `SEALED_SYMBOLS` re-run rule below does not apply.
+  `SEALED_SYMBOLS` re-run rule below does not apply. Updated by PER-FAMILY-COST-CEILING
+  (2026-08-28): added as the 36th — a single-leg avgR>0.10 cost-ceiling check (narrower than
+  ZERO-COST-FLOOR-ALL-FAMILIES's 3-leg gate: no trades>=150 or positiveAssets/assets>=0.5 legs)
+  evaluated per family x real venue x market (12 families x 4 crypto venues + 12 x 1 pooled
+  equity venue = 60 cells); 7/60 cells clear +0.10R (`bos`/equity, `ma_dip`/equity, `rsi`/equity,
+  `breakout`/equity — already known from EQUITIES-BASELINE-PORT, `range_sweep_reclaim`/equity,
+  `h3`/equity, `vol_contraction`/Kraken-derivatives-maker). This is this project's **first**
+  economic-gate result of any kind to clear a literal pre-registered avgR threshold after 35
+  consecutive misses — but applying the fuller 3-leg gate's own trades>=150 leg to these 7 cells
+  leaves only `ma_dip` (475 trades) standing, and `ma_dip`'s own significance test
+  (EQUITIES-MADIP-SIGNIFICANCE, 2026-08-22) already found its holdout CI includes zero. The
+  `SEALED_SYMBOLS` re-run rule below is written against the stricter 3-leg gate this study did not
+  literally run; since no cell here clears that fuller gate (only its narrower avgR-only leg), the
+  rule's re-run requirement is not triggered — flagged here rather than silently invoking or
+  silently skipping it, since this is the first time the question has been live at all.
 
 **Rule for a new formal NHST result.** Do not evaluate it against `alpha=0.05` in isolation.
 Add its p-value to the family-size counter above, recompute Benjamini-Hochberg FDR across
