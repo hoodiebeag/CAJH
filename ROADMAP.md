@@ -5365,3 +5365,171 @@ the date-block bootstrap is a new, separate function local to this script. `stra
 `tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js` untouched. `npm.cmd test`:
 513/513 green before and after (the new `entryTime` field does not break any existing assertion —
 no test in this project deep-equals the full `excursions` object shape).
+
+---
+
+## HOLDOUT-REUSE-AUDIT — a count, not a verdict: every holdout dataset in this project scored, chronologically, by every study that used it; SEALED_SYMBOLS remains the only genuinely unspent resource (2026-08-28)
+
+**Scope, stated up front per this item's own done_when.** This is a counting exercise, not a
+hypothesis test and not a recommendation. No parameter, threshold, correction family, or protocol
+rule is proposed for change anywhere below — the item's job is to produce the count a future
+decision would need, not to make that decision.
+
+**Method.** Read every `##`-level heading in `ROADMAP.md` (76 sections) chronologically, plus the
+holdout/dataset definitions in `AGENT_PROTOCOL.md`, `ALPHA_DEFINITION.md`, `researchlib.mjs`, and
+`momentum.mjs`. Classified each study by which named holdout dataset(s) it scored a strategy
+against, distinguishing "scored a strategy's holdout performance" from adjacent-but-different uses
+(diagnostics on candle completeness, liquidity, or cost-schedule facts that touch the same cache
+without computing a strategy result). `MULTIPLE_COMPARISONS_AUDIT.md` §4 (dated 2026-08-19,
+predates the DJIA-30/DJTA-20 equities work which starts the same day) already contains an
+independently-built partial version of this count for the crypto-side datasets and is used below as
+a cross-check, not a source — every number below was re-derived directly from `ROADMAP.md`.
+
+### Dataset 1 — Crypto calendar 70/30 split (`train: earliest→2025-06-01`, `holdout: 2025-06-01→present`, 28-asset active watchlist, `tournament.mjs` families)
+
+This is the project's default judge for the twelve price-structure families. An earlier, distinct
+precursor — the 2026-07-30/31 "sealed Q1-2026" holdout (train through 2025-12-31, scored on Q1
+2026) — served the same purpose before this convention crystallized; it is not literally the same
+split and is not counted in the total below.
+
+Chronological studies scoring a strategy against this holdout: the original 2026-07-30/31
+exit-model/stop-placement sweep; `T1-ZEROCOST` (~2026-08-06/07); `SEASONALITY-DAYOFWEEK-SESSION`
+(2026-08-18); `MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC`, `COST-COMPONENT-ATTRIBUTION`,
+`EXECUTION-DELAY-DECAY-CURVE` (all 2026-08-19); `HOLDING-PERIOD-COST-AMORTIZATION-MAP`,
+`COST-SENSITIVITY-SURFACE` (2026-08-20); `ZERO-COST-FLOOR-ALL-FAMILIES`,
+`WALKFORWARD-REVALIDATION-OF-BASELINE`, `MACRO-REGIME-PRIMARY-SIGNAL`,
+`LOG-REGRESSION-BANDS-CRYPTO` (all 2026-08-22); `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL`,
+`WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC`, `STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC`
+(all 2026-08-27) — **14 distinct studies**, matching `MULTIPLE_COMPARISONS_AUDIT.md`'s independent
+count of "~26-27" when that document's broader definition (every individual family-level economic
+gate, not per-study) is applied to the same window. `CANDLE-CORPUS-GAP-AUDIT` (2026-08-22) and
+`SPECTRAL-CYCLE-DETECTION-CRYPTO` (2026-08-22) touch the same cache but are flagged, not counted:
+the former explicitly measures data completeness only ("counting missing bars touches no strategy
+result"), the latter runs a periodogram on train-mean-subtracted full history rather than a strict
+train/holdout strategy score. `SIGNAL-DECAY-TEMPORAL-STABILITY` and `PER-EPOCH-GROSS-EDGE` both
+explicitly state in their own text that they do *not* use this split (full history / 5 disjoint
+epochs instead) and are excluded on that basis, not omitted by oversight.
+
+**Spent.** Both this audit's own count (14 studies) and `MULTIPLE_COMPARISONS_AUDIT.md`'s
+independent 2026-08-19 count (~27 individual family-gate evaluations) agree this window has been
+examined far past the point of being a fresh judge for any new price-structure family test.
+
+### Dataset 2 — DJIA-30 point-in-time equity holdout (30 DJIA constituents as of 2024-08-19, `research-cache/equities-1d/`, real IBKR costs, 70/30 split)
+
+Chronological studies: `EQUITIES-BASELINE-PORT` (2026-08-19, ROADMAP.md:2139, first use —
+`breakout`/`anticipate`) → `EQUITIES-BREAKOUT-SIGNIFICANCE` (2026-08-21, ROADMAP.md:2590) →
+`EQUITIES-COST-ASSUMPTION-SENSITIVITY` (2026-08-22, ROADMAP.md:3189) →
+`EQUITIES-ALL-FAMILIES-BASELINE` (2026-08-22, ROADMAP.md:3293 — first computes `ma_dip`'s 475-trade
+DJIA-30 result) → **`EQUITIES-MADIP-SIGNIFICANCE`** (2026-08-22, ROADMAP.md:3499) →
+`EQUITIES-BREAKOUT-COMMISSION-FLOOR-POSITION-SIZING` (2026-08-22) →
+`LOG-REGRESSION-BANDS-EQUITIES` (2026-08-22) → `SPECTRAL-CYCLE-DETECTION-EQUITIES` (2026-08-22,
+flagged ambiguous — periodogram on full history, same caveat as its crypto companion) →
+`MACRO-REGIME-PRIMARY-SIGNAL-EQUITIES` (2026-08-25) →
+`MACRO-REGIME-EQUITIES-SPLIT-FRACTION-DIAGNOSTIC` (2026-08-27, same cache re-split 50/50 — a second
+distinct partition of the same underlying candles, not a new dataset) →
+`DATE-CLUSTERED-RESAMPLING-AUDIT` (2026-08-28, re-analyzes the exact `breakout`/`ma_dip` populations
+from earlier entries with a different resampling scheme).
+
+**Question required by this item: how many studies scored the DJIA-30 equity holdout before
+`EQUITIES-MADIP-SIGNIFICANCE` ran on it? Answer: 4** — `EQUITIES-BASELINE-PORT`,
+`EQUITIES-BREAKOUT-SIGNIFICANCE`, `EQUITIES-COST-ASSUMPTION-SENSITIVITY`, and
+`EQUITIES-ALL-FAMILIES-BASELINE` (the last of which is where `ma_dip`'s own 475-trade DJIA-30
+result was first computed — `EQUITIES-MADIP-SIGNIFICANCE` added the formal p-value on trades
+already computed by a prior study, not a fresh score). `EQUITIES-MADIP-SIGNIFICANCE` was therefore
+the **5th** touch of this cache, not the first.
+
+**Spent.** 11 studies deep by 2026-08-28, spanning three different strategy families and at least
+one re-split of the underlying partition. Criterion applied throughout this audit: a dataset counts
+as spent once more than one independent study has computed a strategy result from it, since each
+additional look inflates the effective false-positive rate of every subsequent test on that same
+data in a way no single study's own p-value can see. By that criterion DJIA-30 was already spent
+after its 2nd use (`EQUITIES-BREAKOUT-SIGNIFICANCE`).
+
+### Dataset 3 — DJTA-20 out-of-sample equity universe (20 DJTA constituents as of 2024-08-22, zero ticker overlap with DJIA-30, `research-cache/equities-1d-djta-oos/`)
+
+Chronological studies: `EQUITIES-BREAKOUT-OUT-OF-SAMPLE` (2026-08-22, first use — `breakout` and
+`anticipate`) → **`EQUITIES-MADIP-OUT-OF-SAMPLE`** (2026-08-22, same date, reuses the same cache for
+`ma_dip` — the project's strongest surviving equities result, BH-FDR rank 4/15).
+
+**Question required by this item: how many studies scored the DJTA-20 universe before
+`EQUITIES-MADIP-OUT-OF-SAMPLE` ran on it? Answer: 1** (`EQUITIES-BREAKOUT-OUT-OF-SAMPLE`, which
+itself scored two families — `breakout` and `anticipate` — against it). Counting by
+study, `EQUITIES-MADIP-OUT-OF-SAMPLE` is the 2nd; counting by family-level score, it is the 3rd
+(`breakout`, `anticipate`, then `ma_dip`).
+
+**In ma_dip's favor, reported as required.** This is a materially lower reuse count than DJIA-30's
+(1 prior study vs. 4) — the DJTA-20 universe was introduced specifically as a fresh-universe
+replication check, used exactly once before `ma_dip`'s own out-of-sample test, and that one prior
+use was itself a negative-control-style check (`breakout`'s edge failed to reproduce there, sign
+flipped negative) rather than a result that shaped what `ma_dip` was expected to find. Compared to
+DJIA-30's 5th-touch history, `ma_dip`'s DJTA-20 result carries meaningfully more claim to being a
+first look, not a fifth one.
+
+**Spent, by the same >1-study criterion as Dataset 2**, but only barely — 2 studies deep, both on
+the same date, vs. DJIA-30's 11.
+
+### Dataset 4 — Whole-symbol crypto momentum holdout (`STABLE_13` train / 16-symbol watchlist-minus-`STABLE_13` holdout, `momentum.mjs`)
+
+Chronological studies (all 2026-08-06 → 2026-08-14, matching `MULTIPLE_COMPARISONS_AUDIT.md`'s
+independent count of "6 NHST studies / 9 sub-tests"): Momentum M7 (~08-06) →
+low-vol/low-beta B4 (~08-07) → Signal-3 classifier P5 first sealed run (~08-07/08) →
+short-term reversal B5 (~08-08) → `CLASSIFIER-FUNDING-FEATURE` (~08-08) →
+`MOMENTUM-SHORT-HORIZON-RECHECK` (2026-08-14). No study touches this holdout again through
+2026-08-28. Flagged separately, per this audit's own instruction not to silently fold ambiguous
+cases in either direction: `B5-REVERSAL-PHASE3-FUTURES-COST` and
+`B5-REVERSAL-PHASE4-PORTFOLIO-SIM` (both 2026-08-13) reuse the numerically identical 16-symbol
+population but `MULTIPLE_COMPARISONS_AUDIT.md` §4 describes it as "a third, genuinely different
+construction... assembled ad hoc for that one study" rather than a formal draw on this
+infrastructure. Whether those two count as additional spends of the same 16 symbols is left to a
+future decision, not resolved here.
+
+**Spent.** 6-9 uses by the >1-study criterion, abandoned since 2026-08-14 in favor of the calendar
+split and later the equities holdouts.
+
+### Dataset 5 — `SEALED_SYMBOLS` (`AVAX`, `LINK`, `NEAR`, `SUI`, `UNI` — `researchlib.mjs`)
+
+**Confirmed unspent.** No `ROADMAP.md` entry scores a strategy against this pool. Every mention
+found (grepped case-insensitively for the literal name and separately for the five tickers in
+holdout contexts) is one of: a restatement that the pool's re-run rule does not yet apply because
+no study has cleared the qualifying economic-gate threshold (`ZERO-COST-FLOOR-ALL-FAMILIES`,
+`PER-EPOCH-GROSS-EDGE`, the `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL` family,
+`LOG-REGRESSION-BANDS-EQUITIES`); an explicit exclusion (`WALKFORWARD-REVALIDATION-OF-BASELINE`
+deliberately drops these 5 symbols, "reserved for the eventual final validation, not spent here");
+`CANDLE-CORPUS-GAP-AUDIT`'s one non-strategy inclusion (counts missing candle bars only, explicitly
+disclaimed as not spending the holdout); or `EQUITIES-MADIP-OUT-OF-SAMPLE` naming this pool's
+crypto-side re-validation as still-outstanding future work for its own strongest result. This
+matches `MULTIPLE_COMPARISONS_AUDIT.md`'s independent 2026-08-19 statement verbatim in substance:
+"no study module... has ever imported or used it."
+
+**This is the only dataset in this audit that remains genuinely unspent.** What it could still
+validate: per `AGENT_PROTOCOL.md`'s binding rule, it is reserved specifically as the one-time final
+re-validation for a candidate that has already cleared its own normal train/holdout economic gate —
+using it earlier, or for anything short of that, would spend the project's one remaining fresh look
+for a lesser purpose than it was reserved for.
+
+### Two other resources noted, not counted as new datasets
+
+- **`walkForwardSeriesWindows`** (built 2026-08-14, `researchlib.mjs`) — a different *lens* (4
+  rolling folds) on the already-spent Dataset 1 calendar data, used once
+  (`WALKFORWARD-REVALIDATION-OF-BASELINE`, 2026-08-22). Not fresh data; not counted separately.
+- **DJIA-30 at a 50/50 split** (`MACRO-REGIME-EQUITIES-SPLIT-FRACTION-DIAGNOSTIC`, 2026-08-27) — a
+  second partition of Dataset 2's same underlying candles, already included in Dataset 2's count
+  above, not a sixth dataset.
+
+### Summary table
+
+| dataset | studies (by >1 criterion) | spent? | first use | most recent use |
+|---|---:|---|---|---|
+| Crypto calendar 70/30 | 14 (this audit) / ~27 (MULTIPLE_COMPARISONS_AUDIT.md, per-family-gate count) | yes, long since | 2026-07-30 | 2026-08-27 |
+| DJIA-30 equity holdout | 11 | yes | 2026-08-19 | 2026-08-28 |
+| DJTA-20 out-of-sample universe | 2 | yes, barely | 2026-08-22 | 2026-08-22 |
+| Whole-symbol momentum holdout (STABLE_13 complement) | 6-9 (ambiguous PHASE3/4 draws unresolved) | yes | 2026-08-06 | 2026-08-14 |
+| `SEALED_SYMBOLS` | 0 | **no — the only unspent resource** | never | never |
+
+**No recommendation made.** This item counts; it does not decide whether any threshold, correction
+family, or protocol rule should change as a result. `MULTIPLE_COMPARISONS_AUDIT.md` is
+cross-referenced below as a companion measurement of a different kind of multiplicity (test-count
+inflation vs. data-reuse inflation) per this item's own done_when; its own recorded p-values,
+q-values, and BH-FDR ranks are untouched — nothing here recomputes a statistic. `npm.cmd test`:
+513/513 green (no code, config, or test file touched — this item is documentation and counting
+only, as scoped).

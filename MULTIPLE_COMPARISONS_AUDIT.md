@@ -647,6 +647,17 @@ truly fresh look is to wait for new candle data to accrue past this audit's date
 (2026-08-19) and pre-register a new split boundary before the next price-structure study
 runs — the existing 2025-06-01–present window is spent for that family.
 
+**Companion measurement: `HOLDOUT-REUSE-AUDIT` (`ROADMAP.md`, 2026-08-28).** This section
+measures a different kind of multiplicity than §§1-3 above — data-reuse inflation rather than
+test-count inflation — and predates (2026-08-19) the DJIA-30/DJTA-20 equities holdouts, which
+did not exist yet when it was written. `HOLDOUT-REUSE-AUDIT` extends this same count through
+2026-08-28 across all five datasets including the two equities universes, re-confirms the
+`SEALED_SYMBOLS` finding above independently by direct `ROADMAP.md` re-derivation (not by
+citing this section), and answers two questions this section does not cover: DJIA-30 was
+scored by 4 prior studies before `EQUITIES-MADIP-SIGNIFICANCE` ran on it (5th touch overall,
+11 total by 2026-08-28), and DJTA-20 by 1 prior study before `EQUITIES-MADIP-OUT-OF-SAMPLE`
+(2 total, both same-date). It makes no recommendation to change anything here.
+
 ## 5. Binding threshold for future studies
 
 The concrete, binding rule (not just narrative here) is written into
