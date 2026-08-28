@@ -2136,6 +2136,24 @@ untouched; `backtest.js` is the shared research/live simulation engine, extended
 with a default-off parameter, same category of change as MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC's
 prior `excursions` addition to the same function). Suite 488 → 492 green.
 
+**Correction (2026-08-28, MAKER-FILL-MICROSTRUCTURE-SIMULATION) — this section's "dead on
+arrival" / "closes the maker-execution thesis" framing overstates what was measured.** This
+study's own numbers show the collapse does not begin until delay 2 — delay 1 costs `breakout`
+only -0.0207R (-0.8640 → -0.8847) — and a real post-only resting order fills, when it fills at
+all, in seconds to minutes, deep INSIDE the first 1-hour bar: below this study's resolution
+entirely. The entire economically relevant range for an actual maker order was never measured
+here; this diagnostic tested transmission latency measured in whole bars, not sub-bar
+resting-order behavior. MAKER-FILL-MICROSTRUCTURE-SIMULATION (2026-08-28) attempted to close
+that gap directly and could not: Kraken's public API exposes no historical order-book depth at
+any resolution (confirmed by direct probe — its Depth endpoint is a live snapshot only, with no
+time-range parameter honored), which is the load-bearing requirement for modeling queue
+position, fill probability, or partial fills; trade-print backfill (obtainable, but a
+multi-hour operation per this project's own 2026-07-30 order-flow precedent) would not supply
+that even if performed, since prints are not book state. The sub-bar region is therefore
+**UNMEASURED, not closed** — this section's claim should be read as "maker execution fails when
+tested at hourly resolution," not as a finding about real post-only fills. See
+MAKER-FILL-MICROSTRUCTURE-SIMULATION's entry below for the full data-availability record.
+
 ## 2026-08-19 — EQUITIES-BASELINE-PORT: breakout survives real IBKR costs (net positive); anticipate's net drag shrinks by ~20x but stays negative
 
 Cost, not signal, is the one variable that has ever moved a number materially in this project
@@ -5720,3 +5738,76 @@ apply to `ma_dip` specifically.
 
 **`ALPHA_DEFINITION.md` section 4b condition-2 row and its explanatory bullet updated** from "not
 computed"/"not evaluated" to this result; no other row changed. **`npm.cmd test`: 513/513 green.**
+
+## 2026-08-28 — MAKER-FILL-MICROSTRUCTURE-SIMULATION: closes as a data-availability non-verdict — historical order-book depth does not exist at any resolution on this project's accessible sources
+
+`EXECUTION-DELAY-DECAY-CURVE` (2026-08-19) is cited across this project, including its own
+section heading above, as showing the maker-execution thesis is "dead on arrival." That study
+measured entry deferred by whole 1-hour bars — a latency-sensitivity measurement — not a
+maker-fill simulation, and its own numbers show the collapse doesn't begin until delay 2:
+`breakout` loses only -0.0207R at delay 1 (-0.8640 → -0.8847), the collapse starts at delay 2
+(-1.5442R). A real post-only order rests for seconds to minutes, deep inside the first bar —
+the entire economically relevant range sits below that study's resolution and had never been
+measured. This item's job was to determine, first, whether that gap could actually be closed:
+whether sub-bar (minute/tick/L2) history is obtainable at all for this project's watchlist,
+before attempting any fill model. Per this item's own scoping (30-60 min for the
+data-availability determination) and its explicit instruction — if sub-bar data cannot be
+obtained, record an honest data non-verdict naming exactly what was tried and stop, rather than
+substitute a coarser proxy and present it as a maker-fill result, the way `TEST4-ONCHAIN-FLOW-GATE`
+should have.
+
+**What a maker-fill simulation actually needs, stated before any probe.** Fill-vs-non-fill
+probability and queue position require knowing where in the order book a resting order would
+have sat and whether/when price reached it — historical order-book DEPTH over time. Partial
+fills require depth at each price level as it evolves. Adverse selection on realised fills
+requires knowing book state around each fill. A trade-print feed (price/size/side/time) alone
+cannot supply any of these — it confirms price *touched* a level, not that a resting order
+there would have filled, how much, or against what book. Historical L2 depth is the
+load-bearing requirement, and every probe below was built to test for it directly rather than
+assume trade prints are an adequate stand-in.
+
+**Four probes run, `scripts/maker-fill-data-availability-check.mjs` (new, read-only, additive —
+no strategy code, no fill model, no production file touched):**
+
+1. **Kraken public OHLC, `interval=1`.** Returns 721 one-minute candles regardless of interval
+   requested — roughly half a day of history, not the months-to-years a holdout window in this
+   project needs. Confirms finer interval alone doesn't solve the depth-of-history problem.
+2. **Kraken public Depth (order book) — historical parameter support.** A live snapshot request
+   and a second request adding an undocumented `since` parameter pointing a year into the past
+   were compared directly. The bogus historical parameter is silently ignored — both responses
+   return the current book, timestamps seconds apart despite the year-old parameter. Kraken's
+   public REST API exposes **no order-book history endpoint at any resolution** — this is not a
+   depth-of-history cap like OHLC's, it is a total absence of the data type.
+3. **Kraken public Trades (tick prints) — backfill feasibility.** Real trade density measured in
+   a fixed historical window (2025-01-01): 1,000 trades span only ~2,166 seconds of market time,
+   implying roughly 14,562 paginated requests to cover one asset for one year at that rate. This
+   project's own prior attempt at exactly this kind of backfill — the order-flow study,
+   2026-07-30, ROADMAP.md — needed "hours per pair" for a ~4-month window on only 3 pairs.
+   Directionally feasible for a small watchlist over a short window, but not a 30-60 minute
+   operation, and — the disqualifying point — even a complete backfill supplies price/size/
+   side/time only, not book depth, so it cannot substitute for what probe 2 already shows is
+   absent.
+4. **Local repo.** No minute- or tick-level file exists anywhere under `candles/` or
+   `research-cache/` — the finest cached granularity in this project is 1h (`tf-60`).
+   `scripts/ibkr-tick-log.mjs`, the one tick-level tool in this codebase, is a live,
+   human-attended debugging aid that connects to a locally-running IB Gateway and logs
+   streaming ticks to the console for a stated number of seconds — it produces no stored
+   historical dataset and cannot run unattended in this environment (no IB Gateway process
+   available here).
+
+**VERDICT: DATA NON-VERDICT.** Historical order-book depth — the load-bearing input for
+fill-probability, queue-position and partial-fill modeling — is not obtainable from any source
+this project has access to, at any resolution, full stop. This is independent of the trade-print
+backfill feasibility question in probe 3: even a complete backfill would not resolve it. No fill
+model was built. No coarser proxy (whole-bar delay, or a trade-print-only heuristic) was
+substituted and presented as a maker-fill result.
+
+**Correction applied to `EXECUTION-DELAY-DECAY-CURVE`'s "dead on arrival" claim** (see that
+section above, 2026-08-19) — this item's finding that the sub-bar region is *unmeasured* rather
+than closed. The deck's and this document's framing should read "maker execution fails when
+tested at hourly resolution," not "the maker-execution thesis is closed" — real post-only fills
+below the 1-hour bar remain untested and, per this item's findings, untestable with any source
+this project holds. `scripts/gdelt-*`/other-diagnostic engineering-note convention followed: this
+is a read-only diagnostic script, no `backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/
+`bot.js`/`trader.js`/`scanner.js` file touched. `npm.cmd test`: 513/513 green, unchanged by this
+item (no test-relevant code added, per its own scope).
