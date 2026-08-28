@@ -4,9 +4,9 @@
   "status": "idle",
   "target_file": null,
   "objective": null,
-  "notes": "MADIP-RANDOM-ENTRY-CONTROL completed and pushed this firing (commit e3816ae). ma_dip fails to clear a matched-geometry random-entry null at the pre-registered 95th percentile on either equity universe (53rd pctile DJIA-30, 85th pctile DJTA-20) -- its positive expectancy (condition 1) is not distinguishable from long exposure with matched risk geometry in this window. ALPHA_DEFINITION.md section 4b annotated (condition 1 keeps its literal E>0 pass but is flagged; new bullet + updated closing paragraph). Drive-by fix: money-path.test.mjs structural-level-cooldown test was not isolating its DATA_DIR, so it persisted a real level_cooldowns.json record that poisoned the very next run of the same test (unrelated pre-existing bug, confirmed via isolated repro before touching anything) -- fixed by scoping that one test to a scratch DATA_DIR; verified by running the full suite twice green (513/513 both times). GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC (script already written by a prior firing, bc3f19d) remains pending -- reconfirmed this firing that GDELT DOC API connectivity is still down (direct curl timeout, control host fine), identical to the prior blocked attempt; not retried further to keep this firing to one unit of work. No protected-logic file touched. Control cleared to idle.",
+  "notes": "REQUIRED-SAMPLE-FOR-DURABLE-PASS completed and pushed this firing (commit 78f879e). Forward-looking planning calculation (ALPHA_DEFINITION.md condition 4), NOT a rescue attempt -- ma_dip used only as the worked example since it is the only candidate with a real recorded effect size/CI; it was already closed on conditions 3+5 before this item ran and stays closed. Derived per-trade SD (2.1390R) from EQUITIES-MADIP-OUT-OF-SAMPLE CI; required-N calibrated off the observed p=0.0116 via sqrt(N) CLT scaling. Key finding: no finite reachable family size makes ma_dip's effect size unrecoverable via BH-FDR correction alone (required N grows only O(sqrt(log m)), from 459 at m=20 to 1,393 even at m=100,000). The real threat to durability is rank, not family size -- a future test landing at p<0.0116 pushes rank up directly (unbounded, sample-size cannot fix it), whereas family growth alone is a slow bounded drag. Did not propose narrowing/rescoping the correction family (explicitly out of scope per this item's own note). New scripts/required-sample-for-durable-pass.mjs (additive, cache-only, no egress, no new p-value/hypothesis, does not join formal-NHST family). ALPHA_DEFINITION.md section 4b cross-referenced with a forward-looking note that does not reopen ma_dip. npm.cmd test: 513/513 green. No protected-logic file touched. GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC remains pending/blocked on GDELT DOC API connectivity (not retried this firing -- picked a different, egress-free item instead to make real progress; this is a repeat network blocker, not a fresh attempt). Control cleared to idle.",
   "updated_by": "executor",
-  "updated_at": "2026-08-28T17:10:00.000Z"
+  "updated_at": "2026-08-28T20:15:00.000Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -921,7 +921,7 @@
    },
    {
     "id": "REQUIRED-SAMPLE-FOR-DURABLE-PASS",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: power/sample-requirement analysis (additive), read-only",
     "depends_on": [],
@@ -1017,14 +1017,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-14T20:12:01.942Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "MOMENTUM-SHORT-HORIZON-RECHECK done",
-   "detail": "New pre-registered short-lookback (L=7d/14d) cross-sectional momentum primary, transform=btcResidual90, motivated by external evidence of 1-4wk crypto momentum persistence (vs M7's 30d primary sitting at/past that edge). Reused runSealedMomentumPanelStudy's primaryLookback/primaryHorizon override via new sealed-short-horizon CLI path, no new statistical machinery. L=7 train residual IC=-0.0218 p=0.6024 (wrong sign); L=14 IC=+0.0573 p=0.4266 (right sign, p fails 0.05 gate). KILLED both horizons on train-significance gate; whole-symbol holdout reported for due-diligence only (L=7 IC=0.0039 p=0.9341; L=14 IC=0.0660 p=0.3237), not gate-relevant. ROADMAP.md full writeup + VERDICTS.md row added. Queue restock checked (TOURNAMENT_ROADMAP/SELF_AWARENESS_SPEC/PARITY_MATRIX) - genuinely empty, no busywork invented, PushNotification sent (empty-queue).",
-   "commit": "af7cb43",
-   "tests": "363/363 green"
-  },
   {
    "ts": "2026-08-14T23:02:44.000Z",
    "agent": "cajh-loop-check-scheduled",
@@ -1812,6 +1804,14 @@
    "detail": "Built a matched-geometry random-entry null control for ma_dip on both cached equity universes (DJIA-30 475 trades, DJTA-20 300 trades): symbol/day drawn uniformly, stop distance resampled from the real trades own empirical stop-distance distribution, exit management replicating backtest.js own lockBreakeven/target/timeout path byte-for-byte, K=2000 draws per universe matched exactly to the real trade count. Pre-registered 95th-percentile decision rule. Result: ma_dip does NOT clear the bar on either universe -- DJIA-30 real +0.1526R lands at the 53rd percentile of its null (null mean +0.1493R, near coin-flip against matched-geometry random entries); DJTA-20 +0.2994R lands at the 85th percentile (null mean +0.1637R, closer but still short). Null means strongly positive on both universes -- a beta/payoff-structure finding stated before any entry-timing claim, per LOG-REGRESSION-BANDS-CRYPTO precedent. ALPHA_DEFINITION.md section 4b condition-1 row annotated (literal pass unchanged, E>0 still true) plus a new what-is-not-established bullet and updated closing paragraph. Descriptive null-control study, not formal-NHST -- no MULTIPLE_COMPARISONS_AUDIT.md family entry, no BH-FDR recomputation. Also fixed a pre-existing test-isolation bug in money-path.test.mjs (structural-level cooldown test was persisting to the real, non-isolated level_cooldowns.json, poisoning its own next run) by isolating that one test to a scratch DATA_DIR -- confirmed unrelated to this item, confirmed fixed by running the full suite twice in a row (513/513 both times). No protected-logic file touched; scanner.js net diff empty after an earlier broader-helper approach was reverted for breaking a deliberate fail-closed test elsewhere. GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC left pending: reconfirmed still blocked on real GDELT DOC API connectivity (manual curl timeout, control host healthy) -- identical failure mode to the prior firing 24h ago, not retried further this firing to avoid burning the single-unit budget on a doomed repeat.",
    "commit": "e3816ae",
    "tests": "513/513 green (confirmed twice in a row)"
+  },
+  {
+   "ts": "2026-08-28T20:15:00.000Z",
+   "agent": "scheduled-firing",
+   "action": "research: REQUIRED-SAMPLE-FOR-DURABLE-PASS closed",
+   "detail": "Planning calculation (not a rescue) using ma_dip as the worked example, per ALPHA_DEFINITION.md condition 4. Derived per-trade SD (2.1390R) from EQUITIES-MADIP-OUT-OF-SAMPLE's recorded CI ([+0.0509,+0.5350], mean +0.2994R, n=300); required-N projections calibrated off the actually observed p=0.0116 (z=2.2701) via sqrt(N) CLT scaling rather than the SD-implied normal approximation. Required-N table across family sizes 19/25/30/40 at ranks 1-5 reproduces the project's own documented near-miss (rank 4, m=19: required 310 vs actual 300). Ceiling probe (rank fixed at 1, family size up to 100,000): required N grows only from 459 to 1,393 -- O(sqrt(log m)), never diverging -- so no finite reachable family size makes ma_dip's effect size unrecoverable via BH-FDR correction alone. Rank sensitivity at the current family size (m=20) shows required N falling as rank worsens at fixed m (correct BH arithmetic, not a safety signal) -- the actual threat to durability is a future test landing at p<0.0116, which pushes rank up directly and is not something sample size can buy. Empirical trade-generation rate (~26 trades/symbol/year on both DJIA-30 and DJTA-20) shows required trade counts (300-1,400) are arithmetically reachable in principle but would require re-spending datasets ROADMAP.md's own reuse audit already flags as spent, or an unverified longer IBKR pull beyond the current 2-year local cache -- left as an open question. Did not propose narrowing/rescoping the correction family (explicitly out of scope). New scripts/required-sample-for-durable-pass.mjs (additive, cache-only, no egress). ALPHA_DEFINITION.md section 4b cross-referenced without reopening the already-closed ma_dip candidate. GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC left pending: reconfirmed still blocked on GDELT DOC API connectivity, not retried this firing -- chose a different, egress-free item instead to avoid repeating an identical failed attempt.",
+   "commit": "78f879e",
+   "tests": "513/513 green"
   }
  ],
  "automation": {
