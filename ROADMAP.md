@@ -5811,3 +5811,87 @@ this project holds. `scripts/gdelt-*`/other-diagnostic engineering-note conventi
 is a read-only diagnostic script, no `backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/
 `bot.js`/`trader.js`/`scanner.js` file touched. `npm.cmd test`: 513/513 green, unchanged by this
 item (no test-relevant code added, per its own scope).
+
+## 2026-08-28 — MADIP-SURVIVABILITY-CONDITION-5: `ma_dip` fails survivability decisively, on both universes, on the same drawdown shape that killed `B5-REVERSAL`
+
+`ALPHA_DEFINITION.md` section 4b named this explicitly as "the right next step" after
+`MADIP-REALISED-R-CONDITION-2` closed condition 2 the same day: "not computed" was condition 5's
+status, and it is historically where this project's closest prior counterexample died —
+`B5-REVERSAL` cleared a pre-registered gate at PHASE3 and was killed at PHASE4 on a -79% to -90%
+max drawdown. Nothing had measured `ma_dip`'s drawdown, its expected worst losing streak, or the
+capital impact of that streak, until this item.
+
+**Pre-registration, written before any drawdown was computed** (full block in
+`scripts/madip-survivability-condition-5.mjs`, new, additive, cache-only — no IBKR egress, reuses
+`EQUITIES-MADIP-SIGNIFICANCE`'s / `EQUITIES-MADIP-OUT-OF-SAMPLE`'s frozen `ma_dip` config and
+cost basis verbatim on both cached universes, DJIA-30 and DJTA-20, reported separately, never
+pooled): fixed-fractional risk `f` at 1%/2%/5% of realised equity per trade, snapshotted at each
+trade's own entry (not re-marked for other concurrently open positions — this engine models no
+margin mechanic anywhere, so open positions don't reserve capital from each other; disclosed,
+not hidden). Two equity curves per universe: a naive "close-order" curve (trades sorted by exit
+time, applied sequentially — wrong whenever positions actually overlap) and the honest
+"calendar-time" curve (event-driven over each trade's own entry/exit timestamps, correctly
+letting genuinely concurrent positions coexist). Drawdown ceiling pre-registered at **25%** on
+the calendar-time curve at the primary f=2% (`D/(1-D)` recovery +33.3%, per `ALPHA_DEFINITION.md`
+§2's table) — set toward the conservative end of that table's named brackets given the CI's thin
+lower bound and condition 3's lapse, well short of `B5-REVERSAL`'s -79%/-90% disqualifying range.
+Losing-streak analysis pre-registered `P(k losses in a row)=(1-W)^k` at the realised win rate,
+plus a defined "longest expected streak": the smallest k where the expected count of k-length
+loss runs across the observed trade count drops below 1.
+
+**Result — the ceiling fails by a wide margin on both universes, at every risk fraction tested:**
+
+| universe | trades | realised W | max DD @ f=1% | @ f=2% (primary) | @ f=5% |
+|---|---:|---:|---:|---:|---:|
+| DJIA-30 | 475 | 30.95% | -54.2% (recover +118%) | **-81.7%** (recover +448%) | **RUIN** (equity hits 0, trade 113 of 476) |
+| DJTA-20 | 300 | 35.67% | -45.3% (recover +83%) | **-74.2%** (recover +288%) | **RUIN** (equity hits 0, trade 60 of 301) |
+
+(Realised win rates cross-check exactly against `MADIP-REALISED-R-CONDITION-2`'s own margin
+figures: DJIA-30 breakeven at realised R=2.65 is 27.40%, +3.52pp margin implies W=30.92% —
+measured here as 30.95%; DJTA-20 breakeven at R=2.50 is 28.57%, +7.12pp margin implies W=35.69%
+— measured here as 35.67%. Independent confirmation the trade set and win-rate convention match
+across both items.)
+
+Both universes' primary-f drawdown lands **inside `B5-REVERSAL`'s own disqualifying -79%/-90%
+range** — this is not a marginal miss. Even at the most conservative risk fraction tested (1%),
+both universes still exceed the pre-registered ceiling by roughly 2x. At 5% risk-per-trade —
+plausible for a candidate this thin, since higher risk is exactly what a marginal edge tempts —
+**both universes go to ruin**: simulated equity reaches zero before the holdout ends, driven by
+correlated concurrent losses (DJTA-20 is twenty transport names that can and do drop together;
+DJIA-30's 30-name spread doesn't prevent it either). The close-order curve, which wrongly
+serialises risk instead of respecting real overlap, is consistently *less* severe than the
+calendar-time curve (e.g. DJIA-30 @ 2%: -78.4% close-order vs. **-81.7%** calendar) — confirming
+the naive curve would have understated the real risk, the direction this item's own
+pre-registration warned about.
+
+**Losing streaks are large and, per the pre-registered definition, largely expected rather than
+tail events:** longest observed loss streak is 18 trades (DJIA-30) and 24 (DJTA-20); the
+pre-registered "longest expected" streak (smallest k where an occurrence isn't expected even
+once in this sample size) is 17 and 13 respectively — close to the observed streaks, meaning
+these are not freak outliers but the ordinary shape of a ~31-36% win-rate strategy over a few
+hundred trades, exactly as `ALPHA_DEFINITION.md` §2 warns generically. Capital impact of the
+observed streak alone, at the primary f=2%: DJIA-30 retains 69.5% of pre-streak capital (-30.5%
+from that single streak); DJTA-20 retains 61.6% (-38.4%) — each streak alone would nearly
+exhaust the pre-registered 25% ceiling by itself, before any other losing trade in the sample is
+counted.
+
+**A modelling artifact was caught and fixed while building this, disclosed rather than
+silently corrected:** an early version of the drawdown-episode function applied an
+equity-curve-style "percent of peak" formula to the additive (non-compounding) R-curve, where
+the running peak can sit near zero early in the series — this produced a nonsense "-6147%"
+figure from a peak of roughly 0.01R. Caught by a direct sanity check against `backtestMultiTF`'s
+own raw per-trade R output (bounded in [-1.93, +4.98] across all 300 DJTA-20 trades, average
++0.2994 — reproduces `EQUITIES-MADIP-OUT-OF-SAMPLE`'s figure exactly) before this write-up was
+drafted. Fixed by giving the additive R-curve its own absolute-difference unit instead of a
+percent-of-peak one; the equity curves (which are always positive by construction, or clamped
+at the ruin floor below) are unaffected and were not the source of the bug.
+
+**`ALPHA_DEFINITION.md` section 4b condition-5 row updated** from "not computed"/"not evaluated"
+to this FAIL, its explanatory bullet rewritten with the full finding, and the section's closing
+"what's left" paragraph rewritten: `ma_dip` now fails two of the six conditions outright (3, on
+family growth alone, and 5, on its own trade sequence — independent failures, not one causing
+the other) on top of a marginal condition 4 and a split-by-universe condition 2. No promotion
+case remains open for this candidate. Descriptive/economic-gate study: no p-value, no hypothesis
+test — does **not** join `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family and triggers no
+BH-FDR recomputation. No `backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/`bot.js`/
+`trader.js`/`scanner.js` file touched — new script only. `npm.cmd test`: 513/513 green.

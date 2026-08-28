@@ -162,11 +162,11 @@ family-wide BH-FDR across all 15 formal-NHST entries**.
 | 2. win rate margin | > `1/(1+R)` on **realised** R | DJIA-30: R=2.65, margin +3.52pp (inside 95% Wald noise); DJTA-20: R=2.50, margin +7.12pp (outside it) | **measured, 2026-08-28 — not pre-registerable retrospectively; splits by universe** |
 | 3. CI excludes zero **and** survives BH-FDR | both | CI **[+0.0509, +0.5350]** holds; **q=0.0522 at n=18** | **FAIL as of 2026-08-27** |
 | 4. sample adequate | ~401 for 80% power at this effect | **300** | **marginal** |
-| 5. survivable | drawdown ceiling + streak stated | not computed | **not evaluated** |
+| 5. survivable | drawdown ceiling + streak stated | calendar-time max DD **-81.7%** (DJIA-30) / **-74.2%** (DJTA-20) at 2% risk/trade, vs. a pre-registered 25% ceiling; **-100% (ruin) at 5%** on both | **FAIL, 2026-08-28 (`MADIP-SURVIVABILITY-CONDITION-5`)** |
 | 6. reproduced out-of-sample | yes | **yes — larger on the fresh universe** | **pass** |
 
 **Two of six pass as of 2026-08-28, condition 2 is now measured but does not cleanly pass or fail
-(it splits by universe), one remains uncomputed, one is marginal, and condition 3 — which passed
+(it splits by universe), condition 5 has now failed outright, one is marginal, and condition 3 — which passed
 when this section was written on 2026-08-22 — has since failed.** It got further than anything
 else ever has here, and it is not an alpha. The distinction matters: this document exists
 precisely so that "the best result we have" and "clears the bar" stay separate ideas.
@@ -186,11 +186,21 @@ went the other way, +0.1866R → −0.0854R, sign flipped.
 
 ### What is not established, stated as plainly as the pass is
 
-- **Condition 5 is the one that killed the closest prior counterexample.** `B5-REVERSAL`
-  cleared a pre-registered gate at PHASE3 and died at PHASE4 on a **−79% to −90%** max drawdown.
-  Nothing here has computed `ma_dip`'s drawdown, its expected worst losing streak, or the
-  capital impact of that streak at the intended risk fraction. Until that exists, condition 5
-  is not "probably fine" — it is unknown, and it is historically where things die.
+- **Condition 5 has now been measured, and `ma_dip` fails it the same way `B5-REVERSAL` did.**
+  `MADIP-SURVIVABILITY-CONDITION-5` (2026-08-28) reran the frozen config on both holdouts,
+  built a calendar-time equity curve that respects genuinely concurrent open positions (fixed-
+  fractional sizing snapshotted at each trade's own entry, correlated DJTA-20 transport names
+  firing together on shared moves), and pre-registered a 25% drawdown ceiling before computing.
+  At the standard 2% risk-per-trade reference, max drawdown is **-81.7% on DJIA-30 and -74.2%
+  on DJTA-20** — both squarely inside `B5-REVERSAL`'s disqualifying **-79% to -90%** range, and
+  both requiring a **+288% to +448%** gain just to return to flat (`D/(1-D)`). Even at a
+  conservative 1% risk-per-trade, drawdown is still -45% to -54% (+83% to +118% to recover). At
+  5% risk-per-trade, both universes hit **ruin** (simulated equity reaches zero) partway through
+  the holdout. The longest observed losing streak is 18 trades (DJIA-30) and 24 (DJTA-20); the
+  expected longest streak at the realised win rate is 17 and 13 respectively, each worth roughly
+  -30% to -38% of capital on its own at 2% risk. Condition 5 is not "probably fine" — it is now
+  a **measured, decisive FAIL**, on the same failure mode that killed the project's only other
+  near-miss.
 - **The interval is thin where it matters.** The lower bound `+0.0509` is **17% of the point
   estimate**. The result is significant, not comfortably so.
 - **Condition 3 is now hanging by 0.0007, and not for any reason to do with `ma_dip`.**
@@ -272,10 +282,16 @@ went the other way, +0.1866R → −0.0854R, sign flipped.
   pre-registered before the fact (both holdouts were already scored), so this is a noise
   assessment, not a pass/fail against a threshold.
 
-**The right next step is not promotion and not a third universe.** Condition 2 is now closed
-(above). What remains is condition 5 on the evidence that already exists — cheap relative to
-what it protects against, and, per the pattern above, condition 3 has already failed on its own
-terms in the meantime.
+**`ma_dip` no longer needs a "what's left" list — it has now failed two of the six conditions
+outright (3 and 5), on top of a marginal 4 and a split-by-universe 2.** Condition 2 closed
+2026-08-28 (above); condition 5 closed the same day, decisively, on the same drawdown failure
+mode that killed `B5-REVERSAL`. Nothing about condition 3's lapse (a function of family growth,
+not of `ma_dip`'s own numbers) or condition 5's fail (a function of the trade sequence, not of
+the correction family) depends on the other — they fail independently, for different reasons,
+and both now hold. The right next step is not promotion, not a third universe, and not a smaller
+risk fraction chosen after seeing this result — it is treating `ma_dip` as closed: real,
+positive, and uninvestable at any risk fraction this project would responsibly run, exactly the
+shape §2 and `B5-REVERSAL`'s own precedent warned this project to expect.
 
 ---
 
