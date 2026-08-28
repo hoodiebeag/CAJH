@@ -6286,3 +6286,119 @@ trading-safety identifier appears in it. This item computes no p-value and tests
 so it does not join `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family and that document is
 not updated. `npm.cmd test`: 513/513 green (no production code changed, so no new tests were
 required or added, matching this project's convention for prior read-only diagnostic scripts).
+
+## 2026-08-28 — VOL-CONTRACTION-SAMPLE-EXTENSION: the 15m-entry holdout axis clears the pre-registered gate (256 trades, +0.2524R gross) — the full-history axis does not, and PROVISIONAL applies
+
+`T2-VOLCONTRACTION` (2026-08-07) killed `vol_contraction` on 98 holdout trades (net avgR
+-0.322). `ZERO-COST-FLOOR-ALL-FAMILIES` (2026-08-22) later found this same family's GROSS
+(zero-cost) holdout edge on those same 98 trades is +0.2177R — the largest gross edge of any
+of the 12 `tournament.mjs` families — and `PER-FAMILY-COST-CEILING` (2026-08-22) found its
+break-even all-in per-leg cost is 17.22bps, roughly 3x `breakout`'s, with one cell
+(Kraken derivatives maker) already clearing +0.10R at +0.1924R on that same 98-trade sample.
+Sample size was the one thing neither prior study could fix. This item, queued by both of
+them, asks whether the gross edge survives a larger sample — through axes that do not touch
+the frozen config (`entryMode: "vol_contraction", trendGate: false, alignMode: "none",
+minStopPct: .01, maxStopPct: .06, tpR: 3, lockBreakeven: true`, copied verbatim from
+`tournament.mjs`): full local candle history (train+holdout combined, not holdout alone),
+today's full watchlist (28/29 locally-cached symbols pass the `>=250`-candle-per-TF filter;
+`EOS` fails on 1d-candle count — 160 bars), and a lower entry timeframe (15m, one step below
+the 1h floor every other study in this codebase has used). New script only:
+`scripts/vol-contraction-sample-extension.mjs` (additive, read-only, cache-only, no network
+egress — `candles/` local minute data resampled via the existing `loadResearchCandles`).
+
+**BASELINE (reproduction check, today's data, same method as the two prior studies):** 98
+trades, gross avgR **0.21772615708553442** — reproduces `ZERO-COST-FLOOR-ALL-FAMILIES`'s
+recorded +0.2177 to 10 decimal places. 28 assets considered (of 29 locally cached), 21 traded,
+11 net-positive. This anchors that every axis below varies exactly one thing at a time from an
+already-verified starting point.
+
+**AXIS A — full local candle history (train+holdout combined), entryTf 1h:** 265 trades, gross
+avgR **0.0147** (95% CI [-0.1646, 0.1940]) — collapses toward zero. This axis is explicitly
+**NOT out-of-sample**: it deliberately reuses bars from `T2-VOLCONTRACTION`'s own train segment
+(already reported net avgR -0.638, the worse of its two reported halves), so this is a
+diagnostic sample-size read, not fresh evidence. That the combined figure crashes when train
+bars are included, rather than staying near the holdout's own +0.2177, is itself informative:
+the 98-trade holdout estimate was not a stable mid-point of a real edge, it was the better half
+of a noisy split.
+
+**AXIS C — lower entry timeframe (15m), holdout only (identical time window and 0.70 split to
+BASELINE):** 256 trades, gross avgR **0.2524** (95% CI [0.0620, 0.4427]), win rate 42.6%, 26/28
+assets traded, 17/26 net-positive (65.4%). This is the ONLY extension axis that stays fully
+out-of-sample — no train bars are mixed in, only the entry timeframe changes, an axis this
+item's own pre-registration explicitly named as legitimate ("a lower entry timeframe if
+`candles/` supports one"). **This clears all three legs of the pre-registered gate at once:
+avgR 0.2524 > 0.10, trades 256 >= 150, positiveAssets/assets 0.654 >= 0.50** — the same fuller
+3-leg gate `T2-VOLCONTRACTION`/`ZERO-COST-FLOOR-ALL-FAMILIES` both used, not just the
+avgR-only leg `PER-FAMILY-COST-CEILING`'s own clear satisfied.
+
+**COMBINED — every legitimate axis stacked (full history + 15m entry + today's full
+watchlist):** 895 trades, gross avgR **0.0985** (95% CI [0.0006, 0.1964]) — just under the
++0.10 bar, and clearly so: the CI's lower edge sits at essentially zero. This is the single
+largest sample this item can produce without touching the frozen config, and it fails the
+avgR leg (barely) precisely because it dilutes AXIS C's genuine out-of-sample edge with AXIS
+A's weaker train-period bars. Reported for completeness (it is the "biggest n" figure a less
+careful read might reach for) but it is explicitly **not** the headline result — gating on it
+instead of AXIS C would be exactly the kind of "pick the axis with the most trades" post-hoc
+selection this project's own research-honesty discipline exists to prevent, when the
+principled criterion (stay out-of-sample) is available and points to a different axis.
+
+**"Full watchlist" axis, reading note:** the original 2026-08-07 run reported "28 assets
+passing the filter / 21 traded"; today, 28/29 locally-cached symbols pass the same filter
+against the full series (candle history has grown since). There is no known-excluded symbol
+left to add back deliberately, and the original run's specific 21-symbol identity was never
+recorded, so it can't be reproduced and diffed exactly — this axis's contribution is therefore
+captured directly in BASELINE/AXIS C themselves (both already use today's full watchlist),
+not as a fourth separate backtest pass.
+
+**Net avgR at each real venue, computed on AXIS C (the axis that actually cleared the gate) —
+derivatives cells are UPPER BOUNDS, this backtest models no funding cost:**
+
+| Venue | Net avgR | Trades | Note |
+|---|---:|---:|---|
+| Kraken spot maker | -0.3342 | 256 | |
+| Kraken spot taker | -0.9941 | 256 | |
+| Kraken derivatives maker | **+0.2231** | 256 | funding-free upper bound |
+| Kraken derivatives taker | **+0.1057** | 256 | funding-free upper bound |
+
+Both derivatives cells stay positive net of the modeled fee+slip, corroborating
+`PER-FAMILY-COST-CEILING`'s own +0.1924R Kraken-derivatives-maker figure (98 trades, 1h entry)
+in the same direction on a larger, independently-constructed (15m entry, holdout-only) sample
+— two different axes of extension pointing the same way, not the same number reproduced twice.
+Both spot cells stay deeply negative: `vol_contraction`'s k (cost sensitivity from its tight
+stops) is large enough that even the maker rate alone erases the gross edge and then some.
+
+**PROVISIONAL, not a live candidate — `AGENT_PROTOCOL.md`'s own rule applies for the first
+time at its fuller form.** `PER-FAMILY-COST-CEILING`'s earlier +0.1924R clear did NOT trigger
+`AGENT_PROTOCOL.md`'s "new economic-gate result that clears its literal pre-registered
+threshold" / `SEALED_SYMBOLS` re-run rule, by that rule's own stated reasoning: it cleared only
+the narrower avgR-only leg (98 trades, short of the 150-trade leg), not the fuller 3-leg gate
+the rule is written against. AXIS C clears the fuller 3-leg gate outright — the first result in
+this project's history to do so. Per `AGENT_PROTOCOL.md`'s rule, this is **provisional, not a
+live candidate for the D3 human gate, until re-run against `researchlib.mjs`'s `SEALED_SYMBOLS`
+pool** (`AVAX`, `LINK`, `NEAR`, `SUI`, `UNI`) — the one holdout resource in this project
+confirmed never yet examined by any study (`MULTIPLE_COMPARISONS_AUDIT.md` §4,
+`HOLDOUT-REUSE-AUDIT`). **This item deliberately does not perform that re-run, and does not
+build a funding-cost model for the two positive derivatives cells above — both are named
+explicitly, in this item's own pre-registered done_when, as required before any promotion and
+as out of this item's own scope.** A new work_queue item is staged for both (see
+`.agent_state.json`), rather than doing either here as an unplanned scope-add mid-item.
+
+**`VERDICTS.md` is not touched.** `T2-VOLCONTRACTION`'s row reports its own 98-trade,
+1h-entry, holdout-only sample correctly and is not being corrected — nothing here contradicts
+that number (AXIS A, the closest like-for-like comparison, also regresses toward it once train
+bars are mixed in). This item's finding is additive: a different, larger, genuinely
+out-of-sample axis (15m entry) that the original study never tried produces a materially
+different, gate-clearing result. Per this item's own done_when, a regression below +0.10R
+would have required annotating `T2-VOLCONTRACTION`'s row as "confirmed on a larger sample" —
+that branch does not apply here, since the true out-of-sample axis held.
+
+**Multiple comparisons.** Economic-gate-only (point-estimate/trade-count thresholds, no
+p-value, no null distribution) — joins that bucket in `MULTIPLE_COMPARISONS_AUDIT.md`, updated
+in this commit.
+
+**Engineering note.** New `scripts/vol-contraction-sample-extension.mjs` only (additive,
+read-only, cache-only, no network egress). `backtest.js`, `strategy.js`, `tournament.mjs`,
+`monitor.js`, `bot.js`, `trader.js`, `scanner.js` — all untouched; grep-confirmed against the
+actual staged diff before commit that no protected trading-safety identifier appears in it.
+`npm.cmd test`: 513/513 green (no production code changed, so no new tests were required or
+added, matching this project's convention for prior read-only diagnostic scripts).

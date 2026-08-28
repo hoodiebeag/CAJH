@@ -37,7 +37,21 @@ VERDICTS.md at all:**
   audit is about ("slicing seven ways and picking the best-looking cell is
   multiple-comparisons p-hacking almost by construction").
 
-**Total: 56 studies conducted to date** (updated 2026-08-27 by ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL
+**Total: 57 studies conducted to date** (updated 2026-08-28 by `VOL-CONTRACTION-SAMPLE-EXTENSION`
+— a point-estimate/trade-count gate (avgR>0.10 AND trades>=150 AND positiveAssets/assets>=0.5,
+the same gate `ZERO-COST-FLOOR-ALL-FAMILIES`/`PER-EPOCH-GROSS-EDGE` both pre-registered, reused
+verbatim) re-testing `vol_contraction`'s known-large gross edge on 4 sample-extension axes
+(full history, today's full watchlist, 15m entry, and all three combined). One axis (15m entry,
+holdout-only, 256 trades) clears the fuller 3-leg gate outright — the first result in this
+project's history to do so, not just the narrower avgR-only leg `PER-FAMILY-COST-CEILING`
+already cleared once. Per `AGENT_PROTOCOL.md`'s own `SEALED_SYMBOLS` re-run rule (updated in
+this commit), this is provisional, not a live D3 candidate, until that re-run happens — a
+follow-up work_queue item, not this one. No VERDICTS.md row: `T2-VOLCONTRACTION`'s own
+98-trade/1h-entry row is correct for its own sample and is not being corrected, and a
+provisional-not-yet-promoted clear does not get a row by this project's existing precedent.
+Counted as a single study covering 4 sub-axes, matching `ZERO-COST-FLOOR-ALL-FAMILIES`'s own
+precedent for a multi-axis run — joins the economic-gate-only bucket below (35→36) — a 57th
+study. Previously updated 2026-08-27 by ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL
 — a BTC-only active-address-count exposure signal, genuinely exogenous data (blockchain.com Charts
 API `n-unique-addresses`), staged per `WHALE-WALLET-ACCUMULATION-PRIMARY`'s own named escape hatch.
 Construct: active-address count above its own trailing 200-session MA (±1% hysteresis band) =
@@ -151,7 +165,7 @@ Breakdown by kind:
 | Kind | Count | What it means for this audit |
 |---|---:|---|
 | Formal NHST (reports a p-value against a pre-registered gate) | 14 studies / 17 sub-tests (this row lagged the real count before this update — see §1's own "the count is stale" framing; corrected here to match §2/AGENT_PROTOCOL.md's current totals as of GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL) | Section 2 — a real FWER/FDR computation applies |
-| Economic-gate-only (point-estimate threshold, no p-value/null distribution) | 35 (see PER-EPOCH-GROSS-EDGE note above; §3's "33" below is pre-this-study and not rewritten here — see that section's own staleness framing) | Section 3 — classical alpha math doesn't transfer cleanly; discussed qualitatively |
+| Economic-gate-only (point-estimate threshold, no p-value/null distribution) | 36 (see VOL-CONTRACTION-SAMPLE-EXTENSION note above; §3's "33" below is pre-this-study and not rewritten here — see that section's own staleness framing) | Section 3 — classical alpha math doesn't transfer cleanly; discussed qualitatively |
 | Non-verdict (a gate failed before holdout was ever examined) | 6 (H11, FUNDING-MEANREV, ONCHAIN-FLOW-GATE, FIB-PULLBACK, VOL-CONFIRM-BREAKOUT, PAIRS-COINTEGRATION-STATARB) | Consumed zero holdout looks — train-gate, data-gate, or (new with PAIRS-COINTEGRATION-STATARB) internal-screen-gate failures, holdout never examined. Not part of either look-elsewhere pool. PAIRS-COINTEGRATION-STATARB differs from the other five: its gate wasn't missing data, it was its own internal, ALREADY BH-FDR-corrected 105-pair Engle-Granger screen (0/105 survived q=0.05) — a self-contained formal-NHST family that doesn't feed Section 2's 9-sub-test table, since it was corrected within the study rather than needing retroactive cross-study correction. |
 | Descriptive / no gate at all | 3 (T1-ZEROCOST informal 8-family screen, SEASONALITY-DAYOFWEEK-SESSION, EQUITIES-ALL-FAMILIES-BASELINE) | No pass/fail claim was ever made, so nothing to correct — but the holdout window was looked at, which matters for Section 4 |
 | Informal, pre-dates any written protocol (pre-2026-08-04) | 3 (Trade intensity, Order-flow pooled, MR1) | No p-value, no formal gate on record; included for honesty, excluded from every quantitative computation below |

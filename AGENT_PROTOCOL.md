@@ -485,6 +485,16 @@ fail):**
   rule's re-run requirement is not triggered — flagged here rather than silently invoking or
   silently skipping it, since this is the first time the question has been live at all.
 
+**Update (2026-08-28, `VOL-CONTRACTION-SAMPLE-EXTENSION`, `ROADMAP.md`): the fuller 3-leg gate
+has now been cleared for the first time.** `vol_contraction` re-tested on a 15m-entry,
+holdout-only, today's-full-watchlist axis: 256 trades, gross avgR +0.2524 (>0.10),
+positiveAssets/assets 0.654 (>=0.50) — all three legs, not just the avgR-only leg the note
+above describes. The rule below is therefore live: this result is **provisional, not a live
+D3 candidate**, until re-run against `SEALED_SYMBOLS`. That re-run is explicitly out of
+`VOL-CONTRACTION-SAMPLE-EXTENSION`'s own scope (its done_when names it as required but not
+performed there) and is staged as a separate `work_queue` item instead of being done
+retroactively here.
+
 **Rule for a new formal NHST result.** Do not evaluate it against `alpha=0.05` in isolation.
 Add its p-value to the family-size counter above, recompute Benjamini-Hochberg FDR across
 *all* p-values in that family (old + new) at `q=0.05`, and only call the new result
