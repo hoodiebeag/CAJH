@@ -130,8 +130,49 @@ export function backtestMultiTF({ series } = {}, {
   // of bar k+entryDelayBars, risk/tp are recomputed off that delayed entry. If the delay runs
   // past the end of the series, or price has already closed the risk to zero or below by fill
   // time, the trade is skipped entirely (tallied as reason "delaySkipped") rather than forced.
-  entryDelayBars = 0
+  entryDelayBars = 0,
+  // SHORT-SIDE-ENGINE-CAPABILITY: "long" (default) reproduces every existing call site and
+  // every recorded number byte-for-byte — this option is a pure additive no-op unless a
+  // caller opts into "short". Only entryMode "bos" has a short-entry candidate: the mirror
+  // of a long entry's confirmed swing LOW is a confirmed swing HIGH (already detected by
+  // detectSwings and already tracked via highAt below), so short entries reuse that existing
+  // structure rather than inventing a new one. Every other entryMode's candidate generator
+  // (support/ma_dip/rsi/rev/breakout/vol_contraction/trend_pullback/sweep_reclaim/
+  // range_sweep_reclaim/h3/anticipate/fib_pullback) is long-only and untouched.
+  //
+  // Placement is inverted honestly, not by negating outputs: stop sits ABOVE entry (at the
+  // swing-high pivot), tp = entry - tpR*(stop-entry) sits BELOW entry, the stop triggers on
+  // a bar's HIGH (not its low), and the target triggers on a bar's LOW (not its high) — see
+  // the direction branch in the exit-resolution block below. The net-R cost formula
+  // (feeRate+slipPct applied to (entry+exitPx)) is unchanged for shorts — that term doesn't
+  // depend on direction, only the (px-entry) P&L term does; see `netAt` below.
+  //
+  // trailR, partialAtR, trailingTpPct, lockBreakeven, exitOnSwingHigh, requireHigherLow, and
+  // minRoomR have not been made direction-aware and are rejected outright for "short" (see
+  // the guard below) rather than silently producing wrong numbers.
+  //
+  // Known missing cost, stated explicitly per this item's own requirement: borrow
+  // availability and borrow cost are NOT modeled anywhere in this engine — there is no
+  // concept here of a borrow fee or of a short being unavailable/unlocatable. Any short P&L
+  // this produces is before that cost. Separately, a short's loss is unbounded above (a
+  // long's is bounded at zero at worst) — any future drawdown/survivability work on shorts
+  // cannot reuse the long-side assumptions unchanged.
+  //
+  // This item runs no family and reports no avgR — it exists only so a later item can ask
+  // whether short entries behave differently, which is currently unanswerable.
+  direction = "long"
 } = {}) {
+  if (direction !== "long" && direction !== "short") {
+    throw new Error(`backtestMultiTF: unknown direction "${direction}" (must be "long" or "short")`);
+  }
+  if (direction === "short") {
+    if (entryMode !== "bos") {
+      throw new Error(`backtestMultiTF: direction "short" is only implemented for entryMode "bos" — every other entryMode's candidate generator is long-only (SHORT-SIDE-ENGINE-CAPABILITY)`);
+    }
+    if (trailR || partialAtR || trailingTpPct || lockBreakeven || exitOnSwingHigh || requireHigherLow || minRoomR) {
+      throw new Error(`backtestMultiTF: direction "short" only supports the base stop/target/timeout exit path — trailR, partialAtR, trailingTpPct, lockBreakeven, exitOnSwingHigh, requireHigherLow, and minRoomR are not yet implemented for shorts (SHORT-SIDE-ENGINE-CAPABILITY)`);
+    }
+  }
   // `series` = timeframes ascending, e.g. [{label:"1h",mins:60,candles},{label:"4h",...},{label:"1d",...}].
   // The entry TF (entryTf label, default the lowest) trades; everything ABOVE it is the
   // bias filter, and the highest TF anchors the chop/MA gate.
@@ -158,9 +199,10 @@ export function backtestMultiTF({ series } = {}, {
   const pivE = detectSwings(entryCandles, n);
   const lowAt  = new Map();             // confirmIndex → low pivot (entry trigger)
   const highAt = new Set();             // confirmIndex of high pivots (swing-high exit)
+  const highPivotAt = new Map();        // confirmIndex → high pivot (short-entry trigger; SHORT-SIDE-ENGINE-CAPABILITY, mirrors lowAt)
   for (const p of pivE) {
     if (p.type === "low") lowAt.set(p.confirmIndex, p);
-    else                  highAt.add(p.confirmIndex);
+    else                  { highAt.add(p.confirmIndex); highPivotAt.set(p.confirmIndex, p); }
   }
 
   // t queried below (tClose) only ever increases across the entry loop, so each of
@@ -371,7 +413,12 @@ export function backtestMultiTF({ series } = {}, {
   for (let k = n; k < entryCandles.length; k++) {
     const lowHere = lowAt.get(k); // a swing low confirmed at this candle on the entry TF?
     if (!pos && entryMode === "bos") {
-     if (lowHere) {
+     // Short's candidate is the mirror pivot: a confirmed swing HIGH instead of a confirmed
+     // swing low. direction === "short" is guarded above to always reach here with
+     // requireHigherLow/minRoomR both falsy, so those two checks below stay long-only
+     // (lowHere-based) without needing a direction check of their own.
+     const pivotHere = direction === "short" ? highPivotAt.get(k) : lowHere;
+     if (pivotHere) {
       const tClose  = T[k] + entryMins * 60;
       const hb = biasAsOfFns.map(fn => fn(tClose));   // higher-TF biases as of entry
       let aligned;
@@ -390,7 +437,9 @@ export function backtestMultiTF({ series } = {}, {
           : aboveMaAsOf(tClose);  // 4h close above its MA
         if (!tg) { aligned = false; gateReason = "trendGate"; }
       }
-      const entry = C[k], stop = lowHere.price, risk = entry - stop;
+      const entry = C[k];
+      const stop  = pivotHere.price;
+      const risk  = direction === "short" ? stop - entry : entry - stop;
       let ok = true, reason;
       if (risk <= 0)                                                              { ok = false; reason = "priceBelowStop"; }
       else if (!aligned)                                                          { ok = false; reason = gateReason; }
@@ -400,7 +449,8 @@ export function backtestMultiTF({ series } = {}, {
       else if (minRoomR && (nearestResAbove(entry, tClose) - entry) / risk < minRoomR)    { ok = false; reason = "noRoom"; }
       else                                                                        { reason = "taken"; }
       reasons[reason] = (reasons[reason] || 0) + 1;
-      if (ok) pos = { entry, stop, risk, tp: entry + tpR * risk, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: entry, trailing: false, maxAdverseR: 0, maxFavorableR: 0 };
+      const tp = direction === "short" ? entry - tpR * risk : entry + tpR * risk;
+      if (ok) pos = { entry, stop, risk, tp, direction, beMoved: false, openedAt: k, open: 1, realized: 0, partialDone: false, peak: entry, trailing: false, maxAdverseR: 0, maxFavorableR: 0 };
      }
     } else if (!pos && entryMode === "anticipate") {
       // ── anticipate mode ── mirrors live: enter the moment price trades ABOVE the
@@ -554,16 +604,22 @@ export function backtestMultiTF({ series } = {}, {
 
     if (pos && k > pos.openedAt) {
       const hi = H[k], lo = L[k];
+      const isShort = pos.direction === "short";
       // Track the worst/best unrealized R this bar reached, before any exit this bar closes
       // the position — MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC. The exit bar's own excursion counts:
       // MAE/MFE is "how far price ran", not "how far it ran before the exit price specifically".
-      pos.maxAdverseR = Math.max(pos.maxAdverseR, (pos.entry - lo) / pos.risk);
-      pos.maxFavorableR = Math.max(pos.maxFavorableR, (hi - pos.entry) / pos.risk);
+      // For a short, adverse is price rising (hi) and favorable is price falling (lo) — the
+      // mirror of a long (SHORT-SIDE-ENGINE-CAPABILITY).
+      pos.maxAdverseR = Math.max(pos.maxAdverseR, isShort ? (hi - pos.entry) / pos.risk : (pos.entry - lo) / pos.risk);
+      pos.maxFavorableR = Math.max(pos.maxFavorableR, isShort ? (pos.entry - lo) / pos.risk : (hi - pos.entry) / pos.risk);
       // Net R of the FULL position exiting at `px`: gross R minus fees+slippage, with the
       // entry leg on the entry notional and the exit leg on the exit notional (matches
       // monitor.js's live P&L). A partial leg of fraction f is simply f × this value, so
-      // scale-outs stay exactly consistent with full exits.
-      const netAt = (px) => (px - pos.entry) / pos.risk - ((feeRate + slipPct) * (pos.entry + px)) / pos.risk;
+      // scale-outs stay exactly consistent with full exits. The fee/slippage term below is
+      // applied to (entry+px) either way and does not depend on direction — only the
+      // directional P&L term (the first line) flips for a short.
+      const netAt = (px) => (isShort ? (pos.entry - px) / pos.risk : (px - pos.entry) / pos.risk)
+        - ((feeRate + slipPct) * (pos.entry + px)) / pos.risk;
       // Close `frac` of what's left at `px`; bank the trade once nothing remains.
       const closeLeg = (px, frac, why) => {
         const f = Math.min(frac, pos.open);
@@ -583,12 +639,23 @@ export function backtestMultiTF({ series } = {}, {
       // both stop and target are touched in one bar, assume the stop hit first).
       // trailingTpPct replaces the fixed TP: the pullback trigger is checked against the
       // peak as it stood entering this candle (updated below, after this check, so it
-      // only binds on later candles — same ordering as the trailR trailing stop).
-      if (lo <= pos.stop) closeLeg(pos.stop, pos.open, pos.beMoved || pos.trailing ? "trail/be" : "stop");
-      else if (!trailingTpPct && hi >= pos.tp) closeLeg(pos.tp, pos.open, "target");
-      else if (trailingTpPct && pos.peak > pos.entry) {
-        const pullbackPx = pos.peak * (1 - trailingTpPct);
-        if (lo <= pullbackPx) closeLeg(pullbackPx, pos.open, "trailingTp");
+      // only binds on later candles — same ordering as the trailR trailing stop). Long-only:
+      // direction "short" is guarded at entry to never reach here with trailingTpPct set.
+      //
+      // A short's stop sits ABOVE entry and triggers on the bar's HIGH; its target sits
+      // BELOW entry and triggers on the bar's LOW — the mirror of a long's low-triggers-stop,
+      // high-triggers-target (SHORT-SIDE-ENGINE-CAPABILITY). Same-bar ambiguity still
+      // resolves to the stop first, for the same conservative reason as the long path.
+      if (isShort) {
+        if (hi >= pos.stop) closeLeg(pos.stop, pos.open, pos.beMoved || pos.trailing ? "trail/be" : "stop");
+        else if (lo <= pos.tp) closeLeg(pos.tp, pos.open, "target");
+      } else {
+        if (lo <= pos.stop) closeLeg(pos.stop, pos.open, pos.beMoved || pos.trailing ? "trail/be" : "stop");
+        else if (!trailingTpPct && hi >= pos.tp) closeLeg(pos.tp, pos.open, "target");
+        else if (trailingTpPct && pos.peak > pos.entry) {
+          const pullbackPx = pos.peak * (1 - trailingTpPct);
+          if (lo <= pullbackPx) closeLeg(pullbackPx, pos.open, "trailingTp");
+        }
       }
 
       // Partial scale-out: bank `partialFrac` at the partial target, let the rest run.

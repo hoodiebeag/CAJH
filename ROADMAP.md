@@ -5200,3 +5200,80 @@ verbatim from `macro-regime-primary-signal-equities.mjs` (same un-exported-helpe
 pattern used throughout this family). Raw output saved to `research-runs/` (gitignored, not
 committed). `npm.cmd test`: 505/505 green (no production/test file touched, no companion test
 added, matching this family's read-only-research-script precedent).
+
+
+## SHORT-SIDE-ENGINE-CAPABILITY — a short-entry path added to the backtest engine; no family run, no result (2026-08-28)
+
+**Scope, per this item's own note.** This item produces NO research result and reports none.
+It exists only so a later item can ask whether short entries behave differently — currently
+unanswerable, since `backtest.js` had no representation of a short position at all.
+`tournament.mjs` is untouched; no family was run; no avgR appears anywhere in this entry.
+
+**What changed.** `backtestMultiTF` (`backtest.js`) gained a `direction` parameter,
+`"long"` by default. Only `entryMode: "bos"` has a short-entry candidate: the mirror of a
+long entry's confirmed swing LOW is a confirmed swing HIGH, which `detectSwings` already
+detects and which the engine already tracked (`highAt`, previously only used for the
+`exitOnSwingHigh` option). A new `highPivotAt` map (mirroring the existing `lowAt` map)
+exposes that pivot's price so `direction: "short"` can use it as the entry's stop. Every
+other entryMode's candidate generator (support/ma_dip/rsi/rev/breakout/vol_contraction/
+trend_pullback/sweep_reclaim/range_sweep_reclaim/h3/anticipate/fib_pullback) is long-only
+and untouched — `direction: "short"` throws for any entryMode other than `"bos"`.
+
+**Arithmetic is inverted honestly, not by negating outputs.** For a short: stop sits ABOVE
+entry (at the swing-high pivot's price), `tp = entry - tpR*(stop-entry)` sits BELOW entry,
+the stop triggers on a bar's HIGH (not its low), and the target triggers on a bar's LOW (not
+its high) — exact mirrors of the long path. Same-bar stop/target ambiguity still resolves to
+the stop first, matching the long-side convention (conservative: if both are touched in one
+bar, assume the worse outcome). MAE/MFE (`pos.maxAdverseR`/`maxFavorableR`) are also
+direction-aware: for a short, adverse is price rising, favorable is price falling.
+
+**Cost formula confirmed direction-agnostic, as required.** `backtest.js`'s net-R formula is
+`(directional P&L term) - ((feeRate + slipPct) * (entry + exitPx)) / risk`. The fee/slippage
+term applies to `(entry + exitPx)` regardless of direction and was NOT changed; only the
+directional P&L term flips (`(entry - px)/risk` for a short vs. `(px - entry)/risk` for a
+long) — see the `netAt` closure in the per-bar exit-resolution block (the comment directly
+above it in `backtest.js` cites this explicitly). Confirmed by test, not just by inspection:
+a stop-out short trade's realized R matches `netAtShort(entry, stopPx, risk)` computed
+independently in the test file.
+
+**Known missing cost, stated explicitly per this item's own requirement.** Borrow
+availability and borrow cost are NOT modeled anywhere in this engine — there is no concept
+here of a borrow fee, or of a short being unavailable/unlocatable. Any short P&L this engine
+could ever produce is before that cost. This is recorded both in a `backtest.js` code
+comment (on the `direction` parameter) and here. Separately: a short's loss is unbounded
+above, while a long's is bounded at zero at worst — any future drawdown or survivability
+study on shorts cannot reuse the long-side assumptions (e.g. `(1-f)^k` capital-after-a-
+losing-streak math) unchanged without accounting for that asymmetry.
+
+**Deliberately NOT made direction-aware this item, and rejected outright rather than
+silently mishandled.** `direction: "short"` throws if combined with `trailR`, `partialAtR`,
+`trailingTpPct`, `lockBreakeven` (note: `LOCK_BREAKEVEN` defaults to `true` in
+`strategy.js`, so a short call must explicitly pass `lockBreakeven: false` or it throws),
+`exitOnSwingHigh`, `requireHigherLow`, or `minRoomR` — none of these have been proven
+direction-aware, and applying long-oriented logic to a short position silently would have
+produced wrong numbers rather than an honest gap. Alignment/trend-gate semantics
+(`alignMode`, `chopFilter`, `trendGate`) also remain long-oriented (e.g. `alignMode: "all"`
+still means "every higher TF bull") and were not inverted for shorts — out of scope here,
+noted for whoever wires an actual short economic hypothesis later.
+
+**Tests.** `backtest.test.mjs` gained 8 tests: long-side output is byte-for-byte identical
+whether `direction` is omitted or passed explicitly as `"long"` (the required no-op proof,
+run against the fixture backing this file's own long-standing BOS-mode expectation); stop
+placed above entry / target below entry; the stop firing specifically on a HIGH breach with
+the low nowhere near the target (isolates the check); the target firing specifically on a
+LOW breach with the high nowhere near the stop; same-bar stop+target ambiguity resolving to
+the stop; and three validation tests (unknown `direction` string throws; `direction:
+"short"` with a non-`"bos"` entryMode throws; `direction: "short"` with `lockBreakeven` left
+at its true default throws). The short-side fixture (`shortEntryPrefix`/`mirror` in
+`backtest.test.mjs`) reflects this file's already-trusted long BOS fixture through price 200
+rather than hand-inventing new candle values — reflecting a confirmed swing LOW into a
+confirmed swing HIGH is provably confirm-timing-identical under that reflection (the low
+pivot's confirm condition is "close > pivot high"; the high pivot's is "close < pivot low";
+these are the same inequality reflected), so the short entry mechanics are exercised against
+a fixture whose shape is already known-correct, not a new one that could hide a construction
+bug.
+
+**Engineering note.** `backtest.js` and `backtest.test.mjs` only. `strategy.js`,
+`tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js` untouched (`git diff
+--stat` shows exactly these two files). No family run, no `avgR` computed or reported
+anywhere in this item. `npm.cmd test`: 513/513 green (505 prior + 8 new).

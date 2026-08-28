@@ -677,3 +677,127 @@ test("trailingTpPct: omitted is a true no-op (identical to explicit null)", () =
   const explicitNull = backtestMultiTF({ series }, { ...BREAKOUT_CFG, trailingTpPct: null });
   assert.deepEqual(omitted, explicitNull);
 });
+
+// ── direction ("short") — SHORT-SIDE-ENGINE-CAPABILITY ──────────────────────────
+// Adds a short-entry path to "bos" mode only, using the already-detected swing-HIGH pivot
+// as the mirror of a long entry's swing-LOW pivot. This item produces no research result —
+// these tests exist only to prove the mechanics: stop above entry / target below entry
+// (inverted placement), stop triggers on a HIGH not a low, target triggers on a LOW not a
+// high, same-bar ambiguity still resolves to the stop, and every existing long-side result
+// stays byte-for-byte unchanged now that `direction` exists.
+//
+// mirror() reflects a candle series through price 200 (open stays put in role, high<->low
+// swap) so the short fixture reuses test 1's already-trusted BOS long fixture (pivot low 95
+// / trigger 97.6, confirm entry 97.7, risk 2.7) instead of a hand-invented one: reflecting
+// turns the swing-LOW pivot into a swing-HIGH pivot at the mirrored price, and — because the
+// low pivot's confirm condition is "close > pivot high" and the high pivot's is "close <
+// pivot low" — the confirm TIMING is provably identical under reflection (close > 97.6 in
+// the original is exactly reflected-close < reflected-102.4 in the mirror).
+function mirror(candles, R = 200) {
+  return candles.map(c => ({
+    time: c.time,
+    open:  String(R - parseFloat(c.open)),
+    high:  String(R - parseFloat(c.low)),
+    low:   String(R - parseFloat(c.high)),
+    close: String(R - parseFloat(c.close)),
+    volume: c.volume,
+  }));
+}
+
+// 30 baseline bars + pivot + confirm (32 candles) from test 1's fixture, mirrored: pivot
+// high 105 (short stop), confirm close 102.3 (short entry), risk 2.7, tp at tpR=4 is 91.5.
+// Drops the long-side grind (bars 33+) so each test appends its own single exit-path bar.
+function shortEntryPrefix() {
+  const long = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
+  return mirror(long[0].candles.slice(0, 32));
+}
+function withNextBar(prefix, bar) {
+  const t = parseInt(prefix.at(-1).time) + HOUR;
+  return [...prefix, mk(t, ...bar)];
+}
+const SHORT_CFG = {
+  entryTf: "1h", entryMode: "bos", alignMode: "none", trendGate: false, chopFilter: false,
+  requireHigherLow: false, maxStopPct: null, minStopPct: null, lockBreakeven: false, tpR: 4,
+  feeRate: 0.004, slipPct: 0.0005, direction: "short",
+};
+const netAtShort = (entry, px, risk) => (entry - px) / risk - (FEE * (entry + px)) / risk;
+
+test("SHORT-SIDE-ENGINE-CAPABILITY: long-side results are byte-for-byte unchanged by the direction parameter's addition", () => {
+  const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
+  const cfg = {
+    entryTf: "1h", entryMode: "bos", alignMode: "none", trendGate: false, chopFilter: false,
+    requireHigherLow: false, maxStopPct: null, minStopPct: null, lockBreakeven: false, tpR: 4,
+    feeRate: 0.004, slipPct: 0.0005,
+  };
+  const withoutDirection = backtestMultiTF({ series }, cfg);
+  const explicitLong = backtestMultiTF({ series }, { ...cfg, direction: "long" });
+  assert.deepEqual(explicitLong, withoutDirection, "direction:\"long\" must be a true no-op, identical to omitting it");
+  assert.equal(withoutDirection.trades, 1);
+  assert.ok(Math.abs(withoutDirection.results[0] - netWinR(97.7, 2.7)) < 1e-9,
+    "the underlying long fixture's numbers must still match this file's own long-standing expectation");
+});
+
+test("SHORT-SIDE-ENGINE-CAPABILITY: entry places the stop ABOVE entry and the target BELOW entry (inverted arithmetic)", () => {
+  // Next bar: low 91 clears tp (~91.5) with margin; high 96 stays nowhere near the 105 stop.
+  const series = [{ label: "1h", mins: 60, candles: withNextBar(shortEntryPrefix(), [95, 96, 91, 92]) }];
+  const r = backtestMultiTF({ series }, SHORT_CFG);
+  assert.equal(r.trades, 1);
+  const [x] = r.excursions;
+  assert.ok(Math.abs(x.entry - 102.3) < 1e-9, `entry ${x.entry} != expected 102.3`);
+  assert.ok(x.exitPrice < x.entry, "target exit price must sit BELOW entry for a short");
+  assert.ok(Math.abs(x.exitPrice - 91.5) < 1e-9, `tp exit ${x.exitPrice} != expected entry - tpR*risk = 91.5`);
+  assert.ok(Math.abs(r.results[0] - netAtShort(102.3, 91.5, 2.7)) < 1e-9,
+    `winner R ${r.results[0]} != expected ${netAtShort(102.3, 91.5, 2.7)}`);
+});
+
+test("SHORT-SIDE-ENGINE-CAPABILITY: the stop triggers on a HIGH breach, not a low", () => {
+  // Next bar: high 105 exactly touches the stop; low 103 stays well clear of the 91.5 tp —
+  // isolates the high-triggers-stop check from any same-bar target ambiguity.
+  const series = [{ label: "1h", mins: 60, candles: withNextBar(shortEntryPrefix(), [103, 105, 103, 104]) }];
+  const r = backtestMultiTF({ series }, SHORT_CFG);
+  assert.equal(r.trades, 1);
+  assert.equal(r.exits.stop, 1);
+  const [x] = r.excursions;
+  assert.ok(x.exitPrice > x.entry, "stop exit price must sit ABOVE entry for a short");
+  assert.ok(Math.abs(x.exitPrice - 105) < 1e-9, `stop exit ${x.exitPrice} != expected 105`);
+  assert.ok(r.results[0] < 0, "a stop-out must realize a loss");
+  assert.ok(Math.abs(r.results[0] - netAtShort(102.3, 105, 2.7)) < 1e-9,
+    `stop-out R ${r.results[0]} != expected ${netAtShort(102.3, 105, 2.7)}`);
+});
+
+test("SHORT-SIDE-ENGINE-CAPABILITY: the target triggers on a LOW breach, not a high", () => {
+  // Next bar: low 91 clears tp (~91.5) with margin; high 96 stays well clear of the 105
+  // stop — isolates the low-triggers-target check from any same-bar stop ambiguity.
+  const series = [{ label: "1h", mins: 60, candles: withNextBar(shortEntryPrefix(), [95, 96, 91, 92]) }];
+  const r = backtestMultiTF({ series }, SHORT_CFG);
+  assert.equal(r.trades, 1);
+  assert.equal(r.exits.target, 1);
+});
+
+test("SHORT-SIDE-ENGINE-CAPABILITY: same-bar stop+target ambiguity resolves to the stop, mirroring the long-side convention", () => {
+  // Next bar touches BOTH the 105 stop (high) and the 91.5 tp (low) in one candle.
+  const series = [{ label: "1h", mins: 60, candles: withNextBar(shortEntryPrefix(), [100, 105, 91.5, 95]) }];
+  const r = backtestMultiTF({ series }, SHORT_CFG);
+  assert.equal(r.trades, 1);
+  assert.equal(r.exits.stop, 1);
+  assert.equal(r.exits.target, undefined, "the target must not also register — only one exit per trade");
+  const [x] = r.excursions;
+  assert.ok(Math.abs(x.exitPrice - 105) < 1e-9, "the stop must win the same-bar ambiguity, not the target");
+});
+
+test("SHORT-SIDE-ENGINE-CAPABILITY: direction other than \"long\"/\"short\" throws", () => {
+  const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
+  assert.throws(() => backtestMultiTF({ series }, { entryTf: "1h", direction: "sideways" }));
+});
+
+test("SHORT-SIDE-ENGINE-CAPABILITY: direction \"short\" is rejected for entryModes other than \"bos\"", () => {
+  const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
+  assert.throws(() => backtestMultiTF({ series }, {
+    entryTf: "1h", entryMode: "ma_dip", direction: "short", lockBreakeven: false,
+  }));
+});
+
+test("SHORT-SIDE-ENGINE-CAPABILITY: direction \"short\" is rejected when lockBreakeven is left at its true default", () => {
+  const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
+  assert.throws(() => backtestMultiTF({ series }, { entryTf: "1h", entryMode: "bos", direction: "short" }));
+});
