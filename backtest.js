@@ -629,7 +629,10 @@ export function backtestMultiTF({ series } = {}, {
         pos.open -= f;
         if (pos.open <= 1e-9) {
           trades.push(pos.realized);
-          excursions.push({ r: pos.realized, mae: pos.maxAdverseR, mfe: pos.maxFavorableR, barsHeld: k - pos.openedAt, entry: pos.entry, risk: pos.risk, exitPrice: px });
+          // entryTime: DATE-CLUSTERED-RESAMPLING-AUDIT — the entry candle's unix time, purely
+          // additive (every pre-existing field is unchanged), so callers can group trades by
+          // calendar day without backtest.js knowing anything about resampling itself.
+          excursions.push({ r: pos.realized, mae: pos.maxAdverseR, mfe: pos.maxFavorableR, barsHeld: k - pos.openedAt, entry: pos.entry, risk: pos.risk, exitPrice: px, entryTime: T[pos.openedAt] });
           exits[why] = (exits[why] || 0) + 1;
           pos = null;
         }

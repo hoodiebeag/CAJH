@@ -5277,3 +5277,91 @@ bug.
 `tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js` untouched (`git diff
 --stat` shows exactly these two files). No family run, no `avgR` computed or reported
 anywhere in this item. `npm.cmd test`: 513/513 green (505 prior + 8 new).
+
+## 2026-08-28 — DATE-CLUSTERED-RESAMPLING-AUDIT: both equities CIs widen under date-clustered resampling — `ma_dip`'s effective sample is a quarter of its nominal count
+
+Every equities CI this project has computed (`EQUITIES-BREAKOUT-SIGNIFICANCE`, 2026-08-21;
+`EQUITIES-MADIP-SIGNIFICANCE`, 2026-08-22) used `blockBootstrapCI` (`momentum.mjs`), which blocks
+by ARRAY POSITION. When trades from 30 DJIA names are pooled symbol-by-symbol, trades triggered
+on the same calendar day by the same market-wide move sit at arbitrary positions in that array —
+a position-based block cannot capture that correlation, and each trade is counted as an
+independent observation even when a dozen fired off the same index-wide gap. This item measures
+the actual clustering and recomputes both CIs against it. Full pre-registration text (written
+before any statistic below was computed): `scripts/date-clustered-resampling-audit.mjs`'s header,
+same commit as these results.
+
+**Replication check, before trusting anything new.** The script reproduces both sealed studies'
+exact trade count, avgR, AND the recorded position-blocked 95% CI itself bit-for-bit off the same
+cached candles, same pooled order, same `blockBootstrapCI` call unmodified — confirms this is the
+same population already on record, not a re-derivation:
+
+| family | trades match | avgR match | position-blocked CI match |
+|---|---|---|---|
+| `breakout` | 61 = 61 | +0.186624 = +0.1866 | [-0.27003, +0.61921] = [-0.2700, +0.6192] |
+| `ma_dip` | 475 = 475 | +0.152634 = +0.1526 | [-0.05444, +0.36092] = [-0.0544, +0.3609] |
+
+**Trades-per-day clustering, pooled across all 30 symbols:**
+
+| family | trades | distinct calendar days | largest single-day cluster | mean simultaneously-open positions |
+|---|---:|---:|---:|---:|
+| `breakout` | 61 | 35 | 7 | 8.26 |
+| `ma_dip` | 475 | 124 | 13 | 10.47 |
+
+`breakout`'s trades-per-day histogram: 20 days with 1 trade, 10 with 2, 2 with 3, 2 with 4, 1 with
+7. `ma_dip`'s: 18 days with 1, 23 with 2, 29 with 3, 15 with 4, 12 with 5, 12 with 6, 6 with 7, 2
+with 8, 3 with 9, 2 with 11, 1 with 12, 1 with 13. Neither family is a uniform spread of
+one-trade-per-day — both have real multi-symbol same-day clusters, and `ma_dip` has them more
+often and larger.
+
+**Date-clustered 95% CI, side by side with the position-blocked interval already on record** (both
+via 5000-iteration bootstrap, 2.5/97.5 percentiles; date-clustered seeds 20260830/20260831, fixed
+before running and not revisited):
+
+| family | position-blocked CI (on record) | date-clustered CI (new) | direction |
+|---|---:|---:|---|
+| `breakout` | [-0.2700, +0.6192] | [-0.2904, +0.6863] | widens both tails |
+| `ma_dip` | [-0.0544, +0.3609] | [-0.1010, +0.4083] | widens both tails |
+
+**Effective sample size**, defined here as the number of distinct calendar days carrying at least
+one trade — the date-block bootstrap's actual unit of independent resampling is one day, not one
+trade, so this is the largest number of genuinely independent draws that resampling scheme can
+ever make:
+
+| family | nominal n | effective n (distinct days) | effective / nominal |
+|---|---:|---:|---:|
+| `breakout` | 61 | 35 | 57% |
+| `ma_dip` | 475 | 124 | 26% |
+
+**Explicit statement on `EQUITIES-BREAKOUT-SIGNIFICANCE` and `EQUITIES-MADIP-SIGNIFICANCE`'s
+conclusions: both CIs widen, and `ma_dip`'s widens by more in absolute terms than `breakout`'s.**
+Neither family's headline conclusion flips outright — both position-blocked CIs already included
+zero, and both date-clustered CIs still include zero — so "CI includes zero, not distinguishable
+from noise" was already the honest read and remains it. But the direction of travel is uniformly
+toward WEAKER evidence, not stronger, and `ma_dip` is the one this project has been treating as
+its closest-to-significant equities result (p=0.0648, the nearest any equities test has come to
+the uncorrected 0.05 line). Under date-clustering its nominal 475-trade sample behaves like
+roughly 124 independent days, its CI's lower bound nearly doubles in magnitude (-0.0544 →
+-0.1010), and the "7x breakout's sample size" framing `EQUITIES-MADIP-SIGNIFICANCE` used to argue
+`ma_dip` was the more evidence-backed candidate is weaker than it read at the time: 475 trades is
+7x `breakout`'s 61, but 124 effective days is only 3.5x `breakout`'s 35. This is reported as
+prominently as a tightening result would have been, per this item's own requirement — it is not a
+reversal of either sealed decision, but it is a real reduction in how much independent evidence
+`ma_dip`'s positive point estimate actually carries.
+
+**`MULTIPLE_COMPARISONS_AUDIT.md` not touched.** Its recorded p-values, q-values, and BH-FDR
+ranks for both families are computed from the sign-flip permutation test, not from
+`blockBootstrapCI`, and neither of those recorded numbers changed here — `blockBootstrapCI` itself
+is unmodified and its recorded outputs for these two families are reproduced bit-for-bit above.
+This item's own conditional ("update `MULTIPLE_COMPARISONS_AUDIT.md` if any recorded interval
+changes") therefore does not trigger.
+
+**Engineering note.** New: `scripts/date-clustered-resampling-audit.mjs` (read-only, cache-only —
+does not import `brokers/ibkr.mjs`). `backtest.js` gained one purely additive field,
+`excursions[].entryTime` (the entry candle's unix time; every pre-existing field on that object is
+unchanged, and `results` — the raw per-trade R array every other consumer reads — is untouched) —
+needed because no existing return value exposed a trade's calendar date, and calendar-day grouping
+is the entire point of this item. `momentum.mjs`'s `blockBootstrapCI` used unmodified, not edited;
+the date-block bootstrap is a new, separate function local to this script. `strategy.js`,
+`tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js` untouched. `npm.cmd test`:
+513/513 green before and after (the new `entryTime` field does not break any existing assertion —
+no test in this project deep-equals the full `excursions` object shape).
