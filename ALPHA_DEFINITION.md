@@ -320,6 +320,18 @@ risk fraction chosen after seeing this result — it is treating `ma_dip` as clo
 positive, and uninvestable at any risk fraction this project would responsibly run, exactly the
 shape §2 and `B5-REVERSAL`'s own precedent warned this project to expect.
 
+**Forward-looking planning note, not a reopening of the above (`REQUIRED-SAMPLE-FOR-DURABLE-PASS`,
+2026-08-28, ROADMAP.md).** Using `ma_dip`'s recorded numbers purely as a worked example of this
+document's own condition 4 (what sample would a durable pass actually need), that item found no
+finite, reachable family size at which BH-FDR correction alone makes this effect size
+unrecoverable — required N grows only `O(√log m)` and stays under ~1,400 trades even at family
+sizes orders of magnitude beyond anything this project could run. The mechanism that has actually
+moved `ma_dip` off the survivor list is not family-size growth (a slow, bounded drag) but any
+single future test landing more significant than its own p=0.0116 (a one-step, unbounded push in
+the wrong direction, outside sample size's reach) — the same distinction condition 3's note above
+already draws. This does not revive `ma_dip`, which remains closed on conditions 3 and 5
+independently of anything in that item.
+
 ---
 
 ## 5. Applied retrospectively to the whole record

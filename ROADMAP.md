@@ -5965,3 +5965,134 @@ scheme) — does **not** join that family and triggers no BH-FDR recomputation. 
 touched — new script only (`backtest.js`'s exit-management logic was read and replicated, not
 imported or modified, since the random-entry candidate path has no natural hook into
 `backtestMultiTF`'s own signal-detection branches). `npm.cmd test`: 513/513 green.
+
+## 2026-08-28 — REQUIRED-SAMPLE-FOR-DURABLE-PASS: no evidence of a finite, reachable family size at which BH-FDR correction alone makes `ma_dip`'s effect size unrecoverable — the real threat to durability was never family growth, it is any future test landing more significant than p=0.0116
+
+**This is a planning calculation, not a verdict and not a rescue attempt for `ma_dip`.**
+`ALPHA_DEFINITION.md` condition 4 asks every candidate to report the sample its claim needs
+alongside the sample it has — a question this project has only ever answered once before,
+roughly, for `breakout`. `ma_dip` is the worked example here purely because it is the only
+candidate with a real, recorded effect size and CI to derive from, not because the goal is to
+save it — by the time this item ran, `ma_dip` had already separately failed conditions 3 and 5
+outright (`MADIP-SURVIVABILITY-CONDITION-5`, `MADIP-RANDOM-ENTRY-CONTROL`, both 2026-08-28) and
+`ALPHA_DEFINITION.md` section 4b already treats it as closed on those grounds alone. Nothing
+below reopens that. As pre-registered in this item's own note, this does **not** propose
+narrowing, splitting, or re-scoping `MULTIPLE_COMPARISONS_AUDIT.md`'s correction family — that
+move is precisely the failure mode the audit exists to prevent, and the temptation to make it is
+strongest right when a candidate is falling out, which is exactly the situation ma_dip is now in
+for an unrelated reason. New `scripts/required-sample-for-durable-pass.mjs` (additive,
+cache-only, no candle data, no egress — pure arithmetic on already-recorded numbers).
+
+**Step 1 — derive the per-trade SD, shown rather than asserted.** Source:
+`EQUITIES-MADIP-OUT-OF-SAMPLE` (DJTA-20), mean R = +0.2994, 95% block-bootstrap CI
+[+0.0509, +0.5350], n = 300 holdout trades, one-sided permutation p = 0.0116 (all verified
+against `ALPHA_DEFINITION.md` section 4b and `MULTIPLE_COMPARISONS_AUDIT.md`'s ranked table
+before any calculation ran). Treating the CI half-width as `1.96 * SE` under a normal
+approximation: lower half-width 0.2485, upper half-width 0.2356, average 0.24205 → SE = 0.12349
+→ per-trade SD = SE·√300 = **2.1390R**. Effect size d = mean/SD = **0.1400** — small, which is
+exactly why hundreds of trades were needed to see this at all.
+
+**Step 2 — calibrate required-N off the empirically observed p, not off the SD-implied normal
+approximation.** The SD above implies a normal-theory z of 2.4244, but the actual one-sided
+permutation p (0.0116) implies z = 2.2701 — the two differ, as expected, because a
+block-bootstrap permutation p is not exactly normal (fatter tails, autocorrelation, no claim
+here that it should match). Rather than force the mismatch, required-N below is computed by
+scaling **directly off the observed z = 2.2701 at n = 300**, using the standard CLT result that
+a test statistic scales as `sqrt(N)` at fixed effect size — this only assumes the permutation
+p's sampling behavior scales the way any CLT-governed statistic does, not that it is exactly
+normal. `N_req(rank, m) = 300 * (z_req / 2.2701)^2`, where `z_req = Φ⁻¹(1 - rank·q/m)` and
+`q = 0.05`.
+
+**Step 3 — required N by rank and family size, task-requested sizes (current family size is
+m=20, ma_dip rank 4, per `MULTIPLE_COMPARISONS_AUDIT.md`):**
+
+| rank \ family size | 19 | 25 | 30 | 40 |
+|---|---:|---:|---:|---:|
+| 1 (best plausible) | 454 | 483 | 502 | 533 |
+| 2 | 381 | 410 | 429 | 459 |
+| 3 | 340 | 368 | 387 | 417 |
+| **4 (current observed rank)** | **310** | **338** | **357** | **387** |
+| 5 | 288 | 316 | 334 | 364 |
+
+At rank 4, m=19, required N is 310 against an actual 300 — matching `ALPHA_DEFINITION.md`'s own
+finding that condition 3 flipped to FAIL right around n=18–19 by a very small margin. This
+table's own numbers reproduce that near-miss rather than contradicting it, which is the main
+internal-consistency check for this method.
+
+**Step 4 — the ceiling probe: does required N diverge as the family grows without bound, holding
+rank fixed near the top (the hardest realistic case — a candidate that stays among the handful
+most significant no matter how large the family gets)?**
+
+| family size | required p | required N |
+|---:|---:|---:|
+| 20 | 2.5e-3 | 459 |
+| 50 | 1.0e-3 | 556 |
+| 100 | 5.0e-4 | 631 |
+| 1,000 | 5.0e-5 | 882 |
+| 10,000 | 5.0e-6 | 1,136 |
+| 100,000 | 5.0e-7 | 1,393 |
+
+**No, it does not diverge, and there is no finite reachable family size at which BH-FDR
+correction alone makes this effect size unrecoverable.** Required N grows only as
+`O(sqrt(log m))` — this is the whole point of BH-FDR over a flat Bonferroni correction, and rank
+1 at any family size is the Bonferroni-equivalent worst case, so this bound applies to every
+gentler rank too. Going from the current family size (20) to a family **5,000 times larger**
+(100,000 — far beyond anything this project could plausibly run) only triples the required
+sample, from 459 to 1,393. That number is answerable with a moderately larger universe or
+longer holdout window (Step 6 below); it was never going to be unreachable on arithmetic grounds
+alone. **The honest answer to "does the ceiling exist" is: not from family-size growth. Report
+this plainly as the finding, not as a reason to relax vigilance about the family size still
+growing — see Step 5.**
+
+**Step 5 — rank sensitivity at the CURRENT family size (m=20), which is the actually
+informative comparison:**
+
+| rank | required p | required N |
+|---:|---:|---:|
+| 4 (current) | 0.01000 | 316 |
+| 8 | 0.02000 | 246 |
+| 12 | 0.03000 | 206 |
+| 16 | 0.04000 | 179 |
+| 19 | 0.04750 | 163 |
+
+Required N falls as rank worsens at fixed family size — this is correct BH-FDR arithmetic (the
+per-rank threshold is deliberately more lenient further down the ranking, which is what bounds
+the expected false-discovery proportion regardless of rank) and it must not be misread as "a
+worse rank is safer." It isn't a lever `ma_dip` or any candidate controls: rank only worsens when
+some *other* study reports a smaller p-value, an event this arithmetic does not predict and
+sample size cannot buy. **This is the actual mechanism that has already moved `ma_dip` from
+survivor to non-survivor once (`ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL` and
+`WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC` both landed near the bottom of the ranking and grew
+the denominator without changing ma_dip's rank; a future study landing *above* it, at p<0.0116,
+would instead grow ma_dip's rank number directly).** Family size alone is a slow, bounded drag
+(Step 4); a single more-significant competing result is a one-step, unbounded-in-principle push
+in the wrong direction. The two are often conflated in casual readings of "the family keeps
+growing" — they are not the same threat, and this item's own numbers are the demonstration.
+
+**Step 6 — are the required trade counts (roughly 300–1,400 across every scenario above)
+reachable on the equity universes this project has access to?** From the two already-spent
+holdouts: `DJIA-30` (475 trades / 30 symbols over the 2026-01-14→2026-08-19 holdout, 0.5945
+years) = **26.63 trades/symbol/year**; `DJTA-20` (300 trades / 20 symbols, same window) =
+**25.23 trades/symbol/year** — consistent across universes. At that rate, reaching even the
+upper end of Step 4's range (1,393 trades) from a DJIA-30-sized (30-symbol) universe would need
+roughly **1,393 / 30 / 26.6 ≈ 1.75 years of holdout** — under three times the current holdout
+span. This project's currently *cached* equity history is exactly 2024-08-20 → 2026-08-19 (501
+daily bars, verified directly from `research-cache/equities-1d/AAPL.json`, not asserted) — a
+fixed 2-year window, of which the current holdout is already the back ~7 months. Extending the
+holdout that far would require either (a) a longer daily-bar pull than this project has ever
+fetched from IBKR — untested and unverified by this item, which is cache-only with no egress, so
+this is named as an open question, not answered — or (b) a larger point-in-time universe (more
+symbols) within the same cached window. **Neither option is free**: both `DJIA-30` and `DJTA-20`
+are independently flagged "spent" in this document's own dataset-reuse audit (more than one
+study has already scored each), so re-running either on the same cache reopens exactly the
+data-reuse concern that audit exists to track, and a larger universe raises the trade-overlap/
+independence question `CROSS-FAMILY-TRADE-OVERLAP-AUDIT` (queued separately) is built to
+measure. **The required sample sizes here are arithmetically modest and plausibly reachable in
+principle; whether this project should actually spend a fresh dataset reaching them is a
+separate, human-scale judgment this item does not make.**
+
+**Engineering note.** New `scripts/required-sample-for-durable-pass.mjs` only, additive,
+cache-only, no egress, computes no new p-value, tests no hypothesis, and does not join
+`MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family. No `backtest.js`/`strategy.js`/
+`tournament.mjs`/`monitor.js`/`bot.js`/`trader.js`/`scanner.js` file touched. `npm.cmd test`:
+513/513 green.
