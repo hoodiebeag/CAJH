@@ -911,7 +911,7 @@
    },
    {
     "id": "SHORT-SIDE-ENGINE-CAPABILITY",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "backtest.js, strategy.js — first genuine production change in this research program; plus new tests",
     "depends_on": [],
@@ -1017,14 +1017,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-14T13:12:12.040Z",
-   "agent": "scheduled-loop",
-   "action": "TEST2-VOL-CONFIRMED-BREAKOUT completed",
-   "detail": "Volume-confirmed breakout study (3 thresholds, entryGate-based, fixed calendar split): all TRAIN-GATE-FAIL on avgR clause, no threshold selected, holdout never examined. Fourth and final item in human-authored TEST1-4 queue now closed (all FAIL/abandoned or non-verdict). Control back to IDLE.",
-   "commit": "3e348c5",
-   "tests": "343/343 green"
-  },
   {
    "ts": "2026-08-14T14:10:00.000Z",
    "agent": "scheduled-task-cajh-loop-check",
@@ -1812,6 +1804,14 @@
    "detail": "GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC: 9th consecutive cheap-probe reconfirmation of GDELT DOC API outage (HTTP_CODE:000/exit 28 vs control blockchain.info HTTP_CODE:200 in 0.42s), now ~8h57m since first detection at 21:05:00Z 2026-08-27. No code change. Pull brought no new commits. Restock check unchanged (ff9ef70 still latest touching commit). Notification skipped -- unresolvable-blocked sent 04:02:07Z, ~2h ago, within 6h dedup window.",
    "commit": null,
    "tests": "not run (no code change)"
+  },
+  {
+   "ts": "2026-08-28T11:20:00.000Z",
+   "agent": "executor",
+   "action": "engineering:short-side-engine-capability",
+   "detail": "SHORT-SIDE-ENGINE-CAPABILITY done: backtestMultiTF gained a direction param (\"long\" default, byte-for-byte unchanged, proven by an explicit no-op test). Short entries only wired for entryMode \"bos\", reusing the already-detected swing-HIGH pivot as the mirror of the long swing-LOW entry. Stop above entry/target below entry, stop triggers on a high, target triggers on a low, same-bar ambiguity resolves to the stop -- all covered by new tests in backtest.test.mjs (mirrors the already-trusted long BOS fixture through price 200 rather than hand-inventing a new one). trailR/partialAtR/trailingTpPct/lockBreakeven/exitOnSwingHigh/requireHigherLow/minRoomR are rejected outright (throw) for direction \"short\" rather than silently mishandled -- none proven direction-aware this item. Borrow cost NOT modeled, documented in both the backtest.js comment and ROADMAP.md, along with the unbounded-above-loss asymmetry for future drawdown work. No family run, no avgR anywhere. tournament.mjs/strategy.js/monitor.js/bot.js/trader.js/scanner.js untouched (git diff --stat confirmed 2 files pre-commit). Chose this pending item over re-probing GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC, which this firing re-confirmed (cheap curl probe, HTTP_CODE:000/exit 28 vs control blockchain.info HTTP_CODE:200) is still down -- 9 consecutive prior reconfirmations of the same exogenous outage with no new agent-actionable lever, matching this project's own established precedent (STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC and MACRO-REGIME-EQUITIES-SPLIT-FRACTION-DIAGNOSTIC firings both did the same) for working a different queue item rather than repeating an identical failed probe. control left untouched (still BLOCKED/GDELT) per that same precedent -- this firing completed a different, unrelated item. notifications.unresolvable-blocked last sent 04:02:07Z, ~7h ago but still governs the GDELT reasonKey specifically, unaffected by this item; no new notification triggers apply (control not newly BLOCKED, queue not empty, no new PASS verdict).",
+   "commit": "5420409",
+   "tests": "513/513 green (505 prior + 8 new)"
   }
  ],
  "automation": {
