@@ -632,7 +632,10 @@ export function backtestMultiTF({ series } = {}, {
           // entryTime: DATE-CLUSTERED-RESAMPLING-AUDIT — the entry candle's unix time, purely
           // additive (every pre-existing field is unchanged), so callers can group trades by
           // calendar day without backtest.js knowing anything about resampling itself.
-          excursions.push({ r: pos.realized, mae: pos.maxAdverseR, mfe: pos.maxFavorableR, barsHeld: k - pos.openedAt, entry: pos.entry, risk: pos.risk, exitPrice: px, entryTime: T[pos.openedAt] });
+          // why: MADIP-REALISED-R-CONDITION-2 — the reason the closing leg fired (same value
+          // just recorded into `exits[why]` below), attached per-trade so callers can break
+          // down R by exit reason without backtest.js knowing anything about that analysis.
+          excursions.push({ r: pos.realized, mae: pos.maxAdverseR, mfe: pos.maxFavorableR, barsHeld: k - pos.openedAt, entry: pos.entry, risk: pos.risk, exitPrice: px, entryTime: T[pos.openedAt], why });
           exits[why] = (exits[why] || 0) + 1;
           pos = null;
         }

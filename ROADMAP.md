@@ -5648,3 +5648,75 @@ strategy code touched (`backtest.js`, `strategy.js`, `tournament.mjs`, `monitor.
 unmodified. `research-cache/equities-1d/` read as cached (no egress; this item was scoped
 no-egress and ran that way). `npm.cmd test`: 513/513 green (no test file added — matches this
 family's own precedent for read-only research scripts under `scripts/`).
+
+---
+
+## MADIP-REALISED-R-CONDITION-2 — realised R is ~2.5-2.65, not `ma_dip`'s configured 5; the
+win-rate margin is +3.5pp on DJIA-30 (inside its own noise) and +7.1pp on DJTA-20 (outside it) (2026-08-28)
+
+**Scoping.** `ALPHA_DEFINITION.md` section 4b lists `ma_dip`'s condition 2 (win-rate margin) as
+"not evaluated": breakeven at the configured `tpR: 5` is a 16.7% win rate, but `lockBreakeven`
+and `maxHold` truncate winners, so the *real* breakeven is higher and was never computed. This
+item computes it, on both equity universes `ma_dip` has been scored on, reported separately, and
+decomposes realised R by exit reason. Descriptive measurement — no parameter changed, no new
+p-value, not an entry in `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family.
+
+**Definitions, pre-registered before running.** Realised R = mean(winning R) / mean(|losing R|),
+win = net R > 0, loss = net R <= 0 (a breakeven-exact trade counts as a loss — it did not clear
+the round-trip cost). Real breakeven win rate = 1/(1+realisedR). Margin = observed win rate minus
+breakeven win rate, in percentage points. Condition 2 requires this margin pre-registered *before*
+the holdout is scored — not possible retrospectively, since `ma_dip` was first scored on
+2026-08-22 with no margin threshold set. Said plainly rather than inventing one after the fact:
+this item instead reports a two-sided 95% Wald interval on the observed win rate and states
+whether the breakeven win rate falls inside it (margin indistinguishable from the estimate's own
+sampling noise) or outside it (margin exceeds that noise band) — a noise check, not a
+significance test.
+
+**Engineering note first, since it's the one code change here.** `backtest.js`'s
+`excursions.push(...)` gained one additive field, `why` (the same reason already recorded into
+`exits[why]`, now attached per-trade) — no existing field changed, no behavior changed, confirmed
+by `totalRMatchesBacktest: true` on both universes (this script's own pooled per-trade R sum
+reproduces `backtestMultiTF`'s independently-computed `totalR` to floating-point precision) and by
+`npm.cmd test` staying 513/513 green. No other file in `backtest.js`/`strategy.js`/`tournament.mjs`/
+`monitor.js`/`bot.js`/`trader.js`/`scanner.js` touched.
+
+**Results reproduce the known headline figures exactly**, an unplanned cross-check that this
+script's cost basis/config matches `EQUITIES-MADIP-SIGNIFICANCE`/`EQUITIES-MADIP-OUT-OF-SAMPLE`
+verbatim: DJIA-30 475 trades / avgR +0.15263 (cited: +0.1526), DJTA-20 300 trades / avgR +0.29939
+(cited: +0.2994).
+
+| universe | trades | wins | losses | avgWin | avgLoss | realised R | breakeven win rate | observed win rate | margin (pp) | breakeven inside 95% Wald CI |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| DJIA-30 | 475 | 147 | 328 | 3.1433 | 1.1877 | 2.6466 | 27.42% | 30.95% | +3.52 | **yes — [26.79%, 35.10%]** |
+| DJTA-20 | 300 | 107 | 193 | 3.0028 | 1.1994 | 2.5036 | 28.54% | 35.67% | +7.12 | **no — [30.25%, 41.09%]** |
+
+Realised R lands at roughly half the configured `tpR: 5` on both universes — the win-rate margin
+is real (positive) on both, but the noise check splits: on DJIA-30 the +3.52pp margin sits fully
+inside the observed win rate's own 95% Wald band, i.e. not distinguishable from sampling noise at
+this sample size; on DJTA-20 the +7.12pp margin sits outside it. Read together with condition 3
+(§4b: `ma_dip` currently FAILS the BH-FDR leg at family size 20), this is one more condition where
+the two universes disagree rather than jointly confirm.
+
+**Exit-reason decomposition — why realised R falls short of 5, and where net R actually comes
+from.** `lockBreakeven` ("trail/be" in `backtest.js`'s naming — `ma_dip`'s config sets no
+`trailR`/`trailStartR`, so `trailing` never arms and `trail/be` here means the breakeven lock
+specifically) accounts for a minority of trades (14.3% DJIA-30, 17.3% DJTA-20) but a
+disproportionate share of net R, because full stop-outs and full target-hits are large and
+land close to opposite in aggregate:
+
+| universe | stop: trades / share of total R | target: trades / share of total R | trail/be: trades / share of total R | timeout censoring |
+|---|---|---|---|---|
+| DJIA-30 | 328 (69.1%) / -537.3% | 79 (16.6%) / +513.0% | 68 (14.3%) / **+124.4%** | 0% (0/475) |
+| DJTA-20 | 193 (64.3%) / -257.7% | 55 (18.3%) / +293.3% | 52 (17.3%) / **+64.5%** | 0% (0/300) |
+
+("share of total R" exceeds 100% for the stop/target legs because they nearly cancel — full
+stop-outs and full 5R target-hits are both large relative to the small net total, so the
+smaller breakeven-lock wins end up contributing more than the whole net result.) Two things
+follow: realised R sits below 5 mainly because most winners are breakeven-lock exits (small,
+positive) rather than full target hits, not because of timeout censoring — `timeoutCensoringRate`
+is exactly 0 on both universes (`maxHold=100`, unmodified, never binds for this family on daily
+equity bars), so `WIDE-STOP-HIGH-TARGET-ASYMMETRY`'s prior timeout-censoring concern does not
+apply to `ma_dip` specifically.
+
+**`ALPHA_DEFINITION.md` section 4b condition-2 row and its explanatory bullet updated** from "not
+computed"/"not evaluated" to this result; no other row changed. **`npm.cmd test`: 513/513 green.**

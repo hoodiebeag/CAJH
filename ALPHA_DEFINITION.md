@@ -159,15 +159,16 @@ family-wide BH-FDR across all 15 formal-NHST entries**.
 | test | required | observed | verdict |
 |---|---|---|---|
 | 1. positive net expectancy | `E > 0` | **+0.2994R** net of real cost | **pass** |
-| 2. win rate margin | > `1/(1+R)` on **realised** R | not computed | **not evaluated** |
+| 2. win rate margin | > `1/(1+R)` on **realised** R | DJIA-30: R=2.65, margin +3.52pp (inside 95% Wald noise); DJTA-20: R=2.50, margin +7.12pp (outside it) | **measured, 2026-08-28 — not pre-registerable retrospectively; splits by universe** |
 | 3. CI excludes zero **and** survives BH-FDR | both | CI **[+0.0509, +0.5350]** holds; **q=0.0522 at n=18** | **FAIL as of 2026-08-27** |
 | 4. sample adequate | ~401 for 80% power at this effect | **300** | **marginal** |
 | 5. survivable | drawdown ceiling + streak stated | not computed | **not evaluated** |
 | 6. reproduced out-of-sample | yes | **yes — larger on the fresh universe** | **pass** |
 
-**Two of six pass as of 2026-08-27, two are uncomputed, one is marginal, and condition 3 —
-which passed when this section was written on 2026-08-22 — has since failed.** It got further
-than anything else ever has here, and it is not an alpha. The distinction matters: this document exists
+**Two of six pass as of 2026-08-28, condition 2 is now measured but does not cleanly pass or fail
+(it splits by universe), one remains uncomputed, one is marginal, and condition 3 — which passed
+when this section was written on 2026-08-22 — has since failed.** It got further than anything
+else ever has here, and it is not an alpha. The distinction matters: this document exists
 precisely so that "the best result we have" and "clears the bar" stay separate ideas.
 
 ### What is genuinely new
@@ -262,13 +263,19 @@ went the other way, +0.1866R → −0.0854R, sign flipped.
 - **Every result here is long-only** (`blackboard.engine_is_long_only`): the backtest engine has
   no short path. This is a long-only result measured over one window on one sector index, and
   it has not been separated from that sector's own drift.
-- **Condition 2 needs realised R, not `ma_dip`'s `tpR: 5` target.** Breakeven at a true R of 5
-  is a 16.7% win rate, but breakeven locks and timeouts truncate winners, so realised R is
-  systematically lower and the real breakeven is higher. The margin is uncomputed.
+- **Condition 2, measured 2026-08-28 (`MADIP-REALISED-R-CONDITION-2`).** Realised R is 2.65
+  (DJIA-30) / 2.50 (DJTA-20), roughly half the configured `tpR: 5` — driven mainly by breakeven-
+  lock exits pulling the winner average down, not by timeout censoring (0% on both universes).
+  The win-rate margin over the *real* breakeven is positive on both universes (+3.52pp / +7.12pp)
+  but a two-sided 95% Wald noise check splits: the DJIA-30 margin sits inside the observed win
+  rate's own noise band, the DJTA-20 margin sits outside it. The margin could not be
+  pre-registered before the fact (both holdouts were already scored), so this is a noise
+  assessment, not a pass/fail against a threshold.
 
-**The right next step is not promotion and not a third universe.** It is closing conditions 2
-and 5 on the evidence that already exists, and running the resampling audit that could
-invalidate condition 3. All three are cheap relative to what they protect against.
+**The right next step is not promotion and not a third universe.** Condition 2 is now closed
+(above). What remains is condition 5 on the evidence that already exists — cheap relative to
+what it protects against, and, per the pattern above, condition 3 has already failed on its own
+terms in the meantime.
 
 ---
 
