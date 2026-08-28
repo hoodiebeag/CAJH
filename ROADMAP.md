@@ -6402,3 +6402,76 @@ read-only, cache-only, no network egress). `backtest.js`, `strategy.js`, `tourna
 actual staged diff before commit that no protected trading-safety identifier appears in it.
 `npm.cmd test`: 513/513 green (no production code changed, so no new tests were required or
 added, matching this project's convention for prior read-only diagnostic scripts).
+
+## 2026-08-28 — BOS-SHORT-EQUITIES-BASELINE: the first empirical look at the short side is deeply net-negative, before any borrow cost — long-only bias is not just a coverage gap, direction matters
+
+`SHORT-SIDE-ENGINE-CAPABILITY` (2026-08-28) added a `direction: "short"` path to
+`backtestMultiTF` (`bos` entryMode only — the mirror of a long entry's confirmed swing low is a
+confirmed swing high) but deliberately ran no family and reported no result.
+`engine_is_long_only` (blackboard finding, 2026-08-22) had already flagged that every positive
+equities number on record (`EQUITIES-BASELINE-PORT`, `EQUITIES-ALL-FAMILIES-BASELINE`,
+`EQUITIES-MADIP-SIGNIFICANCE`/`-OUT-OF-SAMPLE`) is a long-only number over a window in which the
+index rose, on IBKR — where shorting is actually available (unlike this project's Kraken venue)
+— and deliberately deferred queuing this item until the queue drained rather than padding it in
+early. This item is that first look.
+
+**Config, pre-registered exactly per this item's own work_queue spec:** `{ entryMode: "bos",
+trendGate: false, alignMode: "none", minStopPct: .015, maxStopPct: .06, tpR: 4, lockBreakeven:
+false }`, run with both `direction: "long"` and `direction: "short"` against the identical
+config so the comparison isolates direction only. `trendGate`/`alignMode`/`lockBreakeven`
+semantics in this engine are proven only for longs (`SHORT-SIDE-ENGINE-CAPABILITY`'s own
+writeup) and were not inverted for shorts — turning them off for **both** directions avoids
+confounding the long-vs-short comparison with a filter that was never validated for shorts.
+`lockBreakeven: false` is also mechanically required: `direction: "short"` throws if it is left
+at its true default (`backtest.js`'s short-direction guard, added by
+`SHORT-SIDE-ENGINE-CAPABILITY`). **This means neither run here is directly comparable to
+`EQUITIES-ALL-FAMILIES-BASELINE`'s own `bos` row** (`trendGate: true, lockBreakeven: true`) —
+stated plainly, not implied away.
+
+**Data — DJIA-30 cache, cache-only, no live IBKR Gateway call:** same universe, 0.70
+train/holdout split, and cost basis as `EQUITIES-ALL-FAMILIES-BASELINE` (IBKR Fixed
+$0.005/share modeled per-symbol via that symbol's own holdout `avgClose`, 5bps/side slippage).
+New script only: `scripts/bos-short-equities-baseline.mjs` (additive, read-only).
+
+**Result (holdout only, 30/30 symbols cached and used):**
+
+| Direction | Trades | Gross avgR | Net avgR |
+|---|---:|---:|---:|
+| long | 148 | +0.2162 | +0.1838 |
+| short | 188 | **-0.3729** | **-0.4086** |
+| pooled (descriptive only) | 336 | -0.1134 | -0.1477 |
+
+The long side clears comfortably positive on this config — consistent with
+`EQUITIES-ALL-FAMILIES-BASELINE`'s prior `bos` numbers in direction, though not in magnitude,
+per the comparability gap above. The short side is deeply net-negative, both gross and net,
+with more trades than the long side (188 vs 148) over the same window: `bos`'s short-entry
+candidate (confirmed swing-high break) fires more often than its long-entry mirror on a rising
+index, and loses when it fires. This is the expected direction given the window (the index
+rose), but the magnitude — worse than -0.37R gross, before any borrow cost — is new
+information: it is not merely that the short side lacks edge, it is actively and substantially
+harmful on this config, with no filter tuning attempted (none was in scope; `trendGate`/
+`alignMode` are switched off for both directions per the pre-registration above, not tuned per
+direction).
+
+**Pooled (`pooledDescriptiveOnly`, -0.1477R net, 336 trades) is reported descriptively only —
+not a promoted combined-direction strategy.** Running both directions and mechanically adding
+them is not a real "trade both ways" system (no logic here decides which direction to take
+when); it is included only so the net drag the short side would add to an unmodified long-only
+`bos` book is visible in one place.
+
+**Borrow cost is NOT modeled anywhere in this engine** (`SHORT-SIDE-ENGINE-CAPABILITY`'s own
+caveat, restated here). The -0.4086R short net figure is *before* borrow cost, and is already
+decisively negative before that unmodeled cost is even added — borrow cost would only widen an
+already-failing number, not rescue a marginal one. No further short-side work is implied by
+this result; the short side is not a candidate for anything further on this config without a
+materially different entry logic, which is out of this item's scope.
+
+**`VERDICTS.md` is not touched** (breadth/diagnostic-only item, matching
+`EQUITIES-ALL-FAMILIES-BASELINE`'s own precedent for a first-look study; no pre-registered gate
+was defined for this item to clear or fail against).
+
+**Engineering note.** New `scripts/bos-short-equities-baseline.mjs` only (additive,
+read-only, cache-only, no network egress). `backtest.js`/`strategy.js`/`tournament.mjs`/
+`monitor.js`/`bot.js`/`trader.js`/`scanner.js` — all untouched (the `direction` param and the
+`bos` short-entry candidate already existed from `SHORT-SIDE-ENGINE-CAPABILITY`; this item only
+calls them). `npm.cmd test`: 513/513 green (no production code changed).
