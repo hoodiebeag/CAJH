@@ -5895,3 +5895,73 @@ case remains open for this candidate. Descriptive/economic-gate study: no p-valu
 test — does **not** join `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family and triggers no
 BH-FDR recomputation. No `backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/`bot.js`/
 `trader.js`/`scanner.js` file touched — new script only. `npm.cmd test`: 513/513 green.
+
+## 2026-08-28 — MADIP-RANDOM-ENTRY-CONTROL: `ma_dip`'s positive expectancy does not clear a matched-geometry random-entry null on either universe
+
+`ma_dip` is this project's only equities candidate that has ever cleared conditions 1 and 3
+together (`ALPHA_DEFINITION.md` §4b). Nothing had ever asked the question this item asks: is
+`+0.1526R` (DJIA-30) / `+0.2994R` (DJTA-20) attributable to the entry rule itself (buy a
+≥2%-below-20-day-MA dip), or would any random long entry with the same stop-distance geometry,
+5R target, breakeven lock, and hold horizon do about as well in this window — exactly the check
+`LOG-REGRESSION-BANDS-CRYPTO` had to run for its own outperformance figure, where 23 of 24
+assets had negative buy-and-hold before the headline number meant anything.
+
+**Construction, pre-registered before any random return was computed** (full block in new
+`scripts/madip-random-entry-control.mjs`, additive, cache-only, reuses `EQUITIES-MADIP-
+SIGNIFICANCE`'s / `EQUITIES-MADIP-OUT-OF-SAMPLE`'s / `MADIP-SURVIVABILITY-CONDITION-5`'s frozen
+`ma_dip` config and cost basis verbatim, same two universes/caches, DJIA-30 and DJTA-20,
+reported separately): for each synthetic trade, a symbol is drawn UNIFORMLY from the universe's
+active symbols (not weighted by how often the real signal fired there) and an entry index
+UNIFORMLY from that symbol's own holdout candles, entry price = that candle's close (matching
+`ma_dip`'s own `entry = C[k]`). Stop distance is drawn WITH REPLACEMENT from the REAL trades'
+own empirical stop-distance distribution (risk/entry) — a random entry has no dip to place a
+structural stop under, and using structural placement would silently turn this into a test of
+stop placement instead of entry timing. Exit management replicates `backtest.js`'s own generic
+lockBreakeven/target/timeout path byte-for-byte for the no-partial, no-trailing case `ma_dip`'s
+config actually uses (`strategy.js`'s own BE_TRIGGER_R=2.0/BE_LOCK_R=0.2/FEE_BUFFER_PCT=0.018
+and `backtest.js`'s own MAX_HOLD=100, all unmodified). Sample size matched EXACTLY per universe
+against a fresh `collectTrades` run (not hand-typed from prior citations): K=2000 draws per
+universe, each pooling avgR across its full matched trade count, building a null distribution
+of DRAW-LEVEL pooled avgR. Decision rule, pre-registered: `ma_dip`'s entry rule is credited with
+adding information only if its real result exceeds the null distribution's 95th percentile —
+this project's standard one-sided 5% convention — not moved after seeing the result.
+
+**Result — real trade counts and avgR reproduce the cited figures exactly (475 trades /
++0.152634R DJIA-30, 300 trades / +0.299395R DJTA-20, both matching ROADMAP.md's citations to
+four decimal places, confirming the frozen config and caches are unchanged), and `ma_dip` does
+NOT clear the pre-registered bar on either universe:**
+
+| universe | real trades | real avgR | null mean | null SD | percentile of real result | fraction of draws beating real | passes 95th-pctile bar |
+|---|---:|---:|---:|---:|---:|---:|---|
+| DJIA-30 | 475 | +0.1526 | +0.1493 | 0.1038 | **53rd** | 46.95% | **NO** |
+| DJTA-20 | 300 | +0.2994 | +0.1637 | 0.1277 | **85th** | 14.80% | **NO** |
+
+**The null's own mean is reported prominently, per this project's `LOG-REGRESSION-BANDS-CRYPTO`
+precedent (state the window's own tailwind before any claim about the signal):** random long
+entries with `ma_dip`'s exact stop/target/breakeven geometry already average strongly positive R
+in this window, on both universes, before any entry-timing skill is credited — a
+beta-and-payoff-structure finding (a tight structural-sized stop against a 5R target with a
+breakeven lock is a favourable asymmetric bet in a broadly rising market, independent of *when*
+it is entered), not evidence the ≥2%-below-20MA dip condition is doing identifiable work.
+DJIA-30's real result is barely distinguishable from the geometry-matched null — an outright
+coin-flip against it (53rd percentile, 47% of random draws beat it). DJTA-20 is meaningfully
+closer to clearing the bar (85th percentile) but still falls short of the pre-registered
+threshold. Data-edge case disclosed: 1.85% (DJIA-30) / 2.61% (DJTA-20) of simulated draws ran
+past their symbol's holdout data before any exit fired and were force-closed at the last
+available close rather than silently dropped — small enough not to plausibly change either
+verdict, reported rather than assumed negligible.
+
+**`ALPHA_DEFINITION.md` section 4b updated: condition 1's table row keeps its literal pass**
+(`E > 0` is still true) **but is annotated pointing to this finding, and a new bullet under
+"What is not established" states the result in full** — this does not flip a pass to a fail
+(the condition as defined is a strict positivity check, and this is a different, harder
+question: does the positivity trace to the entry rule specifically), but it materially weakens
+what condition 1's pass was ever entitled to claim standing alone, and the section's closing
+paragraph is updated to note it. Descriptive null-control study, not a formal-NHST test in
+`MULTIPLE_COMPARISONS_AUDIT.md`'s sense (the "null" is a resampling control against matched risk
+geometry, not a p-value against a theoretical distribution under a sign-flip/permutation
+scheme) — does **not** join that family and triggers no BH-FDR recomputation. No
+`backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/`bot.js`/`trader.js`/`scanner.js` file
+touched — new script only (`backtest.js`'s exit-management logic was read and replicated, not
+imported or modified, since the random-entry candidate path has no natural hook into
+`backtestMultiTF`'s own signal-detection branches). `npm.cmd test`: 513/513 green.

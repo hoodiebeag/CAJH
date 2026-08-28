@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import { parseConfirmedSell } from "./trader.js";
 import {
@@ -82,15 +85,27 @@ test("manual and scheduled money-path work cannot overlap the same single-flight
 });
 
 test("structural-level cooldown blocks the same pivot until its exact hand-computed expiry", () => {
-  resetLevelCooldownsForTests();
-  const buy = { tf: "4h", pivotIndex: 12, pivotPrice: 90, trigger: 101 };
-  const now = Date.UTC(2026, 0, 1);
-  const expiry = now + 24 * 240 * 60 * 1000;
+  // markLevelTraded() persists to DATA_DIR/level_cooldowns.json for real (scanner.js has no
+  // storage mock) — isolate this test to a scratch dir so it can't read back a still-"unexpired"
+  // record (per this test's own fixed `now`) left on disk by an earlier run of this same test.
+  const prevDataDir = process.env.DATA_DIR;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-levels-"));
+  process.env.DATA_DIR = dir;
+  try {
+    resetLevelCooldownsForTests();
+    const buy = { tf: "4h", pivotIndex: 12, pivotPrice: 90, trigger: 101 };
+    const now = Date.UTC(2026, 0, 1);
+    const expiry = now + 24 * 240 * 60 * 1000;
 
-  assert.equal(levelOnCooldown("BTC", buy, now), false);
-  assert.equal(markLevelTraded("BTC", buy, 240, now), true);
-  assert.equal(levelOnCooldown("BTC", buy, expiry - 1), true);
-  assert.equal(levelOnCooldown("BTC", buy, expiry), false);
+    assert.equal(levelOnCooldown("BTC", buy, now), false);
+    assert.equal(markLevelTraded("BTC", buy, 240, now), true);
+    assert.equal(levelOnCooldown("BTC", buy, expiry - 1), true);
+    assert.equal(levelOnCooldown("BTC", buy, expiry), false);
+  } finally {
+    resetLevelCooldownsForTests();
+    if (prevDataDir === undefined) delete process.env.DATA_DIR; else process.env.DATA_DIR = prevDataDir;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("reconciliation classifies stablecoins, dust, orphans, and ghosts without trading", () => {

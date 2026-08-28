@@ -158,7 +158,7 @@ family-wide BH-FDR across all 15 formal-NHST entries**.
 
 | test | required | observed | verdict |
 |---|---|---|---|
-| 1. positive net expectancy | `E > 0` | **+0.2994R** net of real cost | **pass** |
+| 1. positive net expectancy | `E > 0` | **+0.2994R** net of real cost | **pass, but see note below — the entry rule itself does not clear its own null (`MADIP-RANDOM-ENTRY-CONTROL`, 2026-08-28)** |
 | 2. win rate margin | > `1/(1+R)` on **realised** R | DJIA-30: R=2.65, margin +3.52pp (inside 95% Wald noise); DJTA-20: R=2.50, margin +7.12pp (outside it) | **measured, 2026-08-28 — not pre-registerable retrospectively; splits by universe** |
 | 3. CI excludes zero **and** survives BH-FDR | both | CI **[+0.0509, +0.5350]** holds; **q=0.0522 at n=18** | **FAIL as of 2026-08-27** |
 | 4. sample adequate | ~401 for 80% power at this effect | **300** | **marginal** |
@@ -282,8 +282,35 @@ went the other way, +0.1866R → −0.0854R, sign flipped.
   pre-registered before the fact (both holdouts were already scored), so this is a noise
   assessment, not a pass/fail against a threshold.
 
+- **Condition 1's positive expectancy is not distinguishable from long exposure with matched
+  risk geometry (`MADIP-RANDOM-ENTRY-CONTROL`, 2026-08-28).** This item asked the question
+  condition 1's raw pass never answers: is `+0.1526R`/`+0.2994R` attributable to `ma_dip`'s
+  entry rule (a ≥2%-below-20MA dip), or would any random long entry with the same stop-distance
+  geometry, target, breakeven lock, and hold horizon do about as well in this window? A
+  matched-geometry null was built per universe — K=2000 draws, each drawing 475 (DJIA-30) / 300
+  (DJTA-20) random (symbol, day) entries uniformly from the same universe and same holdout
+  calendar coverage as the real trades, each given a stop distance resampled from the REAL
+  trades' own empirical stop-distance distribution (not a structural stop, since a random entry
+  has no dip to place one under), then run through `backtest.js`'s own unmodified lockBreakeven/
+  target/timeout exit path. Pre-registered decision rule: `ma_dip` is credited with adding
+  information only if its real pooled avgR exceeds the null's 95th percentile. **It does not, on
+  either universe.** DJIA-30's real +0.1526R lands at the **53rd percentile** of its null
+  (null mean +0.1493R, SD 0.1038 — 47% of random-entry draws with matched risk geometry beat it
+  outright); DJTA-20's real +0.2994R lands at the **85th percentile** (null mean +0.1637R, SD
+  0.1277 — closer, but still short of the pre-registered bar, with 14.8% of draws beating it).
+  The null's own mean is reported prominently, per this project's `LOG-REGRESSION-BANDS-CRYPTO`
+  precedent: **random long entries with this stop/target/breakeven geometry already average
+  strongly positive R in this window on both universes**, before any claim about `ma_dip`'s own
+  timing is made — a beta-and-payoff-structure finding (a tight structural stop against a 5R
+  target with a breakeven lock is a favourable asymmetric bet in a broadly rising market,
+  independent of *when* it is entered), not evidence the ≥2%-below-20MA dip condition is doing
+  identifiable work. This does not flip condition 1's literal pass (`E > 0` is still true), and
+  it is a resampling control rather than a formal-NHST test (no BH-FDR family entry), but it
+  materially weakens what that pass was ever entitled to claim on its own.
+
 **`ma_dip` no longer needs a "what's left" list — it has now failed two of the six conditions
-outright (3 and 5), on top of a marginal 4 and a split-by-universe 2.** Condition 2 closed
+outright (3 and 5), on top of a marginal 4, a split-by-universe 2, and a condition 1 whose
+positive expectancy does not survive a matched-geometry random-entry control.** Condition 2 closed
 2026-08-28 (above); condition 5 closed the same day, decisively, on the same drawdown failure
 mode that killed `B5-REVERSAL`. Nothing about condition 3's lapse (a function of family growth,
 not of `ma_dip`'s own numbers) or condition 5's fail (a function of the trade sequence, not of
