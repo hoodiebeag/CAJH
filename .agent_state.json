@@ -4,9 +4,9 @@
   "status": "idle",
   "target_file": null,
   "objective": null,
-  "notes": "DATE-CLUSTERED-RESAMPLING-AUDIT completed and pushed this firing (commit f837295). Chose NOT to do an 11th identical GDELT cheap-probe reconfirmation: the prior 10 reconfirmations (last at 2026-08-28T12:01:56.000Z, ~1h before this firing) established the outage is exogenous with no agent-actionable retry differing from what already failed, and the work_queue held 10 other pending items with empty depends_on that GDELT blocking has no bearing on -- repeating the identical probe again this firing would have added zero information while leaving real, ready work undone. GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC stays pending in work_queue, untouched, still externally blocked as of its last reconfirmation; this is not a claim that the outage cleared. Noting for future firings: the 2026-08-28T11:20:00Z SHORT-SIDE-ENGINE-CAPABILITY firing made the same choice (worked a different queue item while GDELT was blocked) but left control.status/notes stale at BLOCKED/GDELT afterward, which is what caused the very next firing (12:01:56Z) to mechanically reconfirm GDELT yet again without weighing the alternative -- this firing explicitly clears control to idle instead, so the next firing evaluates the queue fresh rather than inheriting a stale block.",
+  "notes": "HOLDOUT-REUSE-AUDIT completed and pushed this firing (commit 4f69c3a). Counted every ROADMAP.md study scoring each named holdout dataset: crypto 70/30 calendar split (14 studies, long spent), DJIA-30 equity holdout (11 studies; 4 prior studies before EQUITIES-MADIP-SIGNIFICANCE, making it the 5th touch not the 1st), DJTA-20 out-of-sample universe (2 studies; only 1 prior study before EQUITIES-MADIP-OUT-OF-SAMPLE, reported as a point in ma_dip favor per the item requirement), whole-symbol momentum holdout (6-9 studies, PHASE3/4 draws flagged ambiguous not resolved), and SEALED_SYMBOLS (0 studies -- confirmed the only unspent resource, independently cross-checked against MULTIPLE_COMPARISONS_AUDIT.md section 4 own 2026-08-19 finding rather than just citing it). Cross-referenced from MULTIPLE_COMPARISONS_AUDIT.md as a companion measurement. No recommendation made anywhere -- item counts, does not decide, per its own scope. Delegated the raw ROADMAP.md heading/citation sweep to an Explore subagent, then personally spot-checked its two required-question answers (DJIA-30 and DJTA-20 prior-study counts) against ROADMAP.md line numbers directly and cross-checked the SEALED_SYMBOLS claim against MULTIPLE_COMPARISONS_AUDIT.md section 4 own independent wording before trusting either. No code touched, no config changed. Left control idle rather than BLOCKED since nothing here requires human review -- 9 other ready pending items remain in work_queue (GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC still externally blocked, untouched this firing, not reconfirmed since no new information would result and 10 prior reconfirmations already on record).",
   "updated_by": "executor",
-  "updated_at": "2026-08-28T13:12:00.000Z"
+  "updated_at": "2026-08-28T14:15:00.000Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -941,7 +941,7 @@
    },
    {
     "id": "HOLDOUT-REUSE-AUDIT",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: holdout-reuse audit (additive), documentation and counting only",
     "depends_on": [],
@@ -1017,14 +1017,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-14T16:13:00.024Z",
-   "agent": "human-authorized-hook-prune",
-   "action": "unblock",
-   "detail": "Pruned the 6 done items (FEE-SCHEDULE-REBASE, PARITY-BUYFILL-SEAM, PARITY-EXCHANGE-ERROR-POLICY, PARITY-STALE-QUOTE-CONTRACT, PARITY-POSITION-CAP-SEAM, PARITY-LIVE-EXIT-FIXTURES) that were pinned past STATE-QUEUE-RETENTION's cap because their stored prose tripped the protected-logic hook. Human directly authorized this in a live session; created a fresh override marker immediately before committing, reviewed as prose-only (no commands.js/trader.js touched). Marked QUEUE-RETENTION-HOOK-PRUNE-EXCEPTION done.",
-   "commit": null,
-   "tests": "data-only change; npm.cmd test re-run independently before commit"
-  },
   {
    "ts": "2026-08-14T16:20:00.000Z",
    "agent": "scheduled-task-cajh-loop-check",
@@ -1812,6 +1804,14 @@
    "detail": "DATE-CLUSTERED-RESAMPLING-AUDIT done: skipped an 11th identical GDELT reconfirmation (exogenous outage, no new agent-actionable lever, 10 prior reconfirmations already on record) and picked a different, unblocked work_queue item instead. New scripts/date-clustered-resampling-audit.mjs measures calendar-day clustering in the pooled equities breakout (61 trades) and ma_dip (475 trades) holdout series and recomputes their 95% CIs via a date-block bootstrap (blockBootstrapCI itself unmodified). Both sealed studies exact trade count, avgR, and recorded position-blocked CI reproduced bit-for-bit before computing anything new. Findings: breakout spans 35 distinct trading days (effective n 57% of nominal), ma_dip spans only 124 (effective n 26% of nominal) despite 7x the raw trade count. Both date-clustered CIs widen vs. position-blocked: breakout [-0.2700,+0.6192]->[-0.2904,+0.6863], ma_dip [-0.0544,+0.3609]->[-0.1010,+0.4083]. Neither headline conclusion flips (both already included zero) but ma_dip -- the projects closest-to-significant equities candidate -- carries meaningfully less independent evidence than its raw trade count suggested; reported as prominently as a tightening result would have been, per the items own requirement. backtest.js gained one purely additive excursions[].entryTime field (no existing field or the results array changed). ROADMAP.md updated with full results tables and the honest interpretation; MULTIPLE_COMPARISONS_AUDIT.md left untouched since no recorded interval it holds changed. Control cleared to idle (see control.notes for why, and a note flagging that a prior firing left control stale at BLOCKED/GDELT after doing unrelated work, which is what caused the 10th GDELT reconfirmation to happen unnecessarily).",
    "commit": "f837295",
    "tests": "513/513"
+  },
+  {
+   "ts": "2026-08-28T14:15:00.000Z",
+   "agent": "executor",
+   "action": "research:holdout-reuse-audit",
+   "detail": "HOLDOUT-REUSE-AUDIT done: built a chronological table of every ROADMAP.md study that scored each of five named holdout datasets (crypto 70/30 calendar split, DJIA-30 equity holdout, DJTA-20 out-of-sample universe, whole-symbol momentum holdout, SEALED_SYMBOLS). Delegated the raw heading/citation sweep to an Explore subagent given precise dataset definitions pulled from AGENT_PROTOCOL.md/ALPHA_DEFINITION.md/researchlib.mjs/momentum.mjs, then personally verified the two done_when-required counts by grepping ROADMAP.md line numbers directly: 4 prior studies scored DJIA-30 before EQUITIES-MADIP-SIGNIFICANCE (making it the 5th touch, not the 1st -- EQUITIES-ALL-FAMILIES-BASELINE already computed ma_dip its 475-trade DJIA-30 result before this item added the formal p-value), and only 1 prior study scored DJTA-20 before EQUITIES-MADIP-OUT-OF-SAMPLE (2nd study, 3rd family-level score) -- reported explicitly as a point in ma_dip favor since this is a materially lower reuse count than DJIA-30 carried. Confirmed SEALED_SYMBOLS (AVAX/LINK/NEAR/SUI/UNI) remains the only dataset in the project with zero studies against it, cross-checked against MULTIPLE_COMPARISONS_AUDIT.md section 4 own independent 2026-08-19 finding rather than trusting either source alone. Flagged, not silently resolved: whether B5-REVERSAL-PHASE3-FUTURES-COST/PHASE4-PORTFOLIO-SIM (2026-08-13) count as additional spends of the whole-symbol momentum holdout population is left open per MULTIPLE_COMPARISONS_AUDIT.md own prior characterization of that construction as ad hoc and distinct. No parameter, threshold, correction family, or protocol rule change proposed anywhere -- item counts, does not decide, exactly as scoped. Cross-referenced from MULTIPLE_COMPARISONS_AUDIT.md section 4 (companion measurement note added there) as required. No code, config, or test file touched. Chose this item over the sole other outstanding item (GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC), which stays externally blocked and was not re-probed this firing since 10 prior reconfirmations already established the outage is exogenous with no new agent-actionable lever -- matches this project own established precedent for firings that had a different ready item available.",
+   "commit": "4f69c3a",
+   "tests": "513/513 green"
   }
  ],
  "automation": {
