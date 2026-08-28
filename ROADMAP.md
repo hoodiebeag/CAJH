@@ -3327,6 +3327,19 @@ best would itself be exactly the twelve-test multiple-comparisons violation
 `MULTIPLE_COMPARISONS_AUDIT.md` was written to prevent. Every family's number is reported below,
 including the bad ones and the unusably small ones.
 
+> **Note added 2026-08-28 (`CROSS-FAMILY-TRADE-OVERLAP-AUDIT`):** this section's own header
+> above says "10 of 12 unmodified families produce a positive net avgR." That number is wrong
+> and was wrong the day this section was written — this section's own body text, three
+> paragraphs below the results table ("**8 of 12 families net-positive...**"), already says 8,
+> counting directly off the same table's net-avgR column (`ma_dip`, `rsi`, `bos`, `breakout`,
+> `h3`, `range_sweep_reclaim`, `support`, `sweep_reclaim` positive; `rev`, `anticipate`,
+> `trend_pullback` negative; `vol_contraction` zero trades = 8, not 10). Nothing computed by
+> this section depended on the header figure — the table and the 8-of-12 body sentence were
+> always correct — but the header itself was never corrected until this note, discovered while
+> building `CROSS-FAMILY-TRADE-OVERLAP-AUDIT`. Corrected here: **8 of 12**, not 10 of 12. Read
+> the header below with that correction; see `CROSS-FAMILY-TRADE-OVERLAP-AUDIT` (2026-08-28) for
+> whether that corrected 8-of-12 breadth finding survives an overlap check (it does).
+
 **Method — identical pipeline, only the config array widened.** New file
 `scripts/equities-all-families-baseline.mjs`, a straight extension of
 `equities-baseline-port.mjs`: same 30-symbol Dow-30-as-of-2024-08-19 universe (point-in-time
@@ -6096,3 +6109,180 @@ cache-only, no egress, computes no new p-value, tests no hypothesis, and does no
 `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family. No `backtest.js`/`strategy.js`/
 `tournament.mjs`/`monitor.js`/`bot.js`/`trader.js`/`scanner.js` file touched. `npm.cmd test`:
 513/513 green.
+
+## 2026-08-28 — CROSS-FAMILY-TRADE-OVERLAP-AUDIT: the 12 families are not 12 independent bets on crypto, but the equity-side breadth finding (corrected to 8-of-12, see the note added above) survives — `ma_dip` is not a near-duplicate of any other net-positive equity family
+
+`EQUITIES-ALL-FAMILIES-BASELINE` (2026-08-22) found several `tournament.mjs` families
+net-positive on the DJIA-30 equity holdout and called it breadth. `HOLDOUT-REUSE-AUDIT` and
+`REQUIRED-SAMPLE-FOR-DURABLE-PASS` (both 2026-08-28) both name the same open question this item
+was queued to close: how many of the twelve families are actually independent bets, versus the
+same underlying signal re-detected under different names? `ma_dip` carries this project's only
+surviving positive result at real sample size and its independence from the other equity-positive
+families had never been measured. This item measures trade-set overlap directly. **No family was
+re-run, no parameter was re-tuned, and no new avgR was produced** — every family x market
+combination below reproduces an already-published trades/avgR figure bit-for-bit before its
+trade-level detail is used (see Replication check below); this is the same-cited-figures pattern
+`EQUITIES-ALL-FAMILIES-BASELINE` and `EQUITIES-MADIP-OUT-OF-SAMPLE` both used against their own
+predecessors.
+
+**Pre-registered before any overlap number was computed** (full text in
+`scripts/cross-family-trade-overlap-audit.mjs`'s header, same commit as these results).
+**Window:** two trades "overlap" if they share the same symbol/pair AND the same calendar day
+(UTC) of entry — one window, applied identically to daily-bar equities (DJIA-30, DJTA-20) and
+hourly-entry crypto, for cross-market consistency, at the disclosed cost of being coarser
+relative to bar granularity on the crypto side. **Metric:** for family pair (A, B),
+`matchedFromA` = count of A's trades with at least one B trade in the same (symbol, day) bucket;
+the matrix cell reported is the symmetric coefficient `(matchedFromA + matchedFromB) / (|A| +
+|B|)`, both directional fractions available alongside it so asymmetry from unequal sample sizes
+is never hidden inside an average. **Clustering threshold:** families join one cluster when
+their symmetric coefficient >= **0.50** (single-linkage / union-find); a market's
+"effectively independent family count" is its number of connected components. Neither the window
+nor the threshold changed after seeing the matrices below.
+
+**Data completeness caveat, disclosed rather than silently absorbed.** `backtest.js`'s
+per-trade `excursions` array only attaches an `entryTime` to trades closed through the general
+per-bar close path; two `entryMode: "anticipate"`-only same-bar-stop-out paths (immediate stop
+on the entry bar, and the `entryDelayBars` fill-then-immediate-stop path) push a trade record
+with no `entryTime`. Those trades cannot be placed in a (symbol, day) bucket and are excluded
+from overlap matching (not from the trade totals used in the replication check below). Only
+`anticipate` is affected, on all three markets: DJIA-30 41/303 trades (13.5%) excluded, DJTA-20
+40/188 (21.3%), crypto 226/3,966 (5.7%). Every other family has zero missing `entryTime`
+anywhere. `anticipate`'s overlap fractions below are therefore computed on 86.5%/78.7%/94.3% of
+its published trade count respectively — a real but modest completeness gap, not treated as
+material to any conclusion below because `anticipate` nets negative on both DJIA-30 and crypto
+and is not part of the equity independence claim this item's `done_when` is scoped to.
+
+**Replication check — every family/market combination reproduces its already-published
+trades/avgR bit-for-bit before its trade-level detail is trusted.** DJIA-30 (all 12 families,
+`EQUITIES-ALL-FAMILIES-BASELINE`'s table), DJTA-20 (`breakout`/`anticipate`/`ma_dip`, the only
+three families ever run on that universe — `EQUITIES-BREAKOUT-OUT-OF-SAMPLE` and
+`EQUITIES-MADIP-OUT-OF-SAMPLE`), and crypto (all 12 families, `ZERO-COST-FLOOR-ALL-FAMILIES`'s
+"net (default)" column) — **all 36 checks passed** (exact trade-count match, avgR within
+5e-4). Nothing here re-derives a figure this project didn't already have on record.
+
+**Result 1 — DJIA-30, all 12 families, full pairwise symmetric-overlap matrix:**
+
+| family | `ma_dip` | `rsi` | `bos` | `breakout` | `h3` | `range_sweep_reclaim` | `support` | `sweep_reclaim` | `rev` | `anticipate` | `trend_pullback` | `vol_contraction` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `ma_dip` | — | 0.0592 | 0.0000 | 0.0000 | 0.0379 | 0.0042 | 0.1973 | 0.0882 | 0.1223 | 0.1791 | 0.0000 | 0.0000 |
+| `rsi` | 0.0592 | — | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0323 | 0.0000 | 0.1361 | 0.0000 | 0.0000 |
+| `bos` | 0.0000 | 0.0000 | — | 0.0000 | 0.0120 | 0.0000 | 0.0343 | 0.0000 | 0.0251 | 0.1553 | 0.1224 | 0.0000 |
+| `breakout` | 0.0000 | 0.0000 | 0.0000 | — | 0.0240 | 0.0000 | 0.0214 | 0.0000 | 0.0167 | 0.0000 | 0.0000 | 0.0000 |
+| `h3` | 0.0379 | 0.0000 | 0.0120 | 0.0240 | — | 0.0000 | 0.0702 | 0.0101 | 0.1895 | 0.0761 | 0.0278 | 0.0000 |
+| `range_sweep_reclaim` | 0.0042 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | — | 0.0000 | 0.0421 | 0.0000 | 0.0000 | 0.0000 | 0.0000 |
+| `support` | 0.1973 | 0.0000 | 0.0343 | 0.0214 | 0.0702 | 0.0000 | — | 0.0762 | **0.5154** | 0.1465 | 0.0315 | 0.0000 |
+| `sweep_reclaim` | 0.0882 | 0.0323 | 0.0000 | 0.0000 | 0.0101 | 0.0421 | 0.0762 | — | 0.0590 | 0.0000 | 0.0308 | 0.0000 |
+| `rev` | 0.1223 | 0.0000 | 0.0251 | 0.0167 | 0.1895 | 0.0000 | **0.5154** | 0.0590 | — | 0.0907 | 0.0553 | 0.0000 |
+| `anticipate` | 0.1791 | 0.1361 | 0.1553 | 0.0000 | 0.0761 | 0.0000 | 0.1465 | 0.0000 | 0.0907 | — | 0.0600 | 0.0000 |
+| `trend_pullback` | 0.0000 | 0.0000 | 0.1224 | 0.0000 | 0.0278 | 0.0000 | 0.0315 | 0.0308 | 0.0553 | 0.0600 | — | 0.0000 |
+| `vol_contraction` | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | 0.0000 | — |
+
+Exactly one pair clears the 0.50 threshold: `support`/`rev` (0.5154). **Effectively independent
+family count on DJIA-30: 11 of 12** (`support` and `rev` merge into one cluster; every other
+family is its own singleton). `rev` nets negative (-0.0501) — it does not affect the net-positive
+breadth count below, only the all-12 independence count.
+
+**Result 2 — the corrected 8-of-12 DJIA-30 breadth finding, checked directly.** Net-positive
+DJIA-30 families, corrected per the note added to `EQUITIES-ALL-FAMILIES-BASELINE` above: `ma_dip`,
+`rsi`, `bos`, `breakout`, `h3`, `range_sweep_reclaim`, `support`, `sweep_reclaim` — 8 families.
+None of the 28 pairs among these 8 reaches the 0.50 threshold (the highest is `ma_dip`/`support`
+at 0.1973). **Every one of the 8 lands in its own singleton cluster — 8 effectively independent
+net-positive families, matching the raw count exactly.** Stated as prominently as the finding
+requires either way: **the corrected 8-of-12 breadth finding SURVIVES this overlap check.** It
+was never a count of near-duplicates; it is 8 families each hitting a different (symbol, day)
+footprint on this universe. (`range_sweep_reclaim`'s row should still be read with
+`EQUITIES-ALL-FAMILIES-BASELINE`'s own caveat: 3 trades is not a sample large enough for any
+overlap fraction computed on it to mean much.)
+
+**Result 3 — `ma_dip` vs. every other net-positive equity family, both universes, reported
+explicitly (this item's own required check):**
+
+| universe | peer family | peer net avgR | symmetric overlap |
+|---|---|---:|---:|
+| DJIA-30 | `support` | +0.0014 | 0.1973 |
+| DJIA-30 | `anticipate`\* | -0.0438 | 0.1791 |
+| DJIA-30 | `sweep_reclaim` | +0.0328 | 0.0882 |
+| DJIA-30 | `rsi` | +0.2507 | 0.0592 |
+| DJIA-30 | `h3` | +0.1178 | 0.0379 |
+| DJIA-30 | `range_sweep_reclaim` | +0.9656 | 0.0042 |
+| DJIA-30 | `bos` | +0.1728 | 0.0000 |
+| DJIA-30 | `breakout` | +0.1866 | 0.0000 |
+| DJTA-20 | `anticipate` | +0.1619 | 0.0982 |
+
+\* `anticipate` is included in this table for completeness even though it nets negative on
+DJIA-30 (-0.0438) — listed to show the full row of `ma_dip`'s overlap against every family this
+item computed, not selectively. It is not counted toward the "net-positive" breadth claims
+above or below. DJTA-20's own net-positive set besides `ma_dip` itself is `anticipate` alone
+(`breakout` nets -0.0854 there); `ma_dip` vs `anticipate` overlap is 0.0982 on that universe too.
+**`ma_dip`'s highest overlap with any other net-positive equity family, on either universe, is
+0.1973 (`support`, DJIA-30) — nowhere close to the 0.50 threshold.** `ma_dip` is not a
+near-duplicate of any other equity family this project has found positive.
+
+**Result 4 — DJTA-20, the only 3 families ever run on this universe:**
+
+| family | `breakout` | `anticipate` | `ma_dip` |
+|---|---:|---:|---:|
+| `breakout` | — | 0.0000 | 0.0000 |
+| `anticipate` | 0.0000 | — | 0.0982 |
+| `ma_dip` | 0.0000 | 0.0982 | — |
+
+All three pairs are far below 0.50. **Effectively independent family count on DJTA-20: 3 of 3**
+(the only universe where this is a full census, not a breadth measurement — every family this
+project has ever run on DJTA-20 is independent of the other two).
+
+**Result 5 — crypto, all 12 families, full watchlist. This is the one market where the
+independence picture looks nothing like equities.**
+
+| family | `ma_dip` | `vol_contraction` | `breakout` | `h3` | `rsi` | `range_sweep_reclaim` | `anticipate` | `bos` | `trend_pullback` | `sweep_reclaim` | `support` | `rev` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `ma_dip` | — | 0.0034 | 0.2061 | 0.3414 | **0.5810** | 0.1264 | **0.6416** | 0.0458 | 0.1595 | **0.6404** | **0.5355** | 0.4274 |
+| `vol_contraction` | 0.0034 | — | 0.0206 | 0.0230 | 0.0042 | 0.0066 | 0.0031 | 0.0000 | 0.0312 | 0.0059 | 0.0128 | 0.0186 |
+| `breakout` | 0.2061 | 0.0206 | — | 0.4393 | 0.1074 | 0.0747 | 0.3144 | 0.0455 | 0.2960 | 0.2374 | 0.4008 | 0.4177 |
+| `h3` | 0.3414 | 0.0230 | 0.4393 | — | 0.1524 | 0.0898 | 0.4041 | 0.0629 | 0.3793 | 0.3458 | 0.4766 | **0.6076** |
+| `rsi` | **0.5810** | 0.0042 | 0.1074 | 0.1524 | — | 0.1322 | 0.4210 | 0.0288 | 0.0322 | 0.4333 | 0.2540 | 0.1683 |
+| `range_sweep_reclaim` | 0.1264 | 0.0066 | 0.0747 | 0.0898 | 0.1322 | — | 0.1416 | 0.0281 | 0.0981 | 0.2861 | 0.0783 | 0.0659 |
+| `anticipate` | **0.6416** | 0.0031 | 0.3144 | 0.4041 | 0.4210 | 0.1416 | — | 0.0952 | 0.2847 | **0.5741** | 0.4013 | 0.3505 |
+| `bos` | 0.0458 | 0.0000 | 0.0455 | 0.0629 | 0.0288 | 0.0281 | 0.0952 | — | 0.0934 | 0.0688 | 0.0401 | 0.0515 |
+| `trend_pullback` | 0.1595 | 0.0312 | 0.2960 | 0.3793 | 0.0322 | 0.0981 | 0.2847 | 0.0934 | — | 0.2695 | 0.2618 | 0.3445 |
+| `sweep_reclaim` | **0.6404** | 0.0059 | 0.2374 | 0.3458 | 0.4333 | 0.2861 | **0.5741** | 0.0688 | 0.2695 | — | 0.3821 | 0.3343 |
+| `support` | **0.5355** | 0.0128 | 0.4008 | 0.4766 | 0.2540 | 0.0783 | 0.4013 | 0.0401 | 0.2618 | 0.3821 | — | **0.8195** |
+| `rev` | 0.4274 | 0.0186 | 0.4177 | 0.6076 | 0.1683 | 0.0659 | 0.3505 | 0.0515 | 0.3445 | 0.3343 | **0.8195** | — |
+
+Six pairs clear 0.50: `ma_dip`/`rsi` (0.5810), `ma_dip`/`anticipate` (0.6416),
+`ma_dip`/`sweep_reclaim` (0.6404), `ma_dip`/`support` (0.5355), `h3`/`rev` (0.6076),
+`anticipate`/`sweep_reclaim` (0.5741), `support`/`rev` (0.8195, the single highest cell in any
+market). Single-linkage chains these into one seven-family cluster: **`{ma_dip, h3, rsi,
+anticipate, sweep_reclaim, support, rev}`.** Five families stand alone: `vol_contraction`,
+`breakout`, `range_sweep_reclaim`, `bos`, `trend_pullback`. **Effectively independent family
+count on crypto: 6, not 12** — under half the roster. This is consistent with (not proof of, since
+single-linkage chains transitively — `ma_dip`/`rev`'s own direct cell is only 0.4274, below
+threshold, and the two are joined only via `support`) the picture `ZERO-COST-FLOOR-ALL-FAMILIES`
+already painted of crypto's twelve families sharing one underlying price-structure signal
+detected under different names, all of it already net-negative there regardless of overlap.
+
+**What this does and does not license.** No family is re-run, no parameter is re-tuned, no new
+avgR is produced anywhere in this item, exactly as `done_when` requires. This is a set-overlap
+measurement on trade sets whose avgR figures were already on record before this item started.
+The corrected 8-of-12 DJIA-30 breadth finding survives on its own terms (Result 2); `ma_dip`'s
+independence from every other net-positive equity family, the specific question this item was
+queued to answer, is confirmed on both universes it has been run on (Result 3). Crypto's
+independence picture is materially different and is reported because the same method was applied
+there per `done_when`'s "on both equity universes and on crypto, reported separately" — but no
+`VERDICTS.md` row changes as a result: every crypto family in that seven-member cluster is
+already net-negative (`ZERO-COST-FLOOR-ALL-FAMILIES`), so collapsing "12 negative families" into
+"6 effectively independent negative families" does not change which families are alive, only how
+many independent negative results there are on record. **Human-facing deck flag:** no deck file
+exists inside this repository to edit directly (searched, none found) — if slide 09 of the
+external deck cites `EQUITIES-ALL-FAMILIES-BASELINE`'s "10 of 12" figure, it needs the same
+correction made above (8 of 12), and that correction is out of this item's reach to make itself.
+
+**Engineering note.** New `scripts/cross-family-trade-overlap-audit.mjs` only (additive,
+read-only, cache-only — crypto reads `research-cache/`'s existing candle store via
+`loadResearchCandles`, equities read the existing `research-cache/equities-1d/` and
+`research-cache/equities-1d-djta-oos/` caches, no network egress anywhere). `backtest.js`,
+`strategy.js`, `tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js` — all
+untouched; grep-confirmed against the actual staged diff before commit that no protected
+trading-safety identifier appears in it. This item computes no p-value and tests no hypothesis,
+so it does not join `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family and that document is
+not updated. `npm.cmd test`: 513/513 green (no production code changed, so no new tests were
+required or added, matching this project's convention for prior read-only diagnostic scripts).
