@@ -80,6 +80,42 @@ rather than clobbering entries another agent added while you worked.
 9. **Write `.agent_state.json` last**, after the code change is saved and committed, so
    a crash mid-run never advertises work that does not exist.
 
+## Closed research programs — binding, check before proposing any study (added 2026-08-29)
+
+Two human decision records close whole classes of work. They live in `.agent_state.json`'s
+`blackboard` and are recorded verbatim there; this section exists because a rule that lives
+only in the blackboard is a rule an agent can miss, and both closures were being ignored in
+practice. **Read both keys before staging anything.** Cite them when refusing; do not
+re-litigate them.
+
+**`blackboard.phase_directive_new_mechanism` (2026-08-29) — decision 1.** The crypto
+price-structure / Template-A program is **CLOSED IN FULL SCOPE**. No new price-structure
+entry variant, gate input, cost-reduction angle, or parameter/timeframe sweep on `breakout`,
+`anticipate`, or any of the 12 `tournament.mjs` families may be queued or run. The basis is
+mechanism, not this window's numbers: 0/12 families and 0/10 epoch-family cells clear a
+meaningfully positive gross edge at any cost structure tested (`ZERO-COST-FLOOR-ALL-FAMILIES`),
+and `EXECUTION-DELAY-DECAY-CURVE` rules out better execution as a rescue structurally.
+Reopening requires a genuinely new **information source** — not a parameter change.
+
+**`blackboard.template_a_exhausted` (2026-08-19).** The "threshold a time series on train,
+gate `breakout`/`anticipate` with it, score holdout avgR" shape is retired. It ran 11 times
+with different inputs; mean effect **−0.008R** against a **+0.864R** breakeven requirement.
+A new input series is not a new experiment.
+
+**If you catch yourself writing** an entry variant, a filter, a gate, a cost angle, or a
+timeframe sweep on those families — **stop, and cite the closure instead.** This matters most
+exactly when the queue is thin, because a thin queue is what tempts invented work. Staging
+nothing is a valid outcome; staging forbidden work is not.
+
+**Still open, per the same directive:** equities research (decision 2, ratified as normal
+authorized work), FX as a new asset class (decision 3), methodology audits, and the
+new-mechanism sequence C0 → C1 → C2 → C3 (decision 4) **run in order** — C1, C2 and C3 are
+not to be queued until C0 resolves.
+
+**Unchanged by any of the above:** no live order in any asset class without the D1 → D2 → D3
+path in `SELF_AWARENESS_SPEC.md` and explicit human sign-off at D3. `SEALED_SYMBOLS` was spent
+on 2026-08-29 and returned inconclusive — nothing may assume a fresh sealed pool exists.
+
 ## Phase duties
 
 - **ARCHITECT** — structure only: imports, interfaces, function stubs with explicit
