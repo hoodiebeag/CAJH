@@ -7142,3 +7142,148 @@ public CSV endpoint `macro-regime-primary-signal.mjs` already uses). `npm.cmd te
 green, unchanged (this diagnostic adds no new tests, same convention as every other throwaway
 `scripts/*.mjs` audit in this project). Raw output saved via `saveExperiment` to
 `research-runs/2026-08-29T11-04-24-423Z-c2-continuous-macro-conditioner.json`.
+
+## 2026-08-29 — CLASSIFIER-P5-ECONOMICS-ROW-STALENESS: VERDICTS.md's Classifier P5 economics figure was double-counting cost since the day it was published — corrected to -0.8544/-0.8989
+
+BOOKKEEPING / INTEGRITY FIX, not new research: corrects a previously-published number, computes
+no new verdict, stages no hypothesis. C0-SIGNAL-COMBINATION (2026-08-29, this ROADMAP's entry
+above) found and disclosed — but correctly left out of its own scope — that Classifier P5's
+published economics figure (-0.4616R selected / -0.5178R baseline, VERDICTS.md, 2026-08-08) does
+not reproduce from the current cache: a fresh refit reproduces the model and AUC exactly but
+comes back with economics of -0.8634R/-0.9079R. This item independently confirms that finding,
+identifies its root cause directly from the source rather than accepting C0's word, derives the
+correct figure, and corrects the row.
+
+**C0's diagnosis independently confirmed**, via a fresh, from-scratch script (not a reuse of C0's
+own script file) that calls `classifier.mjs`'s exported `buildClassifierUniverseRows`,
+`scaleTrainHoldout`, `chooseLambdaByCv`, and `classifierOutcomeReport` directly — the same
+functions the `sealed` CLI's own `primaryOutcome` computation uses internally (classifier.mjs
+~L593-604), skipping only the K=100 permutation-null loop (`scoreClassifierHoldouts`), which is
+not in question here: AUC/p-value significance is unaffected by this bug and has already been
+independently reproduced across 8+ saved `research-runs/*-classifier-sealed.json` files from
+2026-08-07/08 plus C0's own bit-exact refit. Row counts: totalRows=15076, trainRows=7496,
+holdoutRows=7580 — identical to the original PWR4 run (`research-runs/2026-08-08T02-39-53-926Z-
+classifier-sealed-outcome.json`), ruling out any data or universe change. holdoutAuc=
+0.5248761451544306 (0.5249) — reproduces the published figure exactly, and matches C0's own
+independent refit bit-for-bit (0.5248761451544306). At `roundTripCost=0.009` (the original
+`ROUND_TRIP_COST` P5 was published under): selectedNet=-0.8633632752939017, baselineNet=
+-0.9078512980471726 — reproduces C0's -0.8634/-0.9079 finding exactly, confirming it is not a
+transcription error or an artifact of C0's own script.
+
+**Mechanism, demonstrated directly against the two source files rather than accepted on C0's
+word.** `backtest.js`'s `profileEntries` (L872, L951-952) computes every classifier-universe
+row's `netR` as:
+
+    netR = (outcome === "win" ? tpR : -1) - ((feeRate + slipPct) * (entry + exitPrice)) / risk
+
+with `feeRate`/`slipPct` defaulting to `strategy.js`'s module-level `FEE_RATE` (0.008/side) and
+`SLIPPAGE_PCT` (0.0005/side) — i.e. every `netR` value already has the repo's real per-trade
+transaction cost baked in at simulation time, using whatever `strategy.js` constants were current
+when `profileEntries` ran. Separately, `classifier.mjs`'s `economicLiftNetOfCost` (L481-495)
+computes `mean(row.netR - roundTripCost)` for the selected and baseline subsets — a second,
+entirely independent cost subtraction, applied unconditionally regardless of whether `netR`
+already contains a cost term. The `sealed` CLI (classifier.mjs L592-604) calls this with
+`roundTripCost=0.009` on top of `netR` values that already contain `strategy.js`'s real cost.
+The two compose: total cost actually subtracted = (cost baked into `netR` at whatever `FEE_RATE`/
+`SLIPPAGE_PCT` were current) + (the separate `roundTripCost` parameter), not either alone.
+
+**This is not a rebase-induced regression — the double-count existed on day one.** P5 was
+published (commit d304419, 2026-08-07 22:41:41 -0400) *before* `FEE-DEFAULTS-UPDATE` (commit
+44777de, 2026-08-08 14:22:28 -0400) rebased `strategy.js`'s `FEE_RATE` from 0.004 to 0.008. At
+publication time, `netR` already carried the *then-current* ~0.9% round-trip cost (2×(0.004+
+0.0005)), and `economicLiftNetOfCost` subtracted *another* separate 0.009 (=~0.9%) on top — the
+original -0.4616R/-0.5178R already double-counted cost, just by a smaller absolute amount than
+today's -0.8634R/-0.9079R (which double-counts the larger, corrected ~1.7% real cost). Neither
+published number was ever the true single-counted figure.
+
+**Derivation of the correct figure — not assumed, shown.** `economicLiftNetOfCost` is provably
+affine in `roundTripCost` (`mean(netR) - roundTripCost`, a flat per-row subtraction, independently
+verified by `scripts/phase2-triage.mjs` against CLASSIFIER-FUNDING-FEATURE's own two reported
+cost points with 2.8×10⁻¹⁷ drift). That means `mean(netR)` for any subset is recoverable exactly
+from one reported `(cost, net)` pair: `mean(netR) = reportedNet + reportedCost`. Since `netR`
+already contains the *current, real* per-trade cost (today's rebased `FEE_RATE`/`SLIPPAGE_PCT` —
+the corrected ~1.7% Kraken Tier-1 round-trip basis, not an assumption but the constant this
+codebase already treats as its real-cost standard everywhere else), `mean(netR)` **is** the
+correct, single-counted, current-real-cost economics figure — no further `roundTripCost`
+subtraction should be applied. Confirmed directly (not just algebraically) by calling
+`classifierOutcomeReport` with `roundTripCost=0`: selectedNet=-0.8543632752939021, baselineNet=
+-0.8988512980471722, lift=0.04448802275327013 (**-0.8544 / -0.8989 / +0.0445** rounded) — matches
+the algebraic recovery (-0.8633632752939017+0.009=-0.8543632752939017,
+-0.9078512980471726+0.009=-0.8988512980471726) to the last digit. **Neither prior figure was
+correct — both the original -0.4616/-0.5178 and the fresh double-counted -0.8634/-0.9079
+overstate the loss; the true figure is a third number, -0.8544/-0.8989.** The lift itself
+(+0.0445) is unaffected by the bug either way, since a uniform `roundTripCost` shift cancels in a
+difference of two means computed on the same population — only the two absolute figures were
+ever wrong, not the model's own relative selection signal.
+
+**VERDICTS.md corrected**: the Classifier P5 row's economics figure now reads -0.8544R selected /
+-0.8989R baseline (lift +0.0445), annotated with the date, cause, and a pointer to this entry.
+AUC (0.5249) and the **KILLED** verdict itself are unchanged — the classifier's cost failure is,
+if anything, more decisively negative than previously recorded, not less; nothing about this
+correction is good news for the classifier. `classifier.mjs`, `strategy.js`, and `backtest.js`
+are unmodified — the bug was never in the library code (the flat-subtraction cost model in
+`economicLiftNetOfCost` does exactly what it says, and its own unit test in
+`classifier.test.mjs` already proves that correctly); it was in how a published number was
+computed, i.e. a call-site misuse, which is what got corrected.
+
+**Every other figure derived through the same `netR`-plus-`roundTripCost` pattern, checked and
+left uncorrected here per this item's own scope (bookkeeping only, no expansion):**
+
+- **VERDICTS.md's `CLASSIFIER-FUNDING-FEATURE` row** (-0.2412R/-0.2492R selected vs -0.5387R/
+  -0.5467R baseline, commit b4dbe7e, 2026-08-08 14:06:56 -0400) — same function
+  (`economicLiftNetOfCost`), same `netR` field, same bug, **and a worse variant of it**: this
+  commit predates `FEE-DEFAULTS-UPDATE` (44777de, 14:22:28 -0400) by ~16 minutes, so its `netR`
+  was still computed under the *stale* pre-rebase `FEE_RATE=0.004`, yet its reported "corrected
+  real ~0.017" figure applied `roundTripCost=0.017` **on top of that stale `netR` basis** — mixing
+  a stale cost inside `netR` with an already-corrected cost as the separate subtraction. Both its
+  0.009 and 0.017 reported figures overstate the loss, and — unlike P5 — the true figure cannot
+  be recovered by arithmetic alone from the published numbers, since `mean(netR)` recovered that
+  way would still reflect the *stale* 2026-08-08-morning `FEE_RATE`, not today's. Fixing this
+  needs a fresh re-run (`buildClassifierUniverseRows` against current `strategy.js` constants,
+  then `classifierOutcomeReport` with `roundTripCost=0`), not an algebraic correction — genuinely
+  new computation, out of this item's scope.
+- **VERDICTS.md's `C0-SIGNAL-COMBINATION` row** (2026-08-29) — its P5-reproduction figures
+  (-0.8634R/-0.9079R, independently reproduced again by this item) and its matched-population/
+  composite figures are built the identical way: `p5MatchedLegacy`/`p5MatchedReal` call
+  `economicLiftNetOfCost` directly; the composite's `compositeLegacy`/`compositeReal` do the
+  identical `netR - roundTripCost` arithmetic by hand (`scripts/c0-signal-combination.mjs`
+  L269-270) rather than through the named function, same bug either way. Checked concretely
+  rather than assumed: the script's own already-published "gross mean netR" figures
+  (`selectedGrossMean=-0.9174087484075228`, `baselineGrossMean=-0.9206202708953056`) are, by this
+  same derivation, **already the correct single-counted numbers** — it is the adjacent
+  `compositeLegacy`/`compositeReal` figures (-0.9264/-0.9296 and -0.9344/-0.9376) that
+  double-count an extra 0.009/0.017 on top of them. Likewise `p5MatchedReal.selectedNet=
+  -0.8553999690694173` recovers to a true `mean(netR)=-0.8383999690694173` at the real cost
+  basis. **This does not change C0's KILLED verdict or any gate clause's truth value**: the
+  corrected composite figure (-0.9174) is still nowhere near positive (`positiveAtRealCost`
+  stays false by a wide margin) and is still well below the corrected standalone P5 figure
+  (-0.8384), so `beatsP5` still correctly fails — verified by direct arithmetic on the exact
+  saved figures above, not asserted from the general shape of the bug. The row's *absolute*
+  economics numbers are still technically wrong and should be annotated in the same follow-up
+  as `CLASSIFIER-FUNDING-FEATURE`, even though no conclusion drawn from them changes.
+- **ROADMAP.md's 2026-08-13 `PHASE2-MAX-SURVIVABLE-COST` section** (`scripts/phase2-triage.mjs`)
+  — its Classifier P5 (-0.4530R best case) and `CLASSIFIER-FUNDING-FEATURE` (-0.2326R best case)
+  rows, and their full 7-scenario tables, are built entirely by affine-recovering `mean(netR)`
+  from the double-counted published figures and re-subtracting different cost scenarios — every
+  number in both tables is offset by the same double-counted amount as its source row. The
+  qualitative conclusion ("structural, never crosses positive at any tested cost, including the
+  cheapest futures-maker scenario") is very unlikely to flip given how far these figures sit from
+  zero relative to the offset size, but that is an inference from magnitude, not a re-verified
+  fact, and is stated as such rather than asserted as re-confirmed.
+
+**Recommended follow-up (not actioned here):** a dedicated item should (1) re-run
+`buildClassifierUniverseRows`/`classifierOutcomeReport` with `roundTripCost=0` for
+`CLASSIFIER-FUNDING-FEATURE` under current `strategy.js` constants and correct its VERDICTS.md
+row the same way this item corrected P5's; (2) add a corrective annotation to
+`C0-SIGNAL-COMBINATION`'s row pointing at its already-correct "gross mean netR" figures instead
+of the double-counted `compositeLegacy`/`compositeReal` ones; (3) either re-derive
+`PHASE2-MAX-SURVIVABLE-COST`'s two classifier-signal scenario tables against the corrected basis
+or mark them superseded-pending-recorrection. None of the three is expected to change any
+existing KILLED verdict, based on the magnitudes checked above, but none has actually been
+re-verified either, which is exactly why this is a follow-up recommendation and not a claim.
+
+**Engineering note.** No new file, no persisted script — the independent verification used a
+throwaway script (not committed) that called `classifier.mjs`'s existing exported functions
+directly; nothing in `classifier.mjs`, `strategy.js`, `backtest.js`, or any frozen path was
+read-modified, only read. `npm.cmd test`: 513/513 green, unchanged (no test-affecting code
+changed; this is a documentation correction only).
