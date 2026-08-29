@@ -694,4 +694,25 @@ The concrete, binding rule (not just narrative here) is written into
   28-asset active pool — any new price-structure family test either uses data collected after
   2026-08-19 or explicitly discloses it is re-examining spent data.
 
+### C0-C3 correction-family assignment (pre-registered 2026-08-29, before any C0 result exists)
+
+**Decision: C0 (signal combination), C1 (options-vol risk premium), C2 (macro/cross-asset
+regime conditioner), and C3 (FX carry) join the existing formal-NHST family above (§2,
+currently n=20) as each produces a p-value — they do not form a new, separately-corrected
+family.** Full reasoning is recorded in `ROADMAP.md`'s 2026-08-29 `PHASE-DIRECTIVE-BOOKKEEPING`
+entry; summarized here because this is the binding location: (1) this project has never spun
+off a separate family for a new hypothesis class alone — `MACRO-REGIME-PRIMARY-SIGNAL`,
+`GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL`, and `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL` are all at
+least as distant from price-structure momentum/reversal as C1-C3 are, and all three joined this
+same family without a separate-family argument being raised; (2) C0 specifically reuses the
+literal same sealed holdout and cost model as two existing family members (`B5-REVERSAL`,
+`Classifier P5`) — a new combination of two already-used inputs on already-spent data is not a
+fresh information source; (3) none of C0-C3 is pre-registered against a self-contained,
+already-corrected internal screen of the kind that would justify a separate family (contrast
+`PAIRS-COINTEGRATION-STATARB`'s own 105-pair Engle-Granger test, which for exactly that reason
+is not part of this family). This is decided before C0 has been implemented, run, or scored, so
+the decision cannot be influenced by where any C-series p-value would land under either scheme.
+The family-size counter above (§2, currently 20) must be updated for each p-value C0-C3
+produce, per the mechanical rule immediately above — whether it passes or fails.
+
 No existing verdict changes as a result of this audit.

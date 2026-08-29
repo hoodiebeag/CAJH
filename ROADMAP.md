@@ -6625,3 +6625,191 @@ bookkeeping.
 `time-varying-cost-repricing.mjs`/`candle-corpus-gap-audit.mjs` — none re-run; every quoted
 figure above is read from the existing `ROADMAP.md` record, not recomputed. `npm.cmd test`:
 green (no production or test file changed).
+
+## 2026-08-29 — PHASE-DIRECTIVE-BOOKKEEPING: recording the new-mechanism phase directive's four decisions, the C0-C3 build order, and a pre-registered correction-family decision for C0-C3
+
+Pre-registered task: `PHASE-DIRECTIVE-BOOKKEEPING` (`.agent_state.json` work_queue), depends
+on `EQUITIES-QUEUED-ITEMS-AUDIT` (done, immediately above). This item does two things only:
+(a) writes the human phase directive recorded in `blackboard.phase_directive_new_mechanism`
+(2026-08-29) into this project's permanent record, with the reasoning drawn from the project's
+own history and figures quoted rather than restated from memory; (b) makes and pre-registers a
+decision — before any C0 result exists — on whether C0-C3 join the existing formal-NHST
+correction family (`MULTIPLE_COMPARISONS_AUDIT.md` §2) or form a new, separately-corrected one.
+**No C0 result is computed in this item.**
+
+### The four decisions (source: `blackboard.phase_directive_new_mechanism`, human principal, in
+response to `SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md`, 2026-08-22)
+
+1. **The crypto price-structure / Template-A program is CLOSED**, extending
+   `blackboard.template_a_exhausted` (2026-08-19) to its full scope. No new price-structure
+   entry variant, gate input, or cost-reduction angle on `breakout`/`anticipate`/the existing 12
+   families may be queued. Reopening requires a genuinely new information source, not a
+   parameter change.
+2. **Equities research is ratified to continue**, including the pre-existing deviation from
+   this project's own asset-expansion gate (equities work began before any crypto signal
+   passed) — reviewed and accepted because it stayed research-only (cached data, no live IBKR
+   order ever placed) and was fully disclosed as it happened. Going forward this is normal,
+   authorized work, not a standing exception; the underlying rule (no live order without the
+   D1→D2→D3 path and explicit human sign-off at D3) is unchanged.
+3. **FX is authorized as a new asset class**, reusing the equities IBKR integration.
+   Research/paper only until a signal earns live promotion through the same human-gated path.
+4. **A new research phase is opened**, scoped to genuinely new mechanisms — not variants of the
+   12 closed families or the 11 closed Template-A gate inputs.
+
+### Why decision 1, from the project's own record — figures quoted, not restated from memory
+
+- **`ZERO-COST-FLOOR-ALL-FAMILIES` (2026-08-22, this file).** All 12 `tournament.mjs` families
+  re-run at zero cost against the pre-registered "meaningfully positive" gate (holdout trades
+  >=150, positiveAssets/assets >=0.5, avgR > +0.10R). Result: **0/12 families clear it.** Only 4
+  clear zero at all (`ma_dip` +0.0877, `vol_contraction` +0.2177, `breakout` +0.0637, `h3`
+  +0.0329), and `vol_contraction` — the closest, clearing both the avgR clause (+0.2177) and the
+  positive-asset clause (11/21 = 52.4%) — fails only on the trade-count floor (98 < 150).
+- **`EXECUTION-DELAY-DECAY-CURVE` (2026-08-19, this file).** Delaying `breakout`/`anticipate`
+  entry by 0-5 bars (1h timeframe) produced **sharp, monotonic degradation for both families,
+  zero exceptions across 5 points x 2 families.** `anticipate`: -0.8842R (delay 0) →
+  -1.6242R (delay 5), an 84% relative worsening. `breakout`: -0.8640R → -2.2953R, a 166%
+  relative worsening. This ruled out "wait for a better fill" as a rescue for the maker-execution
+  cost-reduction thesis PWR5 through PHASE4 were built on — waiting for a resting order to fill
+  is itself a form of execution delay. (Correction on record, stated here rather than omitted:
+  `MAKER-FILL-MICROSTRUCTURE-SIMULATION`, 2026-08-28, narrowed this claim — the collapse doesn't
+  begin until delay 2, `breakout` loses only -0.0207R at delay 1, and the sub-1-hour region where
+  a real post-only order actually rests remains unmeasured and, per that item's own finding,
+  unmeasurable with any data source this project holds. The honest framing is "maker execution
+  fails when tested at hourly resolution," not "closed at every resolution" — carried forward
+  here rather than restated as unqualified.)
+- **`PAIRS-COINTEGRATION-STATARB` (2026-08-19, `VERDICTS.md`).** The one market-neutral,
+  relationship-reversion mechanism tested (Engle-Granger cointegration across 105 pairs with
+  sufficient overlapping history, active watchlist): **0/105 pairs survive BH-FDR q=0.05.**
+  Lowest three raw p-values (APT/FIL, DOT/FIL, FIL/POL, all p=0.0050) correct to q=0.1741, more
+  than 3x past threshold.
+- **`B5-REVERSAL` and `Classifier P5` (`VERDICTS.md`) — "real but small effects killed by
+  cost."** `B5-REVERSAL` L=3: train IC=-0.0685, p=0.0010 (correct sign after the pre-registered
+  sign-flip, the first primary-cell IC to clear significance) — but net economics fail
+  decisively at the corrected real ~1.7% round-trip cost, -0.0025 to -0.0243R across quantiles.
+  `Classifier P5`: holdout AUC 0.5249 beats its permutation null (p=0.0198, significant) — but
+  the best-scoring subset still nets -0.4616R/trade after cost (baseline -0.5178R, lift +0.056R,
+  still deeply negative). Both are this project's clearest examples of a statistically real,
+  economically dead result — not noise, not a bug, just too small for this project's actual
+  costs to ever monetize.
+- **`PER-FAMILY-COST-CEILING` (2026-08-28, this file) — the equities venue difference is the
+  only change that moved the outcome materially.** Of 60 (family, venue, market) cells checked,
+  7 clear +0.10R; 6 of those 7 are on the equity market alone (`bos` +0.1728R/60 trades, `ma_dip`
+  +0.1526R/475 trades, `rsi` +0.2507R/32 trades, `breakout` +0.1866R/61 trades,
+  `range_sweep_reclaim` +0.9656R/3 trades, `h3` +0.1178R/106 trades); the one crypto cell
+  (`vol_contraction`/derivatives-maker, +0.1924R/98 trades) is a funding-free upper bound on the
+  same small sample `ZERO-COST-FLOOR-ALL-FAMILIES` already flagged. That study's own scope note:
+  clearing a cost ceiling is a necessary condition for tradability, not a sufficient one — most
+  of the 6 equity cells are carried by very few trades at a favorable price level, not a broad
+  edge.
+
+Together: nothing in the 12 crypto price-structure families clears a meaningful gross edge at
+any cost structure; the one market-neutral mechanism tried finds nothing; better execution
+cannot rescue it at the resolution this project can actually measure; and the only lever that
+changed the outcome materially was trading a different venue (equities), not a different
+price-structure signal on the same venue. That is the basis on which decision 1 closes the
+program on mechanism.
+
+### The `vol_contraction` tension — stated plainly, not resolved here
+
+Decision 1's own text (in `blackboard.phase_directive_new_mechanism`) says `vol_contraction`
+"fails only on trade count — a sample ceiling, not a signal problem." Two events postdate the
+2026-08-22 `SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md` this directive responds to, and the
+directive's section on decision 1 rests on the superseded reading of the first:
+
+- **`VOL-CONTRACTION-SAMPLE-EXTENSION` (2026-08-28)** addressed that trade-count ceiling
+  directly. Its AXIS C (15m entry, holdout-only, 256 trades, gross avgR +0.2524, 65.4% of assets
+  positive) **cleared the full 3-leg gate — the first result in this project's history to do
+  so.**
+- **`VOL-CONTRACTION-SEALED-VALIDATION` (2026-08-29)** then spent the `SEALED_SYMBOLS` pool on
+  it and returned **INCONCLUSIVE** (67 trades, structurally unable to reach the required
+  150-trade leg) — contrary to `SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md`'s own §2 warning that
+  spending that pool with nothing validated would destroy the project's last fresh judge. The
+  sealed pool was spent inconclusively on 2026-08-29; nothing may assume a fresh sealed pool
+  exists.
+
+**This was not resolved by the agent.** The reading applied conservatively pending human review:
+a 15m entry timeframe is a *parameter change* on an existing family, not a genuinely new
+information source, so decision 1's closure covers it. The two cache-only controls that would
+test whether AXIS C's edge is entry-rule or payoff-geometry
+(`VOL-CONTRACTION-RANDOM-ENTRY-CONTROL`, `ENTRY-TIMEFRAME-AXIS-CONTROL`) are preserved in the
+work queue as closed-by-directive with their full text intact — reopening them is a one-line
+state change if the human decides the record above changes the call. Decision 1 should **not**
+be read as unambiguous: the record contains a first-ever gate clearance in the closed program,
+spent inconclusively the same week it closed.
+
+### C0-C3 build order and sequencing rule
+
+`C0` signal combination (`B5-REVERSAL` rank + `Classifier P5` probability, composite score, the
+same sealed holdout and cost model each already uses alone) → `C1` equity/index options
+volatility risk premium (data-availability gate first) → `C2` macro/cross-asset regime
+conditioner on the equities line (regime variable external to the traded asset's own
+price/derivatives — distinct from the failed `T3-REGIMEFILTER`/`TREND-GATE-MA`/`TREND-GATE-
+STRUCTURE`, which gated on the asset's own price) → `C3` FX carry (sequenced last; not started
+early for coverage). **C1, C2, and C3 are not to be queued until C0 resolves.** `SEALED_SYMBOLS`
+remains reserved for the one-time final validation of a candidate that has already cleared its
+own normal gate — nothing in C0-C3 earns that spend until it clears a holdout on the active pool
+first. Every item still requires fixed pre-registration before any result is seen, real cost
+modeling, a sealed holdout, and on any PASS the D1 (research) → D2 (paper-trade, log-only) → D3
+(human gate) path before anything resembling live promotion.
+
+### Pre-registered correction-family decision for C0-C3 (decided before any C0 number exists)
+
+**Decision: C0-C3, when each produces a formal significance test, join the existing formal-NHST
+correction family in `MULTIPLE_COMPARISONS_AUDIT.md` §2 (currently 20 sub-tests across 17
+studies) — they do not form a new, separately-corrected family.**
+
+Argued from the hypothesis classes involved, not from the effect on any threshold:
+
+1. **This project's own established practice already pools every genuinely new hypothesis class
+   into this same family, and has never spun off a separate one.** `MACRO-REGIME-PRIMARY-SIGNAL`,
+   `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL`, and `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL` are exposure
+   signals built on macro data, news sentiment, and on-chain address counts respectively — three
+   hypothesis classes at least as distant from "price-structure momentum/reversal" as C1's
+   options-vol risk premium or C3's FX carry are. All three joined the same family
+   (`MULTIPLE_COMPARISONS_AUDIT.md` §2's running table) without any separate-family argument
+   being raised at the time. Treating C0-C3 differently, with no change in project convention to
+   justify it, would be an unexplained departure timed to exactly the moment it lowers the bar
+   for the next set of tests — the shape of thing `ALPHA_DEFINITION.md` §4b's standing
+   prohibition against narrowing a correction family for convenience exists to catch, even though
+   that prohibition was written about removing existing members rather than routing new ones
+   around the family.
+2. **C0 specifically reuses the literal same data and cost model as two sub-tests already inside
+   the family.** `C0`'s own build-order description is explicit: "the same sealed holdout and
+   cost model each uses alone" — i.e. `B5-REVERSAL`'s and `Classifier P5`'s own whole-symbol
+   sealed split. A combination of two already-tested signals on already-spent data is not a
+   fresh information source by this project's own definition (`AGENT_PROTOCOL.md`'s closed-
+   research-programs section: "a new input series is not a new experiment" — the inverse case,
+   a new *combination* of two already-used inputs on the *same* data, is at least as clearly
+   inside the existing family, not outside it).
+3. **C1-C3 are new asset classes/data sources, but that alone has never been this project's test
+   for family membership** — see point 1. What would justify a separate family is a different
+   *statistical basis* (e.g. a self-contained, already-corrected internal screen, the shape
+   `PAIRS-COINTEGRATION-STATARB` used for its own 105-pair Engle-Granger test) — none of C0-C3 is
+   pre-registered that way; each is a single primary test against the project's standard
+   permutation-null/significance gate, the same shape as every member of the existing family.
+
+**What the alternative would have implied, stated explicitly per this item's own requirement.**
+A new, separately-corrected family starting at C0 would mean C0's own raw p-value, evaluated
+alone or against a 4-test family (C0-C3) at most, faces a BH-FDR threshold as loose as `1/4 x
+0.05 = 0.0125` at worst rank and `4/4 x 0.05 = 0.05` at best rank — compared to joining the
+existing n=20 (soon n=21) family, where the current tightest surviving threshold sits at
+`1/20 x 0.05 = 0.0025` and every existing member's rank shifts down as new entries are added.
+This is a large, real difference in how hard C0 would have to clear the bar, and is exactly why
+this decision had to be made now, from the hypothesis-class argument above, rather than after
+seeing where C0's own p-value would land in each scheme.
+
+**Timing, recorded explicitly:** this decision is written before `C0` has been implemented, run,
+or scored — no p-value for any C-series item exists anywhere in this project's record as of this
+entry. `MULTIPLE_COMPARISONS_AUDIT.md` §5 is updated in this commit to bind this decision as the
+governing rule for the C-series; no `AGENT_PROTOCOL.md` change is needed since its existing
+"Multiple-comparisons discipline" section already states the family-size counters must be
+updated whenever a new NHST study of that kind completes — C0-C3 simply do, when their time
+comes, following the rule already written there.
+
+### Engineering note
+
+No production or research code touched, no backtest re-run, no C0 result computed — this item
+reads `.agent_state.json`, `ROADMAP.md`, `VERDICTS.md`, `ALPHA_DEFINITION.md`, and
+`MULTIPLE_COMPARISONS_AUDIT.md`, and writes this section plus the `MULTIPLE_COMPARISONS_AUDIT.md`
+§5 addendum. Every figure quoted above is read from the cited existing record, not recomputed.
+`npm.cmd test`: green (no test-relevant file changed).
