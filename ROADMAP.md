@@ -6544,3 +6544,84 @@ project's existing precedent — no genuine PASS-and-replicated result to record
 read-only, cache-only, no network egress). `backtest.js`/`strategy.js`/`tournament.mjs`/
 `cost-model.mjs`/`derivatives.mjs` — all untouched (this item only calls their existing
 exports). `npm.cmd test`: 513/513 green (no production code changed).
+
+## 2026-08-29 — EQUITIES-QUEUED-ITEMS-AUDIT: all six section-2 items were already complete; the one real gap was three missing `VERDICTS.md` rows, now added
+
+**Task.** `SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md` section 2 named six queued items as the
+gating check before any C0-C3 new-mechanism work: `EQUITIES-BREAKOUT-OUT-OF-SAMPLE`,
+`EQUITIES-ALL-FAMILIES-BASELINE`, `EQUITIES-COST-ASSUMPTION-SENSITIVITY` (the three the
+`phase_directive_new_mechanism` directive names explicitly), plus
+`WALKFORWARD-REVALIDATION-OF-BASELINE`, `TIME-VARYING-COST-REPRICING`,
+`CANDLE-CORPUS-GAP-AUDIT` (the remaining items in that table). This item verifies each one
+item-by-item rather than trusting the queue note's preliminary claim, since that claim is the
+whole basis for proceeding to C0.
+
+**Verification, one line per item, `work_queue` state + `ROADMAP.md` section quoted directly
+(no paraphrase from memory):**
+
+- `EQUITIES-BREAKOUT-OUT-OF-SAMPLE` — `work_queue` state `done`; `ROADMAP.md:3707`
+  ("on a fresh universe, the edge does not reproduce — it flips negative"). Holdout avgR
+  **-0.0854R** (DJTA-20, 33 trades) vs the original DJIA-30's +0.1866R; 95% CI
+  [-0.4052, +0.3313]; one-sided sign-flip p=0.6165.
+- `EQUITIES-ALL-FAMILIES-BASELINE` — `work_queue` state `done`; `ROADMAP.md:3311`
+  ("10 of 12 unmodified families produce a positive net avgR... this is a breadth measurement,
+  not a promotion"). Corrected 2026-08-28 by `CROSS-FAMILY-TRADE-OVERLAP-AUDIT` to **8 of 12**
+  (the header was wrong; the section's own body text already said 8). `ma_dip`: 475 trades, net
+  avgR +0.1526, the largest usable sample in the table.
+- `EQUITIES-COST-ASSUMPTION-SENSITIVITY` — `work_queue` state `done`; `ROADMAP.md:3207`
+  ("`breakout`'s net-positive equities result survives every plausible slippage citation, breaks
+  only past 45bps; the unmodeled $1 commission floor binds well within a realistic retail
+  position size"). Break-even slippage 45.42bps (~9x the 5bps baseline); commission floor binds
+  below ~$6.7k-$192k per-symbol position size (median ~$48k).
+- `WALKFORWARD-REVALIDATION-OF-BASELINE` — `work_queue` state `done`; `ROADMAP.md:2897`
+  ("`anticipate`'s fold-to-fold drift is statistically significant, `breakout`'s isn't — the
+  single split is not uniformly adequate"). `anticipate`: 4 rolling folds decline monotonically
+  (-0.673 → -0.974R), ANOVA permutation p=0.000999 (significant); `breakout`: fold range 0.165R,
+  p=0.076 (not significant). Both stay decisively negative in every fold — no hidden profitable
+  regime surfaced.
+- `TIME-VARYING-COST-REPRICING` — `work_queue` state `done`; `ROADMAP.md:3437`
+  ("a real Kraken Tier-1 fee-schedule change is confirmed inside the sample window, but the
+  pre-change rate could not be reliably sourced — honest non-verdict, no repricing performed").
+- `CANDLE-CORPUS-GAP-AUDIT` — `work_queue` state `done`; `ROADMAP.md:3020`
+  ("26 of 29 watchlist assets have not collected a new candle since 2026-03-31 — every 'full
+  local history' claim made by any study run after that date is silently truncated for
+  everything but BTC/ETH/SOL"). Staleness: BTC/ETH/SOL ~23 days, the other 26 assets ~143 days
+  (all stalled the same minute, 2026-03-31), EOS ~417 days.
+
+**All six confirmed complete — no incomplete item found, nothing completed as a side effect of
+this audit.**
+
+**The equities line's status, stated plainly against the current record (not the 2026-08-22
+assessment's framing).** `EQUITIES-BREAKOUT-OUT-OF-SAMPLE` flipped negative on a fresh,
+zero-ticker-overlap universe (DJTA-20): -0.0854R vs the original +0.1866R, CI includes zero,
+p=0.6165 — the project's one out-of-sample equities re-check of `breakout` failed. `ma_dip`,
+the family `EQUITIES-ALL-FAMILIES-BASELINE` flagged as the strongest breadth candidate, is now
+**closed**: `MADIP-SURVIVABILITY-CONDITION-5` and `MADIP-RANDOM-ENTRY-CONTROL` (both
+2026-08-28) found it fails survivability (same drawdown shape that killed `B5-REVERSAL`) and
+fails a matched-geometry random-entry null, on both universes — conditions 3 and 5 of
+`ALPHA_DEFINITION.md`'s six-condition gate, closed outright. And `EQUITIES-ALL-FAMILIES-BASELINE`'s
+own breadth headline — "10 of 12 families net-positive" — was itself wrong from the day it was
+written; `CROSS-FAMILY-TRADE-OVERLAP-AUDIT` (2026-08-28) corrected it to **8 of 12**, confirmed
+the corrected figure survives an overlap check, but that correction does not change any
+individual family's fate. Taken together: the equities program's headline positive result did
+not reproduce out-of-sample, its best breadth candidate is now closed on two separate gate
+conditions, and the breadth measurement that surfaced that candidate had a wrong header for six
+days. Nothing currently open on the equities line clears this project's promotion bar.
+
+**The one real gap: three `VERDICTS.md` rows.** `EQUITIES-BREAKOUT-OUT-OF-SAMPLE`,
+`EQUITIES-ALL-FAMILIES-BASELINE`, and `EQUITIES-COST-ASSUMPTION-SENSITIVITY` — the three items
+the `phase_directive_new_mechanism` directive names explicitly — had never been added to
+`VERDICTS.md`, confirmed by grep before this item started. Added in this commit, following
+`VERDICT_TEMPLATE.md`'s header discipline and the file's own existing row format exactly; no
+existing row altered.
+
+**C0-C3 work.** None started, per this item's own scope. This item is read-only research
+bookkeeping.
+
+**Engineering note.** No production or research script touched — this item only reads
+`.agent_state.json`, `ROADMAP.md`, and `VERDICTS.md`, and adds three rows to the latter.
+`equities-breakout-out-of-sample.mjs`/`equities-all-families-baseline.mjs`/
+`equities-cost-assumption-sensitivity.mjs`/`walkforward-revalidation.mjs`/
+`time-varying-cost-repricing.mjs`/`candle-corpus-gap-audit.mjs` — none re-run; every quoted
+figure above is read from the existing `ROADMAP.md` record, not recomputed. `npm.cmd test`:
+green (no production or test file changed).
