@@ -4,9 +4,9 @@
   "status": "idle",
   "target_file": null,
   "objective": null,
-  "notes": "EQUITIES-QUEUED-ITEMS-AUDIT complete (commit a4b9327). All six SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md section-2 items verified done with dated ROADMAP.md sections -- none were actually incomplete. The one real gap (three missing VERDICTS.md rows for EQUITIES-BREAKOUT-OUT-OF-SAMPLE/EQUITIES-ALL-FAMILIES-BASELINE/EQUITIES-COST-ASSUMPTION-SENSITIVITY) is fixed, following VERDICT_TEMPLATE.md and the file's existing row format, no existing row altered. Equities line current status recorded plainly in ROADMAP.md's 2026-08-29 section: breakout out-of-sample flipped negative (-0.0854R, p=0.6165), ma_dip closed on survivability + random-entry-null conditions (2026-08-28), breadth headline corrected 10-of-12 to 8-of-12. No C0-C3 work started, per this item's own scope -- PHASE-DIRECTIVE-BOOKKEEPING and C0-SIGNAL-COMBINATION remain queued and depend on this item, now unblocked to run next. 513/513 tests green, no protected logic touched, read-only bookkeeping (no research script re-run).",
+  "notes": "PHASE-DIRECTIVE-BOOKKEEPING complete (commit 83d385e). Recorded the 2026-08-29 phase directive (blackboard.phase_directive_new_mechanism) into ROADMAP.md: Template-A/crypto price-structure program CLOSED, equities research ratified, FX authorized as new asset class, new mechanism phase opened -- reasoning quoted from cited prior findings (ZERO-COST-FLOOR-ALL-FAMILIES, EXECUTION-DELAY-DECAY-CURVE, PAIRS-COINTEGRATION-STATARB, B5-REVERSAL/Classifier-P5, PER-FAMILY-COST-CEILING), not restated from memory. Stated the vol_contraction tension plainly per the directive's own open_conflict_for_human field (AXIS C cleared the 3-leg gate 2026-08-28, then SEALED_SYMBOLS spent inconclusively on it 2026-08-29) rather than presenting decision 1 as unambiguous -- left unresolved for human review. Recorded the C0-C3 build order and sequencing rule (C1-C3 not queued until C0 resolves). Pre-registered, before any C0 result exists, that C0-C3 join the existing formal-NHST BH-FDR family (MULTIPLE_COMPARISONS_AUDIT.md section 2, n=20) rather than forming a new one -- reasoned from hypothesis-class precedent (MACRO-REGIME/GDELT/ACTIVE-ADDRESS-COUNT signals all joined without a separate-family argument) and from C0 reusing B5-REVERSAL/Classifier-P5's literal same sealed holdout and cost model; bound this as the governing rule in a new subsection of section 5. No AGENT_PROTOCOL.md change needed -- its existing Multiple-comparisons-discipline section already covers this. No production or research code touched, no backtest re-run, no C0 result computed. 513/513 tests green. C0-SIGNAL-COMBINATION is now unblocked to run next.",
   "updated_by": "executor",
-  "updated_at": "2026-08-29T04:10:00.000Z"
+  "updated_at": "2026-08-29T07:15:00.000Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -982,7 +982,7 @@
    },
    {
     "id": "PHASE-DIRECTIVE-BOOKKEEPING",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "ROADMAP.md (new dated entry); MULTIPLE_COMPARISONS_AUDIT.md (correction-family decision for C0-C3); AGENT_PROTOCOL.md if the family decision needs a binding line",
     "depends_on": [
@@ -1183,14 +1183,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-15T04:15:00.000Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "T4-PORTFOLIO-MOMENTUM-PHASE4 done (FAIL, Sharpe clause)",
-   "detail": "Closed the explicitly-flagged PHASE4 gap: momentum_30d/30d-rebalance run through portfolio.mjs's simulatePortfolio shared-capital engine (same methodology as B5-REVERSAL-PHASE4-PORTFOLIO-SIM), full 28-asset watchlist, standard 70/30 time split. Two cost scenarios: futures taker 0.10% (primary, realistic execution) and futures maker fee-only 0.04% (secondary, PHASE2's original optimistic flag, reproduces its Sharpe 0.493 exactly). FAIL on Sharpe specifically (0.483/0.493, both <0.5) despite passing totalReturn>0, maxDrawdown>-35%, and no literal sign flip across N=4/5/6; disclosed a fragility finding beyond the gate wording (Sharpe swings 52-92% on +/-1 position count). All four PWR5-era cost-reduction candidates now tested to the same PHASE4 depth. scripts/phase4-t4-momentum-portfolio-sim.mjs (throwaway, deletable). VERDICTS.md/TOURNAMENT_ROADMAP.md updated.",
-   "commit": "d39486c",
-   "tests": "363/363 green"
-  },
   {
    "ts": "2026-08-15T05:13:50.399Z",
    "agent": "cajh-loop-check-scheduled",
@@ -1981,6 +1973,14 @@
    "action": "audit-complete",
    "detail": "EQUITIES-QUEUED-ITEMS-AUDIT: verified all six SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md section-2 items (EQUITIES-BREAKOUT-OUT-OF-SAMPLE, EQUITIES-ALL-FAMILIES-BASELINE, EQUITIES-COST-ASSUMPTION-SENSITIVITY, WALKFORWARD-REVALIDATION-OF-BASELINE, TIME-VARYING-COST-REPRICING, CANDLE-CORPUS-GAP-AUDIT) are complete with dated ROADMAP.md sections -- all confirmed done, none needed re-running. Added the one genuine gap: three missing VERDICTS.md rows for the three directive-named items, following VERDICT_TEMPLATE.md/existing row format, no existing row altered. Recorded the equities line's current status plainly in a new ROADMAP.md 2026-08-29 section: breakout out-of-sample flipped negative (DJTA-20, -0.0854R vs original +0.1866R, p=0.6165), ma_dip closed on conditions 3 and 5 (MADIP-SURVIVABILITY-CONDITION-5/MADIP-RANDOM-ENTRY-CONTROL, both 2026-08-28), breadth headline corrected 10-of-12 to 8-of-12 (CROSS-FAMILY-TRADE-OVERLAP-AUDIT, 2026-08-28). No C0-C3 work started. Read-only bookkeeping only, no research script re-run, no production file touched. Marked EQUITIES-QUEUED-ITEMS-AUDIT done in work_queue, control reset to idle.",
    "commit": "a4b9327",
+   "tests": "513/513 pass"
+  },
+  {
+   "ts": "2026-08-29T07:15:00.000Z",
+   "agent": "executor",
+   "action": "PHASE-DIRECTIVE-BOOKKEEPING complete",
+   "detail": "Wrote ROADMAP.md 2026-08-29 phase-directive entry (four decisions, reasoning quoted from cited record, vol_contraction tension stated plainly, C0-C3 build order) and pre-registered C0-C3 correction-family assignment (joins existing n=20 formal-NHST family), bound in MULTIPLE_COMPARISONS_AUDIT.md section 5. No code touched. Work found already drafted in the working tree from a prior incomplete pass (MULTIPLE_COMPARISONS_AUDIT.md section 5 addendum referenced in ROADMAP.md text was not yet actually written) -- completed and committed this firing.",
+   "commit": "83d385e",
    "tests": "513/513 pass"
   }
  ],
