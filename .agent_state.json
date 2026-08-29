@@ -4,9 +4,9 @@
   "status": "idle",
   "target_file": null,
   "objective": null,
-  "notes": "PHASE-DIRECTIVE-BOOKKEEPING complete (commit 83d385e). Recorded the 2026-08-29 phase directive (blackboard.phase_directive_new_mechanism) into ROADMAP.md: Template-A/crypto price-structure program CLOSED, equities research ratified, FX authorized as new asset class, new mechanism phase opened -- reasoning quoted from cited prior findings (ZERO-COST-FLOOR-ALL-FAMILIES, EXECUTION-DELAY-DECAY-CURVE, PAIRS-COINTEGRATION-STATARB, B5-REVERSAL/Classifier-P5, PER-FAMILY-COST-CEILING), not restated from memory. Stated the vol_contraction tension plainly per the directive's own open_conflict_for_human field (AXIS C cleared the 3-leg gate 2026-08-28, then SEALED_SYMBOLS spent inconclusively on it 2026-08-29) rather than presenting decision 1 as unambiguous -- left unresolved for human review. Recorded the C0-C3 build order and sequencing rule (C1-C3 not queued until C0 resolves). Pre-registered, before any C0 result exists, that C0-C3 join the existing formal-NHST BH-FDR family (MULTIPLE_COMPARISONS_AUDIT.md section 2, n=20) rather than forming a new one -- reasoned from hypothesis-class precedent (MACRO-REGIME/GDELT/ACTIVE-ADDRESS-COUNT signals all joined without a separate-family argument) and from C0 reusing B5-REVERSAL/Classifier-P5's literal same sealed holdout and cost model; bound this as the governing rule in a new subsection of section 5. No AGENT_PROTOCOL.md change needed -- its existing Multiple-comparisons-discipline section already covers this. No production or research code touched, no backtest re-run, no C0 result computed. 513/513 tests green. C0-SIGNAL-COMBINATION is now unblocked to run next.",
+  "notes": "C0-SIGNAL-COMBINATION complete (commit e294b66). New scripts/c0-signal-combination.mjs (additive, cache-only, no egress; momentum.mjs/classifier.mjs unmodified). Pre-registered combination rule (fixed a-priori percentile rank-average of B5-REVERSAL momentum score and Classifier P5 win probability, top tercile, unfitted), cost model, holdout, and gate written into the script header before any composite number was computed. Holdout deliberately reduced from the historical 16-symbol convention to 13 symbols (drops SEALED_SYMBOLS NEAR/SUI/UNI per this item's own never-touch-it instruction; STABLE_13/train unchanged, still includes AVAX/LINK per every prior study's own convention -- disclosed as a deliberate deviation, not silently done). B5-REVERSAL train reproduction matched published figures exactly (all six numbers). Classifier P5 model/AUC reproduced exactly (holdout AUC 0.5249) but its published economics did not (-0.8634 fresh vs -0.4616 published) -- disclosed as a staleness finding, not investigated further: strategy.js's FEE_RATE/SLIPPAGE_PCT were corrected upward by FEE-SCHEDULE-REBASE the same day P5 was published, and row counts match exactly (15076/7580) ruling out a data or universe cause. Composite (3345 joined trades from classifier holdout trades matched to the same-symbol B5-REVERSAL panel as of each trade's own entry date, no lookahead; 2044 trades dropped for no momentum coverage yet, disclosed not absorbed): selected tercile (n=1115) net R deeply negative and WORSE than either standalone signal recomputed on the identical matched population. Pre-registered one-sided permutation test (K=2000, seed 20260829): p=0.4708, not significant (nominally correct sign, negligible effect). Gate: only the >=100-trade sample floor passes; every other clause (significance, positive-at-real-cost, beats-B5, beats-P5) fails. KILLED, decisively -- closes the 'existing small effects, just combined' hypothesis before any new data source is built, the useful negative result this item's own note anticipated. Joins MULTIPLE_COMPARISONS_AUDIT.md's formal-NHST family as its 21st sub-test (rank 13/21, q=0.7605) per PHASE-DIRECTIVE-BOOKKEEPING's pre-registered C0-C3 assignment -- applied, not re-opened; no survivor flips. AGENT_PROTOCOL.md family-size counter updated (20->21). Recorded in ROADMAP.md (full methodology + numbers) and VERDICTS.md. 513/513 tests green both before and after. Per the phase directive's own build order, C1 (options-vol risk premium) is now unblocked to run next.",
   "updated_by": "executor",
-  "updated_at": "2026-08-29T07:15:00.000Z"
+  "updated_at": "2026-08-29T08:23:30.391Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -994,7 +994,7 @@
    },
    {
     "id": "C0-SIGNAL-COMBINATION",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: scripts/c0-signal-combination.mjs (additive, cache-only); reuses momentum.mjs and classifier.mjs exports unmodified",
     "depends_on": [
@@ -1183,14 +1183,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-15T05:13:50.399Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "executor-completed",
-   "detail": "Closed OPEN-INTEREST-TREND-CONFIRMATION: new oi-trend-gate.mjs module gates breakout/anticipate on Kraken Futures OI trend (OI vs trailing 7-day avg). Data-availability gate passed cleanly (28/29 assets, 694-899 days coverage, no H11-style ceiling). Sealed 70/30 holdout: FAIL both families (breakout avgR -0.975/1252 trades/1-28 positive; anticipate avgR -0.895/1462 trades/0-27 positive), decisive vs the -0.30/150/0.40 gate. Recorded in VERDICTS.md + TOURNAMENT_ROADMAP.md. 368/368 tests green (5 new).",
-   "commit": "1e09a2c",
-   "tests": "368/368 green"
-  },
   {
    "ts": "2026-08-15T06:09:26.841Z",
    "agent": "cajh-loop-check-scheduled",
@@ -1982,6 +1974,14 @@
    "detail": "Wrote ROADMAP.md 2026-08-29 phase-directive entry (four decisions, reasoning quoted from cited record, vol_contraction tension stated plainly, C0-C3 build order) and pre-registered C0-C3 correction-family assignment (joins existing n=20 formal-NHST family), bound in MULTIPLE_COMPARISONS_AUDIT.md section 5. No code touched. Work found already drafted in the working tree from a prior incomplete pass (MULTIPLE_COMPARISONS_AUDIT.md section 5 addendum referenced in ROADMAP.md text was not yet actually written) -- completed and committed this firing.",
    "commit": "83d385e",
    "tests": "513/513 pass"
+  },
+  {
+   "ts": "2026-08-29T08:23:30.391Z",
+   "agent": "executor",
+   "action": "research-complete",
+   "detail": "C0-SIGNAL-COMBINATION: fixed a-priori rank-average combination of B5-REVERSAL and Classifier P5, KILLED decisively (composite net R worse than either standalone input; permutation p=0.4708, not significant). Joins formal-NHST family as 21st sub-test (q=0.7605). Disclosed an unrelated Classifier-P5 economics staleness finding (model/AUC reproduce exactly, economics do not, due to FEE-SCHEDULE-REBASE's cost-constant correction post-dating P5's publication). C1 now unblocked.",
+   "commit": "e294b66",
+   "tests": "513/513 green"
   }
  ],
  "automation": {
