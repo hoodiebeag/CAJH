@@ -278,8 +278,18 @@ section is the binding rule; that document is the reasoning behind it. Update bo
 fail):**
 
 - Formal NHST studies (report a p-value against a pre-registered significance gate):
-  **21** sub-tests across 18 studies as of 2026-08-29 (see audit §2 for the list and p-values).
-  Updated by C0-SIGNAL-COMBINATION (2026-08-29): a fixed a-priori rank-average combination of
+  **22** sub-tests across 19 studies as of 2026-08-29 (see audit §2 for the list and p-values).
+  Updated by C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES (2026-08-29): a continuous-covariate
+  association between the 10y-2y Treasury spread level (causally lagged) and `ma_dip` DJIA-30
+  holdout trade net R — a different statistical unit (effective n = trade count, 475) from the
+  three prior discrete-regime macro studies, which were all limited to 1 holdout episode. C1
+  (options-vol) resolved as a data-availability gate, neither pass nor fail, and never entered
+  this family. Two-sided permutation p=0.0365 (K=2000) — nominally clears the raw gate but does
+  NOT survive family-wide BH-FDR (q=0.1338, rank 6/22) — NULL after correction (see
+  `ROADMAP.md`/`VERDICTS.md`). Family-wide BH-FDR recomputed across all 22: two survivors,
+  unchanged from n=21; no flips. This is the first addition to the family that raised the raw
+  p<0.05 hit-count itself (5→6) rather than landing below the existing hits.
+  Prior update, C0-SIGNAL-COMBINATION (2026-08-29): a fixed a-priori rank-average combination of
   B5-REVERSAL's momentum score and Classifier P5's win probability, joining this family per
   `MULTIPLE_COMPARISONS_AUDIT.md` §5's own pre-registered C0-C3 assignment rather than starting
   a new one. One-sided permutation p=0.4708 (K=2000) — nominally correct sign but far from

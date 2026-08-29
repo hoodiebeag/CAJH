@@ -7036,3 +7036,109 @@ by the human.
 attempted.** `npm.cmd test`: 513/513 green, unchanged (this diagnostic adds no new tests, same
 convention as every other throwaway `scripts/*.mjs` audit in this project). Raw output saved via
 `saveExperiment` to `research-runs/2026-08-29T10-03-27-905Z-c1-vrp-data-availability-gate.json`.
+
+
+## 2026-08-29 — C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES: a genuinely new statistical unit — nominally p<0.05, does not survive family-wide BH-FDR
+
+`C1-VRP-DATA-AVAILABILITY-GATE`'s account-side entitlement question resolved as neither pass nor
+fail, unanswerable without the human. Per that item's own Part C fallback (and the phase
+directive's step 4), the build order drops to C2. New file `scripts/c2-continuous-macro-
+conditioner.mjs` (additive, read-only; `brokers/ibkr.mjs` and `backtest.js`/`strategy.js`
+untouched).
+
+**Why this is not a fourth discrete-regime study.** `MACRO-REGIME-PRIMARY-SIGNAL` (2026-08-22),
+`MACRO-REGIME-PRIMARY-SIGNAL-EQUITIES` (2026-08-25), and
+`MACRO-REGIME-EQUITIES-SPLIT-FRACTION-DIAGNOSTIC` (2026-08-27) all died on the identical
+structural wall: the equities holdout window contains exactly **one** discrete regime episode
+(roughly 479 of 500 cached days sit inside a single unbroken favourable episode), so no split
+point can catch a transition that isn't there, and effective n under discrete regime-voting is
+the episode count — 1 — regardless of where train/holdout falls. The third study established this
+is a property of the *window*, not the split fraction. A fourth discrete-regime study would fail
+identically and was not staged. This item instead conditions on the macro level as a **continuous
+covariate**, which changes the statistical unit entirely: effective n becomes the **trade count**,
+not the episode count. Not caught by `template_a_exhausted` either (that closure retired
+threshold-a-series then binary-gate breakout/anticipate then score holdout avgR) — this design
+applies no threshold and no binary gate anywhere.
+
+**Pre-registration (written into the script header before any equity return was touched —
+summarized here, full text in the script itself).** Macro variable: the 10y-2y Treasury spread
+(DGS10-DGS2), used as a continuous value, never thresholded — the natural single candidate since
+it is already sourced by `macro-regime-primary-signal.mjs`, chosen before any association was
+computed, no other variable tried and discarded. Sourcing/causal lag reused verbatim from that
+script (`fetchFredSeries`/`lookupLagged` duplicated, since it doesn't export them — same pattern
+`macro-regime-primary-signal-equities.mjs` already used): latest published value strictly before
+(trade entry date - 1 day). Equity trade population: `ma_dip` on the DJIA-30 holdout, the EXACT
+config `MADIP-REALISED-R-CONDITION-2` established (`{ entryMode: "ma_dip", trendGate: false,
+alignMode: "none", minStopPct: 0, maxStopPct: .06, tpR: 5, lockBreakeven: true }`, 70/30 split,
+IBKR Fixed $0.005/share + 5bps/side slippage) — chosen as the single most rigorously
+characterized equity trade population in this project (win-rate margin, exit-reason
+decomposition, random-entry control, survivability all already measured against it), no parameter
+changed. Test statistic: Spearman rank correlation between the causally-lagged spread level at
+each trade's own entry date and that trade's realised net R, **two-sided** (no directional prior
+was pre-registered — an inverted curve could plausibly correlate with trade outcome in either
+direction, and choosing a side only after seeing the sign would be exactly the after-the-fact
+framing this project's discipline exists to prevent). Significance via a label-shuffle permutation
+test, K=2000, seed 20260829 (fixed before this script was ever run). A quintile breakdown (mean
+net R and count per macro-level quintile) is a descriptive companion only, not an additional test.
+Correction family: per `PHASE-DIRECTIVE-BOOKKEEPING`'s pre-registered decision, this joins
+`MULTIPLE_COMPARISONS_AUDIT.md`'s existing formal-NHST family — not re-opened here.
+
+**Result.** 30/30 DJIA-30 symbols had cache coverage; 475 `ma_dip` holdout excursions collected
+(matches `MADIP-REALISED-R-CONDITION-2`'s own trade count for the same universe/config exactly —
+confirms this reuses that population rather than re-deriving it). All 475 carried a real
+`entryTime` and a DGS10/DGS2 macro point under the causal lag (0 dropped either way — FRED's
+daily-series history comfortably covers the 2024-2026 holdout window). **Effective n = 475
+trades**, contrasted against the **1 holdout regime episode** that limited all three prior
+macro-regime studies — that contrast is the entire reason this item exists.
+
+Observed Spearman rho = **-0.0980** (higher spread associated with lower net R — a small negative
+effect, no direction was pre-registered so this is simply the sign observed). Permutation p =
+**0.0365** (two-sided, K=2000, seed 20260829) — nominally clears the project's pre-registered
+p<0.05 gate. Quintile breakdown (n=95 each):
+
+| Quintile | Spread range | Mean net R |
+|---:|---|---:|
+| 1 (lowest) | 0.00 – 0.38 | +0.600 |
+| 2 | 0.38 – 0.47 | +0.701 |
+| 3 | 0.47 – 0.51 | -0.456 |
+| 4 | 0.51 – 0.56 | -0.024 |
+| 5 (highest) | 0.56 – 0.74 | -0.057 |
+
+The quintile pattern is not monotonic (quintile 2 is the best-performing bucket, quintile 3 the
+worst, with 4 and 5 both mildly negative) — consistent with a real but modest, noisy rank
+correlation rather than a clean linear relationship, and a reason on its own not to read this as
+an obviously exploitable gradient even before correction is applied.
+
+**Multiple comparisons — applying, not re-opening, `PHASE-DIRECTIVE-BOOKKEEPING`'s pre-registered
+decision.** C2's p=0.0365 joins `MULTIPLE_COMPARISONS_AUDIT.md` §2's formal-NHST family as its
+22nd sub-test, landing at rank 6 of 22 (between `Classifier P5` at 0.0198/rank 5 and `Low-vol B4
+negBeta` at 0.0579/now rank 7). This is the first addition to this family that raises the raw
+p<0.05 hit-count itself (five to six) rather than landing below the existing hits. Family-wide
+BH-FDR recomputed across all 22: **q=0.1338 — does not survive** (rank 6's own critical value is
+`6/22×0.05=0.01364`, more than 2.5x below this result's q). Two sub-tests still formally survive
+at n=22, unchanged from n=21; no flips. `MULTIPLE_COMPARISONS_AUDIT.md` §2 and §5 and
+`AGENT_PROTOCOL.md`'s family-size counter are updated in this commit.
+
+**RESULT: NULL after correction.** A nominally significant (p=0.0365), small, negative,
+non-monotonic association that does not survive family-wide BH-FDR correction (q=0.1338) across
+a 22-test family with two known survivors already. This closes continuous macro conditioning on
+the 10y-2y spread for the `ma_dip`/DJIA-30 population — a useful negative result exactly as valid
+as a discrete-regime null, and the honest complement to the three prior studies' episode-count
+limitation: the wall those studies hit was structural (window shape), not merely
+under-powered — and now that the statistical unit has actually been fixed, the result is still a
+null, just a formally-testable one rather than an untestable one. No threshold was applied, no
+signal was gated, no lag was swept, no discrete-regime design was re-run, `SEALED_SYMBOLS` was
+never touched. Per this item's own scope, this is a diagnostic result, not a strategy change — no
+gate, threshold, or production code follows from it.
+
+**Sequencing.** C3 (FX carry) is next in the phase-directive's build order.
+
+### Engineering note
+
+New file only: `scripts/c2-continuous-macro-conditioner.mjs` (additive, read-only for equities —
+`backtestMultiTF`/`saveExperiment` imported and called exactly as `backtest.js`/`researchlab.mjs`
+already expose them, no modification to either; one FRED egress call for DGS10/DGS2, the same
+public CSV endpoint `macro-regime-primary-signal.mjs` already uses). `npm.cmd test`: 513/513
+green, unchanged (this diagnostic adds no new tests, same convention as every other throwaway
+`scripts/*.mjs` audit in this project). Raw output saved via `saveExperiment` to
+`research-runs/2026-08-29T11-04-24-423Z-c2-continuous-macro-conditioner.json`.

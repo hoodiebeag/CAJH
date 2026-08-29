@@ -177,7 +177,7 @@ study by `B5-REVERSAL-PHASE4-PORTFOLIO-SIM`'s FAIL under a stricter, more realis
 
 ## 2. The formal-significance subfamily: a real FWER/FDR computation
 
-Twenty-one sub-tests across eighteen studies report an actual p-value against the project's
+Twenty-two sub-tests across nineteen studies report an actual p-value against the project's
 pre-registered `p<0.05` significance gate (`MOMENTUM_SPEC.md §6` clause 1, and the
 classifier spec's equivalent permutation-null clause). These are the only results in this
 project where classical multiple-comparisons math applies without qualification, because
@@ -190,46 +190,50 @@ they're the only ones with an actual null distribution behind them.
 | 3 | CLASSIFIER-FUNDING-FEATURE (holdout, primary) | 0.0099 | yes |
 | 4 | EQUITIES-MADIP-OUT-OF-SAMPLE (holdout, primary) | 0.0116 | yes |
 | 5 | Classifier P5 (holdout, primary) | 0.0198 | yes |
-| 6 | Low-vol B4 negBeta (train) | 0.0579 | yes |
-| 7 | EQUITIES-MADIP-SIGNIFICANCE (holdout, primary) | 0.0648 | yes |
-| 8 | CROSS-SECTIONAL-NONPRICE-RANK (train, OI-change primary IC) | 0.1249 | **no** (wrong sign) |
-| 9 | EQUITIES-BREAKOUT-SIGNIFICANCE (holdout, primary) | 0.2036 | yes |
-| 10 | Low-vol B4 negVol (train) | 0.2278 | yes |
-| 11 | B5-REVERSAL L=5 (train) | 0.4226 | yes |
-| 12 | MOMENTUM-SHORT-HORIZON-RECHECK L=14 (train) | 0.4266 | yes |
-| 13 | C0-SIGNAL-COMBINATION (permutation test, tercile-vs-random) | 0.4708 | yes (selection nominally beats random, but the effect is far too small to be significant) |
-| 14 | MOMENTUM-SHORT-HORIZON-RECHECK L=7 (train) | 0.6024 | **no** (wrong sign) |
-| 15 | EQUITIES-BREAKOUT-OUT-OF-SAMPLE (holdout, primary) | 0.6165 | **no** (wrong sign) |
-| 16 | Momentum M7 (train, residual IC) | 0.7013 | yes |
-| 17 | GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL (holdout, primary) | 0.7113 | **no** (wrong sign) |
-| 18 | STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC (holdout, primary) | 0.7183 | **no** (wrong sign) |
-| 19 | WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC (holdout, primary) | 0.9251 | **no** (wrong sign) |
-| 20 | LOG-REGRESSION-BANDS-EQUITIES (holdout, primary) | 0.9750 | **no** (wrong sign) |
-| 21 | ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL (holdout, primary) | 0.9990 | **no** (wrong sign) |
+| 6 | C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES (permutation test, spread-vs-netR) | 0.0365 | **no** (negative rho — higher 10y-2y spread associated with lower trade net R; no directional prior was pre-registered, so this is simply the sign observed) |
+| 7 | Low-vol B4 negBeta (train) | 0.0579 | yes |
+| 8 | EQUITIES-MADIP-SIGNIFICANCE (holdout, primary) | 0.0648 | yes |
+| 9 | CROSS-SECTIONAL-NONPRICE-RANK (train, OI-change primary IC) | 0.1249 | **no** (wrong sign) |
+| 10 | EQUITIES-BREAKOUT-SIGNIFICANCE (holdout, primary) | 0.2036 | yes |
+| 11 | Low-vol B4 negVol (train) | 0.2278 | yes |
+| 12 | B5-REVERSAL L=5 (train) | 0.4226 | yes |
+| 13 | MOMENTUM-SHORT-HORIZON-RECHECK L=14 (train) | 0.4266 | yes |
+| 14 | C0-SIGNAL-COMBINATION (permutation test, tercile-vs-random) | 0.4708 | yes (selection nominally beats random, but the effect is far too small to be significant) |
+| 15 | MOMENTUM-SHORT-HORIZON-RECHECK L=7 (train) | 0.6024 | **no** (wrong sign) |
+| 16 | EQUITIES-BREAKOUT-OUT-OF-SAMPLE (holdout, primary) | 0.6165 | **no** (wrong sign) |
+| 17 | Momentum M7 (train, residual IC) | 0.7013 | yes |
+| 18 | GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL (holdout, primary) | 0.7113 | **no** (wrong sign) |
+| 19 | STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC (holdout, primary) | 0.7183 | **no** (wrong sign) |
+| 20 | WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC (holdout, primary) | 0.9251 | **no** (wrong sign) |
+| 21 | LOG-REGRESSION-BANDS-EQUITIES (holdout, primary) | 0.9750 | **no** (wrong sign) |
+| 22 | ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL (holdout, primary) | 0.9990 | **no** (wrong sign) |
 
-**Naive FWER, k=21, alpha=0.05:** 1 − (1 − 0.05)^21 = **0.6594** (assuming independence,
+**Naive FWER, k=22, alpha=0.05:** 1 − (1 − 0.05)^22 = **0.6765** (assuming independence,
 which these tests only partially satisfy — see caveat below). Over a family this size, roughly
-66% odds of at least one nominal "significant" hit existed even if every single underlying
-effect were exactly zero. Five clear raw p<0.05 (ranks 1–5 above, unchanged by this update — the
-new entry lands in the middle of the table, above only the eight already-below-it entries) —
-informative, but this alone doesn't say anything about which are real.
+68% odds of at least one nominal "significant" hit existed even if every single underlying
+effect were exactly zero. Six clear raw p<0.05 (ranks 1–6 above — the first time this update
+mechanism has seen the raw hit-count itself grow, rather than a new entry landing below the
+existing hits and leaving the count unchanged) — informative, but this alone doesn't say
+anything about which are real.
 
-**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 21 is `(i/21)×0.05`):
+**Benjamini-Hochberg FDR at q=0.05** (critical value for rank *i* of 22 is `(i/22)×0.05`):
 
 | Rank *i* | Study | p-value | q-value | Survives? |
 |---:|---|---:|---:|---|
-| 1 | LOG-REGRESSION-BANDS-CRYPTO | 0.0002 | 0.0042 | **yes** (nominally — see caveat) |
-| 2 | B5-REVERSAL L=3 | 0.0010 | 0.0105 | **yes** |
-| 3 | CLASSIFIER-FUNDING-FEATURE | 0.0099 | 0.0609 | no (already a non-survivor going into this update) |
-| 4 | EQUITIES-MADIP-OUT-OF-SAMPLE | 0.0116 | 0.0609 | no (already a non-survivor going into this update — tightens further) |
-| 5 | Classifier P5 | 0.0198 | 0.0832 | no |
-| 6–21 | (remaining 16, see full table above) | 0.0579–0.9990 | 0.1944–0.9990 | no |
+| 1 | LOG-REGRESSION-BANDS-CRYPTO | 0.0002 | 0.0044 | **yes** (nominally — see caveat) |
+| 2 | B5-REVERSAL L=3 | 0.0010 | 0.0110 | **yes** |
+| 3 | CLASSIFIER-FUNDING-FEATURE | 0.0099 | 0.0638 | no (already a non-survivor going into this update — tightens further) |
+| 4 | EQUITIES-MADIP-OUT-OF-SAMPLE | 0.0116 | 0.0638 | no (already a non-survivor going into this update — tightens further) |
+| 5 | Classifier P5 | 0.0198 | 0.0871 | no |
+| 6 | C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES | 0.0365 | 0.1338 | no (raw p<0.05, does not survive correction) |
+| 7–22 | (remaining 16, see full table above) | 0.0579–0.9990 | 0.1782–0.9990 | no |
 
 **Two sub-tests formally survive family-wise BH-FDR correction at q=0.05 at the current
-n=21 — unchanged from n=20. No material side effect this update:
-`C0-SIGNAL-COMBINATION`'s addition (p=0.4708) lands at rank 13 of 21, in the middle of the
-table, low enough that it only tightens thresholds already well above 0.05 for the existing
-non-survivors — nothing flips in either direction. One of the two remaining survivors is a
+n=22 — unchanged from n=21. No survivor flips this update:
+`C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES`'s addition (p=0.0365) lands at rank 6 of 22,
+between the current non-survivors `Classifier P5` (rank 5) and `Low-vol B4 negBeta` (now rank
+7) — high enough in the ranking to raise the raw p<0.05 hit-count from five to six for the first
+time, but its own q-value (0.1338) is nowhere near the 0.05 line. One of the two remaining survivors is a
 demonstrated benchmark artifact (rank 1, see below).**
 `LOG-REGRESSION-BANDS-CRYPTO`
 (2026-08-22, `ROADMAP.md`) tested a log-price-vs-log-time regression-band exposure signal
@@ -636,6 +640,57 @@ weak, already-established effects simply do not compound under a fixed unfitted 
 rule — not surprising under either the independence or correlated-null reading, and it changes
 neither this document's headline family-size caveat nor either standing survivor's status.
 
+**This update (n=21→n=22): `C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES` joins as the 22nd entry,
+landing at rank 6, p=0.0365.** Per `MULTIPLE_COMPARISONS_AUDIT.md` §5's own pre-registered
+C0-C3 decision, C2 joins this family rather than starting a new one — that decision is not
+re-opened here. C1 (options-vol risk premium) was skipped ahead of C2 without producing a
+p-value: `C1-VRP-DATA-AVAILABILITY-GATE` (2026-08-29) resolved as an availability gate, neither
+pass nor fail, code-side confirmed sufficient but the account-side entitlement question left for
+the human — it never reached a statistical test and so never entered this family. C2 is a
+two-sided Spearman rank-correlation permutation test (K=2000, seed 20260829) between the 10y-2y
+Treasury spread level at each trade's causally-lagged entry date and that trade's realised net
+R, on `ma_dip`'s DJIA-30 holdout trades (n=475, `MADIP-REALISED-R-CONDITION-2`'s exact,
+unmodified config) — a genuinely different statistical unit from the three prior discrete-regime
+macro studies (`MACRO-REGIME-PRIMARY-SIGNAL`, `MACRO-REGIME-PRIMARY-SIGNAL-EQUITIES`,
+`MACRO-REGIME-EQUITIES-SPLIT-FRACTION-DIAGNOSTIC`), all of which were limited to 1 holdout
+regime episode; this measurement's effective n is the trade count instead. Observed rho=-0.0980
+(negative — higher spread associated with lower net R, no direction was pre-registered so this
+is simply the observed sign), p=0.0365. Full writeup: `ROADMAP.md`'s 2026-08-29
+`C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES` section.
+
+**Material side effect: the raw p<0.05 hit-count itself grows from five to six — the first time
+that has happened in this family's history rather than a new entry landing below the existing
+hits and leaving the count unchanged.** `C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES` inserts at
+rank 6, immediately after `Classifier P5` (rank 5, p=0.0198) and before `Low-vol B4 negBeta`
+(now rank 7, p=0.0579) — above the 0.05 raw-significance line, unlike every prior addition to
+this family. It does not, however, come close to surviving BH-FDR correction (q=0.1338, rank
+6's own critical value being `6/22×0.05=0.01364` — nowhere near). `LOG-REGRESSION-BANDS-CRYPTO`
+(q=0.0042→0.0044) and `B5-REVERSAL L=3` (q=0.0105→0.0110) tighten negligibly, purely from `n`
+growing — both remain comfortable survivors. `CLASSIFIER-FUNDING-FEATURE` and
+`EQUITIES-MADIP-OUT-OF-SAMPLE` (ranks 3–4, already non-survivors) both tighten from q=0.0609 to
+q=0.0638 for the same mechanical reason the rank-4 term sets the running-minimum for both ranks
+— unchanged conclusion, still non-survivors. `Classifier P5` (rank 5) tightens from q=0.0832 to
+q=0.0871, also unaffected in status. Two sub-tests still formally survive at n=22, unchanged
+from n=21.
+
+**The binomial-surprise figure, updated once more (n=22) — and for the first time, the hit
+count itself changed.** Under a null of "no real effect anywhere in this family," P(at least 6
+of 22 independent trials clear p<0.05) ≈ **0.06%** (exact binomial, n=22, p=0.05) — a sharp drop
+from the n=21 figure of 0.31% for P(at least 5 of 21), because this update is the first to add a
+raw hit rather than a raw non-hit. Read cautiously: `C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES`
+is a genuinely new information source relative to every other member of this family (a
+continuous macro covariate joined against equity trade outcomes — unlike the three prior
+discrete-regime macro studies, which used a different statistical unit entirely and are
+themselves not part of this table), so this is not a correlated re-run inflating the hit count
+artificially. But p=0.0365 is also not close to surviving correction (q=0.1338, more than 2.5x
+the q=0.05 line), and this project's own standing discipline (`AGENT_PROTOCOL.md`'s
+multiple-comparisons section) treats family-wide BH-FDR, not the raw hit-count or the naive
+FWER figure, as the binding bar for calling a result "statistically significant." By that bar
+this result does not clear it. The honest reading: a nominally significant, negative,
+small-effect-size association (rho=-0.098) that does not survive correction across a 22-test
+family — recorded as a raw finding worth naming (the first time this family's hit-count has
+moved), not as a discovery.
+
 ## 3. The economic-gate subfamily: why classical FWER doesn't transfer, and what does
 
 33 studies (see Section 1 table) never computed a p-value at all — they check a point
@@ -729,9 +784,9 @@ The concrete, binding rule (not just narrative here) is written into
 
 - **Formal NHST studies** (anything reporting a p-value against a pre-registered
   significance gate): a new result is only credible as "statistically significant" if it
-  survives a **BH-FDR recomputation across all NHST p-values to date (this document's 12),
+  survives a **BH-FDR recomputation across all NHST p-values to date (this document's 22),
   at q=0.05** — not evaluated against alpha=0.05 in isolation. The family-size
-  counter (currently 12) must be updated in that section every time a new NHST test is added,
+  counter (currently 22) must be updated in that section every time a new NHST test is added,
   whether it passes or fails.
 - **Economic-gate studies**: no p-value exists to correct, so the discipline is structural
   instead — (a) the family-size counter (currently 33) is kept current in the same section so
@@ -768,6 +823,15 @@ produce, per the mechanical rule immediately above — whether it passes or fail
 **Update (2026-08-29): C0 has now run and produced its p-value (0.4708, KILLED — see
 `ROADMAP.md`'s `C0-SIGNAL-COMBINATION` section and `VERDICTS.md`), applying this decision rather
 than re-opening it. Family grew from n=20 to n=21 as pre-registered; no survivor status
-changed. C1 is next in the sequence.**
+changed.**
+
+**Update (2026-08-29): C1 ran and resolved as a data-availability gate, neither pass nor fail —
+it never reached a statistical test, so it does not join this family (`C1-VRP-DATA-AVAILABILITY-
+GATE`, code-side confirmed sufficient, account-side entitlement left as an explicit question list
+for the human). C2 ran next per the directive's own fallback step and produced its p-value
+(0.0365, raw p<0.05 but does not survive BH-FDR at q=0.1338 — see `ROADMAP.md`'s
+`C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES` section and `VERDICTS.md`), applying this decision
+rather than re-opening it. Family grew from n=21 to n=22 as pre-registered; no survivor status
+changed. C3 is next in the sequence.**
 
 No existing verdict changes as a result of this audit.
