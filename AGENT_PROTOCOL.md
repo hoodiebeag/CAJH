@@ -495,6 +495,15 @@ D3 candidate**, until re-run against `SEALED_SYMBOLS`. That re-run is explicitly
 performed there) and is staged as a separate `work_queue` item instead of being done
 retroactively here.
 
+**Update (2026-08-29, `VOL-CONTRACTION-SEALED-VALIDATION`, `ROADMAP.md`): the `SEALED_SYMBOLS`
+re-run is done, and is inconclusive, not a pass.** 67 trades on the 5-symbol sealed pool
+(gross avgR +0.0411, 95% CI spans zero) fails the trades>=150 leg, but the sealed pool is
+structurally too small (5 symbols vs the active pool's 28) to ever clear that leg regardless of
+whether the underlying edge is real — foreseeable and disclosed before running, not a surprise.
+Reported as inconclusive on the trades leg specifically, not a pass and not a clean fail on
+sample size alone. The result remains **not promoted, not a live D3 candidate** — this rule's
+job here is done; no further sealed-pool spend is authorized on this candidate.
+
 **Rule for a new formal NHST result.** Do not evaluate it against `alpha=0.05` in isolation.
 Add its p-value to the family-size counter above, recompute Benjamini-Hochberg FDR across
 *all* p-values in that family (old + new) at `q=0.05`, and only call the new result

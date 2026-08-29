@@ -6475,3 +6475,72 @@ read-only, cache-only, no network egress). `backtest.js`/`strategy.js`/`tourname
 `monitor.js`/`bot.js`/`trader.js`/`scanner.js` — all untouched (the `direction` param and the
 `bos` short-entry candidate already existed from `SHORT-SIDE-ENGINE-CAPABILITY`; this item only
 calls them). `npm.cmd test`: 513/513 green (no production code changed).
+
+## 2026-08-29 — VOL-CONTRACTION-SEALED-VALIDATION: the sealed pool is structurally too small to test the trades leg — inconclusive, not a pass; the active-pool funding-cost caveat resolves clean, both derivatives cells stay positive net of real funding
+
+`VOL-CONTRACTION-SAMPLE-EXTENSION` (2026-08-28) found that `vol_contraction` on a 15m-entry,
+holdout-only axis (today's full watchlist, same 0.70 split) clears the fuller 3-leg gate for
+the first time in this project's history: 256 trades, gross avgR +0.2524, positiveAssets/
+assets 0.654. Per `AGENT_PROTOCOL.md`'s "Rule for a new economic-gate result that clears its
+literal pre-registered threshold" (added in that same commit), this made the result
+**provisional, not a live D3 candidate**, until re-run against `researchlib.mjs`'s
+`SEALED_SYMBOLS` pool (`AVAX`, `LINK`, `NEAR`, `SUI`, `UNI`) — the one holdout resource in this
+project confirmed never yet examined by any study. This item performs that one-time re-run,
+single-shot by design (this pool is not to be touched again regardless of outcome), plus
+resolves a second, independent caveat `VOL-CONTRACTION-SAMPLE-EXTENSION` left open: its two
+positive Kraken-derivatives cells were reported as funding-free upper bounds. New script only:
+`scripts/vol-contraction-sealed-validation.mjs` (additive, read-only, cache-only — every
+`PF_<PAIR>USD-historical-funding.json` needed was already on disk; no network egress).
+
+**SEALED_SYMBOLS re-run (same frozen config, same 0.70-split holdout, entryTf 15m — the only
+things that change are the 5 symbols):** 67 trades, gross avgR **0.0411** (95% CI [-0.2959,
+0.3782]), 5/5 sealed symbols traded, 2/5 net-positive (0.400). Per-symbol: AVAX -0.0859 (14
+trades), LINK -0.3487 (9), NEAR +0.0787 (18), SUI -0.1123 (11), UNI +0.4610 (15) — noisy and
+mixed, no consistent direction across the pool.
+
+**Gate result: FAILS the trades leg, and this was foreseeable and disclosed before running.**
+The sealed pool is 5 symbols against the active pool's 28 that produced 256 trades (~9.14
+trades/asset); at that same per-asset rate, 5 symbols would be expected to produce roughly 46
+trades — nowhere near the 150-trade floor — regardless of whether the underlying edge is real.
+Observed 67 trades is consistent with that expectation, not a surprise. avgRPass=false (0.0411
+< 0.10), tradesPass=false (67 < 150), positiveAssetsPass=false (0.400 < 0.50). **This is
+reported as INCONCLUSIVE on the trades leg specifically — the sealed pool is structurally too
+small to test that leg at all — not lowered to a pass and not declared a clean fail on sample
+size alone.** The point estimate itself (+0.0411, CI spanning zero) also does not independently
+support the active-pool's +0.2524 gross edge, but with only 5 symbols and a CI this wide, that
+is weak evidence either way. **`VOL-CONTRACTION-SAMPLE-EXTENSION`'s finding does NOT replicate
+on sealed data as tested. No promotion — this was never a live D3 candidate, and stays that
+way.**
+
+**Funding-cost resolution (independent deliverable, active pool, not touching the sealed
+pool):** a funding-rate model already exists in this codebase — `cost-model.mjs`'s
+`fundingCost()`, fed by `derivatives.mjs`'s `fetchFundingRates()` /
+`PF_<PAIR>USD-historical-funding.json` caches — but had never previously been applied to any
+backtest result. This item reproduced `VOL-CONTRACTION-SAMPLE-EXTENSION`'s own AXIS C
+population exactly (today's full watchlist, unsplit against `SEALED_SYMBOLS` — that item used
+`loadWatchlist()` directly, so its reported 28-asset pool already includes the 5 sealed
+symbols; reproducing its exact figures requires the same unsplit population, confirmed by the
+reproduction below matching to 4 decimal places) and applied real per-trade funding cost
+(`fundingCost()` over each trade's entry→exit window, converted to R via the same
+price/risk convention `backtest.js` already uses for fees):
+
+| Venue | Reported (funding-free) | Reproduced (funding-free) | True net (funding-adjusted) | 95% CI |
+|---|---:|---:|---:|---|
+| Kraken derivatives maker | +0.2231 | +0.2231 | **+0.2244** | [0.0339, 0.4148] |
+| Kraken derivatives taker | +0.1057 | +0.1057 | **+0.1070** | [-0.0833, 0.2974] |
+
+The funding-free reproduction matches the originally reported figures exactly, confirming the
+same population and method. Both cells stay positive after real funding is included, and the
+effect of funding itself is small (+0.0013R on both cells) — consistent with this axis's short
+average hold times (tpR 3, 15m entry) leaving little time for funding to accrue either way.
+**The upper-bound caveat is resolved: it does not overturn either cell**, though this says
+nothing about the sealed-pool replication question above, which remains inconclusive
+independently.
+
+**`VERDICTS.md` is not touched** (provisional/non-promoted economic-gate clear, matching this
+project's existing precedent — no genuine PASS-and-replicated result to record).
+
+**Engineering note.** New `scripts/vol-contraction-sealed-validation.mjs` only (additive,
+read-only, cache-only, no network egress). `backtest.js`/`strategy.js`/`tournament.mjs`/
+`cost-model.mjs`/`derivatives.mjs` — all untouched (this item only calls their existing
+exports). `npm.cmd test`: 513/513 green (no production code changed).
