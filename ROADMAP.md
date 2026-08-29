@@ -6972,3 +6972,67 @@ No production code touched. `npm.cmd test`: 513/513 green, unchanged from before
 diagnostic in this project, which reuse already-tested library functions rather than duplicating
 coverage). Raw run output saved via `saveExperiment` to
 `research-runs/2026-08-29T08-17-23-191Z-c0-signal-combination.json` for full auditability.
+
+
+## 2026-08-29 — C1-VRP-DATA-AVAILABILITY-GATE: code-side capability confirmed sufficient, account-side entitlement is an open question for the human — not a pass, not a fail
+
+Phase-directive STEP 4's build order queues C1 (defined-risk short-premium / variance-risk-premium
+via IBKR equity/index options) next, now that `C0-SIGNAL-COMBINATION` closed KILLED. The directive
+is explicit that the data-availability gate comes first: "does the available IBKR data plan
+actually provide the options chain / historical implied-vol series needed, at what cost, how far
+back... If the gate fails, say so plainly and stop; do not substitute a proxy without disclosing
+it." This run had no egress and IB Gateway parked pending the human being at their machine, so the
+live-subscription half of the gate genuinely cannot be answered from here — that constraint is the
+deliverable's shape, not a hedge around it.
+
+**Part A (code-side capability) — resolved, from static analysis only, no network call made.**
+New `scripts/c1-vrp-data-availability-gate.mjs` (additive, read-only: reads `brokers/ibkr.mjs` and
+the installed `@stoqey/ib` package's own TypeScript declarations, makes zero network calls,
+modifies nothing). Two sub-findings:
+
+- **`brokers/ibkr.mjs` carries no options code path today**, re-confirmed directly against this
+  file rather than assumed to transfer from `OPTIONS-SKEW-PRIMARY-SIGNAL`'s 2026-08-22 finding
+  (that was a Deribit/crypto-options study that died on construct — a different venue and data
+  path). Every contract built anywhere in the file is `new Stock(symbol, "SMART", "USD")`
+  (`stockContract()` at line 104); no `secType`, `Option`, `reqSecDefOptParams`,
+  `reqContractDetails`, `tickOptionComputation`, or `OPTION_IMPLIED_VOLATILITY` identifier appears
+  anywhere in it.
+- **The installed `@stoqey/ib` dependency (already in use, no new package needed) already exposes
+  every API call a defined-risk short-premium study would need**, verified against
+  `node_modules/@stoqey/ib/dist/api/**/*.d.ts` directly rather than general TWS API docs: an
+  `Option` contract class (`api/contract/option.d.ts`), `reqContractDetails`/`reqSecDefOptParams`
+  for chain/strike/expiry enumeration, `tickOptionComputation` for live IV/greeks, and
+  `reqHistoricalData`'s `whatToShow` enum includes `OPTION_IMPLIED_VOLATILITY` for historical IV
+  (same `reqHistoricalData` call `fetchOHLC()` already uses — only the contract and `whatToShow`
+  argument differ).
+
+**Mapped to existing equities-side analogues, with a build estimate in
+`EXOGENOUS-DATA-ACCESS-AUDIT`'s terms:** three of the four required pieces (contract construction,
+historical retrieval, and its decoder quirks) extend `stockContract()`/`fetchOHLC()`'s existing
+pattern directly; option-chain enumeration needs one new function following `fetchOHLC()`'s
+request/promise/event-listener/cleanup shape against a different event pair; delta-based strike
+selection has no direct precedent in this codebase (needs either a live `tickOptionComputation`
+subscription or an offline pricing calc this project doesn't have). Overall: a multi-day build, not
+a same-day change like C0's rank-average and not a multi-week one either — the code-side gate does
+**not** fail.
+
+**Part B (account-side entitlement) — not answerable from this session, stated as a question list
+rather than guessed.** Whether the actual IBKR account holds an OPRA/options market-data
+subscription, whether it covers historical option/IV bars or only live snapshots, and how far back
+retention goes are all account-settings facts this run cannot check with no egress and Gateway
+parked. Five concrete questions are recorded in the script's output, each answerable from one
+settings page (IBKR Client Portal/TWS > Settings > User Settings > Market Data Subscriptions),
+covering: OPRA/options-inclusive bundle held or not, historical-vs-snapshot-only entitlement,
+retention depth for the underlying being considered, and any incremental cost not currently being
+paid.
+
+**Fallback, stated per the directive, not acted on.** If Part B comes back negative, the next
+mechanism is C2 (needs one new external time series, not options data) per the build order. C2 is
+**not** queued by this item — that is the next restock's decision once Part B is actually answered
+by the human.
+
+**No strategy or backtest code written, no return computed, no proxy substituted for implied vol,
+`brokers/ibkr.mjs` unmodified (confirmed via `git status` before commit), no network access
+attempted.** `npm.cmd test`: 513/513 green, unchanged (this diagnostic adds no new tests, same
+convention as every other throwaway `scripts/*.mjs` audit in this project). Raw output saved via
+`saveExperiment` to `research-runs/2026-08-29T10-03-27-905Z-c1-vrp-data-availability-gate.json`.
