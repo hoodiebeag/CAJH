@@ -1006,8 +1006,8 @@
   },
   "notifications": {
    "unresolvable-blocked": {
-    "lastSentAt": "2026-08-28T12:01:56.000Z",
-    "message": "cajh: GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC still blocked — GDELT DOC API unreachable ~15h now (10th reconfirmation). Only queue item. Waiting on GDELT's outage to clear.",
+    "lastSentAt": "2026-08-29T01:03:00.000Z",
+    "message": "cajh: GDELT DOC API's own TLS cert expired Aug28 19:50 UTC (confirmed via openssl, not a local issue). Only queue item, blocked until GDELT renews it.",
     "deliveryResult": "Mobile push requested (tool call succeeded; delivery to device not independently confirmed - see notification_policy.known_gap)."
    },
    "empty-queue": {
@@ -1038,14 +1038,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-15T03:01:54.000Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "empty-queue-checked",
-   "detail": "STEP 0-1 healthy (control IDLE, work_queue/ledger well-typed), git pull clean (no new commits). All 22 work_queue items are done; no pending item to work. Checked ROADMAP.md/TOURNAMENT_ROADMAP.md tails: MOMENTUM-SHORT-HORIZON-RECHECK (last entry, 2026-08-14) is KILLED on train significance at both L=7 and L=14, consistent with every prior price/exit/signal-family verdict this project has produced (FAIL or KILLED, none PASS). Checked SELF_AWARENESS_SPEC.md Phase 1-2 (C1 decision log, C2 buildLiveContext exposure, C3 mission digest) against the actual code: all three are already implemented (logger.js recordDecision/getRecentDecisions wired into scanner.js; context.js buildLiveContext exposes recentDecisions/halt/ROADMAP verdict; commands.js has a working !why command) even though the spec's own table never got matching work_queue rows checked off - so nothing to restock there either. Declined to invent a new hypothesis per STEP 5's explicit instruction not to manufacture busywork. Sent PushNotification (empty-queue, dedup window had expired: last sent 2026-08-14T20:12:01.941Z, 6h50m prior) restating the same honest-empty-state finding for the human. No code changes, no work_queue changes, no control changes this firing.",
-   "commit": null,
-   "tests": null
-  },
   {
    "ts": "2026-08-15T03:30:49.882Z",
    "agent": "human-fix-notes-selfblock",
@@ -1837,6 +1829,14 @@
    "detail": "VOL-CONTRACTION-SEALED-VALIDATION: sealed-pool re-run inconclusive on trades leg (67 trades, structurally under-powered vs the 150-trade floor -- 5-symbol pool at the active pool's own per-asset rate predicts ~46 trades), no promotion, finding does not replicate on sealed data as tested. Funding-cost caveat on the active-pool derivatives cells resolved separately: a funding model exists (cost-model.mjs fundingCost() + derivatives.mjs fetchFundingRates(), cache-only) and was applied for the first time -- both cells stay positive net of real funding (+0.2244 maker, +0.1070 taker, vs +0.2231/+0.1057 funding-free upper bounds). ROADMAP.md + AGENT_PROTOCOL.md updated. No new work_queue items restocked (SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md Sec 4 items all done, no new follow-on named by the 5 most recent studies).",
    "commit": "c0fe451",
    "tests": "513/513 passing"
+  },
+  {
+   "ts": "2026-08-29T01:03:00.000Z",
+   "agent": "cajh-loop-check",
+   "action": "reconfirm-blocked-new-diagnosis: GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC",
+   "detail": "GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC remains SOFT-BLOCKED, but this firing found a materially different and more precise cause than the prior ~11 reconfirmations: curl to api.gdeltproject.org now fails with exit 35 SEC_E_CERT_EXPIRED (not the prior exit 28/HTTP_CODE:000 timeout pattern). Verified with 'openssl s_client -connect api.gdeltproject.org:443': notAfter=Aug 28 19:50:12 2026 GMT, Verify return code: 10 (certificate has expired) -- GDELT's own server certificate genuinely expired ~5h before this check, it is not a network-path outage. Ruled out a local clock/cert-store cause: control probes to https://www.google.com and https://api.github.com both returned HTTP 200 in the same session. System clock confirmed correct (2026-08-29T01:01:35Z). This changes the diagnosis from 'unreachable host' to 'reachable host presenting an expired cert' -- still nothing this repo can fix (no code path in this project makes outbound requests to GDELT except the blocked script itself, and weakening TLS verification to work around a real expired cert is not an acceptable fix). GDELT is still the only work_queue item (state: pending, depends_on: []) and remains the honest bottleneck. Queue restock checked: read SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md's named untested directions (WALKFORWARD-REVALIDATION-OF-BASELINE, TIME-VARYING-COST-REPRICING, CANDLE-CORPUS-GAP-AUDIT, TEST-ISOLATION-DATADIR-LEAK, the three EQUITIES-* items) -- all 7 already state:done in work_queue, that document is stale relative to the equities MADIP/BOS/VOL-CONTRACTION work done since. ma_dip (the only equities candidate that ever cleared >=2 ALPHA_DEFINITION.md conditions) is now closed as a candidate per this week's MADIP-SURVIVABILITY-CONDITION-5 and MADIP-RANDOM-ENTRY-CONTROL (fails conditions 3 and 5 outright). No specific, pre-registered, well-grounded new work_queue item identified this firing without inventing busywork -- none added, per this project's own discipline against queue-filling for its own sake (ALPHA_DEFINITION.md / SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md sec 4). Notification sent under reasonKey unresolvable-blocked (dedup window cleared, prior send 2026-08-28T12:01:56.000Z, this send 13h1m later, and the diagnosis materially changed).",
+   "commit": null,
+   "tests": "not run (no code changed this firing)"
   }
  ],
  "automation": {
