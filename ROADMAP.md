@@ -7561,3 +7561,120 @@ read-only, cache-only, no egress — reads the existing `research-cache/equities
 touched — `backtest.js`'s exit-management logic was read and replicated for the synthetic-entry
 path exactly as `MADIP-RANDOM-ENTRY-CONTROL` did, not imported or modified. `npm.cmd test`:
 513/513 green, unchanged.
+
+---
+
+## 2026-08-29 — DATE-CLUSTERED-RESAMPLING-DJTA20: date-clustering pushes the project's one
+zero-excluding equities CI back to include zero — `ma_dip` (DJTA-20) remains a CLOSED population,
+this is not a re-test of it
+
+**Scope, stated up front.** This is not an attempt to revisit, rescue, or re-test `ma_dip` as a
+candidate — it closed on `MADIP-SURVIVABILITY-CONDITION-5` (max drawdown -81.7% DJIA-30 / -74.2%
+DJTA-20 at f=2%, ruin at f=5% on both) and on `MADIP-RANDOM-ENTRY-CONTROL` (53rd percentile
+DJIA-30), both settled before this item ran. `ma_dip` (DJTA-20) is described throughout as a
+**closed historical population**. This item exists for a forward-looking reason:
+`REQUIRED-SAMPLE-FOR-DURABLE-PASS` derived its entire required-N table from this population's
+nominal 300-trade count and its POSITION-blocked CI half-width, with no clustering adjustment —
+that table is an input every future equities study reads, so the correction belongs on the record.
+Full pre-registration text (written before any statistic below was computed):
+`scripts/date-clustered-resampling-djta20.mjs`'s header, same commit as these results. Method
+reused unchanged from `DATE-CLUSTERED-RESAMPLING-AUDIT` (2026-08-28) — same block-position
+bootstrap for the replication check, same date-block bootstrap mechanic, same clustering
+statistics, same 5000-iteration / 2.5-97.5-percentile convention — applied to a population that
+audit did not cover (DJTA-20).
+
+**Replication check, before trusting anything new.** The script reproduces
+`EQUITIES-MADIP-OUT-OF-SAMPLE`'s recorded 300 trades, avgR, and the recorded position-blocked 95%
+CI itself bit-for-bit off the same cached candles, confirming this is the same population already
+on record:
+
+| trades match | avgR match | position-blocked CI match |
+|---|---|---|
+| 300 = 300 | +0.2994 = +0.2994 | [+0.05092, +0.53498] = [+0.0509, +0.5350] |
+
+**Clustering, pooled across all 20 DJTA symbols, side by side with DJIA-30's figures already on
+record (`DATE-CLUSTERED-RESAMPLING-AUDIT`, 2026-08-28):**
+
+| universe (`ma_dip`) | trades | distinct calendar days | largest single-day cluster | mean simultaneously-open positions | effective / nominal |
+|---|---:|---:|---:|---:|---:|
+| DJIA-30 (on record) | 475 | 124 | 13 | 10.47 | 26% |
+| DJTA-20 (this item) | 300 | 104 | 12 | 8.19 | 35% |
+
+DJTA-20's trades-per-day histogram: 36 days with 1 trade, 22 with 2, 15 with 3, 12 with 4, 9 with
+5, 2 with 6, 3 with 7, 1 with 8, 1 with 9, 2 with 10, 1 with 12. Same shape as DJIA-30's — real
+multi-symbol same-day clusters, not a uniform one-trade-per-day spread — though DJTA-20's
+effective/nominal ratio (35%) is somewhat less severe than DJIA-30's (26%), consistent with a
+smaller universe (20 vs 30 symbols) producing fewer same-day coincidences.
+
+**Date-clustered 95% CI, side by side with the position-blocked interval already on record** (5000
+iterations, 2.5/97.5 percentiles, date-clustered seed 20260832 — fixed before running, continuing
+`DATE-CLUSTERED-RESAMPLING-AUDIT`'s 20260829-base seed numbering, not reused from it):
+
+| CI | interval | excludes zero? |
+|---|---:|---|
+| position-blocked (on record) | [+0.0509, +0.5350] | **yes** |
+| date-clustered (new) | [-0.0851, +0.7129] | **no** |
+
+**This is the headline result, reported as prominently as `DATE-CLUSTERED-RESAMPLING-AUDIT`'s own
+discipline requires.** `EQUITIES-MADIP-OUT-OF-SAMPLE`'s DJTA-20 result was, at the time it ran, the
+first and only equities CI in this project's history to exclude zero on an out-of-sample universe
+— the reason it formally cleared BH-FDR at rank 4/15 (q=0.0435). Under date-clustered resampling,
+that CI's lower bound moves from +0.0509 to **-0.0851** and the interval now spans zero, the same
+direction of travel `DATE-CLUSTERED-RESAMPLING-AUDIT` found for both DJIA-30 families, but here it
+crosses the line that mattered: the one result this project had that didn't merely fail to exclude
+zero, but positively excluded it, no longer does under the more conservative resampling scheme.
+This does not reopen `ma_dip` as a candidate — conditions 3 and 5 already closed it independently
+of any CI — but it does mean the BH-FDR survival recorded for `EQUITIES-MADIP-OUT-OF-SAMPLE` was
+computed from a sign-flip permutation p-value untouched by this finding (that p is not recomputed
+here, and this item does not join `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family or trigger
+BH-FDR recomputation, per its own pre-registration), not from the block-bootstrap CI — the two are
+different statistics and this item only speaks to the latter.
+
+**`REQUIRED-SAMPLE-FOR-DURABLE-PASS` restatement.** That item derived a per-trade SD from the
+position-blocked CI half-width purely as a disclosed, explicitly-NOT-used-for-required-N
+diagnostic (its own Step 2: "do NOT reuse that normal-approximated SD directly... calibrate
+instead off the empirically observed p=0.0116"). Recomputing that same diagnostic with the
+date-clustered half-width:
+
+| | position-blocked (on record) | date-clustered (new) | movement |
+|---|---:|---:|---:|
+| CI half-width (avg) | 0.2421 | 0.3990 | 1.65x wider |
+| derived per-trade SD | 2.1390 | 3.5260 | **1.65x** |
+| implied effect size (d = mean/SD) | 0.1400 | 0.0849 | 0.61x |
+
+**The PRIMARY required-N table does not move.** `REQUIRED-SAMPLE-FOR-DURABLE-PASS`'s actual
+required-N formula (Step 3/5) calibrates its z-score off the *observed sign-flip p-value*
+(z=2.2701 from p=0.0116), not off the CI-derived SD — by that item's own explicit design, because
+a block-bootstrap permutation p is not exactly normal. This item does not recompute a new p-value,
+so nothing mechanically changes there: required N at the population's actual current standing
+(rank 4, family size m=20) remains **316**, exactly as `REQUIRED-SAMPLE-FOR-DURABLE-PASS` computed
+it. This is stated explicitly as a reported non-move, not a silent omission.
+
+**Where the half-width swap DOES move something: the disclosed "sanity check, NOT used" path.**
+`REQUIRED-SAMPLE-FOR-DURABLE-PASS`'s own Step 2 also computed a second z (`zFromSDAlone`,
+`(mean/SD)*sqrt(n)`) purely as a disclosed cross-check it explicitly declined to use. Recomputing
+*that* path's required-N with the date-clustered SD in place of the position-blocked one is the one
+place a CI half-width change can mechanically reach the required-N formula:
+
+| | position-blocked SD | date-clustered SD | movement |
+|---|---:|---:|---:|
+| `zFromSDAlone` | 2.4244 | 1.4707 | 0.61x |
+| required N (rank 4, m=20), SD-alone path | 277 | 751 | **2.71x** |
+
+This SD-alone path was never the one `REQUIRED-SAMPLE-FOR-DURABLE-PASS` actually used for planning
+(the p-calibrated 316 is), so this is not a correction to that item's headline number — it is a
+disclosure that the gap between the two calibration approaches (already flagged as "expected,
+disclosed, not corrected for" in the original item) widens substantially under the more
+conservative clustering-aware interval, which is itself informative about how much the
+normal-approximation shortcut would have understated future sample needs had it been used instead
+of the p-calibrated approach.
+
+**`MULTIPLE_COMPARISONS_AUDIT.md` not touched** — no new p-value computed anywhere in this script,
+consistent with `DATE-CLUSTERED-RESAMPLING-AUDIT`'s own precedent for the CI-only resampling
+check.
+
+**Engineering note.** New: `scripts/date-clustered-resampling-djta20.mjs` (read-only, cache-only —
+does not import `brokers/ibkr.mjs`). Reuses `backtest.js`'s existing `excursions[].entryTime` field
+(added by `DATE-CLUSTERED-RESAMPLING-AUDIT`, unmodified here) and `momentum.mjs`'s
+`blockBootstrapCI` unmodified. No `backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/
+`bot.js`/`trader.js`/`scanner.js` file touched. `npm.cmd test`: 513/513 green, unchanged.
