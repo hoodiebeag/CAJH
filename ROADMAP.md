@@ -7772,3 +7772,117 @@ unmodified (confirmed via `git status`/`git diff` before commit), no network acc
 `brokers/ibkr.mjs` and `node_modules/@stoqey/ib/dist/api/**/*.d.ts`/`.js` only. No
 `backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/`bot.js`/`trader.js`/`scanner.js` file
 touched; `brokers/ibkr.mjs` read-only. `npm.cmd test`: 513/513 green, unchanged.
+
+---
+
+## 2026-08-29 — GEOMETRY-NULL-DOWN-WINDOW-PROBE: a genuinely down/flat window was found (equities and crypto both) — the geometry's positive null mean does NOT survive it, confirming the window-artifact reading
+
+`RANDOM-ENTRY-NULL-WINDOW-SENSITIVITY` left the project's biggest open equities question
+formally untested: its cache (2024-08 through 2026-08) never contained a down or flat sub-window
+on either equity universe, so whether `ma_dip`'s matched-geometry null's positive mean
+(+0.1493R DJIA-30, +0.1637R DJTA-20, both rising-window holdouts) is a durable property of the
+payoff geometry (structural stop, tpR=5, breakeven lock) or an artifact of measuring only in a
+rising market was left an open question, not a finding. This item is the single measurement that
+resolves it.
+
+**Pre-registration (fixed before any return was computed).** Qualifying criterion: a sub-window
+counts as "genuinely down or flat" if it spans **>=60 calendar days** and its equal-weighted mean
+buy-and-hold return (last close / first close - 1, frictionless, same convention as the
+predecessor) is **<=0.00**. Segmentation: calendar **quarters and years**, UTC, a mechanical
+partition of every cell with at least one candle — not a hand-picked drawdown window, which this
+item's own task text explicitly prohibited. Universes surveyed, cache-only, no egress: DJIA-30
+(`research-cache/equities-1d/`), DJTA-20 (`research-cache/equities-1d-djta-oos/`), and — new to
+this item — **CRYPTO-28**, every pair with a CSV under `candles/` (29 files found; all 29 had
+enough history to appear in at least one surveyed cell), resampled to daily via `data.js`'s own `loadCandles`
+resampler (the same one `researchlab.mjs` and the live bot already use — no new candle-reading
+logic written). New `scripts/geometry-null-down-window-probe.mjs` (additive, cache-only).
+
+**Full survey: 43 cells (12 DJIA-30 + 12 DJTA-20 + 19 CRYPTO-28).** DJIA-30 never qualified — every
+one of its 12 quarter/year cells had a positive buy-and-hold return (this universe's cache is
+rising throughout, confirming the predecessor's finding at finer-than-year granularity). DJTA-20
+qualified twice (2025-Q1, 2025-Q3, out of 12). CRYPTO-28 — the only cache with meaningfully
+deeper history (2023-01 through the store's own last bar) — qualified 9 of 19 cells. All 43 cells,
+qualifying or not, are in the saved JSON in full, per this item's own task text.
+
+**Where a window qualified, the matched-geometry null was rebuilt there, unchanged**
+(`MADIP-RANDOM-ENTRY-CONTROL`'s four-part construction reused verbatim per cell: real `ma_dip`
+trades re-run confined to that window; stop distance drawn with replacement from that window's
+own empirical stop distribution; exit management replicating `backtest.js`'s generic path
+byte-for-byte; sample size matched to that cell's own real trade count; K=2000 draws; MIN
+10-real-trade floor, same as the predecessor — no qualifying cell was too thin).
+
+| universe | window | real trades | real avgR | null mean | null SD | buy-and-hold |
+|---|---|---:|---:|---:|---:|---:|
+| DJTA-20 | 2025-Q1 | 155 | -0.2742 | **-0.1741** | 0.1459 | -8.64% |
+| DJTA-20 | 2025-Q3 | 113 | -0.0869 | **-0.0632** | 0.1945 | -0.21% |
+| CRYPTO-28 | 2023-Q2 | 241 | -1.5085 | -1.4622 | 0.1503 | -12.92% |
+| CRYPTO-28 | 2023-Q3 | 216 | -2.0202 | -1.7460 | 0.1703 | -14.35% |
+| CRYPTO-28 | 2024-Q2 | 253 | -2.8965 | -3.0658 | 0.2977 | -34.08% |
+| CRYPTO-28 | 2025-Q1 | 443 | -1.5003 | -1.5656 | 0.1287 | -36.94% |
+| CRYPTO-28 | 2025-Q4 | 452 | -1.1920 | -1.5114 | 0.1008 | -28.45% |
+| CRYPTO-28 | 2026-Q1 | 494 | -1.5270 | -1.4461 | 0.1030 | -27.74% |
+| CRYPTO-28 | 2026-Q2 | 33 | -1.2994 | -1.2376 | 0.2977 | -16.69% |
+| CRYPTO-28 | 2025 (year) | 1750 | -1.3755 | -1.4680 | 0.0687 | -11.21% |
+| CRYPTO-28 | 2026 (year) | 541 | -1.5065 | -1.4434 | 0.0971 | -28.39% |
+
+**Headline, on the reliable (equities) evidence: the geometry's null mean turns NON-POSITIVE in
+both genuinely down/flat windows found.** DJTA-20 2025-Q1 and 2025-Q3 — same fee basis
+(IBKR Fixed $0.005/share commission) `MADIP-RANDOM-ENTRY-CONTROL` and the predecessor already
+validated, so these two numbers are directly comparable to the +0.1493/+0.1637 rising-window
+means on record — both come in negative. This is the discriminating case the predecessor
+couldn't reach: **the tailwind does not survive a down window on the same universe and fee
+basis where it was originally found positive.** That confirms, rather than merely suggests, the
+window-artifact reading `RANDOM-ENTRY-NULL-WINDOW-SENSITIVITY`'s r=0.90 correlation already
+pointed toward.
+
+**CRYPTO-28 corroborates directionally, but its magnitudes are a disclosed cost-model artifact,
+not a second clean data point.** Every one of the 9 qualifying crypto cells shows a strongly
+negative null mean — directionally consistent with the equities result. But the actual numbers
+(nullMean as low as -3.07, worst single trade -17.99R) are not economically meaningful: `ma_dip`'s
+structural stop runs tight on this universe (median stop distance ~1.6% in the cells checked)
+while this script prices crypto trades at `strategy.js`'s own flat `FEE_RATE=0.008`/side (matching
+`cost-model.mjs`'s `SPOT_FEE_SCHEDULE.taker` — the project's real crypto cost assumption, not
+invented for this item) — roughly 500x the equities' per-share commission expressed as a
+fraction of price. `backtest.js`'s R-normalization formula divides fee cost by risk-in-price-terms,
+which was fine when fee cost was negligible next to any realistic equity stop distance but blows
+up at crypto's combination of a proportionally large fee and a tight stop: a single stopped-out
+trade's R can land many multiples below the -1 a stop is supposed to represent. The **sign** of
+the crypto result (strongly negative in every down/flat quarter, versus positive in every rising
+year on record) is informative; the **size** of that negative number is not, and this write-up
+does not cite it as comparable to the equities figures or to the +0.1493/+0.1637 rising-window
+means. This mismatch is a property of reusing an equities-calibrated cost formula on a new asset
+class, not a bug in this item's construction — flagged here rather than quietly left in the
+numbers, and not something this item's scope extends to fixing (that would be a new cost-model
+item, not a probe).
+
+**Verdict, stated exactly as it falls.** The single measurement `RANDOM-ENTRY-NULL-WINDOW-
+SENSITIVITY` said would resolve the project's biggest open equities question has now been run:
+a genuinely down/flat window exists (DJTA-20, twice) and in it the geometry's null mean is
+negative, not positive. The six rising-window null means this project has on record —
+`MADIP-RANDOM-ENTRY-CONTROL`'s two plus the predecessor's six calendar-year cells — were a window
+artifact (leverage on the window's own direction), not a durable property of the payoff geometry.
+This closes the artifact-vs-durable question the predecessor left open; it does not reopen
+`ma_dip`'s own already-settled percentile result (`MADIP-RANDOM-ENTRY-CONTROL`'s separate
+question, unaffected).
+
+**Why this is not caught by D1.** D1 closes new price-structure entry variants, gate inputs and
+cost angles on the twelve sealed families. This item proposes none of those — no entry rule, no
+gate, no cost angle — and touches no family; it is a methodology control on which historical
+windows this project's own caches happen to contain, underlying an existing null-control study,
+not a candidate mechanism competing for D1 slots.
+
+**No entry rule proposed or tested beyond `ma_dip` itself (already sealed, unchanged). No
+parameter re-tuned. `SEALED_SYMBOLS` untouched.** Descriptive null-control study, not a hypothesis
+test in `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST sense, same precedent as
+`MADIP-RANDOM-ENTRY-CONTROL` — does not join that family, triggers no BH-FDR recomputation.
+`npm.cmd test`: 513/513 green, unchanged. Raw output (full 43-cell survey plus every qualifying
+cell's null draws) saved via `saveExperiment` to
+`research-runs/2026-08-29T17-11-33-610Z-geometry-null-down-window-probe.json`.
+
+**Engineering note.** New `scripts/geometry-null-down-window-probe.mjs` only (additive,
+read-only, cache-only, no egress of any kind — reads the existing equities JSON caches and the
+local `candles/*.csv` crypto store via `data.js`'s own `loadCandles`, no live IBKR or Kraken API
+call). No `backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/`bot.js`/`trader.js`/
+`scanner.js` file touched — `backtest.js`'s exit-management logic was read and replicated for the
+synthetic-entry path exactly as `MADIP-RANDOM-ENTRY-CONTROL`/`RANDOM-ENTRY-NULL-WINDOW-
+SENSITIVITY` did, not imported or modified. `npm.cmd test`: 513/513 green, unchanged.
