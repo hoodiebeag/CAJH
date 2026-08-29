@@ -4,9 +4,9 @@
   "status": "idle",
   "target_file": null,
   "objective": null,
-  "notes": "VERDICTS-COST-CONSTANT-STALENESS-SWEEP complete (commit 8e06008, pushed). Generalized CLASSIFIER-P5-ECONOMICS-ROW-STALENESS's (2026-08-29) own flagged follow-up: enumerated every call site of classifier.mjs's economicLiftNetOfCost plus every hand-written equivalent (cost subtracted on top of a netR that already bakes in strategy.js's real cost via profileEntries), classified all 16 candidates as AFFECTED / UNAFFECTED-BY-CANCELLATION / NOT-DERIVED-THROUGH-THAT-PATH in a new dated ROADMAP.md entry. Corrected VERDICTS.md's CLASSIFIER-FUNDING-FEATURE row via a fresh re-run (throwaway script, cache-only, no egress -- its original netR predated FEE-DEFAULTS-UPDATE by ~16 min so algebraic recovery alone would have recovered a stale-cost figure): selected -0.6351R / baseline -0.9253R / lift +0.2902R at roundTripCost=0 (was double-counted -0.2412/-0.2492 selected, -0.5387/-0.5467 baseline); row counts (15076/3969/2163) and AUC (0.5943) reproduce exactly, ruling out data/universe drift. Corrected VERDICTS.md's C0-SIGNAL-COMBINATION row via algebraic recovery from its saved 2026-08-29 run (same-day constants, no re-run needed): composite selected/baseline correct to -0.9174/-0.9206 (the already-published gross mean netR figures, relabeled not replaced), Classifier P5's matched-population selected net corrects to -0.8384, 95% block-bootstrap CI shifts +0.017 to [-1.0658, -0.7500]. Fixed one stale absolute-figure mention in VERDICTS.md's own Bottom-line summary paragraph. No verdict/AUC/p-value/q-value changed anywhere -- re-verified directly on corrected numbers, not assumed from the bug's general shape. Flagged (not guessed) ROADMAP.md's PHASE2-MAX-SURVIVABLE-COST table's two classifier rows as SUPERSEDED-PENDING-RECORRECTION: correcting them needs a fresh per-venue profileEntries re-run (genuinely new computation), out of this item's bookkeeping scope -- left as a fresh work-queue item recommendation, not actioned. Only VERDICTS.md and ROADMAP.md touched (confirmed via git status/diff before commit) -- classifier.mjs/strategy.js/backtest.js/momentum.mjs and every frozen path read-only throughout, two throwaway uncommitted scripts used during investigation were deleted before commit. npm.cmd test: 513/513 green, run before commit. Untracked universe.txt in the working tree predates this run and was left untouched. Queue has 5 pending items remaining (VERDICTS-COST-CONSTANT-STALENESS-SWEEP now done), no notification triggered this firing (not BLOCKED, queue not empty, no new PASS verdict). Next in queue: BREAKEVEN-LOCK-COUNTERFACTUAL, CRYPTO-EFFECTIVE-SAMPLE-AUDIT, DEAD-CODE-AND-ASSET-AUDIT, or DOCS-ARCHIVE-CONVENTION (deps satisfied).",
+  "notes": "BREAKEVEN-LOCK-COUNTERFACTUAL complete (commit 3e81c2a, pushed). New script scripts/breakeven-lock-counterfactual.mjs (additive, read-only, cache-only) replays every ma_dip breakeven-locked exit (why==='trail/be', using MADIP-REALISED-R-CONDITION-2's per-trade field verbatim, not re-added) forward against its ORIGINAL pre-lock stop/target on both closed universes DJIA-30 and DJTA-20, using backtest.js's own conservative same-bar rule and unmodified MAX_HOLD=100 timeout -- no backtest.js line touched. Cross-check passed first: reproduced MADIP-REALISED-R-CONDITION-2's trade counts (475/300), avgR (+0.15263/+0.29939), and realised R (2.64655/2.50362, cited 2.6466/2.5036) off cache before computing anything new. Lock subset sizes reproduce cited counts exactly (68/52); 2 trades per universe UNRESOLVED (cache ends before replay reaches an exit -- excluded from aggregates, not guessed, mirroring backtest.js's own silent-drop of a position that never closes). Of resolved trades (66 DJIA-30, 50 DJTA-20): saved-from-full-stop-out 38/31, cut-from-eventual-target-hit 28/19, would-have-timed-out 0/0. Net change in total R had the lock not fired: +7.6505R (DJIA-30), +5.8973R (DJTA-20) -- the lock is NET NEGATIVE for total R on both universes despite protecting more trades (by count) than it cost, because this config's 5:1 reward:risk geometry means the fewer cut targets outweigh the more-numerous saved stops in R terms. Counterfactual realised R (3.9827/4.0139) far exceeds measured (2.6466/2.5036). Framed explicitly as an exit-geometry property of a CLOSED historical population (ma_dip already killed by MADIP-SURVIVABILITY-CONDITION-5's drawdown/ruin finding) -- not a re-tune, not a reopened candidate. No entry/exit logic modified, no parameter swept, no config change proposed. Recorded in ROADMAP.md as a new dated section (2026-08-29 -- BREAKEVEN-LOCK-COUNTERFACTUAL). backtest.js/strategy.js/tournament.mjs/monitor.js/bot.js/trader.js/scanner.js and all frozen paths read-only throughout; only ROADMAP.md and the new script were committed (universe.txt, untracked and pre-existing, left untouched; the saveExperiment output landed in gitignored research-runs/). npm.cmd test: 513/513 green, run before commit. No notification triggered this firing (not BLOCKED, queue not empty -- 4 items remain pending with deps satisfied, no new PASS verdict). Next in queue: CRYPTO-EFFECTIVE-SAMPLE-AUDIT, DEAD-CODE-AND-ASSET-AUDIT, or DOCS-ARCHIVE-CONVENTION (deps satisfied); AGENT-DOC-DEDUPLICATION still blocked on DOCS-ARCHIVE-CONVENTION.",
   "updated_by": "executor",
-  "updated_at": "2026-08-29T19:15:08.630Z"
+  "updated_at": "2026-08-29T20:08:23.665Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -300,7 +300,7 @@
    },
    {
     "id": "BREAKEVEN-LOCK-COUNTERFACTUAL",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: counterfactual R for breakeven-locked exits, using the per-trade why field added by MADIP-REALISED-R-CONDITION-2",
     "depends_on": [],
@@ -435,14 +435,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-19T09:00:58.000Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "pull-blocked-exit",
-   "detail": "STEP 0.3: git pull --rebase still fails on the same pre-existing unstaged package.json change (allowScripts.canvas@3.2.3=true), still not created this run - did not stash/checkout/reset/clean it. Confirmed via git fetch that origin/main has no commits ahead of HEAD, so this is purely the unstaged-change block, not an actual divergence to reconcile. blackboard.notifications['persistent-pull-blocker'] was last set 2026-08-19T04:00:46.000Z, ~5h ago (under the 6h dedup window), so per notification_policy.dedup this firing skipped PushNotification and left the notifications entry untouched rather than resending. No STEP 1-6 work attempted; exiting for next firing to retry the pull. A human still needs to resolve the package.json change (commit, revert, or otherwise clear it) to unblock the loop.",
-   "commit": null,
-   "tests": "not run (exited at STEP 0.3, before STEP 3)"
-  },
   {
    "ts": "2026-08-19T10:02:01.000Z",
    "agent": "cajh-loop-check-scheduled",
@@ -1234,6 +1226,14 @@
    "detail": "Generalized CLASSIFIER-P5-ECONOMICS-ROW-STALENESS's flagged follow-up across every economicLiftNetOfCost-style call site. Corrected VERDICTS.md CLASSIFIER-FUNDING-FEATURE row (fresh re-run: selected -0.6351/baseline -0.9253/lift +0.2902 at roundTripCost=0) and C0-SIGNAL-COMBINATION row (algebraic recovery: composite -0.9174/-0.9206, P5-matched -0.8384, CI [-1.0658,-0.7500]). Flagged PHASE2-MAX-SURVIVABLE-COST's two classifier rows SUPERSEDED-PENDING-RECORRECTION rather than guessed. No verdict/AUC/p/q changed. classifier.mjs/strategy.js/backtest.js untouched.",
    "commit": "8e06008",
    "tests": "513/513"
+  },
+  {
+   "ts": "2026-08-29T20:08:23.665Z",
+   "agent": "executor",
+   "action": "completed-work-queue-item",
+   "detail": "BREAKEVEN-LOCK-COUNTERFACTUAL: new scripts/breakeven-lock-counterfactual.mjs replays ma_dip's breakeven-locked exits (why===\"trail/be\") against their original pre-lock stop/target on cached OHLC, cross-checked first against MADIP-REALISED-R-CONDITION-2's trade counts/avgR/realisedR (exact match). Result: removing the lock would have added +7.6505R (DJIA-30, 66/68 resolved) and +5.8973R (DJTA-20, 50/52 resolved) -- lock is net NEGATIVE for total R on both closed universes despite saving more trades from full stop-outs (38/31) than it cost via cut targets (28/19), because this config's 5:1 reward:risk means the fewer cut targets outweigh in R terms. Counterfactual realised R 3.98/4.01 vs measured 2.65/2.50. Framed as exit-geometry property of a closed (already-killed) population, no config change proposed. Recorded in ROADMAP.md.",
+   "commit": "3e81c2a",
+   "tests": "513/513 green"
   }
  ],
  "automation": {
