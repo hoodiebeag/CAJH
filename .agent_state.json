@@ -4,9 +4,9 @@
   "status": "idle",
   "target_file": null,
   "objective": null,
-  "notes": "GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC remains the only work_queue item and remains SOFT-BLOCKED (external, not this repos to fix). Symptom shifted again: curl now fails with a bare TCP connect timeout at api.gdeltproject.org:443 (2x confirmed, 25s timeout each, no TLS handshake even attempted) -- this reverts from the immediately prior firings SEC_E_CERT_EXPIRED diagnosis (notAfter=Aug 28 19:50:12 2026 GMT) back toward the generic-timeout pattern seen in ~11 reconfirmations before that. Whether the host is now firewalled/rate-limiting or the cert-expired state simply presents as a hard drop on some paths is not resolvable from this side. Restock check: no commits to ROADMAP.md/TOURNAMENT_ROADMAP.md/SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md since c0fe451 (already checked last firing) -- nothing new to queue, still <3 pending but no well-grounded item to add. Notification not resent: unresolvable-blocked was sent 2026-08-29T01:03:00.000Z (~2h ago), inside the 6h dedup window, and this firings finding (reverting to timeout) is not a materially new escalation over that message. Control stays idle, no code touched, no tests run, no protected logic touched.",
+  "notes": "EQUITIES-QUEUED-ITEMS-AUDIT complete (commit a4b9327). All six SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md section-2 items verified done with dated ROADMAP.md sections -- none were actually incomplete. The one real gap (three missing VERDICTS.md rows for EQUITIES-BREAKOUT-OUT-OF-SAMPLE/EQUITIES-ALL-FAMILIES-BASELINE/EQUITIES-COST-ASSUMPTION-SENSITIVITY) is fixed, following VERDICT_TEMPLATE.md and the file's existing row format, no existing row altered. Equities line current status recorded plainly in ROADMAP.md's 2026-08-29 section: breakout out-of-sample flipped negative (-0.0854R, p=0.6165), ma_dip closed on survivability + random-entry-null conditions (2026-08-28), breadth headline corrected 10-of-12 to 8-of-12. No C0-C3 work started, per this item's own scope -- PHASE-DIRECTIVE-BOOKKEEPING and C0-SIGNAL-COMBINATION remain queued and depend on this item, now unblocked to run next. 513/513 tests green, no protected logic touched, read-only bookkeeping (no research script re-run).",
   "updated_by": "executor",
-  "updated_at": "2026-08-29T03:10:00.000Z"
+  "updated_at": "2026-08-29T04:10:00.000Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -972,7 +972,7 @@
    },
    {
     "id": "EQUITIES-QUEUED-ITEMS-AUDIT",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "read-only audit of .agent_state.json / ROADMAP.md against SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md section 2; VERDICTS.md rows added where genuinely missing",
     "depends_on": [],
@@ -1183,14 +1183,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-15T03:35:55.142Z",
-   "agent": "human-requested-untested-hypothesis-batch",
-   "action": "restock-work-queue",
-   "detail": "Human explicitly asked for at least 10 new items focused on genuinely untested hypotheses. Found derivatives.mjs's dormant-but-real Kraken Futures analytics infrastructure (15 endpoint types, never used in an actual study) and built 9 items on it: OPEN-INTEREST-TREND-CONFIRMATION, LIQUIDATION-CASCADE-REVERSAL, FUTURES-BASIS-DIRECTIONAL-SIGNAL, LONG-SHORT-RATIO-CONTRARIAN, TOP-TRADERS-DIVERGENCE, ORDER-FLOW-AGGRESSOR-IMBALANCE, ROLLING-VOLATILITY-REGIME-TIMING, ORDERBOOK-IMBALANCE-DEPTH, WATCHLIST-LIQUIDITY-REALISM-AUDIT. Added 3 more needing no new futures-data infra: SEASONALITY-DAYOFWEEK-SESSION (pure calendar/session effects, zero new data source), DISPERSION-CORRELATION-REGIME-GATE (cross-asset correlation regime, uses existing candle data), ETF-FLOW-GATE (new external data source, verified a real candidate provider via web search but the item itself requires confirming live reachability before trusting it, learning from the Binance-funding-API HTTP-451 precedent). Every item checked against VERDICTS.md for non-duplication before being written; explicit differentiation from closely-related closed items noted in each task text.",
-   "commit": null,
-   "tests": "data-only change; npm.cmd test re-run independently before commit"
-  },
   {
    "ts": "2026-08-15T04:15:00.000Z",
    "agent": "cajh-loop-check-scheduled",
@@ -1982,6 +1974,14 @@
    "detail": "GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC remains the only work_queue item and remains SOFT-BLOCKED (external, not this repos to fix). Symptom shifted again: curl now fails with a bare TCP connect timeout at api.gdeltproject.org:443 (2x confirmed, 25s timeout each, no TLS handshake even attempted) -- this reverts from the immediately prior firings SEC_E_CERT_EXPIRED diagnosis (notAfter=Aug 28 19:50:12 2026 GMT) back toward the generic-timeout pattern seen in ~11 reconfirmations before that. Whether the host is now firewalled/rate-limiting or the cert-expired state simply presents as a hard drop on some paths is not resolvable from this side. Restock check: no commits to ROADMAP.md/TOURNAMENT_ROADMAP.md/SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md since c0fe451 (already checked last firing) -- nothing new to queue, still <3 pending but no well-grounded item to add. Notification not resent: unresolvable-blocked was sent 2026-08-29T01:03:00.000Z (~2h ago), inside the 6h dedup window, and this firings finding (reverting to timeout) is not a materially new escalation over that message. Control stays idle, no code touched, no tests run, no protected logic touched.",
    "commit": null,
    "tests": null
+  },
+  {
+   "ts": "2026-08-29T04:10:00.000Z",
+   "agent": "executor",
+   "action": "audit-complete",
+   "detail": "EQUITIES-QUEUED-ITEMS-AUDIT: verified all six SEARCH_SPACE_EXHAUSTION_ASSESSMENT.md section-2 items (EQUITIES-BREAKOUT-OUT-OF-SAMPLE, EQUITIES-ALL-FAMILIES-BASELINE, EQUITIES-COST-ASSUMPTION-SENSITIVITY, WALKFORWARD-REVALIDATION-OF-BASELINE, TIME-VARYING-COST-REPRICING, CANDLE-CORPUS-GAP-AUDIT) are complete with dated ROADMAP.md sections -- all confirmed done, none needed re-running. Added the one genuine gap: three missing VERDICTS.md rows for the three directive-named items, following VERDICT_TEMPLATE.md/existing row format, no existing row altered. Recorded the equities line's current status plainly in a new ROADMAP.md 2026-08-29 section: breakout out-of-sample flipped negative (DJTA-20, -0.0854R vs original +0.1866R, p=0.6165), ma_dip closed on conditions 3 and 5 (MADIP-SURVIVABILITY-CONDITION-5/MADIP-RANDOM-ENTRY-CONTROL, both 2026-08-28), breadth headline corrected 10-of-12 to 8-of-12 (CROSS-FAMILY-TRADE-OVERLAP-AUDIT, 2026-08-28). No C0-C3 work started. Read-only bookkeeping only, no research script re-run, no production file touched. Marked EQUITIES-QUEUED-ITEMS-AUDIT done in work_queue, control reset to idle.",
+   "commit": "a4b9327",
+   "tests": "513/513 pass"
   }
  ],
  "automation": {
