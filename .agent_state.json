@@ -4,9 +4,9 @@
   "status": "idle",
   "target_file": null,
   "objective": null,
-  "notes": "C3-FX-CARRY-DATA-GATE complete (commit baf878c, pushed). Phase-directive step 7 earned C3 (C0 KILLED, C1 gated-unavailable, C2 null -- all three resolved). Followed C1-VRP-DATA-AVAILABILITY-GATE gate pattern exactly. Part A (price-side code capability, static analysis only, no network): brokers/ibkr.mjs re-confirmed to carry no FX/CASH contract path today (only new Stock(symbol,SMART,USD) via stockContract()); installed @stoqey/ib exposes a Forex contract class (secType CASH, hardcoded exchange IDEALPRO) and reqHistoricalData is generic over Contract (same call fetchOHLC() already uses) with WhatToShow including MIDPOINT/BID/ASK alongside TRADES -- price side is a small change, code gate does not fail. Part B (carry signals non-price data requirement, the harder half, NOT a code question): FX carry needs a short-rate per currency. Cited EXOGENOUS-DATA-ACCESS-AUDIT rather than re-probing -- that audit confirmed FREDs key-less CSV endpoint for three USD-side series only (DGS10/DTWEXBGS/FEDFUNDS). Named 6 non-USD candidate series (EUR/GBP/JPY/CAD/AUD/CHF, FRED OECD-MEI IR3TIB01<ISO2>M156N convention) explicitly flagged UNVERIFIED since this task permitted no network access even for confirmation -- only FEDFUNDS (USD) is confirmed reachable. Part C (account-side entitlement): stated as a 3-item question list for the human (IDEALPRO quote bundling, historical FX bar entitlement, whether the named FRED series actually resolve), presented alongside C1s still-open options question so both can be answered in one IBKR-settings sitting. Gate verdict: NOT RESOLVED -- not a pass, not a fail, an open question for the human, per the directives instruction not to guess. No strategy or backtest code written, no return computed, no proxy substituted, brokers/ibkr.mjs unmodified (confirmed via git status/git diff before commit), no network access attempted. New scripts/c3-fx-carry-data-gate.mjs (additive, read-only, reads brokers/ibkr.mjs and node_modules/@stoqey/ib declarations only). No frozen path touched (backtest.js/strategy.js/tournament.mjs/monitor.js/bot.js/trader.js/scanner.js all read-only; brokers/ibkr.mjs read-only, confirmed unmodified). npm.cmd test: 513/513 green, unchanged, run before the ROADMAP.md edit and again immediately before commit. Recorded in ROADMAP.md. Next in queue per this items own Part C: the human answers the FX/options entitlement questions and the non-USD FRED series get one real fetch each before any FX carry strategy code is considered; this item does not itself queue a follow-on.",
+  "notes": "GEOMETRY-NULL-DOWN-WINDOW-PROBE complete (commit e5a3a07, pushed). Pre-registered a qualifying criterion (>=60 calendar days, buy-and-hold mean return <=0.00) and a mechanical calendar-quarter+year segmentation before computing any return, then surveyed all 43 cells across DJIA-30, DJTA-20, and a new CRYPTO-28 universe (every candles/*.csv pair, resampled to daily via data.js's own loadCandles -- no new candle-reading logic). DJIA-30 never qualified (rising throughout, 0/12). DJTA-20 qualified twice (2025-Q1, 2025-Q3, of 12) on the same IBKR per-share fee basis MADIP-RANDOM-ENTRY-CONTROL already validated -- the matched-geometry null's mean, positive on every rising window on record (+0.1493R DJIA-30, +0.1637R DJTA-20), turned NEGATIVE in both (-0.1741, -0.0632). This is the discriminating measurement RANDOM-ENTRY-NULL-WINDOW-SENSITIVITY could not reach (its cache never contained a down/flat window) and it confirms that correlation's window-artifact reading: the geometry's positive null mean does not survive a down window on the same universe/fee-basis where it was found positive, so the six rising-window null means on record are read as a window artifact (leverage on the window's own direction), not a durable property of the payoff geometry. CRYPTO-28 qualified 9/19 cells and every one showed a strongly negative null mean too (directionally corroborating), but I flagged and disclosed a real cost-model mismatch rather than citing the crypto magnitudes as comparable: ma_dip's structural stops run tight on crypto (median ~1.6% in the cells checked) and backtest.js's R-normalization formula divides fee cost by risk-in-price-terms, which is fine at equities' negligible per-share fee but blows up at crypto's flat strategy.js FEE_RATE=0.008/side -- one real trade hit -17.99R, which is a formula artifact, not an economically real loss multiple. Caught this myself before writing to ROADMAP.md by spot-checking a qualifying cell's stopPct distribution and individual trade Rs; revised the script's headline logic to lead with the reliable equities evidence and carry the crypto caveat as a separate, explicit field (cryptoFeeModelCaveat) rather than silently reporting an inflated number. No entry rule proposed or tested beyond ma_dip itself (unchanged, sealed). No parameter re-tuned. SEALED_SYMBOLS untouched. Descriptive null-control study, not NHST -- no BH-FDR recomputation, same precedent as MADIP-RANDOM-ENTRY-CONTROL. New scripts/geometry-null-down-window-probe.mjs only (additive, cache-only, no egress -- reads existing equities JSON caches and candles/*.csv via data.js's loadCandles; no backtest.js/strategy.js/tournament.mjs/monitor.js/bot.js/trader.js/scanner.js touched, confirmed via git status/diff before commit). npm.cmd test: 513/513 green, run before the ROADMAP.md edit and again immediately before commit. Recorded in ROADMAP.md. Next in queue: ALPHA-DEFINITION-POST-NULL-RESTATEMENT (pending, no deps) -- likely wants to fold this result's implications into ALPHA_DEFINITION.md's framing of ma_dip, but that is that item's own scope, not done here (one work_queue item per firing).",
   "updated_by": "executor",
-  "updated_at": "2026-08-29T16:10:00.000Z"
+  "updated_at": "2026-08-29T17:15:24.191Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -270,7 +270,7 @@
    },
    {
     "id": "GEOMETRY-NULL-DOWN-WINDOW-PROBE",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: scripts/geometry-null-down-window-probe.mjs (additive, cache-only)",
     "depends_on": [],
@@ -435,14 +435,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-19T04:00:46.000Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "pull-blocked-exit",
-   "detail": "STEP 0.3, second consecutive firing: git pull --rebase still fails on the same pre-existing unstaged package.json change (allowScripts.canvas@3.2.3=true), still not created this run - did not stash/checkout/reset/clean it. blackboard.notifications['persistent-pull-blocker'] was last set 2026-08-18T20:30:00.000Z, which is >6h old (now 2026-08-19T04:00:46.000Z, ~7.5h), so re-attempted PushNotification per dedup rule (tool reported not sent: terminal active/redundant, same as before) and refreshed the notifications timestamp. No STEP 1-6 work attempted; exiting for next firing to retry the pull. A human still needs to resolve the package.json change (commit, revert, or otherwise clear it) to unblock the loop.",
-   "commit": null,
-   "tests": "not run (exited at STEP 0.3, before STEP 3)"
-  },
   {
    "ts": "2026-08-19T06:00:55.000Z",
    "agent": "cajh-loop-check-scheduled",
@@ -1233,6 +1225,14 @@
    "action": "C3-FX-CARRY-DATA-GATE resolved (not a pass, not a fail)",
    "detail": "Static-analysis-only FX data gate, no network access, no strategy code, brokers/ibkr.mjs unmodified. Price-side code capability (Forex contract class + existing reqHistoricalData pattern) confirmed sufficient. Rate-side: 6 non-USD FRED short-rate series named but explicitly flagged unverified (no network access permitted this pass); only USD/FEDFUNDS confirmed reachable via prior EXOGENOUS-DATA-ACCESS-AUDIT. Account-side FX entitlement stated as a 3-item question list for the human, alongside C1s still-open options question. Recorded in ROADMAP.md.",
    "commit": "baf878c",
+   "tests": "513/513 green"
+  },
+  {
+   "ts": "2026-08-29T17:15:24.191Z",
+   "agent": "executor",
+   "action": "GEOMETRY-NULL-DOWN-WINDOW-PROBE resolved -- geometry null mean does NOT survive a down window",
+   "detail": "Pre-registered >=60-day/<=0.00-buy-and-hold qualifying criterion and mechanical quarter+year segmentation before computing returns. Surveyed 43 cells (DJIA-30, DJTA-20, new CRYPTO-28 via data.js loadCandles). DJTA-20 qualified twice (2025-Q1, 2025-Q3); matched-geometry null mean went negative (-0.1741, -0.0632) versus the +0.1493/+0.1637 rising-window means on record -- confirms the window-artifact reading RANDOM-ENTRY-NULL-WINDOW-SENSITIVITYs r=0.90 correlation pointed toward. CRYPTO-28 corroborated directionally (9/19 qualifying cells, all strongly negative) but magnitudes flagged as a disclosed cost-model artifact (equities-calibrated R-normalization vs crypto flat FEE_RATE=0.008 at ma_dips tight stops, worst single trade -17.99R) and not cited as comparable. No entry rule/parameter change, SEALED_SYMBOLS untouched.",
+   "commit": "e5a3a07",
    "tests": "513/513 green"
   }
  ],
