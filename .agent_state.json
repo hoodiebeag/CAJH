@@ -4,9 +4,9 @@
   "status": "idle",
   "target_file": null,
   "objective": null,
-  "notes": "STATE-RETENTION-PASS complete (commit 52106d2, pushed). Applied AGENT_PROTOCOL.md Work-queue retention rule as written: kept every pending/started item plus the most recent 15 done items; dropped 79 older done items whose rationale was individually confirmed to survive elsewhere (ROADMAP.md/TOURNAMENT_ROADMAP.md dated prose, VERDICTS.md rows, or commit+code for infra-only items) -- full per-item table is in the commit message. One eligible-for-drop done item, PWR5-MAKER-FILL-COST-REDUCTION, was deliberately retained instead: its file field contains the literal identifier for the live-trading env-gate flag, and work_queue is outside the ledger-array exemption in scripts/check-protected-logic.cjs, so removing it would have tripped the pre-commit hook (same shape as the QUEUE-RETENTION-HOOK-PRUNE-EXCEPTION precedent, commit 89d859d). Left in place, named in the commit message, for a future pass (human marker or a rewritten file field) to resolve -- this is a normal partial-completion per the rule’s own do-not-drop-if-unconfirmable clause, not a blocker, so control.status stays idle. Whole-file size 471,366 -> 250,336 bytes (46.9% reduction); work_queue 314,440 -> 97,991 bytes (68.8% reduction); work_queue length 104 -> 25. Ledger untouched at 100 entries, byte-identical elsewhere (git diff was pure deletion, 818 lines removed, 0 added). 513/513 tests green before and after -- no source files touched, housekeeping only. Queue still has 8 ready pending items (EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL, DATE-CLUSTERED-RESAMPLING-DJTA20, BREAKEVEN-LOCK-COUNTERFACTUAL, CRYPTO-EFFECTIVE-SAMPLE-AUDIT, DEAD-CODE-AND-ASSET-AUDIT, plus 3 with unmet depends_on) so no restock needed this firing.",
+  "notes": "C1-VRP-DATA-AVAILABILITY-GATE complete (commit 0c18ea4, pushed). Part A (code-side): new scripts/c1-vrp-data-availability-gate.mjs (additive, read-only, zero network calls -- static analysis of brokers/ibkr.mjs plus installed @stoqey/ib .d.ts files only). Confirmed brokers/ibkr.mjs carries zero options code path today (re-verified directly, not assumed to transfer from OPTIONS-SKEW-PRIMARY-SIGNALs Deribit/crypto finding). Confirmed the already-installed @stoqey/ib dependency exposes every API call a defined-risk short-premium study needs (Option contract class, reqSecDefOptParams chain lookup, tickOptionComputation live greeks, reqHistoricalData whatToShow=OPTION_IMPLIED_VOLATILITY for historical IV) -- three of four required pieces extend fetchOHLC()/stockContract()s existing pattern directly. Build estimate: multi-day, not same-day (C0) and not multi-week. Code-side gate does NOT fail. Part B (account-side): NOT answerable this run (no egress, IB Gateway parked) -- five concrete questions recorded in the script output and ROADMAP.md for the human to check on one IBKR settings page (OPRA/options subscription bundle, historical-vs-snapshot-only entitlement, retention depth, incremental cost). Part C: fallback to C2 stated per directive, C2 NOT queued -- next restocks decision once Part B is answered. No strategy/backtest code, no return computed, no proxy substituted, brokers/ibkr.mjs unmodified (confirmed via git status before commit), no network access attempted. npm.cmd test: 513/513 green. Queue still has 9 other pending items after marking this done, no restock needed this firing.",
   "updated_by": "executor",
-  "updated_at": "2026-08-29T09:30:00.000Z"
+  "updated_at": "2026-08-29T10:06:13.326Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -198,7 +198,7 @@
    },
    {
     "id": "C1-VRP-DATA-AVAILABILITY-GATE",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: scripts/c1-vrp-data-availability-gate.mjs (additive, read-only); brokers/ibkr.mjs read but NOT modified",
     "depends_on": [],
@@ -385,14 +385,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-15T07:09:03.312Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "closed-work-queue-item",
-   "detail": "FUTURES-BASIS-DIRECTIONAL-SIGNAL: basis-widening gate (current > trailing 7d avg, N=7) on breakout/anticipate, new module basis-directional-signal.mjs reusing derivatives.mjs fetchAnalytics(type:future-basis) for the first sealed-holdout use of that data source. Momentum/confirmation hypothesis pre-registered before data was examined (contrarian-fade explicitly out of scope). Data-availability confirmed against real API first (899-day future-basis history for PF_XBTUSD/PF_ETHUSD, 28/29 watchlist assets clear 500-day floor, EOS excluded on pre-existing candle shortfall). FAIL both families: breakout holdout avgR -0.994/1229 trades/0-27 positive, anticipate holdout avgR -0.938/1491 trades/0-27 positive, both agree in sign with train, both trade counts comfortably clear the 150 floor. VERDICTS.md and TOURNAMENT_ROADMAP.md updated. 380/380 pre-existing tests plus 6 new tests green.",
-   "commit": "c7f67fe",
-   "tests": "green (380/380 npm test)"
-  },
   {
    "ts": "2026-08-15T08:12:55.169Z",
    "agent": "cajh-loop-check-scheduled",
@@ -1184,6 +1176,14 @@
    "detail": "Applied AGENT_PROTOCOL.md work-queue retention rule to blackboard.work_queue: kept 9 pending/started items + 15 most-recent done items + 1 hook-pinned retention (PWR5-MAKER-FILL-COST-REDUCTION, contains LIVE_TRADING string, would trip check-protected-logic.cjs since work_queue is outside the ledger exemption); dropped 79 older done items, each individually confirmed against ROADMAP.md/TOURNAMENT_ROADMAP.md/VERDICTS.md/commit+code before dropping (full table in commit message). File 471,366->250,336 bytes (-46.9%); work_queue 314,440->97,991 bytes (-68.8%); work_queue length 104->25. Ledger untouched (100 entries). 513/513 tests green.",
    "commit": "52106d2",
    "tests": "513/513"
+  },
+  {
+   "ts": "2026-08-29T10:06:13.327Z",
+   "agent": "executor",
+   "action": "C1-VRP-DATA-AVAILABILITY-GATE done",
+   "detail": "Static-analysis-only data-availability gate for mechanism C1 (IBKR equity/index options VRP). Part A (code-side capability, resolvable without network): confirmed brokers/ibkr.mjs has no options code path, confirmed installed @stoqey/ib package already exposes the full required API surface (Option contract class, chain lookup, live/historical IV), build estimate multi-day not multi-week -- code-side gate does not fail. Part B (account-side subscription entitlement): unanswerable this run (no egress, Gateway parked) -- five concrete questions recorded for the human, answerable from one IBKR settings page. Part C: fallback to C2 stated, C2 not queued. No strategy/backtest code, no proxy substituted, brokers/ibkr.mjs unmodified, no network access attempted.",
+   "commit": "0c18ea4",
+   "tests": "513/513 green"
   }
  ],
  "automation": {
