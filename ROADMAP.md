@@ -8232,3 +8232,137 @@ geometry-null-down-window-probe.json`, both read-only. `backtest.js`, `strategy.
 untouched throughout (grep-confirmed against the staged diff before commit). Only `ROADMAP.md`
 modified (this section plus the correcting annotation in `GEOMETRY-NULL-DOWN-WINDOW-PROBE`'s
 section above). `npm.cmd test`: 513/513 green, unchanged — no test-affecting code changed.
+
+
+## 2026-08-29 — PHASE-DIRECTIVE-COMPLETION-SUMMARY: closing blackboard.phase_directive_new_mechanism's C0-C3 sequence — one KILLED, one NULL-after-correction, two gated-unavailable; the phase's strongest findings were negative controls on prior work, not the new mechanisms themselves
+
+BOOKKEEPING, per this item's own scoping note (30-60 min, no egress, no computation — D1 does not
+apply, following the precedent of `PHASE-DIRECTIVE-BOOKKEEPING` and other bookkeeping items in
+this ROADMAP). Synthesis only: every figure below is quoted from its own named ROADMAP.md entry,
+nothing here is computed fresh. Closes `blackboard.phase_directive_new_mechanism`'s STEP 4 build
+order (C0 -> C1 -> C2 -> C3, all sequenced by that blackboard key) — all four mechanisms are now
+resolved as far as an unattended loop can take them without the human.
+
+**C0 — signal combination (rank-average of B5-REVERSAL and Classifier P5): KILLED, decisively**
+(`C0-SIGNAL-COMBINATION`, 2026-08-29). Pre-registered one-sided permutation test (K=2000,
+seed 20260829): **p=0.4708**, nowhere near the 0.05 bar. Composite selected net R at real cost
+**-0.9344**, worse than both standalone inputs on the identical matched population — B5-REVERSAL
+top-3/top-5 at -0.0153/-0.0123, Classifier P5 at -0.8554 (originally -0.8474/-0.8554 pre-
+`CLASSIFIER-P5-ECONOMICS-ROW-STALENESS` correction). All five pre-registered gate clauses failed
+except the minimum-trades floor (3345 >= 100). Joined `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-
+NHST family as its 21st sub-test; family-wide BH-FDR **q=0.7605** — does not survive.
+
+**C1 — options/VRP data-availability gate: gated-unavailable on account-side entitlement, not a
+pass or a fail** (`C1-VRP-DATA-AVAILABILITY-GATE`, 2026-08-29). Part A (code-side capability),
+resolved from static analysis: `brokers/ibkr.mjs` has no options code path today, but the
+installed `@stoqey/ib` dependency already exposes everything a defined-risk short-premium study
+would need (`Option` contract class, `reqContractDetails`/`reqSecDefOptParams`,
+`tickOptionComputation`, `OPTION_IMPLIED_VOLATILITY`) — a multi-day build, not a same-day change
+and not a multi-week one; the code-side gate does **not** fail. Part B (account-side entitlement —
+whether the account holds an OPRA/options market-data subscription, historical-vs-snapshot-only,
+retention depth) is not answerable from this session: no egress, IB Gateway parked pending the
+human. Five concrete questions recorded in the script's saved output rather than guessed.
+
+**C2 — continuous macro conditioner on equities (10y-2y Treasury spread as a continuous
+covariate, not a discrete regime): NULL after correction, but a genuinely new statistical unit**
+(`C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES`, 2026-08-29). Unlike the three prior discrete-regime
+macro studies (all killed by the equities holdout containing exactly one regime episode, so
+effective n=1 regardless of split), this design's effective n is the trade count: **475** `ma_dip`/
+DJIA-30 holdout trades. Spearman rho = **-0.0980** (higher spread, lower net R), two-sided
+permutation p = **0.0365** (K=2000) — nominally clears p<0.05. Joined the same NHST family as its
+22nd sub-test; family-wide BH-FDR **q=0.1338** — does not survive (rank 6's critical value is
+0.01364, more than 2.5x below this q). Quintile breakdown was non-monotonic (quintile 2 the best
+performer, quintile 3 the worst), a further reason not to read this as an exploitable gradient
+even before correction.
+
+**C3 — FX carry data gate: gated-unavailable, price-side sufficient but rate-side unverified and
+account-side an open question** (`C3-FX-CARRY-DATA-GATE`, 2026-08-29). Part A (price-side code
+capability): `brokers/ibkr.mjs` has no FX/CASH contract path today, but `@stoqey/ib` already
+exposes a `Forex` contract class and `reqHistoricalData` is generic over any contract — a small,
+same-day-to-C0-sized build; the price-side code gate does **not** fail. Part B (the carry signal's
+actual data need — a short-term policy/money-market rate per currency, not just pair price
+history): only the USD series (`FEDFUNDS`) is confirmed reachable, already fetched by
+`EXOGENOUS-DATA-ACCESS-AUDIT` and reused by C2's own sourcing; the six non-USD candidate series
+(EUR/GBP/JPY/CAD/AUD/CHF, `IR3TIB01<ISO2>M156N` or named alternates `ECBDFR`/`SONIA`) are named
+from FRED's known catalog convention but **not fetched this session** — explicitly reported as
+unverified, not confirmed. Part C (account-side IDEALPRO FX entitlement, historical-bar
+availability, retention) is not answerable from this session: no egress, IB Gateway last returned
+ECONNREFUSED at 127.0.0.1:4002. Three concrete questions recorded in the script's saved output.
+
+**What the phase established collectively — separating what the mechanisms themselves produced
+from what the controls run alongside them produced.** Of the four mechanisms, one ran to a
+decisive negative result (C0 KILLED), one ran to a nominally-significant-but-corrected-null result
+(C2), and two never got past a data-availability gate that only the human can clear (C1, C3). None
+of the four produced a positive, surviving result. But the phase also carried four control studies
+that were not new mechanisms at all — re-examinations of *prior* published findings — and those
+controls produced this period's most consequential results:
+
+- `EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL`: **zero of ten scorable families** clear a matched-
+  geometry random-entry null at the pre-registered 95th percentile. `ma_dip` sits at the 52.1st
+  percentile of its own null, `rsi` (the closest any family gets) at 55.3rd — nowhere near the
+  bar. Every scorable family's null mean is itself strongly positive (+0.0751 to +0.2348),
+  meaning a random long entry with the same stop/target/breakeven geometry already made money in
+  this window before any entry-timing rule is credited. The corrected 8-of-12 DJIA-30
+  net-positive-family claim (this project's most-cited positive equities finding) does not
+  survive: one of the eight is too thin to score, and the remaining seven all fail the null.
+- `DATE-CLUSTERED-RESAMPLING-DJTA20`: the project's **one** equities confidence interval that had
+  ever positively excluded zero out-of-sample (`ma_dip`/DJTA-20, position-blocked 95% CI
+  [+0.0509, +0.5350]) moves to **[-0.0851, +0.7129]** under date-clustered resampling — spans
+  zero. This does not reopen `ma_dip` as a candidate (already closed independently on
+  survivability and random-entry grounds), but it removes the one equities result that had ever
+  cleared this specific bar.
+- `RANDOM-ENTRY-NULL-WINDOW-SENSITIVITY`: across 6 cells (2 universes x 3 calendar years, all
+  rising), the random-entry geometry's null mean correlates with each cell's own buy-and-hold
+  return at **r=0.90** — consistent with a window/leverage effect rather than a geometry-only
+  edge, though the cache available at the time contained no down window to make this a clean
+  test.
+- `GEOMETRY-NULL-DOWN-WINDOW-PROBE`: found genuinely down/flat windows (DJTA-20 2025-Q1 and
+  2025-Q3, plus 9 crypto quarters/years) and confirmed the open question directly — the
+  geometry's null mean, positive in every rising window on record (+0.1493R DJIA-30, +0.1637R
+  DJTA-20), turns **negative** in both equities down windows found (-0.1741, -0.0632). All 9
+  qualifying crypto cells were directionally negative too, though their magnitudes reflect
+  correct crypto-specific cost economics rather than a comparable second equities data point
+  (`CRYPTO-R-NORMALIZATION-DEFECT-OR-ECONOMICS`, 2026-08-29, verified this rather than assumed
+  it).
+
+**Stated plainly, as the record shows it: this phase's strongest results were negative controls
+on prior work — the equities breadth claim and the project's one zero-excluding CI both did not
+survive scrutiny, and the geometry's rising-window tailwind was shown not to survive a down
+window — rather than any positive result from the four genuinely new mechanisms the phase was
+built to test.** C0 and C2 each ran to completion and produced a clean negative; C1 and C3 never
+reached a testable result at all.
+
+**Consolidated numbered list — exactly what the human must supply for C1 or C3 to proceed**
+(combining the question lists both items already produced into one place):
+
+1. IBKR options market-data entitlement — whether the live account's data plan includes an
+   OPRA/options-inclusive bundle. (C1)
+2. If held, whether that entitlement covers historical option/implied-vol bars or only live
+   snapshots, and how far back retention goes for the underlying(s) in question. (C1)
+3. Any incremental subscription cost for options market data not currently being paid. (C1)
+4. IBKR IDEALPRO FX quote-data entitlement — bundled with the existing account or a separate
+   subscription. (C3)
+5. Whether historical FX bars (`whatToShow=MIDPOINT`/`BID`/`ASK`) actually return for this
+   account, and how far back. (C3)
+6. Confirmation, via one real fetch per series against FRED's free key-less CSV endpoint, that
+   the named non-USD policy-rate series actually resolve (EUR `IR3TIB01EZM156N`/alt `ECBDFR`,
+   GBP `IR3TIB01GBM156N`/alt `IUDSOIA`, JPY `IR3TIB01JPM156N`, CAD `IR3TIB01CAM156N`, AUD
+   `IR3TIB01AUM156N`, CHF `IR3TIB01CHM156N`) — currently named from catalog convention, not
+   fetched. (C3)
+7. IB Gateway reachability at the human's machine, so items 1-6 can actually be checked from a
+   future unattended run — both C1 and C3 ran with Gateway unreachable this session (parked /
+   ECONNREFUSED at 127.0.0.1:4002).
+
+**No C4 or successor mechanism is proposed here.** The phase directive named four mechanisms;
+all four are now resolved as far as this loop can take them without the human, and inventing a
+fifth to keep the phase moving would be exactly the manufactured-work failure this project's
+discipline prohibits. Whether a new mechanism should be specified is a decision for the human,
+made after C1/C3's entitlement questions above are answered — not a decision this item makes by
+proposing one.
+
+**Engineering note.** `ROADMAP.md` only (this section). `blackboard.phase_directive_new_mechanism`
+gains a `completion` field pointing at this entry; `decisions_verbatim` and `open_conflict_for_human`
+are untouched (confirmed byte-identical in the diff). No production file read or modified —
+every figure above is a quotation from an already-committed ROADMAP.md entry, not a fresh
+computation. `frozen_paths_note` remains `blackboard`'s last key, byte-exact indent-1 roundtrip.
+`npm.cmd test`: 513/513 green, unchanged (no test-affecting code changed).
