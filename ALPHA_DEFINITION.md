@@ -156,18 +156,35 @@ overlap** with the DJIA-30 it was fitted and first scored on, real IBKR costs, *
 over 300 holdout trades**, 95% CI **[+0.0509, +0.5350]**, p=0.0116, **q=0.0435 — survives
 family-wide BH-FDR across all 15 formal-NHST entries**.
 
+> **CI corrected 2026-08-29 (`DATE-CLUSTERED-RESAMPLING-DJTA20`).** The 95% CI quoted above,
+> [+0.0509, +0.5350], is the **position-blocked** bootstrap — it resamples by position in the
+> flat trade array, not by calendar date, and 300 DJTA-20 trades condense to only **104 distinct
+> calendar days (a 35% effective/nominal ratio)**, with signals from correlated same-day moves
+> counted as independent observations. Under date-clustered resampling (same method, blocking by
+> calendar day), the interval widens to **[-0.0851, +0.7129] and no longer excludes zero.** This
+> was the project's one equities CI that positively excluded zero rather than merely failing to
+> exclude it; it no longer does. The figure above is left in place as the number this section was
+> originally written around — every place below that treats it as excluding zero is marked, not
+> silently corrected.
+
 | test | required | observed | verdict |
 |---|---|---|---|
-| 1. positive net expectancy | `E > 0` | **+0.2994R** net of real cost | **pass, but see note below — the entry rule itself does not clear its own null (`MADIP-RANDOM-ENTRY-CONTROL`, 2026-08-28)** |
+| 1. positive net expectancy | `E > 0` | **+0.2994R** net of real cost | **pass, but see note below — the entry rule itself does not clear its own null, on `ma_dip` alone or project-wide (`MADIP-RANDOM-ENTRY-CONTROL`, 2026-08-28; `EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL`, 2026-08-29)** |
 | 2. win rate margin | > `1/(1+R)` on **realised** R | DJIA-30: R=2.65, margin +3.52pp (inside 95% Wald noise); DJTA-20: R=2.50, margin +7.12pp (outside it) | **measured, 2026-08-28 — not pre-registerable retrospectively; splits by universe** |
-| 3. CI excludes zero **and** survives BH-FDR | both | CI **[+0.0509, +0.5350]** holds; **q=0.0522 at n=18** | **FAIL as of 2026-08-27** |
+| 3. CI excludes zero **and** survives BH-FDR | both | position-blocked CI **[+0.0509, +0.5350]** — but the date-clustered CI is **[-0.0851, +0.7129] and no longer excludes zero** (`DATE-CLUSTERED-RESAMPLING-DJTA20`, 2026-08-29); separately, q=0.0580 at current family size n=20 | **FAIL on two independent grounds: BH-FDR (2026-08-27) and the CI itself (2026-08-29)** |
 | 4. sample adequate | ~401 for 80% power at this effect | **300** | **marginal** |
 | 5. survivable | drawdown ceiling + streak stated | calendar-time max DD **-81.7%** (DJIA-30) / **-74.2%** (DJTA-20) at 2% risk/trade, vs. a pre-registered 25% ceiling; **-100% (ruin) at 5%** on both | **FAIL, 2026-08-28 (`MADIP-SURVIVABILITY-CONDITION-5`)** |
 | 6. reproduced out-of-sample | yes | **yes — larger on the fresh universe** | **pass** |
 
-**Two of six pass as of 2026-08-28, condition 2 is now measured but does not cleanly pass or fail
+**Two of six pass as of 2026-08-29, condition 2 is now measured but does not cleanly pass or fail
 (it splits by universe), condition 5 has now failed outright, one is marginal, and condition 3 — which passed
-when this section was written on 2026-08-22 — has since failed.** It got further than anything
+when this section was written on 2026-08-22 — has since failed on two independent grounds: BH-FDR
+(2026-08-27, family growth) and, as of 2026-08-29, the confidence interval itself, which no longer
+excludes zero under date-clustered resampling (`DATE-CLUSTERED-RESAMPLING-DJTA20`). Condition 1's
+literal pass is further weakened as of 2026-08-29: the same matched-geometry random-entry null
+that failed `ma_dip` alone (`MADIP-RANDOM-ENTRY-CONTROL`) also fails it, and every other scorable
+equities family, when applied project-wide (`EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL`: zero of ten
+scorable families clear it, `ma_dip` at the 52.1st percentile).** It got further than anything
 else ever has here, and it is not an alpha. The distinction matters: this document exists
 precisely so that "the best result we have" and "clears the bar" stay separate ideas.
 
@@ -202,7 +219,9 @@ went the other way, +0.1866R → −0.0854R, sign flipped.
   a **measured, decisive FAIL**, on the same failure mode that killed the project's only other
   near-miss.
 - **The interval is thin where it matters.** The lower bound `+0.0509` is **17% of the point
-  estimate**. The result is significant, not comfortably so.
+  estimate**. The result is significant, not comfortably so. **(Annotated 2026-08-29: this is the
+  position-blocked interval — see the dedicated bullet below on `DATE-CLUSTERED-RESAMPLING-DJTA20`,
+  whose date-clustered lower bound is negative.)**
 - **Condition 3 is now hanging by 0.0007, and not for any reason to do with `ma_dip`.**
   Its raw p-value has never moved from `0.0116`. Its BH-FDR q-value has: `0.0435` at 15 family
   members, `0.0464` at 16, **`0.0493` at 17**, against a `0.05` threshold. That drift is
@@ -222,8 +241,12 @@ went the other way, +0.1866R → −0.0854R, sign flipped.
   terms. It has no relationship to `ma_dip` beyond both being entries in the same correction
   family. Adding it grew the denominator from 17 to 18, and that alone moved `ma_dip` from
   survivor to non-survivor. **`ma_dip`'s own p-value has never changed from 0.0116, and its
-  confidence interval [+0.0509, +0.5350] still excludes zero.** What changed is the number of
-  looks the project has taken.
+  position-blocked confidence interval [+0.0509, +0.5350] still excludes zero.** What changed
+  [for this BH-FDR mechanism] is the number of looks the project has taken. **(Annotated
+  2026-08-29: this paragraph is about the BH-FDR mechanism specifically. The same interval fails
+  a second, independent way under date-clustered resampling — see the dedicated bullet below,
+  `DATE-CLUSTERED-RESAMPLING-DJTA20`, whose date-clustered version of this same interval,
+  [-0.0851, +0.7129], does not exclude zero.)**
 
   The project is therefore back to **zero candidates clearing conditions 1 and 3 together**. The
   exception recorded in §4b lasted five days, from 2026-08-22 to 2026-08-27. Of the two entries
@@ -263,6 +286,24 @@ went the other way, +0.1866R → −0.0854R, sign flipped.
   `ma_dip`'s rank and buys real margin. If the family framing genuinely warrants revisiting,
   that case must be argued on its own terms, in advance, and never in response to a candidate
   being about to fall out.
+- **Condition 3 fails on a second, independent ground as of 2026-08-29: the CI itself no longer
+  excludes zero under date-clustered resampling (`DATE-CLUSTERED-RESAMPLING-DJTA20`).** The
+  position-blocked interval quoted throughout this section, [+0.0509, +0.5350], resamples by
+  position in the flat 300-trade array; DJTA-20's 300 trades condense to only **104 distinct
+  calendar days**, an **effective/nominal ratio of 35%** (DJIA-30's own ratio, on record, is 26%).
+  Block-resampling by calendar day instead of by array position — the same method
+  `DATE-CLUSTERED-RESAMPLING-AUDIT` used for DJIA-30 — widens the interval to
+  **[-0.0851, +0.7129], which spans zero.** This was flagged as a live possibility when this
+  section was first written (see the `blockBootstrapCI`-has-no-notion-of-a-calendar-day bullet
+  below, unchanged since 2026-08-22) and it has now happened: the one equities CI in this
+  project's history that positively excluded zero no longer does. This is a second, independent
+  reason condition 3 fails, unrelated to the BH-FDR family-growth mechanism above, and it means
+  every place in this section's prose asserting the DJTA-20 interval "still excludes zero"
+  (below, written before this correction) is describing the position-blocked figure only and is
+  superseded by this finding. Required-N planning is unaffected — see
+  `DATE-CLUSTERED-RESAMPLING-DJTA20`'s own restatement of `REQUIRED-SAMPLE-FOR-DURABLE-PASS`,
+  which the p-calibrated required-N of 316 (not the CI-derived SD) already used and which this
+  finding does not move.
 - **The CI may be optimistic for a reason unrelated to the signal.** `blockBootstrapCI`
   resamples contiguous blocks **by position in the flat trade array**; it has no notion of a
   calendar day. 300 trades across 20 transport names means signals fired by one sector-wide
@@ -307,6 +348,23 @@ went the other way, +0.1866R → −0.0854R, sign flipped.
   identifiable work. This does not flip condition 1's literal pass (`E > 0` is still true), and
   it is a resampling control rather than a formal-NHST test (no BH-FDR family entry), but it
   materially weakens what that pass was ever entitled to claim on its own.
+- **Confirmed project-wide, not just for `ma_dip` alone (`EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL`,
+  2026-08-29).** The same matched-geometry random-entry null, applied unchanged to all twelve
+  `tournament.mjs` families (ten scorable at >=10 trades), found **zero of ten scorable families
+  clear the pre-registered 95th-percentile bar** — including `ma_dip` itself, whose real DJIA-30
+  result (+0.1526R) landed at the **52.1st percentile** of its own null (null mean +0.1514R, SD
+  0.1045), closely replicating `MADIP-RANDOM-ENTRY-CONTROL`'s independent 53rd-percentile finding
+  on a separate seed and draw order. Every one of the ten scorable families' null means was
+  strongly positive (+0.0751R to +0.2348R) — a matched-geometry random long entry already earns
+  real money in this window before any entry-timing rule is credited, on every family tested, not
+  `ma_dip` alone. This is the direct bearing on condition 1: positive expectancy that a random
+  entry with identical stop/target/breakeven geometry also achieves, on ten-for-ten families
+  tested, is not evidence any of those entry rules — `ma_dip`'s included — contributes
+  identifiable timing skill. The corrected 8-of-12 DJIA-30 net-positive breadth claim
+  (`CROSS-FAMILY-TRADE-OVERLAP-AUDIT`) — this project's main stated reason equities looked
+  different from crypto — does not survive being read against this null: seven of the eight
+  net-positive families fail to clear it and the eighth (`range_sweep_reclaim`) is too thin to
+  score (3 trades, below the pre-registered 10-trade floor).
 
 **`ma_dip` no longer needs a "what's left" list — it has now failed two of the six conditions
 outright (3 and 5), on top of a marginal 4, a split-by-universe 2, and a condition 1 whose
@@ -319,6 +377,23 @@ and both now hold. The right next step is not promotion, not a third universe, a
 risk fraction chosen after seeing this result — it is treating `ma_dip` as closed: real,
 positive, and uninvestable at any risk fraction this project would responsibly run, exactly the
 shape §2 and `B5-REVERSAL`'s own precedent warned this project to expect.
+
+**Project position, restated 2026-08-29 (`ALPHA-DEFINITION-POST-NULL-RESTATEMENT`, bookkeeping,
+not research — D1 does not apply, per the same convention `CLASSIFIER-P5-ECONOMICS-ROW-STALENESS`
+used).** `ma_dip` is closed on conditions 3 and 5 independently of each other and of anything
+above: condition 5 on a measured, decisive drawdown failure (`MADIP-SURVIVABILITY-CONDITION-5`),
+and condition 3 now on two independent grounds of its own — BH-FDR family growth (2026-08-27) and,
+as of `DATE-CLUSTERED-RESAMPLING-DJTA20` (2026-08-29), the confidence interval itself, which no
+longer excludes zero once resampled by calendar date instead of by array position (300 trades
+collapse to 104 distinct days, a 35% effective/nominal ratio). Separately, the breadth claim that
+made equities look different from crypto — 8 of 12 `tournament.mjs` families net-positive on
+DJIA-30 (`CROSS-FAMILY-TRADE-OVERLAP-AUDIT`) — does not survive being read against a
+geometry-matched random-entry null: `EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL` found zero of ten
+scorable families, `ma_dip` included, clear the pre-registered 95th-percentile bar against a null
+built from each family's own stop/target/breakeven geometry. Neither finding reopens or narrows
+the other; both hold, independently, and both point the same direction: this project's equities
+record has produced no candidate — not `ma_dip`, not the eight nominally net-positive families
+around it — that clears this document's bar or that a matched-geometry null cannot explain.
 
 **Forward-looking planning note, not a reopening of the above (`REQUIRED-SAMPLE-FOR-DURABLE-PASS`,
 2026-08-28, ROADMAP.md).** Using `ma_dip`'s recorded numbers purely as a worked example of this
@@ -345,7 +420,17 @@ Asked directly: does anything this project has already run meet the bar?
 > every other candidate in the record, and because a document that quietly edits away its own
 > falsified claims is worth less than one that shows where it was wrong.
 
-**No — with one exception found on 2026-08-22, recorded in §4b.** And the way things fail is
+> **Annotation added 2026-08-29.** The exception above lasted five days (2026-08-22 to
+> 2026-08-27) — see §4b's own note under condition 3. As of 2026-08-29, `ma_dip` has failed
+> conditions 3 and 5 independently (§4b's restated position, above), so the project is back to
+> the pre-2026-08-22 state this section originally described: no candidate on record clears
+> conditions 1 and 3 together. This does not un-supersede the callout above — the claim that
+> "conditions 1 and 3 have never been met by the same candidate" was still falsified, once, for
+> five days, and that fact is preserved rather than erased — but the exception is itself now
+> closed and should not be read as currently live.
+
+**No — with one exception found on 2026-08-22, recorded in §4b (exception closed 2026-08-27 —
+condition 3 lapsed; see §4b's restated position).** And the way things fail is
 still more informative than the count.
 
 | candidate | 1. net E>0 | 3. CI excl. 0 + FDR | 5. survivable | 6. out-of-sample | verdict |
