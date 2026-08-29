@@ -4,9 +4,9 @@
   "status": "idle",
   "target_file": null,
   "objective": null,
-  "notes": "ALPHA-DEFINITION-POST-NULL-RESTATEMENT complete (commit 762d0f6, pushed). Bookkeeping restatement of ALPHA_DEFINITION.md sections 4b and 5 against two 2026-08-29 findings, no code, no new computation, every figure quoted from a named ROADMAP.md entry -- D1 does not apply per CLASSIFIER-P5-ECONOMICS-ROW-STALENESS precedent. Corrected every place asserting the DJTA-20 CI [+0.0509, +0.5350] excludes zero: DATE-CLUSTERED-RESAMPLING-DJTA20 (2026-08-29) found the date-clustered version is [-0.0851, +0.7129] and spans zero (104 distinct days behind 300 nominal trades, 35% effective/nominal ratio) -- condition 3 now fails on two independent grounds (BH-FDR family growth 2026-08-27, and the CI itself 2026-08-29), not one; every prose assertion that the interval still excludes zero was annotated in place (not deleted) as describing the position-blocked figure only. Recorded EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL against condition 1 and against the 8-of-12 DJIA-30 breadth claim: zero of ten scorable tournament.mjs families clear a matched-geometry random-entry null, ma_dip at the 52.1st percentile (closely replicating MADIP-RANDOM-ENTRY-CONTROLs independent 53rd-percentile finding), seven of the eight nominally net-positive families fail the null and the eighth is too thin to score. Added a clearly-marked \"Project position, restated 2026-08-29\" paragraph: ma_dip closed on conditions 3 and 5 independently, and the breadth claim that made equities look different from crypto does not survive the geometry-matched null. Added a parallel dated annotation to section 5s SUPERSEDED-IN-PART callout noting the 5-day exception (2026-08-22 to 2026-08-27) has since closed, without altering the callout itself. Correction-family warning against narrowing the BH-FDR family verified present verbatim and unweakened before commit. Every superseded claim marked with a dated annotation, none deleted -- confirmed via diff review before commit. Only ALPHA_DEFINITION.md touched (confirmed via git status/diff before commit) -- no backtest.js/strategy.js/tournament.mjs/monitor.js/bot.js/trader.js/scanner.js file touched. npm.cmd test: 513/513 green, run before commit. Untracked universe.txt in the working tree predates this run and was left untouched. Queue has 7 pending/started items remaining, no notification triggered this firing (not BLOCKED, queue not empty, no new PASS verdict). Next in queue: VERDICTS-COST-CONSTANT-STALENESS-SWEEP, BREAKEVEN-LOCK-COUNTERFACTUAL, CRYPTO-EFFECTIVE-SAMPLE-AUDIT, DEAD-CODE-AND-ASSET-AUDIT, or DOCS-ARCHIVE-CONVENTION (deps satisfied).",
+  "notes": "VERDICTS-COST-CONSTANT-STALENESS-SWEEP complete (commit 8e06008, pushed). Generalized CLASSIFIER-P5-ECONOMICS-ROW-STALENESS's (2026-08-29) own flagged follow-up: enumerated every call site of classifier.mjs's economicLiftNetOfCost plus every hand-written equivalent (cost subtracted on top of a netR that already bakes in strategy.js's real cost via profileEntries), classified all 16 candidates as AFFECTED / UNAFFECTED-BY-CANCELLATION / NOT-DERIVED-THROUGH-THAT-PATH in a new dated ROADMAP.md entry. Corrected VERDICTS.md's CLASSIFIER-FUNDING-FEATURE row via a fresh re-run (throwaway script, cache-only, no egress -- its original netR predated FEE-DEFAULTS-UPDATE by ~16 min so algebraic recovery alone would have recovered a stale-cost figure): selected -0.6351R / baseline -0.9253R / lift +0.2902R at roundTripCost=0 (was double-counted -0.2412/-0.2492 selected, -0.5387/-0.5467 baseline); row counts (15076/3969/2163) and AUC (0.5943) reproduce exactly, ruling out data/universe drift. Corrected VERDICTS.md's C0-SIGNAL-COMBINATION row via algebraic recovery from its saved 2026-08-29 run (same-day constants, no re-run needed): composite selected/baseline correct to -0.9174/-0.9206 (the already-published gross mean netR figures, relabeled not replaced), Classifier P5's matched-population selected net corrects to -0.8384, 95% block-bootstrap CI shifts +0.017 to [-1.0658, -0.7500]. Fixed one stale absolute-figure mention in VERDICTS.md's own Bottom-line summary paragraph. No verdict/AUC/p-value/q-value changed anywhere -- re-verified directly on corrected numbers, not assumed from the bug's general shape. Flagged (not guessed) ROADMAP.md's PHASE2-MAX-SURVIVABLE-COST table's two classifier rows as SUPERSEDED-PENDING-RECORRECTION: correcting them needs a fresh per-venue profileEntries re-run (genuinely new computation), out of this item's bookkeeping scope -- left as a fresh work-queue item recommendation, not actioned. Only VERDICTS.md and ROADMAP.md touched (confirmed via git status/diff before commit) -- classifier.mjs/strategy.js/backtest.js/momentum.mjs and every frozen path read-only throughout, two throwaway uncommitted scripts used during investigation were deleted before commit. npm.cmd test: 513/513 green, run before commit. Untracked universe.txt in the working tree predates this run and was left untouched. Queue has 5 pending items remaining (VERDICTS-COST-CONSTANT-STALENESS-SWEEP now done), no notification triggered this firing (not BLOCKED, queue not empty, no new PASS verdict). Next in queue: BREAKEVEN-LOCK-COUNTERFACTUAL, CRYPTO-EFFECTIVE-SAMPLE-AUDIT, DEAD-CODE-AND-ASSET-AUDIT, or DOCS-ARCHIVE-CONVENTION (deps satisfied).",
   "updated_by": "executor",
-  "updated_at": "2026-08-29T17:15:24.191Z"
+  "updated_at": "2026-08-29T19:15:08.630Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -290,7 +290,7 @@
    },
    {
     "id": "VERDICTS-COST-CONSTANT-STALENESS-SWEEP",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "VERDICTS.md and ROADMAP.md; classifier.mjs, strategy.js and all frozen paths READ ONLY",
     "depends_on": [],
@@ -435,14 +435,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-19T08:00:47.000Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "pull-blocked-exit",
-   "detail": "STEP 0.3: git pull --rebase still fails on the same pre-existing unstaged package.json change (allowScripts.canvas@3.2.3=true), still not created this run - did not stash/checkout/reset/clean it. blackboard.notifications['persistent-pull-blocker'] was last set 2026-08-19T04:00:46.000Z, only ~4h ago (under the 6h dedup window), so per notification_policy.dedup this firing skipped PushNotification and left the notifications entry untouched rather than resending. No STEP 1-6 work attempted; exiting for next firing to retry the pull. A human still needs to resolve the package.json change (commit, revert, or otherwise clear it) to unblock the loop. Note: also observed a pre-existing structural duplication in this state file - a stale top-level notifications object (root.notifications, distinct from the canonical root.blackboard.notifications) still holding an unrelated 2026-08-08 pull-blocker entry about a different incident (nested repo clone). Not touched this firing (out of scope for a pull-blocked exit), flagging for a future cleanup pass.",
-   "commit": null,
-   "tests": "not run (exited at STEP 0.3, before STEP 3)"
-  },
   {
    "ts": "2026-08-19T09:00:58.000Z",
    "agent": "cajh-loop-check-scheduled",
@@ -1233,6 +1225,14 @@
    "action": "research-bookkeeping",
    "detail": "ALPHA-DEFINITION-POST-NULL-RESTATEMENT: restated ALPHA_DEFINITION.md sections 4b/5 against DATE-CLUSTERED-RESAMPLING-DJTA20 (DJTA-20 date-clustered CI [-0.0851,+0.7129] no longer excludes zero, 35% effective/nominal ratio -- condition 3 now fails on two independent grounds) and EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL (zero of ten scorable families clear a matched-geometry null, ma_dip at 52.1st percentile -- weighs on condition 1 and the 8-of-12 breadth claim). Added a clearly-marked project-position paragraph: ma_dip closed on conditions 3 and 5 independently; breadth claim does not survive the null. All superseded claims marked with dated annotations, none deleted; correction-family warning verified verbatim. Bookkeeping only, no code/computation.",
    "commit": "762d0f6",
+   "tests": "513/513"
+  },
+  {
+   "ts": "2026-08-29T19:15:08.630Z",
+   "agent": "executor",
+   "action": "VERDICTS-COST-CONSTANT-STALENESS-SWEEP",
+   "detail": "Generalized CLASSIFIER-P5-ECONOMICS-ROW-STALENESS's flagged follow-up across every economicLiftNetOfCost-style call site. Corrected VERDICTS.md CLASSIFIER-FUNDING-FEATURE row (fresh re-run: selected -0.6351/baseline -0.9253/lift +0.2902 at roundTripCost=0) and C0-SIGNAL-COMBINATION row (algebraic recovery: composite -0.9174/-0.9206, P5-matched -0.8384, CI [-1.0658,-0.7500]). Flagged PHASE2-MAX-SURVIVABLE-COST's two classifier rows SUPERSEDED-PENDING-RECORRECTION rather than guessed. No verdict/AUC/p/q changed. classifier.mjs/strategy.js/backtest.js untouched.",
+   "commit": "8e06008",
    "tests": "513/513"
   }
  ],
