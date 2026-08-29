@@ -6813,3 +6813,162 @@ reads `.agent_state.json`, `ROADMAP.md`, `VERDICTS.md`, `ALPHA_DEFINITION.md`, a
 `MULTIPLE_COMPARISONS_AUDIT.md`, and writes this section plus the `MULTIPLE_COMPARISONS_AUDIT.md`
 §5 addendum. Every figure quoted above is read from the cited existing record, not recomputed.
 `npm.cmd test`: green (no test-relevant file changed).
+
+## 2026-08-29 — C0-SIGNAL-COMBINATION: rank-average of B5-REVERSAL and Classifier P5 — KILLED, decisively, worse than either input alone
+
+First item of the new-mechanism phase (`blackboard.phase_directive_new_mechanism` STEP 3).
+New file `scripts/c0-signal-combination.mjs` (additive, cache-only, no egress); `momentum.mjs`
+and `classifier.mjs` unmodified, their exported scoring functions reused directly throughout.
+
+**Hypothesis, restated from the work-queue item's own framing.** B5-REVERSAL (L=3 cross-sectional
+reversal, train IC=-0.0685 p=0.0010, correct sign — the project's only formal-NHST survivor at
+q=0.05 as of this writing) and Classifier P5 (entry-time logistic classifier, holdout AUC 0.5249
+p=0.0198) are two independent, statistically-real, economically-dead effects. Might two small
+edges sum past the ~1.7% cost floor together even though neither does alone? This is a
+combination mechanism on two already-used signals' own native outputs — not a new input series,
+so `blackboard.template_a_exhausted`'s 2026-08-19 closure of the threshold-gate/breakout/
+anticipate shape does not apply to it.
+
+**Pre-registration (written into the script header before any composite number was computed —
+summarized here, full text in the script itself).** Combination rule: fixed a priori,
+UNFITTED rank-average. For each Classifier-P5 holdout trade, attach the most recent B5-REVERSAL
+(L=3, sign-flipped `trailR`) panel score for that trade's symbol as of a panel date at or before
+the trade's own entry date (no lookahead — a panel row's score only ever uses data at or before
+its own date). Convert both the classifier probability and the momentum score to percentile
+ranks *within the joined trade population* (scale-free, so no fitted weight is needed to combine
+a probability against a return magnitude) and average them; select the top tercile
+(`Math.floor(n/3)`, this project's own convention from `economicMomentumViews`). Cost model:
+`classifier.mjs`'s own `economicLiftNetOfCost`, unmodified, at both the legacy 0.009 round-trip
+and the FEE-SCHEDULE-REBASE-corrected real ~0.017 (primary gate cost). Gate: >=100 joined
+trades; a one-sided permutation test (K=2000, seed 20260829, fixed before any result was
+examined) that the combined-score top tercile beats a same-size random tercile from the same
+population, p<0.05; composite selected net R>0 at 0.017; composite beats BOTH standalone
+signals, each recomputed on the identical matched population.
+
+**Holdout universe — a disclosed, deliberate deviation from every prior sealed study's
+16-symbol convention.** This item's own instruction is explicit: never touch `SEALED_SYMBOLS`
+(`researchlib.mjs`: AVAX, LINK, NEAR, SUI, UNI), and `AGENT_PROTOCOL.md` already records that
+pool as spent (2026-08-29, `VOL-CONTRACTION-SEALED-VALIDATION`, inconclusive) with "nothing may
+assume a fresh sealed pool exists." B5-REVERSAL's and Classifier P5's historical 16-symbol
+holdout (`watchlist minus STABLE_13`) includes NEAR/SUI/UNI — a fact that predates the
+`SEALED_SYMBOLS` protocol and is not re-litigated here, but this study's own NEW computation
+never re-scores anything on them: the composite and its matched-population standalone baselines
+use `watchlist minus STABLE_13 minus SEALED_SYMBOLS` (13 symbols: ALGO, APT, EOS, ETC, FIL, INJ,
+POL, TAO, TIA, TRX, XMR, XTZ, ZEC). STABLE_13 (train, unchanged, still includes AVAX/LINK) is
+used exactly as every prior study has always used it — that is not new information extraction
+about those two symbols, it is this project's one and only train-universe definition throughout
+its history. The one place the historical 16-symbol set is touched at all is the read-only
+reproduction step below, which replays an already-published number as a code-path sanity check,
+not a new evaluation.
+
+**Step 1 — B5-REVERSAL train reproduction, exact match.** Replayed `momentum.mjs`'s own
+`sealed-reversal` CLI recipe (L=3, STABLE_13, sign-flipped `trailR`, train split) byte-for-bit:
+tercile net -0.0088/-0.0207 (legacy/real cost), top-3 -0.0007/-0.0069, top-5 +0.0001/-0.0046 —
+all six figures match `phase2-triage.mjs`'s recorded reference exactly. Confirms the integration
+point is wired correctly before touching anything new.
+
+**Step 2 — Classifier P5 holdout reproduction: model/AUC match exactly, but the economics
+figure has silently gone stale, disclosed here rather than reconciled quietly.** Refit the
+identical model (STABLE_13 train, `chooseLambdaByCv`, lambda=0.1) and scored it on the
+historical 16-symbol holdout: **holdout AUC = 0.5249**, matching `VERDICTS.md`'s published P5
+figure exactly — proof the train/holdout split, scaler, and fitted model are byte-identical to
+the original 2026-08-08 run. The economics are NOT reproducible from the current cache, though:
+fresh selected/baseline net at 0.009 cost is **-0.8634 / -0.9079**, not the published
+**-0.4616 / -0.5178**. Row counts match exactly (15076 total, 7580 holdout, 7496 train —
+identical to the published run), ruling out a data or universe change. The cause: `strategy.js`'s
+`FEE_RATE` (now 0.008/side, ~1.6% round trip) and `SLIPPAGE_PCT` already bake a cost into every
+`profileEntries()` record's `netR` at simulation time, and `economicLiftNetOfCost` then subtracts
+its own separate `roundTripCost` on top. `FEE-SCHEDULE-REBASE` corrected these constants upward
+the same day (2026-08-08) P5 was originally published; the P5 sealed CLI has apparently never
+been re-run since to refresh `VERDICTS.md`'s row, so calling the unmodified function today
+against the now-corrected cost constants nets a materially worse figure — a genuine, disclosure-
+worthy staleness in an existing published row, not a defect in this study or in `classifier.mjs`
+itself. **Investigating or refreshing P5's own row is out of this item's scope** and is not done
+here; this study instead uses freshly-computed figures throughout for both the standalone
+baseline and the composite, since comparing a stale cost basis on one side against a fresh one
+on the other would be the actual integrity error.
+
+**Step 3 — matched-population (13-symbol) standalone baselines, freshly computed.**
+B5-REVERSAL on the 13-symbol universe: top-3 net -0.0092/-0.0153 (legacy/real), top-5
+-0.0074/-0.0123 (114 observations) — near break-even, consistent with its established profile,
+slightly worse than the historical 16-symbol reading (expected: three symbols with their own
+return characteristics are simply removed). Classifier P5 on the same 13-symbol holdout rows:
+selected net -0.8474/-0.8554 (legacy/real, n=2350/5389) — consistent with Step 2's freshly-
+computed figure, confirming the cost-constant explanation rather than a NEAR/SUI/UNI-specific
+effect (removing three of sixteen symbols barely moves the number).
+
+**Step 4-5 — the join and the composite.** 5389 classifier holdout trades on the matched
+universe; 2044 dropped for having no momentum-panel coverage yet (a trade earlier than its
+symbol's first 3-day lookback window in the holdout period) — disclosed, not silently absorbed.
+Joined population: **3345 trades**. Selected top tercile (n=1115) gross mean netR **-0.9174**
+vs. the unselected joined-population baseline **-0.9206** — visually indistinguishable, a
+combined-rank selection that moved the needle by roughly 0.003R out of a ~0.92R loss.
+
+**Step 6 — the pre-registered significance test.** One-sided permutation (K=2000, seed
+20260829): **p=0.4708** — nowhere near the pre-registered 0.05 bar. Sign is nominally correct
+(observed selected mean -0.9174 beats the null distribution's mean of -0.9220), but the effect
+is far too small to be anything but noise, exactly what the near-identical selected/baseline
+means in Step 5 already showed. Due-diligence-only 95% block-bootstrap CI on the selected
+subset's net-of-0.017 R: **[-1.0828, -0.7670]** — entirely negative, does not exclude zero as
+"positive" by any reading (it excludes zero, but on the negative side).
+
+**Step 7 — the pre-registered gate, applied mechanically:**
+
+| Clause | Result |
+|---|---|
+| >=100 joined trades | **PASS** (3345) |
+| Permutation p<0.05, correct sign | **FAIL** (p=0.4708) |
+| Composite selected net R>0 at 0.017 | **FAIL** (-0.9344) |
+| Beats B5-REVERSAL (top-3 AND top-5) on the matched population at 0.017 | **FAIL** (-0.9344 < -0.0153 and < -0.0123) |
+| Beats Classifier P5 on the matched population at 0.017 | **FAIL** (-0.9344 < -0.8554) |
+
+**RESULT: KILLED, decisively — the composite is worse than either standalone input, not merely
+no-better-than-neither.** The mechanism reads exactly as the rank-average arithmetic predicts
+once the two inputs' scales are examined: B5-REVERSAL contributes a real but tiny-magnitude
+signal (its net R sits within a few basis points of zero either way), while Classifier P5's
+per-trade netR distribution is enormous by comparison (individual trades range roughly -2R to
++3R, mean far below zero after the corrected cost). Averaging PERCENTILE RANKS (not the raw
+values) means this scale disparity shouldn't mechanically dominate the selection — and indeed
+the permutation test shows the selection barely differs from a random draw — but the resulting
+tercile still inherits the classifier population's own deeply negative mean, because ranking by
+combined score does not change what the *selected trades' own outcomes* are: B5-REVERSAL's rank
+information does correlate weakly with something, just not enough to lift a subset of an already
+strongly negative population into positive territory, or even meaningfully above that
+population's own unselected average. This closes the "existing small effects, just combined"
+hypothesis cleanly, before any new data source is built — the useful negative result this item's
+own note anticipated as a valid outcome.
+
+**Multiple comparisons**, applying (not re-opening) `PHASE-DIRECTIVE-BOOKKEEPING`'s pre-registered
+decision: C0's p=0.4708 joins `MULTIPLE_COMPARISONS_AUDIT.md` §2's formal-NHST family as its
+21st sub-test, landing at rank 13 of 21 (between `B5-REVERSAL L=5` at 0.4226/rank 11 and
+`MOMENTUM-SHORT-HORIZON-RECHECK L=14` at 0.4266/rank 12 in raw-p order — the new entry pushes
+those two, in fact, down by one rank apiece and everything below it shifts as well). Family-wide
+BH-FDR recomputed across all 21: q=0.7605, does not survive (unsurprising given the raw p).
+**No material side effect**: the two existing survivors move by less than 0.001 in q
+(`LOG-REGRESSION-BANDS-CRYPTO` 0.0040→0.0042, `B5-REVERSAL L=3` 0.0100→0.0105) — this addition
+lands in the middle-to-lower half of the ranking, tightening thresholds below it only
+mechanically via family-size growth, the same pattern every recent addition near the bottom half
+has shown. `MULTIPLE_COMPARISONS_AUDIT.md` §2 and §5 and `AGENT_PROTOCOL.md`'s family-size
+counter are updated in this commit.
+
+**Sequencing**: per the phase directive's own build order (`C0 -> C1 -> C2 -> C3` in sequence,
+C1-C3 not queued until C0 resolves), `C1` (options-vol risk premium) is now unblocked to run
+next.
+
+### Engineering note
+
+New file only: `scripts/c0-signal-combination.mjs` (additive, cache-only, no network egress —
+verified: `loadDailyCandles`/`loadResearchCandles`/`buildClassifierUniverseRows` all read from
+on-disk research-cache files, no fetch calls anywhere in the path). `momentum.mjs` and
+`classifier.mjs` are unmodified — every function used (`buildMomentumPanel`,
+`economicMomentumViews`, `blockBootstrapCI`, `buildClassifierUniverseRows`, `fitZScoreScaler`,
+`applyZScoreScaler`, `chooseLambdaByCv`, `predictLogistic`, `mannWhitneyAuc`,
+`economicLiftNetOfCost`) is imported and called exactly as its own module already exposes it.
+`SEALED_SYMBOLS` is imported from `researchlib.mjs` (not hand-copied) and never appears in any
+holdout/evaluation role in this study's new computation — see the holdout-universe section
+above for the one disclosed exception (a read-only reproduction of an already-published number).
+No production code touched. `npm.cmd test`: 513/513 green, unchanged from before this commit
+(this study adds no new tests of its own, consistent with every other throwaway `scripts/*.mjs`
+diagnostic in this project, which reuse already-tested library functions rather than duplicating
+coverage). Raw run output saved via `saveExperiment` to
+`research-runs/2026-08-29T08-17-23-191Z-c0-signal-combination.json` for full auditability.

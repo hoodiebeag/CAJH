@@ -278,8 +278,14 @@ section is the binding rule; that document is the reasoning behind it. Update bo
 fail):**
 
 - Formal NHST studies (report a p-value against a pre-registered significance gate):
-  **20** sub-tests across 17 studies as of 2026-08-27 (see audit §2 for the list and p-values).
-  Updated by STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC (2026-08-27): a third,
+  **21** sub-tests across 18 studies as of 2026-08-29 (see audit §2 for the list and p-values).
+  Updated by C0-SIGNAL-COMBINATION (2026-08-29): a fixed a-priori rank-average combination of
+  B5-REVERSAL's momentum score and Classifier P5's win probability, joining this family per
+  `MULTIPLE_COMPARISONS_AUDIT.md` §5's own pre-registered C0-C3 assignment rather than starting
+  a new one. One-sided permutation p=0.4708 (K=2000) — nominally correct sign but far from
+  significant, KILLED (see `ROADMAP.md`/`VERDICTS.md`). Family-wide BH-FDR recomputed across all
+  21 (rank 13/21, q=0.7605) — no survivor flips.
+  Prior update, STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC (2026-08-27): a third,
   distinctly-named diagnostic in the same band-width A/B/C chain on ACTIVE-ADDRESS-COUNT-PRIMARY-
   SIGNAL's construct (±1% KILLED → ±3% WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC partial
   explanation → ±5% this item), sourced directly from that study's own "still-wider ±5% band is
