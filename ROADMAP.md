@@ -2156,6 +2156,17 @@ MAKER-FILL-MICROSTRUCTURE-SIMULATION's entry below for the full data-availabilit
 
 ## 2026-08-19 — EQUITIES-BASELINE-PORT: breakout survives real IBKR costs (net positive); anticipate's net drag shrinks by ~20x but stays negative
 
+> **Note added 2026-08-29 (`EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL`):** this entry's positive net
+> figures (and every equities entry built on them) have never been read against a
+> matched-geometry random-entry null. That item found random long entries carrying this same
+> stop/target/breakeven geometry already average strongly positive R across this window's
+> DJIA-30 holdout, before any entry-timing rule is credited — and that none of the ten scorable
+> `tournament.mjs` families (`breakout` included, 46.5th percentile of its own null) clear the
+> pre-registered 95th-percentile bar against it. The counted trades and net avgR here are
+> unchanged and still reproduce exactly; the "equities look different from crypto" reading built
+> on their breadth does not hold up as evidence of distinct entry-timing edges. See
+> `EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL` (2026-08-29) for the full per-family table.
+
 Cost, not signal, is the one variable that has ever moved a number materially in this project
 — the fee rebase alone shifted the breakout baseline 0.419R, larger than every signal effect
 ever measured combined, and COST-COMPONENT-ATTRIBUTION showed fee is 94.1% of the current
@@ -3339,6 +3350,20 @@ including the bad ones and the unusably small ones.
 > building `CROSS-FAMILY-TRADE-OVERLAP-AUDIT`. Corrected here: **8 of 12**, not 10 of 12. Read
 > the header below with that correction; see `CROSS-FAMILY-TRADE-OVERLAP-AUDIT` (2026-08-28) for
 > whether that corrected 8-of-12 breadth finding survives an overlap check (it does).
+
+> **Note added 2026-08-29 (`EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL`):** the corrected 8-of-12
+> breadth finding survives an overlap check but does not survive a matched-geometry
+> random-entry null — that item built, per family, a null using that family's own empirical
+> stop-distance distribution and this same cost basis, and found that **zero of the ten
+> scorable families** (`range_sweep_reclaim`'s 3 trades and `vol_contraction`'s 0 trades are
+> too thin to score) clear the pre-registered 95th-percentile bar, including `ma_dip` (52.1st
+> percentile of its own null) and `rsi` (55.3rd, the closest of the ten). Every scorable
+> family's null mean is strongly positive — this window's matched risk geometry (structural
+> stop, large fixed target, breakeven lock) already earns real money before any entry-timing
+> rule is credited. The trade counts and net avgR in the table below are unchanged and
+> reproduce exactly; the breadth they report is real, but reading 8-of-12 net-positive as
+> evidence of eight distinct entry-timing edges does not hold up. See
+> `EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL` (2026-08-29) for the full per-family table.
 
 **Method — identical pipeline, only the config array widened.** New file
 `scripts/equities-all-families-baseline.mjs`, a straight extension of
@@ -6405,6 +6430,21 @@ added, matching this project's convention for prior read-only diagnostic scripts
 
 ## 2026-08-28 — BOS-SHORT-EQUITIES-BASELINE: the first empirical look at the short side is deeply net-negative, before any borrow cost — long-only bias is not just a coverage gap, direction matters
 
+> **Note added 2026-08-29 (`EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL`):** this entry's own header
+> reads the long-positive (+0.1838R)/short-negative (-0.4086R) asymmetry as evidence that
+> "direction matters." That item built a matched-geometry random-SHORT-entry null for this
+> exact config (188 real trades against a K=2000 null using this population's own empirical
+> stop-distance distribution) and found the real -0.4086R sits at the **14.6th percentile** of
+> a null with mean **-0.2857R** — well inside the range a random short with this stop/target
+> geometry already produces in a rising-index window (a mechanical headwind for any short,
+> independent of entry timing), and does not clear the pre-registered mirrored bar (below the
+> null's 5th percentile, -0.4750R) required to call it distinguishable. **The asymmetry this
+> entry reports is consistent with a property of the window, not confirmed evidence that
+> direction — or either side's entry-timing skill — is what's driving the gap.** The trade
+> counts and net avgR below are unchanged and reproduce exactly. See
+> `EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL` (2026-08-29) for the full construction and the long
+> families' own null results.
+
 `SHORT-SIDE-ENGINE-CAPABILITY` (2026-08-28) added a `direction: "short"` path to
 `backtestMultiTF` (`bos` entryMode only — the mirror of a long entry's confirmed swing low is a
 confirmed swing high) but deliberately ran no family and reported no result.
@@ -7287,3 +7327,141 @@ throwaway script (not committed) that called `classifier.mjs`'s existing exporte
 directly; nothing in `classifier.mjs`, `strategy.js`, `backtest.js`, or any frozen path was
 read-modified, only read. `npm.cmd test`: 513/513 green, unchanged (no test-affecting code
 changed; this is a documentation correction only).
+
+## 2026-08-29 — EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL: zero of ten scorable families clear a matched-geometry random-entry null — the corrected 8-of-12 DJIA-30 breadth claim does not survive
+
+`MADIP-RANDOM-ENTRY-CONTROL` (2026-08-28) built a matched-geometry random-entry null for
+`ma_dip` alone and found random long entries carrying `ma_dip`'s exact stop/target/breakeven
+geometry already average +0.1493R on DJIA-30 before any entry-timing skill is credited —
+`ma_dip`'s real result sat at only the 53rd percentile of that null. That control was scoped to
+one family. `EQUITIES-ALL-FAMILIES-BASELINE` (2026-08-22, corrected 2026-08-28 by
+`CROSS-FAMILY-TRADE-OVERLAP-AUDIT`) found 8 of `tournament.mjs`'s 12 families net-positive on
+DJIA-30 — this project's most-cited positive equities finding, and the main stated reason
+equities look different from crypto. It had never been read against a geometry-matched null.
+This item applies `MADIP-RANDOM-ENTRY-CONTROL`'s exact method, unchanged, to all twelve
+families, plus one extra configuration: `BOS-SHORT-EQUITIES-BASELINE`'s short-direction leg
+read against its own matched-geometry short null.
+
+**Method — `MADIP-RANDOM-ENTRY-CONTROL`'s construction reused verbatim, per family.** New
+`scripts/equities-breadth-vs-random-entry-null.mjs` (additive, cache-only, no egress — same
+`research-cache/equities-1d/` cache, all 30 symbols already present). Same four pre-registered
+choices: random symbol (uniform over active symbols, not weighted by trade count) and entry
+index (uniform over that symbol's own holdout candles); stop distance drawn with replacement
+from **that family's own** empirical stop-distance distribution (not shared across families);
+exit management replicating `backtest.js`'s generic lockBreakeven/target/timeout path
+byte-for-byte (`strategy.js`'s BE_TRIGGER_R=2.0/BE_LOCK_R=0.2/FEE_BUFFER_PCT=0.018 and
+`backtest.js`'s MAX_HOLD=100, all unmodified); sample size matched exactly per family against a
+fresh run, not hand-typed. K=2000 draws per family. Pre-registered floor: families under 10 real
+trades are reported as too-thin-to-score rather than given a percentile — `range_sweep_reclaim`
+(3 trades) and `vol_contraction` (0 trades) both fall below it.
+
+**Reproduction check, before any null was computed.** All twelve families' trade counts and net
+avgR reproduced `EQUITIES-ALL-FAMILIES-BASELINE`'s table bit-for-bit (trades exact match, avgR
+matches to 4 decimals, all twelve `citationMatch: true`), and the `bos`-short-config leg
+reproduced both `BOS-SHORT-EQUITIES-BASELINE` directions exactly (short: 188 trades, -0.4086R;
+long: 148 trades, +0.1838R) — confirming the frozen configs and caches are unchanged before any
+new statistic is trusted.
+
+**Result — every scorable family, real result against its own matched-geometry null:**
+
+| family | trades | real net avgR | null mean | null SD | percentile of real result | 95th-pctile bar | passes |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `ma_dip` | 475 | +0.1526 | +0.1514 | 0.1045 | 52.1th | +0.3320 | NO |
+| `rsi` | 32 | +0.2507 | +0.2189 | 0.3605 | 55.3th | +0.8390 | NO |
+| `bos` | 60 | +0.1728 | +0.2236 | 0.2391 | 42.3th | +0.6303 | NO |
+| `breakout` | 61 | +0.1866 | +0.2142 | 0.2061 | 46.5th | +0.5576 | NO |
+| `h3` | 106 | +0.1178 | +0.2348 | 0.1918 | 27.4th | +0.5624 | NO |
+| `support` | 407 | +0.0014 | +0.1815 | 0.1015 | 3.8th | +0.3479 | NO |
+| `sweep_reclaim` | 92 | +0.0328 | +0.0751 | 0.1513 | 40.5th | +0.3242 | NO |
+| `rev` | 179 | -0.0501 | +0.1715 | 0.1565 | 7.8th | +0.4323 | NO |
+| `anticipate` | 303 | -0.0438 | +0.1563 | 0.1016 | 2.2th | +0.3238 | NO |
+| `trend_pullback` | 38 | -0.2026 | +0.1865 | 0.2673 | 6.9th | +0.6296 | NO |
+| `range_sweep_reclaim` | 3 | +0.9656 | — too thin to score (< 10 trades) — | | | | |
+| `vol_contraction` | 0 | — (no trades) | — too thin to score (0 trades) — | | | | |
+
+**Zero of ten scorable families clear the pre-registered 95th-percentile bar.** Not one —
+including `ma_dip` (52.1th percentile, closely replicating `MADIP-RANDOM-ENTRY-CONTROL`'s own
+53rd-percentile finding on an independent 2026-08-29 seed and draw order, which is itself a
+useful cross-validation of the method) and `rsi` (55.3th percentile, the closest any family gets
+to its own null mean in the *positive* direction but still nowhere near the 95th-percentile
+bar). Two families sit closest to their null on the low side (`anticipate` 2.2nd percentile,
+`support` 3.8th percentile) — both because their real result is close to flat while their null
+mean is strongly positive, not because either signal does unusually badly.
+
+**The null's own mean is reported prominently, per this project's `LOG-REGRESSION-BANDS-CRYPTO`/
+`MADIP-RANDOM-ENTRY-CONTROL` precedent (state the window's own tailwind before any claim about a
+signal).** Every one of the ten scorable families' null means is strongly positive (+0.0751 to
++0.2348) — a matched-geometry random long entry (structural-sized stop, large fixed target,
+breakeven lock) already earns real money in this window before any entry-timing rule is
+credited. This is the same beta/payoff-structure finding `MADIP-RANDOM-ENTRY-CONTROL` made for
+`ma_dip` alone, now confirmed across the other nine scorable families: **the equity-side breadth
+claim looks much more like a property of this window's favourable long-side payoff geometry than
+like eight or ten distinct entry-timing signals.** Data-edge case disclosed, not silently
+dropped: between 1.87% (`ma_dip`) and 11.67% (`breakout`) of simulated draws per family ran past
+their symbol's holdout data before any exit fired and were force-closed at the last available
+close — small enough not to plausibly change any of the ten verdicts above, reported rather than
+assumed negligible.
+
+**The corrected 8-of-12 breadth claim does not survive being restated against a geometry-matched
+null.** Using the corrected figure throughout (per `CROSS-FAMILY-TRADE-OVERLAP-AUDIT`, not the
+superseded 10-of-12): of the eight net-positive families (`ma_dip`, `rsi`, `bos`, `breakout`,
+`h3`, `range_sweep_reclaim`, `support`, `sweep_reclaim`), one (`range_sweep_reclaim`) is too thin
+to score at all, and the remaining seven all fail to clear the pre-registered bar. Breadth of
+net-positive count was never itself evidence of eight distinct edges — this item is the first to
+check that directly, and the check does not support it.
+
+**No family re-tuned, re-parameterised, or promoted, exactly per this item's task text** — this
+is a control, and every family's own percentile is reported, not just the interesting ones.
+
+**Short leg (one extra configuration, not a separate study).** `BOS-SHORT-EQUITIES-BASELINE`'s
+`bos` short-direction config (`trendGate:false, alignMode:"none", lockBreakeven:false, tpR:4`),
+188 trades, real net avgR **-0.4086R**, read against its own matched-geometry short null
+(mirrored exit geometry — stop above entry triggers on the bar's high, target below entry
+triggers on the bar's low, no breakeven arm since `lockBreakeven:false`): **null mean -0.2857R**,
+null SD 0.1194, real result at the **14.6th percentile** of the null. Pre-registered mirrored bar
+(distinguishable only if the real result falls below the null's 5th percentile, -0.4750R): the
+real result does **not** clear it — **not distinguishable from a matched-geometry random short
+entry in the same window.** Random shorts with this exact stop/target geometry already lose
+money in this window (a rising-index tailwind working against any short, mechanically), and the
+real `bos` short result is well within the range that tailwind alone produces.
+`BOS-SHORT-EQUITIES-BASELINE`'s own long-direction figure (+0.1838R, 148 trades, same config)
+is, by the same logic as the long-family table above, also consistent with the window's
+long-side tailwind rather than confirmed evidence of directional signal — this item does not
+build a separate null for that leg since it uses the same construction already applied to the
+twelve `tournament.mjs` families' `bos` row, whose own trendGate:true/lockBreakeven:true variant
+already appears in the table above (42.3rd percentile, does not pass).
+
+**`BOS-SHORT-EQUITIES-BASELINE`'s entry is annotated accordingly:** its -0.4086R short figure
+should be read as *consistent with a window effect*, not as evidence the `bos` short signal is
+directionally bad — the long-positive (+0.1838R)/short-negative (-0.4086R) asymmetry that entry
+originally reported is exactly what a rising-index window predicts for ANY matched-geometry
+long/short pair, independent of either side's entry-timing skill, and this item's short null
+confirms that reading rather than merely speculating it.
+
+**`EQUITIES-BASELINE-PORT` and `EQUITIES-ALL-FAMILIES-BASELINE` are annotated accordingly:**
+both entries' breadth and gross-edge-gap framing (the 8-of-12/10-of-12 net-positive count, and
+the "equities look different from crypto" reading built on it) should be read alongside this
+item's finding that none of the scorable positive families demonstrably beat a geometry-matched
+random entry in the same window — the breadth those entries reported is real (the counted trades
+and avgR figures are unchanged and still reproduce exactly) but its interpretation as evidence of
+multiple distinct equities edges does not hold up.
+
+**Human-facing deck flag, same precedent as `CROSS-FAMILY-TRADE-OVERLAP-AUDIT`:** no deck file
+exists inside this repository to edit directly (searched, none found) — if any slide of the
+external deck cites the 8-of-12 (or superseded 10-of-12) DJIA-30 breadth figure as evidence of
+multiple equities edges, it needs a correction pointing at this item's null result, and that
+correction is out of this item's reach to make itself.
+
+**Multiple-comparisons discipline.** Descriptive null-control study, not a hypothesis test in
+`MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST sense (the "null" is a resampling control against
+matched risk geometry, not a p-value against a theoretical distribution) — does not join that
+family and triggers no BH-FDR recomputation, same precedent as `MADIP-RANDOM-ENTRY-CONTROL`.
+
+**Engineering note.** New `scripts/equities-breadth-vs-random-entry-null.mjs` only (additive,
+read-only, cache-only, no egress — reads the existing `research-cache/equities-1d/` cache, no
+live IBKR Gateway call). No `backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/`bot.js`/
+`trader.js`/`scanner.js` file touched — `backtest.js`'s exit-management logic and short-direction
+`netAt` formula were read and replicated (same approach `MADIP-RANDOM-ENTRY-CONTROL` used for
+the long-only case), not imported or modified, since the random-entry candidate path has no
+natural hook into `backtestMultiTF`'s own signal-detection branches. `npm.cmd test`: 513/513
+green, unchanged.
