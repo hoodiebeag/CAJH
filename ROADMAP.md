@@ -7465,3 +7465,99 @@ live IBKR Gateway call). No `backtest.js`/`strategy.js`/`tournament.mjs`/`monito
 the long-only case), not imported or modified, since the random-entry candidate path has no
 natural hook into `backtestMultiTF`'s own signal-detection branches. `npm.cmd test`: 513/513
 green, unchanged.
+
+## 2026-08-29 — RANDOM-ENTRY-NULL-WINDOW-SENSITIVITY: the geometry's positive null mean tracks buy-and-hold at r=0.90 across sub-windows — but this cache never contains a down window, so the artifact-vs-durable question stays formally untested
+
+`MADIP-RANDOM-ENTRY-CONTROL`'s most consequential number was never `ma_dip`'s own percentile —
+it was **the null's own mean**: +0.1493R on DJIA-30, +0.1637R on DJTA-20. A random long entry
+carrying `ma_dip`'s exact stop/target/breakeven geometry already made money in this window before
+any entry-timing rule was credited. Nobody had asked whether that is a property of the payoff
+geometry (durable, would hold in any window) or of the one ~2-year holdout this project has
+measured everything against (a tailwind every equities result here has been riding). This item
+holds the geometry fixed and varies the window instead of the entry rule.
+
+**Method.** New `scripts/random-entry-null-window-sensitivity.mjs` (additive, cache-only, no
+egress). Geometry frozen exactly as `MADIP-RANDOM-ENTRY-CONTROL`: `{ entryMode:"ma_dip",
+trendGate:false, alignMode:"none", minStopPct:0, maxStopPct:.06, tpR:5, lockBreakeven:true }`,
+`backtest.js`'s MAX_HOLD=100, `strategy.js`'s BE_TRIGGER_R=2.0/BE_LOCK_R=0.2/FEE_BUFFER_PCT=0.018,
+IBKR Fixed $0.005/share commission, 5bps/side slippage — all unmodified. Same two universes:
+DJIA-30 (`research-cache/equities-1d/`) and DJTA-20 (`research-cache/equities-1d-djta-oos/`).
+
+**What varies.** The predecessor built its null on each universe's 70/30-split holdout only
+(~150 candles). This item uses the FULL cached history per symbol (501 candles) and splits it
+into non-overlapping **calendar-year** sub-windows — chosen over equal-length blocks because both
+caches, checked before any return was computed, land on the identical year structure: 2024
+(91-93 candles, partial — cache starts 2024-08-20/22), 2025 (250 candles, full year), 2026
+(158-160 candles, partial — cache ends 2026-08-19/21). Calendar years are also the more
+interpretable unit for this question ("was 2025 the rising year that built the tailwind") than an
+arbitrary equal-length boundary. Per sub-window per universe, the null is rebuilt exactly as the
+predecessor's four choices: random symbol/entry-index drawn only from that sub-window's own
+candles; stop distance drawn from **that cell's own** empirical stop-distance distribution (real
+`ma_dip` trades re-run confined to that sub-window, not pooled across windows); exit management
+replicating `backtest.js`'s generic path byte-for-byte, walking forward only within the
+sub-window and force-closing at its last candle if a draw runs past the end (disclosed, not
+dropped); sample size matched to that cell's own real trade count. K=2000 draws per cell,
+pre-registered floor of 10 real trades below which a cell is too-thin-to-score (none were).
+Buy-and-hold reported alongside per cell: equal-weighted mean, across that cell's active symbols,
+of each symbol's own simple total price return over the sub-window — frictionless and unlevered,
+a benchmark reference, not a traded return.
+
+**Result — all six cells (2 universes × 3 years):**
+
+| universe | year | real trades | real avgR | null mean | null SD | null +draws | buy-and-hold |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| DJIA-30 | 2024 (partial) | 197 | -0.0538 | +0.0269 | 0.1631 | 57.0% | +4.39% |
+| DJIA-30 | 2025 (full) | 653 | +0.2623 | +0.0905 | 0.0817 | 87.0% | +13.82% |
+| DJIA-30 | 2026 (partial) | 490 | +0.1473 | +0.1553 | 0.1006 | 94.0% | +15.71% |
+| DJTA-20 | 2024 (partial) | 134 | +0.1131 | +0.1107 | 0.2024 | 70.0% | +15.36% |
+| DJTA-20 | 2025 (full) | 538 | +0.1730 | +0.0492 | 0.0889 | 71.5% | +11.69% |
+| DJTA-20 | 2026 (partial) | 316 | +0.3360 | +0.1678 | 0.1234 | 91.6% | +18.54% |
+
+All six cells scored (none too thin). **The null's mean is positive in every one of the six
+sub-windows** — the tailwind `MADIP-RANDOM-ENTRY-CONTROL` found on the full holdout is not
+concentrated in one year or one universe. But **every one of the six sub-windows also had a
+positive buy-and-hold return** — this cache (2024-08 through 2026-08) never contains a falling or
+flat sub-window on either universe. The Pearson correlation between a cell's null mean and that
+cell's own buy-and-hold return across the six cells is **r=0.90**: the more a window was rising,
+the larger the geometry's random-entry tailwind, roughly in proportion (e.g. DJIA-30 2024's
+weakest buy-and-hold, +4.39%, pairs with its weakest null mean, +0.0269; DJTA-20 2026's strongest
+buy-and-hold, +18.54%, pairs with its strongest null mean, +0.1678).
+
+**Verdict, stated exactly as it falls.** Within the one regime this cache actually contains
+(rising throughout, no exception), the geometry's null mean scaled closely with how strongly each
+window was rising — consistent with a window/leverage effect (the geometry is levering the
+market's own direction, not adding something independent of it) rather than with a geometry-only
+edge that would hold regardless of the window's own direction. **But this is not a clean test of
+the durable-vs-artifact question**, and saying so is this item's job as much as the correlation
+number is: a genuinely flat or falling sub-window — the actual discriminating case — does not
+exist anywhere in this cache. What this item shows is that the tailwind's *size* tracks the
+window's *degree* of rising; it cannot show whether the tailwind would disappear or reverse in a
+down window, because no down window has been observed. The reading of the whole equities chapter
+that `MADIP-RANDOM-ENTRY-CONTROL` and `EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL` already adopted —
+treat the null's positive mean as a beta/window finding, not a geometry-only edge, until proven
+otherwise — is reinforced by the r=0.90 correlation, not superseded by it; neither of those items
+claimed the tailwind was window-independent, and this item does not find grounds to claim it is
+window-independent either.
+
+**Data-edge case disclosed.** 1.4%-2.8% of null draws per cell ran past their sub-window's own
+last candle before any exit fired and were force-closed at the last available close — small, and,
+as expected, roughly flat across cells rather than concentrated in the two partial years (a
+forced closure here reflects MAX_HOLD=100 relative to a symbol's own remaining candles in the
+window, not primarily the window's total length).
+
+**No strategy, parameter or promotion proposed**, exactly per this item's own task text — a
+payoff structure that pays in a rising market is a description of leverage, not an edge, and nine
+months from now, if a down window enters the cache, this same script can be re-run unchanged to
+finally supply the missing regime.
+
+**Multiple-comparisons discipline.** Descriptive null-control study, not a hypothesis test in
+`MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST sense — does not join that family and triggers no
+BH-FDR recomputation, same precedent as `MADIP-RANDOM-ENTRY-CONTROL`.
+
+**Engineering note.** New `scripts/random-entry-null-window-sensitivity.mjs` only (additive,
+read-only, cache-only, no egress — reads the existing `research-cache/equities-1d/` and
+`research-cache/equities-1d-djta-oos/` caches, no live IBKR Gateway call). No
+`backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/`bot.js`/`trader.js`/`scanner.js` file
+touched — `backtest.js`'s exit-management logic was read and replicated for the synthetic-entry
+path exactly as `MADIP-RANDOM-ENTRY-CONTROL` did, not imported or modified. `npm.cmd test`:
+513/513 green, unchanged.
