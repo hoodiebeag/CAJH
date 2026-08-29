@@ -7877,6 +7877,58 @@ class, not a bug in this item's construction — flagged here rather than quietl
 numbers, and not something this item's scope extends to fixing (that would be a new cost-model
 item, not a probe).
 
+**Correction (2026-08-29, `CRYPTO-R-NORMALIZATION-DEFECT-OR-ECONOMICS`) — the "cost-model
+artifact" framing two paragraphs above is wrong. The magnitudes are correct economics, not a
+defect in `backtest.js`'s formula.** That item was staged specifically to check this framing
+before letting it stand, and found it does not hold up.
+
+**Derivation.** For an `ma_dip` long stopped out, gross R is exactly −1 by construction
+(`stop = entry − risk`). `backtest.js` computes `netR = (stop−entry)/risk − (feeRate+slipPct)*
+(entry+stop)/risk = −1 − (feeRate+slipPct)*(entry+stop)/risk`. Writing `stopPct = risk/entry`,
+`entry+stop = entry*(2−stopPct)` and `risk = entry*stopPct`, so the cost term reduces to
+`(feeRate+slipPct)*(2−stopPct)/stopPct` — for `stopPct << 1`, approximately
+`2*(feeRate+slipPct)/stopPct`. At crypto's `feeRate+slipPct = 0.0085` (`strategy.js`
+`FEE_RATE=0.008` + `SLIPPAGE_PCT=0.0005`) and this probe's own reported median stop distance in
+the qualifying cells (1.6%–2.4%, e.g. `stopPct=0.018`): cost term ≈ `0.0085*1.982/0.018 ≈ 0.936`,
+i.e. a *typical* stopped-out trade here nets ≈ **−1.94R** — in line with the ≈1R-of-cost estimate
+this follow-up's own task text sketched, and nowhere near −18R. The −17.99R extreme this section
+cites (`feeModelSanity.minRealR`, recurring across several qualifying cells in the saved run) is
+the *same formula* evaluated at a near-zero-risk stop: solving `−1 − 0.0085*(2−stopPct)/stopPct =
+−17.9915` gives `stopPct ≈ 0.001` (a 10bp structural stop). That trade is real, not a computation
+error — it is what this study's own `CONFIG` (`minStopPct: 0`, matching
+`per-family-cost-ceiling.mjs` L57 byte-for-byte) permits through; live trading's
+`MIN_STOP_PCT=0.015` (`strategy.js` L48) would filter it out entirely. Dividing a cost that is
+roughly proportional to price by a risk that can shrink toward zero is unboundedly sensitive to
+stop distance by construction — true for any asset class or fee schedule, not a crypto-specific
+defect; crypto's larger flat fee just needs a far less extreme stop to make the effect visible.
+
+**Reconciliation with `PER-FAMILY-COST-CEILING`'s `k=615.69`.** That item's `k` is defined as
+`(feeDragAvgR+slipDragAvgR)/(FEE_RATE+SLIPPAGE_PCT)` — exactly the same per-trade coefficient
+`(entry+exitPx)/risk` derived above, averaged over `ma_dip`'s full 9894-trade crypto holdout
+rather than evaluated at one stop distance. Direct check, reproducing its own published table to
+4 decimals: spot-taker `netAvgR = 0.0877 − 615.69*0.0085 = −5.1457`; spot-maker (slip=0, maker fee
+`cost-model.mjs`'s `SPOT_FEE_SCHEDULE.maker=0.0040`) `netAvgR = 0.0877 − 615.69*0.0040 = −2.3751`
+— both match exactly. Both items therefore describe the identical arithmetic, on the identical
+`ma_dip`-on-crypto config, from two angles: `PER-FAMILY-COST-CEILING` reports the population
+average (pulled up by exactly this tiny-stop tail) with no artifact caveat, and is the correct
+characterization; the artifact framing above, describing one extreme individual draw from the
+same distribution, is the one that needed correcting.
+
+**Is net R below −1 for a stopped-out trade expected?** Yes. A stop caps only the *gross* loss at
+exactly −1R; round-trip cost is charged on top of that in price terms, and is reported here in
+risk terms by dividing by the same risk denominator used for the gross P&L. Any trade whose fixed
+round-trip price cost is large relative to its risk — a tight stop, a high fee rate, or both —
+will show net R below −1 by construction of that ratio, not by error.
+
+**Verdict: CORRECT ECONOMICS.** This correcting annotation stands in place of the "cost-model
+artifact, not a second clean data point" framing above; the **sign**-based conclusion this
+section draws from it (crypto null means strongly negative in every genuinely down/flat quarter,
+corroborating the equities window-artifact finding) is unaffected and stands unchanged — it never
+depended on the magnitudes either way. Full derivation, cross-checks, and the reconciliation
+against `PER-FAMILY-COST-CEILING` recorded in `CRYPTO-R-NORMALIZATION-DEFECT-OR-ECONOMICS`
+(2026-08-29, this file, filed separately below). No figure in this section changed; no code
+touched; `backtest.js`, `strategy.js`, and every frozen path read-only throughout this check.
+
 **Verdict, stated exactly as it falls.** The single measurement `RANDOM-ENTRY-NULL-WINDOW-
 SENSITIVITY` said would resolve the project's biggest open equities question has now been run:
 a genuinely down/flat window exists (DJTA-20, twice) and in it the geometry's null mean is
@@ -8108,3 +8160,75 @@ side, on this specific historical trade set.
 **No entry or exit logic modified anywhere, no parameter swept, no config change proposed.** Both
 universes treated as closed populations throughout — nothing here reopens `ma_dip` as a
 candidate. `npm.cmd test`: 513/513 green.
+
+## 2026-08-29 — CRYPTO-R-NORMALIZATION-DEFECT-OR-ECONOMICS: the large-negative crypto R figures
+`GEOMETRY-NULL-DOWN-WINDOW-PROBE` flagged as a "cost-model artifact" are CORRECT ECONOMICS, not a
+defect — that item's framing is corrected, its sign-based conclusion stands
+
+**Why this exists.** `GEOMETRY-NULL-DOWN-WINDOW-PROBE` (2026-08-29, this file) reported crypto
+null means as low as −3.07 and a worst single trade of −17.99R, and described the *magnitude* as
+a cost-model artifact of "reusing an equities-calibrated cost formula on a new asset class,"
+explicitly declining to fix it and flagging it for a separate item. This item is that separate
+item, and its job was to check that framing before letting it stand — not to assume either
+verdict.
+
+**`backtest.js`'s net-R identity is `netR = grossR − (feeRate+slipPct)*(entry+exitPx)/risk`.** It
+is a single formula applied identically to every family and both markets — not equities-specific
+code, only fed different inputs per market. Derived symbolically for an `ma_dip` long stopped
+out (gross R is exactly −1 by construction): with `stopPct = risk/entry`, `entry+stop =
+entry*(2−stopPct)` and `risk = entry*stopPct`, so `netR = −1 − (feeRate+slipPct)*(2−stopPct)/
+stopPct` — for `stopPct << 1`, approximately `−1 − 2*(feeRate+slipPct)/stopPct`.
+
+**Evaluated at the probe's own reported figures.** At crypto's `feeRate+slipPct = 0.0085`
+(`strategy.js` `FEE_RATE=0.008` + `SLIPPAGE_PCT=0.0005`) and its median qualifying-cell stop
+distance (1.6%–2.4%, e.g. `stopPct=0.018` for 2024-Q2): `netR ≈ −1 − 0.0085*1.982/0.018 ≈
+−1.94R` — a typical stopped-out trade in this population, in line with the ≈1R-of-cost estimate
+this item's own pre-registered task text sketched, and nowhere near −18R. The −17.99R extreme
+(`feeModelSanity.minRealR`, saved in
+`research-runs/2026-08-29T17-11-33-610Z-geometry-null-down-window-probe.json`, recurring across
+several qualifying cells) is the *same formula* at a near-zero-risk stop: solving `−1 −
+0.0085*(2−stopPct)/stopPct = −17.9915` gives `stopPct ≈ 0.001` (a 10bp structural stop). That
+trade is real arithmetic, not a computation error — it is what the probe's own `CONFIG`
+(`minStopPct: 0`, matching `scripts/per-family-cost-ceiling.mjs` L57 byte-for-byte) lets through;
+live trading's `MIN_STOP_PCT=0.015` (`strategy.js` L48) would filter it out entirely. Dividing a
+cost roughly proportional to price by a risk that can shrink toward zero is unboundedly sensitive
+to stop distance by construction, for any asset class or fee schedule — crypto's larger flat fee
+just needs a far less extreme stop to make the effect visible than equities' tiny per-share
+commission would.
+
+**Reconciliation with `PER-FAMILY-COST-CEILING`'s `k=615.69` for `ma_dip` on crypto.** That
+item's `k = (feeDragAvgR+slipDragAvgR)/(FEE_RATE+SLIPPAGE_PCT)` is exactly the same per-trade
+coefficient `(entry+exitPx)/risk` derived above, averaged over `ma_dip`'s full 9894-trade crypto
+holdout rather than evaluated at one stop distance — and it was reported with no artifact
+caveat. Direct check, reproducing its published table to 4 decimals: spot-taker `netAvgR =
+0.0877 − 615.69*0.0085 = −5.1457`; spot-maker (slip=0, `cost-model.mjs`'s
+`SPOT_FEE_SCHEDULE.maker=0.0040`) `netAvgR = 0.0877 − 615.69*0.0040 = −2.3751` — both match
+exactly. Both items use the identical `ma_dip`-on-crypto config (confirmed by reading
+`per-family-cost-ceiling.mjs` L57 against the probe's `CONFIG` at its L101 — byte-identical), so
+they describe the same arithmetic from two angles: `PER-FAMILY-COST-CEILING`'s population average
+(pulled up by exactly this tiny-stop tail) is the correct characterization; the probe's "cost-
+model artifact" framing, describing one extreme draw from the same distribution, is the one that
+needed correcting.
+
+**Is net R below −1 for a stopped-out trade economically coherent?** Yes, expected behaviour, not
+a sign of error. A stop caps only the *gross* loss at exactly −1R; round-trip cost is charged on
+top of that in price terms and reported here in risk terms by dividing by the same risk
+denominator used for the gross P&L. Any trade whose fixed round-trip price cost is large relative
+to its risk — a tight stop, a high fee rate, or both — will show net R below −1 by construction of
+that ratio.
+
+**Verdict: CORRECT ECONOMICS.** `GEOMETRY-NULL-DOWN-WINDOW-PROBE`'s artifact framing is corrected
+by a dated annotation added directly to that section above; its **sign**-based conclusion (crypto
+null means strongly negative in every genuinely down/flat quarter, corroborating the equities
+window-artifact finding) never depended on the magnitudes and stands unchanged. No published
+figure in either item changed — only the characterization of magnitude in the earlier item's
+write-up.
+
+**Engineering note.** Diagnostic only, no script written — the derivation was closed-form,
+cross-checked against `PER-FAMILY-COST-CEILING`'s already-saved table and against
+`GEOMETRY-NULL-DOWN-WINDOW-PROBE`'s already-saved `research-runs/2026-08-29T17-11-33-610Z-
+geometry-null-down-window-probe.json`, both read-only. `backtest.js`, `strategy.js`,
+`tournament.mjs`, `monitor.js`, `bot.js`, `trader.js`, `scanner.js`, and every frozen path
+untouched throughout (grep-confirmed against the staged diff before commit). Only `ROADMAP.md`
+modified (this section plus the correcting annotation in `GEOMETRY-NULL-DOWN-WINDOW-PROBE`'s
+section above). `npm.cmd test`: 513/513 green, unchanged — no test-affecting code changed.
