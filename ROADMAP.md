@@ -7678,3 +7678,97 @@ does not import `brokers/ibkr.mjs`). Reuses `backtest.js`'s existing `excursions
 (added by `DATE-CLUSTERED-RESAMPLING-AUDIT`, unmodified here) and `momentum.mjs`'s
 `blockBootstrapCI` unmodified. No `backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/
 `bot.js`/`trader.js`/`scanner.js` file touched. `npm.cmd test`: 513/513 green, unchanged.
+
+
+## 2026-08-29 — C3-FX-CARRY-DATA-GATE: price-side code capability confirmed sufficient, rate-side series named but unverified, account-side entitlement an open question for the human — not a pass, not a fail
+
+Phase-directive step 7 allows C3 (FX carry — the interest-rate differential between two
+currencies) to be considered "only after C0-C2 are resolved (pass, fail, or gated-unavailable)".
+All three now are: `C0-SIGNAL-COMBINATION` KILLED (permutation p=0.4708, composite worse than both
+inputs), `C1-VRP-DATA-AVAILABILITY-GATE` gated-unavailable on account entitlement,
+`C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES` resolved null (Spearman rho -0.0980, nominal p<0.05,
+does not survive family-wide BH-FDR). This item follows `C1-VRP-DATA-AVAILABILITY-GATE`'s own
+gate pattern exactly — separate what static analysis can settle from what only the human can, and
+state the second as a question list rather than guessing. This run again had no egress and IB
+Gateway last returned ECONNREFUSED at 127.0.0.1:4002, an acceptable outcome for a gate, per the
+directive.
+
+**Part A (price-side code capability) — resolved, from static analysis only, no network call
+made.** New `scripts/c3-fx-carry-data-gate.mjs` (additive, read-only: reads `brokers/ibkr.mjs` and
+the installed `@stoqey/ib` package's own TypeScript declarations, makes zero network calls,
+modifies nothing). Two sub-findings:
+
+- **`brokers/ibkr.mjs` carries no FX/CASH contract path today**, re-confirmed directly against this
+  file rather than assumed: every contract built anywhere in the file is still
+  `new Stock(symbol, "SMART", "USD")` (`stockContract()` at line 104); no `Forex`, `SecType.CASH`,
+  `"CASH"`, or `IDEALPRO` identifier appears anywhere in it — the same shape of finding
+  `C1-VRP-DATA-AVAILABILITY-GATE` recorded for options.
+- **The installed `@stoqey/ib` dependency (already in use, no new package needed) already exposes
+  what a currency-pair price study needs**, verified against
+  `node_modules/@stoqey/ib/dist/api/**/*.d.ts` directly: a `Forex` contract class
+  (`api/contract/forex.d.ts`, `new Forex(symbol, currency)`, `secType = CASH`, hardcodes
+  `exchange = "IDEALPRO"` itself so a caller cannot route to a different FX venue with this class),
+  and `reqHistoricalData`'s signature is generic over any `Contract` — the same call
+  `fetchOHLC()` already uses, only the contract argument and `whatToShow` would differ.
+  `WhatToShow`'s enum includes `MIDPOINT`/`BID`/`ASK`/`BID_ASK` alongside `TRADES`; the
+  declarations do not type-restrict `whatToShow` per contract `secType` (TWS enforces valid
+  combos server-side), so IBKR's documented FX behavior (spot FX is OTC/dealer, historical bars
+  use MIDPOINT/BID/ASK rather than TRADES) is reported as expected-but-not-package-verified —
+  stated as a distinct claim from what the `.d.ts` itself asserts, per this project's discipline
+  against overclaiming from docs memory.
+
+**Mapped to existing equities-side analogues:** the price side is a small change — one new
+contract-builder analogous to `stockContract()`, and `fetchOHLC()`'s existing
+request/promise/event-listener/cleanup pattern (including its already-handled daily-bar
+`"YYYYMMDD"` decoder quirk) applies unchanged, only the contract class and `whatToShow` value
+differ. This is same-day-to-small, comparable to `C0`'s rank-average — **not** a multi-day build
+like `C1`'s options chain/greeks path. The price-side code gate does **not** fail.
+
+**Part B (the carry signal's non-price data requirement) — the harder half, and NOT a code
+question.** FX carry's return driver is the interest-rate differential between the two
+currencies in a pair (long the higher-yielding currency, short the lower-yielding one), which
+needs a short-term policy/money-market rate **per currency**, not just pair price history.
+`EXOGENOUS-DATA-ACCESS-AUDIT` is cited rather than re-probed, per this item's own scoping note:
+that audit confirmed FRED's public CSV export endpoint
+(`fred.stlouisfed.org/graph/fredgraph.csv?id=<seriesId>`) is free and key-less for three series it
+actually fetched — `DGS10`, `DTWEXBGS`, `FEDFUNDS` — **all three USD-side**. It did not test any
+non-USD series, so this item cannot claim the same access pattern is confirmed for non-USD rates
+without a fresh fetch, which this task's own no-network-access constraint forbade in this pass.
+Candidate series named, explicitly split into confirmed vs. unverified:
+
+| Currency | Series | Status |
+|---|---|---|
+| USD | `FEDFUNDS` | **CONFIRMED reachable** — already fetched by `EXOGENOUS-DATA-ACCESS-AUDIT`, reused by `C2`'s DGS10-DGS2 sourcing |
+| EUR | `IR3TIB01EZM156N` (OECD MEI 3-month interbank, Euro area); alt: `ECBDFR` | UNVERIFIED — named from FRED's known OECD-MEI naming convention, not fetched |
+| GBP | `IR3TIB01GBM156N`; alt: `IUDSOIA` (SONIA) | UNVERIFIED — not fetched |
+| JPY | `IR3TIB01JPM156N` | UNVERIFIED — not fetched |
+| CAD | `IR3TIB01CAM156N` | UNVERIFIED — not fetched |
+| AUD | `IR3TIB01AUM156N` | UNVERIFIED — not fetched |
+| CHF | `IR3TIB01CHM156N` | UNVERIFIED — not fetched |
+
+The non-USD IDs follow FRED's documented OECD-MEI series-ID convention
+(`IR3TIB01<ISO2>M156N`) from general knowledge of FRED's catalog structure, **not** from a fetch
+this session — reported as an open item, not a confirmed fact, the same discipline
+`EXOGENOUS-DATA-ACCESS-AUDIT`'s own header states ("never generalized... a container 403 was
+nearly recorded as a fact about an upstream API once already"). Before any FX carry code is
+written, each candidate ID needs one real fetch against the same free, key-less CSV pattern
+already proven for the USD series, to confirm it exists and check its actual history depth and
+publication lag.
+
+**Part C (account-side entitlement) — not answerable from this session, stated as a question list
+rather than guessed.** Whether IDEALPRO FX quote data is bundled or needs a separate subscription,
+whether historical FX bars (`whatToShow=MIDPOINT`/`BID`/`ASK`) actually return for this account
+and how far back, and whether the non-USD FRED series named above actually resolve, are all
+recorded in the script's output as a three-item question list, presented alongside `C1`'s
+still-open options-entitlement question list so both can be handled in one IBKR-settings sitting.
+
+**No strategy or backtest code written, no return computed, no proxy substituted, `brokers/ibkr.mjs`
+unmodified (confirmed via `git status`/`git diff` before commit), no network access attempted.**
+`npm.cmd test`: 513/513 green, unchanged (this diagnostic adds no new tests, same convention as
+`C1`/`C2` and every other throwaway `scripts/*.mjs` audit in this project). Raw output saved via
+`saveExperiment` to `research-runs/2026-08-29T16-03-54-933Z-c3-fx-carry-data-gate.json`.
+
+**Engineering note.** New: `scripts/c3-fx-carry-data-gate.mjs` (additive, read-only). Reads
+`brokers/ibkr.mjs` and `node_modules/@stoqey/ib/dist/api/**/*.d.ts`/`.js` only. No
+`backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/`bot.js`/`trader.js`/`scanner.js` file
+touched; `brokers/ibkr.mjs` read-only. `npm.cmd test`: 513/513 green, unchanged.
