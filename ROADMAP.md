@@ -8038,3 +8038,73 @@ deleted before commit — nothing new is left in the repo. `classifier.mjs`, `st
 `backtest.js`, `momentum.mjs`, and every other frozen path were read-only throughout; only
 VERDICTS.md and ROADMAP.md were modified. `npm.cmd test`: 513/513 green, run before commit
 (unchanged — no test-affecting code changed; this is a documentation/bookkeeping correction only).
+
+## 2026-08-29 — BREAKEVEN-LOCK-COUNTERFACTUAL: on both `ma_dip` universes, removing the breakeven lock would have produced MORE total R, not less — the 5:1 reward:risk geometry means the target-hits it cut off outweigh the stop-outs it saved
+
+`ma_dip` is a **CLOSED historical population** on both equity universes — killed decisively by
+`MADIP-SURVIVABILITY-CONDITION-5` (2026-08-28: max drawdown −81.7%/−74.2% at f=2%, **RUIN** at
+f=5%, against a pre-registered −25% ceiling). This item is forensic, not a re-tune or a candidate
+re-evaluation. `MADIP-REALISED-R-CONDITION-2` (2026-08-28) found the breakeven lock ("trail/be"
+in `backtest.js`'s naming — `ma_dip`'s config sets no `trailR`/`trailStartR`, so `trailing` never
+arms and "trail/be" here means the breakeven lock specifically) accounts for a minority of trades
+(14.3% DJIA-30, 17.3% DJTA-20) but a disproportionate share of net R (+124.4% of total on
+DJIA-30, +64.5% on DJTA-20), and flagged the natural follow-up left open: what would have
+happened to those exact trades had the lock not fired, carrying the position to its original
+stop or target instead? This item answers that.
+
+**Method, new script `scripts/breakeven-lock-counterfactual.mjs` (additive, read-only, cache-only
+— no IBKR egress).** Reuses `MADIP-REALISED-R-CONDITION-2`'s cost basis/config/split verbatim
+(IBKR Fixed $0.005/share, 5bps/side slippage, 70/30 split, `{ entryMode: "ma_dip", trendGate:
+false, alignMode: "none", minStopPct: 0, maxStopPct: .06, tpR: 5, lockBreakeven: true }`) and its
+per-trade `why` field exactly as added — not re-added. The breakeven-locked subset is isolated as
+every excursion with `why === "trail/be"`. For each, the counterfactual replays forward from the
+cached OHLC bars starting the bar after entry (matching `backtest.js`'s own `k > pos.openedAt`
+gating), checking the *original* pre-lock stop (`entry − risk`) and target (`entry + 5·risk`)
+with the identical conservative same-bar rule `backtest.js` itself uses (stop checked before
+target) and the identical unmodified `MAX_HOLD = 100` timeout. No line of `backtest.js` was
+touched — the replay is implemented standalone in the new script.
+
+**Cross-check passed on both universes before any counterfactual was computed**, confirming the
+cache and cost basis match `MADIP-REALISED-R-CONDITION-2` exactly: DJIA-30 475 trades / avgR
++0.15263 / realised R 2.64655 (cited 2.6466); DJTA-20 300 trades / avgR +0.29939 / realised R
+2.50362 (cited 2.5036).
+
+**Lock subset sizes reproduce the cited counts exactly** (68 DJIA-30, 52 DJTA-20). Two trades per
+universe are **UNRESOLVED** — the cached holdout ends before the counterfactual replay reaches a
+stop, target, or the 100-bar timeout (DJIA-30: DOW entry 1783382400, WMT entry 1784764800;
+DJTA-20: KEX entry 1785801600, UPS entry 1787011200) — excluded from every aggregate below rather
+than assigned a guessed outcome, mirroring `backtest.js`'s own silent-drop behavior for a position
+that never closes before the data ends. 66/68 and 50/52 resolve.
+
+| universe | resolved | saved from full stop-out | cut from eventual target hit | would have timed out | actual subset ΣR | counterfactual subset ΣR | net change in total R | net change in avgR (full population) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| DJIA-30 | 66 | 38 | 28 | 0 | 88.6733 | 96.3239 | **+7.6505** | +0.01611 |
+| DJTA-20 | 50 | 31 | 19 | 0 | 54.4948 | 60.3921 | **+5.8973** | +0.01966 |
+
+**The lock is net NEGATIVE for total R on both universes.** More of the resolved trades were
+saved from a full stop-out than were cut from a target hit (38 vs. 28 on DJIA-30, 31 vs. 19 on
+DJTA-20) — the naive read of that count alone would suggest the lock is protective. It is not,
+in R terms: at this config's 5:1 reward:risk, a saved stop-out is worth ≈−1.0R avoided and a cut
+target is worth ≈−4R foregone (5R target minus the ~1R+ the lock actually banked), so the fewer
+target-hits the lock cut off cost more total R than the more-numerous stop-outs it prevented.
+Letting every one of these 66/50 trades ride to its original stop or target, unmodified, would
+have added +7.65R (DJIA-30) and +5.90R (DJTA-20) to the strategy's total — both would-be gains,
+not losses, i.e. removing the lock strictly helps total R on this closed population. Realised R
+recomputed with the resolved subset's actual R replaced by its counterfactual R rises sharply
+above the measured figures: DJIA-30 3.9827 vs. measured 2.6466; DJTA-20 4.0139 vs. measured
+2.5036 — consistent with letting winners run all the way to a 5R target rather than banking a
+small breakeven-plus exit.
+
+**Framed as an exit-geometry property, not a strategy edge.** This result says nothing about
+`ma_dip`'s viability — it was already closed on survivability grounds — and is not a claim that
+removing the lock would fix it (the 5:1 asymmetry that makes uncapped trades pay off here is
+exactly the same asymmetry the random-entry null (`EQUITIES-BREADTH-VS-RANDOM-ENTRY-NULL`,
+`GEOMETRY-NULL-DOWN-WINDOW-PROBE`) already credits to entry-agnostic exit rules on this cache. It
+documents how `ma_dip`'s own realised-R shortfall against its configured `tpR: 5`
+(`MADIP-REALISED-R-CONDITION-2`) decomposes at the trade level: not because the lock protects
+against bad continuations, but because it caps a fat-tailed reward-risk shape from the wrong
+side, on this specific historical trade set.
+
+**No entry or exit logic modified anywhere, no parameter swept, no config change proposed.** Both
+universes treated as closed populations throughout — nothing here reopens `ma_dip` as a
+candidate. `npm.cmd test`: 513/513 green.
