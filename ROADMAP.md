@@ -8366,3 +8366,122 @@ are untouched (confirmed byte-identical in the diff). No production file read or
 every figure above is a quotation from an already-committed ROADMAP.md entry, not a fresh
 computation. `frozen_paths_note` remains `blackboard`'s last key, byte-exact indent-1 roundtrip.
 `npm.cmd test`: 513/513 green, unchanged (no test-affecting code changed).
+
+## 2026-09-01 — CRYPTO-EFFECTIVE-SAMPLE-AUDIT: the equities date-clustering defect does not generalise to crypto's closed formal-NHST family — the one exposed population (VOL-CONTRACTION AXIS C) loses its zero-exclusion under clustering correction
+
+**Premise check before any new computation.** This item's work_queue text asserted "every crypto
+interval in this project was produced by `blockBootstrapCI` (momentum.mjs:64), which resamples
+contiguous blocks BY POSITION in the flat trade array with blockSize 4 and no timestamp awareness
+at all" — the same defect `DATE-CLUSTERED-RESAMPLING-AUDIT` (2026-08-28) found and corrected for
+pooled multi-symbol equities trades. Before reproducing that fix for crypto, every
+`blockBootstrapCI(` call site in the repo touching crypto data was read (19 call sites total,
+`grep -n "blockBootstrapCI("`), and the premise does **not** hold as a blanket claim. Every crypto
+call site falls into one of three categories structurally immune to the equities-specific defect
+(which requires: multiple symbols, pooled in symbol-then-trade array order, with no time
+correction before block-bootstrapping):
+
+- **Single-symbol continuous-exposure series** — `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL`,
+  `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL`, the `MACRO-REGIME-PRIMARY-SIGNAL` family,
+  `WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC`,
+  `STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC`,
+  `GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC`: all call
+  `blockBootstrapCI(holdoutScore.stratReturnsForCI, {blockSize:20})` on ONE symbol's (XBTUSD) own
+  chronologically-ordered return series — array position already equals time order for a single
+  time series, so there is no second symbol to scatter across positions.
+- **Pre-aggregated to one value per date/date-panel before bootstrapping** — `momentum.mjs:181`
+  (the shared IC-significance machinery behind `Momentum M7`, `Low-vol B4`,
+  `MOMENTUM-SHORT-HORIZON-RECHECK`, `CROSS-SECTIONAL-NONPRICE-RANK`: `values` there is one
+  cross-sectional IC per date-panel, and the reported p-value comes from
+  `dateVectorPermutationP`, a genuinely date-aware permutation test, not from `blockBootstrapCI`
+  at all) and `phase3-b5-reversal-rerun.mjs:83` (`B5-REVERSAL` PHASE3's
+  `holdout.topN[n].perDateNet` — one net-return value per calendar date across the whole
+  universe, already collapsed before the block bootstrap runs).
+- **Explicitly time-sorted before bootstrapping, and not load-bearing** — `c0-signal-
+  combination.mjs:301` sorts the selected subset by trade time (`selectedByTime`) before calling
+  `blockBootstrapCI`, and its own comment marks this "due-diligence-only, not part of the
+  pre-registered gate"; `C0-SIGNAL-COMBINATION`'s real significance test is a permutation test
+  (p=0.4708, KILLED) unrelated to `blockBootstrapCI`.
+
+Two more closed crypto formal-NHST entries — `Classifier P5` and `CLASSIFIER-FUNDING-FEATURE` —
+use **neither** `blockBootstrapCI` **nor** any trade-R pooling at all: `classifier.mjs` has no
+`blockBootstrapCI` call anywhere; their p-values (0.0198, 0.0099) come from `mannWhitneyAuc`, a
+rank-based classification test on labels, a different statistical object entirely.
+`LOG-REGRESSION-BANDS-CRYPTO` similarly never calls `blockBootstrapCI` — its p=0.0002 is a
+per-asset (n=24) buy-and-hold comparison.
+
+**Revised scope, stated plainly rather than silently narrowed.** No CLOSED crypto formal-NHST
+population in this project actually has the equities-shaped defect. The one population that DOES
+pool multiple symbols' discrete trades without any time-based correction is
+`VOL-CONTRACTION-SAMPLE-EXTENSION`'s AXIS C (256 trades, 15m entry, holdout-only) — required by
+this item's own task text regardless, because a gate clearance rests on it. Read closely, AXIS
+C's recorded CI `[0.0620, 0.4427]` does **not** actually come from `blockBootstrapCI` either — it
+comes from `stat()` (`researchlib.mjs`), a normal-approximation CI (mean ± 1.96·SE) with **zero**
+serial-correlation adjustment, computed on `perSymbol.flatMap(x => x.results)` (all of one
+symbol's trades, then the next symbol's, etc. — concatenation order, not time order). The
+work_queue item's description of this interval as coming "from this same position-blocked
+machinery" is corrected here: it is a *different*, and if anything *less* clustering-aware,
+method than `blockBootstrapCI` (no resampling at all — a single closed-form normal interval).
+This makes AXIS C the one population genuinely re-run below; every family above is answered by
+call-site code review, cited above, not a rerun, because re-running an already-immune population
+could not change any conclusion.
+
+**Method (new script: `scripts/crypto-effective-sample-audit.mjs`, cache-only, no egress).**
+Reuses `DATE-CLUSTERED-RESAMPLING-AUDIT`'s date-block-bootstrap mechanic unchanged (draw whole
+time-buckets with replacement until reaching the original trade count, truncate, record the mean;
+5000 iterations, 2.5/97.5 percentile 95% CI), applied at two granularities since AXIS C's bars are
+15m, not daily: per distinct 15m bar timestamp (the appropriate unit for this bar interval —
+multiple symbols entering on the exact same 15m bar is crypto's analog of equities' "same
+calendar day, market-wide move") and per distinct calendar day (reported alongside, per this
+item's own done_when, for comparability with the equities figures). Exit time is read from the
+same symbol's 15m holdout candle array at (entryIndex + barsHeld), matching
+`DATE-CLUSTERED-RESAMPLING-AUDIT`'s own convention. `blockBootstrapCI` (momentum.mjs) is NOT
+modified. Replication check performed first: reproduced AXIS C's recorded 256 trades and its
+normal-approx CI bit-for-bit off the same cached candles before computing anything new —
+**confirmed exact match** (avgR reproduced 0.2524, CI reproduced [0.0620, 0.4427] to 4 decimal
+places).
+
+**Result: the +0.0620 lower bound does NOT survive clustering correction.**
+
+| Population | Trades | Distinct periods (bar/day) | Effective N / nominal | Largest single-period cluster | Mean simultaneously open |
+|---|---:|---:|---:|---:|---:|
+| VOL-CONTRACTION AXIS C (28 assets, 15m entry, holdout) — per 15m bar | 256 | 161 bars | 62.9% | 11 | 0.24 |
+| VOL-CONTRACTION AXIS C — per calendar day (coarser, for equities comparability) | 256 | 76 days | 29.7% | — (not separately tracked at day grain) | 0.24 |
+| *For comparison, already on record:* `ma_dip` DJIA-30 (`DATE-CLUSTERED-RESAMPLING-AUDIT`, 1d bars) | 475 | 124 days | 26.1% | 13 | 10.47 |
+| *For comparison, already on record:* `breakout` DJIA-30 (`DATE-CLUSTERED-RESAMPLING-AUDIT`, 1d bars) | 61 | 35 days | 57.4% | 7 | 8.26 |
+
+| CI method | 95% interval | Excludes zero? |
+|---|---|---|
+| Recorded normal-approx (`stat()`, as originally reported) | [+0.0620, +0.4427] | yes |
+| Position-blocked (`blockBootstrapCI`, blockSize=4 — new, for completeness) | [+0.1007, +0.4330] | yes |
+| **Bar-timestamp-clustered (new, primary — this item's real question)** | **[-0.0244, +0.5649]** | **no** |
+| Day-clustered (new, secondary, coarser granularity) | [-0.1527, +0.6761] | no |
+
+Both new clustering-aware intervals span zero; the recorded normal-approx interval and even a
+freshly-computed position-blocked bootstrap do not. The gap is not small: bar-clustering roughly
+doubles the recorded interval's width and flips its lower bound negative. 62.9% effective sample
+size (161 distinct 15m bars behind 256 nominal trades) sits in the same range as
+`DATE-CLUSTERED-RESAMPLING-AUDIT`'s `ma_dip` DJIA-30 finding (26%) and `breakout` (57%) — same
+qualitative failure mode, different asset class and bar interval.
+
+**What this does and does not change.** `VOL-CONTRACTION-SAMPLE-EXTENSION`'s own pre-registered
+gate (`avgR > +0.10` AND `trades >= 150`) is a point-estimate threshold, not a CI-exclusion rule —
+avgR=0.2524 and trades=256 still mechanically clear it regardless of this finding, so the gate's
+literal pass/fail is unchanged. What changes is how much confidence the recorded CI should have
+lent that pass: a reader treating `[0.0620, 0.4427]` as evidence the true edge is reliably
+positive would be wrong — the honestly-clustered interval says the data cannot rule out zero.
+`VOL-CONTRACTION-SAMPLE-EXTENSION`'s own writeup already flagged this axis as "NOT out-of-sample
+in the fullest sense... not a promotion", and this finding sharpens that caveat rather than
+reversing a promotion decision, since none was made.
+
+**One-line verdict:** the equities date-clustering defect does not generalise to crypto's closed
+formal-NHST family (every other crypto `blockBootstrapCI` call site is structurally immune —
+single-symbol series, pre-date-aggregated, or already time-sorted); the one genuinely exposed
+population, VOL-CONTRACTION AXIS C, no longer excludes zero under bar-clustered resampling, so its
+gate clearance should be treated as unreliable evidence of a real edge, even though the literal
+point-estimate gate still passes.
+
+Not part of `MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family (AXIS C was already
+economic-gate-only, not a p<0.05 test) and no BH-FDR recomputation performed. `backtest.js`,
+`momentum.mjs`, `classifier.mjs`, `strategy.js`, and all other frozen paths read only, not
+modified — only `scripts/crypto-effective-sample-audit.mjs` (new, additive) was added.
+`npm.cmd test`: 513/513 green, run before commit.
