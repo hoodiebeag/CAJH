@@ -5756,7 +5756,8 @@ significance test.
 by `totalRMatchesBacktest: true` on both universes (this script's own pooled per-trade R sum
 reproduces `backtestMultiTF`'s independently-computed `totalR` to floating-point precision) and by
 `npm.cmd test` staying 513/513 green. No other file in `backtest.js`/`strategy.js`/`tournament.mjs`/
-`monitor.js`/`bot.js`/`trader.js`/`scanner.js` touched.
+`monitor.js`/`bot.js`/`trader.js`/`scanner.js` touched. Computed by `scripts/madip-realised-r-condition-2.mjs`
+(additive, cache-only).
 
 **Results reproduce the known headline figures exactly**, an unplanned cross-check that this
 script's cost basis/config matches `EQUITIES-MADIP-SIGNIFICANCE`/`EQUITIES-MADIP-OUT-OF-SAMPLE`
@@ -8384,7 +8385,10 @@ correction before block-bootstrapping):
   `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL`, the `MACRO-REGIME-PRIMARY-SIGNAL` family,
   `WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC`,
   `STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC`,
-  `GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC`: all call
+  `GDELT-WIDER-HYSTERESIS-BAND-DIAGNOSTIC` (`scripts/gdelt-wider-hysteresis-band-diagnostic.mjs`,
+  written 2026-08-27, still externally blocked on GDELT DOC API connectivity and never yet
+  produced a scored result — the script itself is what this bullet's claim was checked against):
+  all call
   `blockBootstrapCI(holdoutScore.stratReturnsForCI, {blockSize:20})` on ONE symbol's (XBTUSD) own
   chronologically-ordered return series — array position already equals time order for a single
   time series, so there is no second symbol to scatter across positions.
@@ -8485,3 +8489,173 @@ economic-gate-only, not a p<0.05 test) and no BH-FDR recomputation performed. `b
 `momentum.mjs`, `classifier.mjs`, `strategy.js`, and all other frozen paths read only, not
 modified — only `scripts/crypto-effective-sample-audit.mjs` (new, additive) was added.
 `npm.cmd test`: 513/513 green, run before commit.
+
+## 2026-09-01 — DEAD-CODE-AND-ASSET-AUDIT: repo-wide reachability confirmed for every tracked module — headline result is zero confirmed-dead files, plus two genuine ROADMAP.md path-citation gaps closed
+
+**Headline, stated plainly since it's the whole point of this item: nothing is confirmed dead.**
+This repeats and extends the 2026-08-29 preliminary sweep referenced in this item's own
+work_queue note, using a reproducible reference-search method rather than re-trusting the prior
+count. Every one of the 64 tracked root-level `.js`/`.mjs`/`.ts` modules (excluding `*.test.mjs`)
+and all 61 tracked files under `scripts/` have a confirmed reachability route. An empty deletion
+list is the expected and accurate outcome, not a shortfall.
+
+**Method.** Built the full tracked-file list (`git ls-files`, 213 files) and, for every candidate
+module, searched every other tracked code file for an `import`/`require`/dynamic-`import()` of it
+by basename, and every tracked `.md` doc for a citation by path or bare filename. A module counts
+as reachable if it is imported by other code, listed in `package.json`'s `scripts`, dispatched from
+a CLI table, or cited by path/name in project documentation (ROADMAP.md, VERDICTS.md,
+TOURNAMENT_ROADMAP.md, AGENT_NOTES.md, README.md, etc.) — matching the "not dead" bar this item's
+own task text sets. `*.test.mjs` files are excluded from the dead-code question entirely: `npm.cmd
+test` runs `node --test`, which discovers every `*.test.mjs` file by naming convention, not by
+import — a test file with zero importers is normal, not orphaned, and none of the 23 test files
+that showed 0 import-references were treated as candidates for anything.
+
+**Root-level modules (64 total) — full reachability table.** `n` = number of other tracked code
+files importing it; route lists up to 3 importers (or the doc citation, for the 10 standalone CLI
+study scripts with no code importer).
+
+| module | imported by (n) | route |
+|---|---:|---|
+| agent-tools.mjs | 2 | agent-tools.test.mjs, commands.js |
+| analyzer.js | 1 | commands.js |
+| backtest.js | 55 | backtest.test.mjs, baseline.mjs, basis-directional-signal.mjs (+52 more) |
+| baseline.mjs | 0 | standalone CLI script, cited in AGENT_NOTES.md, ROADMAP.md |
+| basis-directional-signal.mjs | 1 | basis-directional-signal.test.mjs |
+| bot.js | 1 | bot-scheduler.test.mjs (also `package.json`'s `"start": "node bot.js"`) |
+| brokers/ibkr.mjs | 5 | brokers/ibkr.test.mjs, scripts/equities-all-families-baseline.mjs, scripts/equities-baseline-port.mjs (+2 more) |
+| brokers/kraken.mjs | 1 | brokers/kraken.test.mjs (also imported live by trader.js) |
+| carrystudy.mjs | 1 | carrystudy.test.mjs |
+| chart.js | 2 | commands.js, scanner.js |
+| classifier.mjs | 2 | classifier.test.mjs, scripts/c0-signal-combination.mjs |
+| commands.js | 3 | bot.js, commands.test.mjs, research.js |
+| context.js | 2 | commands.js, context.test.mjs |
+| cost-model.mjs | 6 | cost-model.test.mjs, scripts/calibrate-fill-model.mjs, scripts/cost-sensitivity-surface.mjs (+3 more) |
+| cross-sectional-nonprice-rank.mjs | 1 | cross-sectional-nonprice-rank.test.mjs |
+| data.js | 16 | baseline.mjs, commands.js, flowsignal.mjs (+13 more) |
+| dca.mjs | 2 | dca.test.mjs, grid.mjs |
+| derivatives.mjs | 17 | basis-directional-signal.mjs, carrystudy.mjs, classifier.mjs (+14 more) |
+| features.js | 2 | backtest.js, isbeta.mjs |
+| flowsignal.mjs | 0 | standalone CLI script, cited in AGENT_NOTES.md, ROADMAP.md |
+| flowverify.mjs | 0 | standalone CLI script, cited in ROADMAP.md |
+| funding-gate-h11.mjs | 2 | funding-gate-h11.test.mjs, research.js |
+| funding-meanrev.mjs | 1 | funding-meanrev.test.mjs |
+| funding-study.mjs | 2 | funding-study.test.mjs, research.js |
+| funding.mjs | 1 | funding.test.mjs |
+| fundinglib.mjs | 2 | classifier.mjs, funding-gate-h11.mjs |
+| grid.mjs | 1 | grid.test.mjs |
+| intensityfilter.mjs | 0 | standalone CLI script, cited in ROADMAP.md |
+| intensityIC.mjs | 0 | standalone CLI script, cited in ROADMAP.md |
+| isbeta.mjs | 0 | standalone CLI script, cited in AGENT_NOTES.md, ROADMAP.md |
+| liquidation-cascade-reversal.mjs | 1 | liquidation-cascade-reversal.test.mjs |
+| logger.js | 12 | analyzer.js, bot.js, chart.js (+9 more) |
+| long-short-ratio-contrarian.mjs | 1 | long-short-ratio-contrarian.test.mjs |
+| ma-crossover-study.mjs | 1 | ma-crossover-study.test.mjs |
+| mae-mfe-stop-placement-diagnostic.mjs | 1 | mae-mfe-stop-placement-diagnostic.test.mjs |
+| mcp-server/src/index.ts | 0 | compiled by `mcp-server/package.json`'s `"main": "dist/index.js"` build step; `.vscode/mcp.json` launches that compiled output; source references `strategy.js` by path internally |
+| momentum.mjs | 27 | classifier.mjs, cross-sectional-nonprice-rank.mjs, momentum.test.mjs (+24 more) |
+| monitor.js | 9 | bot.js, commands.js, context.js (+6 more) |
+| oi-trend-gate.mjs | 1 | oi-trend-gate.test.mjs |
+| onchain-flow-gate.mjs | 1 | onchain-flow-gate.test.mjs |
+| order-flow-aggressor-imbalance.mjs | 1 | order-flow-aggressor-imbalance.test.mjs |
+| overlay.mjs | 0 | standalone CLI script, cited in AGENT_NOTES.md, ROADMAP.md |
+| pairs-cointegration.mjs | 1 | pairs-cointegration.test.mjs |
+| portfolio.mjs | 5 | portfolio.test.mjs, research.js, scripts/phase2-triage.mjs (+2 more) |
+| regime.mjs | 0 | standalone CLI script, cited in AGENT_NOTES.md, ROADMAP.md |
+| research.js | 0 | standalone CLI script, cited in AGENT_NOTES.md, README.md |
+| researchlab.mjs | 82 | agent-tools.mjs, agent-tools.test.mjs, basis-directional-signal.mjs (+79 more) |
+| researchlib.mjs | 58 | baseline.mjs, basis-directional-signal.mjs, carrystudy.mjs (+55 more) |
+| rolling-volatility-regime-timing.mjs | 1 | rolling-volatility-regime-timing.test.mjs |
+| rsi-reversion-study.mjs | 1 | rsi-reversion-study.test.mjs |
+| scanner.js | 5 | bot.js, commands.js, money-path.test.mjs (+2 more) |
+| seasonality-dayofweek-session.mjs | 1 | seasonality-dayofweek-session.test.mjs |
+| signal-decay-temporal-stability.mjs | 3 | scripts/per-epoch-gross-edge.mjs, signal-decay-temporal-stability.test.mjs, walkforward-revalidation.mjs |
+| simple.mjs | 0 | standalone CLI script, cited in AGENT_NOTES.md, ROADMAP.md |
+| sizing.mjs | 2 | dca.mjs, sizing.test.mjs |
+| storage.js | 9 | bot.js, commands.js, context.js (+6 more) |
+| strategy-registry.mjs | 2 | scanner.js, strategy-registry.test.mjs |
+| strategy-search.mjs | 2 | research.js, strategy-search.test.mjs |
+| strategy.js | 34 | backtest.js, baseline.mjs, basis-directional-signal.mjs (+31 more) |
+| top-traders-divergence.mjs | 1 | top-traders-divergence.test.mjs |
+| tournament.mjs | 6 | commands.js, research.js, scripts/equities-breadth-vs-random-entry-null.mjs (+3 more) |
+| trader.js | 11 | api-resilience.test.mjs, bot.js, brokers/kraken.mjs (+8 more) |
+| trail.mjs | 0 | standalone CLI script, cited in AGENT_NOTES.md, ROADMAP.md |
+| walkforward-revalidation.mjs | 1 | walkforward-revalidation.test.mjs |
+
+11 of the 64 (`baseline.mjs`, `flowsignal.mjs`, `flowverify.mjs`, `intensityfilter.mjs`,
+`intensityIC.mjs`, `isbeta.mjs`, `overlay.mjs`, `regime.mjs`, `research.js`, `simple.mjs`, `trail.mjs`)
+have zero code importers; every one of them is a standalone, directly-runnable CLI study script
+(each carries its own `node <file>` usage header) documented by name in
+ROADMAP.md/AGENT_NOTES.md/README.md — exactly the "reached through a documentation citation" case
+this item's own task text says is NOT dead. None proposed for deletion.
+
+**`scripts/` (61 tracked files) — ROADMAP.md path-citation check.** 56 of 61 are cited by path
+somewhere in ROADMAP.md (up from the 46/51 the preliminary sweep found, reflecting the 10 study
+scripts added since 2026-08-29). 5 were not, each resolved on its own facts rather than treated as
+one bucket:
+
+1. **`scripts/madip-realised-r-condition-2.mjs`** — genuine citation gap, exactly the case this
+   item's own note pre-identified: `MADIP-REALISED-R-CONDITION-2`'s ROADMAP.md section (2026-08-28)
+   cites the study by ID three times but never by path. **Fixed** — path citation added to that
+   section's engineering-note paragraph.
+2. **`scripts/gdelt-wider-hysteresis-band-diagnostic.mjs`** — cited by ID (not path) in the
+   `CRYPTO-EFFECTIVE-SAMPLE-AUDIT` entry above (2026-09-01), which discusses its `blockBootstrapCI`
+   call site. **Fixed** — path citation added there. Distinct from case 1 in one respect worth
+   recording: this script has never produced a scored result. `git log` shows it written
+   2026-08-27, then reconfirmed externally blocked on GDELT DOC API connectivity across roughly a
+   dozen subsequent firings (outage symptom shifted between TCP timeout and an actually-expired
+   TLS certificate on GDELT's own server, confirmed via `openssl s_client`, ruling out a local
+   cause both times) — no ROADMAP.md dated write-up exists for it because no run has ever
+   completed, not because of a documentation oversight. It no longer appears in
+   `blackboard.work_queue` as of this state file, which this item flags rather than resolves: the
+   script is legitimate and should not be deleted (its own extensive ledger history establishes
+   intent and repeated recent activity, most recently 2026-08-29T03:10Z), but whether it should be
+   restocked to the queue for a fresh connectivity probe, or formally closed as abandoned, is a
+   judgment call this audit item's scope does not cover.
+3. **`scripts/mint-approval-token.mjs`** — not a study script at all, so the "cited by ID, missing
+   by path" pattern doesn't apply. Its own header states it is deliberately the one place a valid
+   MCP-deploy approval token can be minted, requiring a human's own terminal and
+   `MCP_APPROVAL_SECRET`, with no MCP tool wrapper anywhere by design — an operational security
+   control, not a research write-up. Forcing it into a ROADMAP.md dated section would misrepresent
+   its category. **No citation added**, and no deletion — reachability here is "known and
+   deliberately invoked by a human directly," which this item's own task text accepts as a valid
+   route (a module reached only through direct, documented human operation is not dead).
+4. **`scripts/phase4-t4-momentum-portfolio-sim.mjs`** — its own header says "Deletable after
+   ROADMAP.md's finding is written," which reads at first glance like a stale, actionable TODO.
+   Checked whether the finding was actually written: yes, in full, but into `VERDICTS.md`'s
+   `T4-PORTFOLIO-MOMENTUM-PHASE4` row and `TOURNAMENT_ROADMAP.md`'s 2026-08-15 dated section (not
+   ROADMAP.md — this project runs two separate roadmap documents, and this script's study line
+   belongs to the tournament track), and the script is already cited there **by path**
+   (`TOURNAMENT_ROADMAP.md:1723`). Its own "deletable" comment is accurate in spirit — the write-up
+   it was waiting on exists — but this item's task text explicitly says not to remove a script a
+   ROADMAP.md **or VERDICTS.md** entry depends on for reproducibility, and `VERDICTS.md`'s row cites
+   specific numbers (Sharpe 0.483/0.493, maxDrawdown -33.1%) this script is the only path back to
+   reproducing. **Not deleted** — flagged instead as a candidate a human could clear explicitly,
+   since the script's own comment already made that call; not this item's call to execute
+   unilaterally against a "don't remove a script a VERDICTS.md entry depends on" instruction.
+5. **`scripts/fetch-equity-ohlc.mjs`** — an equities data-ingestion utility (run manually against a
+   live IB Gateway to populate `candles/`), not a one-off study with a dated write-up; the "add a
+   path citation to the relevant dated section" fix doesn't apply because no dated section is the
+   right home for it. It has no ROADMAP.md/AGENT_NOTES.md/README.md mention at all, but it is
+   referenced by `equity-port.test.mjs` (format-compatibility comments) and by its own `--universe
+   universe.txt` usage contract, which explains the untracked `universe.txt` at repo root seen in
+   `git status` this run — that file is this script's required input, not stray debris, and was
+   left untouched. **No citation added** (wrong category for the ROADMAP.md convention) and no
+   deletion; noted here so a future audit doesn't re-flag it without this context.
+
+**Non-code asset directories.**
+
+| directory | tracked files | reachability |
+|---|---:|---|
+| `fonts/` | 3 | `DejaVuSans.ttf`/`DejaVuSans-Bold.ttf` registered by `chart.js` (`registerFont`, lines 16/18) for chart-text rendering. `fonts.conf` has **no in-repo reference** (no code, no doc, and this repo has no tracked Dockerfile/deploy-config to check either) — but its content (`<dir>/app/fonts</dir>`, `<cachedir>/tmp/fontconfig-cache</cachedir>`) is a fontconfig file shaped for a containerized deploy, almost certainly consumed by an external build/deploy step (e.g. a platform's build config or `FONTCONFIG_FILE` env var) that lives outside this repository, not by anything trackable here. Deleting it on the strength of "no in-repo reference" risks silently breaking font rendering in a production deploy this audit cannot see. **Not proposed for deletion** — flagged for a human who has visibility into the actual deploy pipeline to confirm. |
+| `brokers/` | 5 | `ibkr.mjs`/`kraken.mjs` imported live by `trader.js` and multiple `scripts/`; `interface.md` cited by both broker modules' own headers and by `equity-port.test.mjs`; both `.test.mjs` files run under `node --test`. All reachable. |
+| `.vscode/` | 1 | `mcp.json` launches `mcp-server/dist/index.js` — the one place this project's MCP-server wiring is declared. Reachable (used directly by any editor/agent that loads this workspace's MCP config). |
+| `mcp-server/` | 3 | `package.json`/`tsconfig.json` are the build config for `src/index.ts`; see the root-module table above for `index.ts` itself. All reachable. |
+
+**Deletions: none.** Zero files across the entire tracked tree were confirmed unreachable by every
+route checked. This matches and extends the preliminary 2026-08-29 sweep rather than contradicting
+it. No frozen path, strategy file, or reproducibility-load-bearing script was touched or proposed
+for removal.
+
+**Files touched this item:** `ROADMAP.md` only — the two citation fixes above (in the
+`MADIP-REALISED-R-CONDITION-2` section and the `CRYPTO-EFFECTIVE-SAMPLE-AUDIT` section) plus this
+entry. No code, config, or test file changed. `npm.cmd test`: 513/513 green, run before commit.
