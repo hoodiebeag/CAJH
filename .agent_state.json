@@ -4,9 +4,9 @@
   "status": "idle",
   "target_file": null,
   "objective": null,
-  "notes": "VERDICTS-ROW-WRITEUP-RECONCILIATION done (commit c32c72f, pushed). Checked all 67 VERDICTS.md rows against ROADMAP.md/ROADMAP_ARCHIVE.md, then disclosed-expanded to TOURNAMENT_ROADMAP.md after the two-file-only pass gave an implausible 54% UNSOURCED rate -- 29 rows resolved there cleanly (citation gap, figures match, not corrected). Net: 60 AGREES (31 direct + 29 via TOURNAMENT_ROADMAP.md), 1 DIVERGES corrected (T3-REGIMEFILTER -0.437->-0.445, same-day self-supersession in its own source doc), 6 genuinely UNSOURCED in all three documents (MR1, DCA-MARTINGALE, DCA-ANTIMARTINGALE, GRID-SIM, PAIRS-COINTEGRATION-STATARB, CROSS-SECTIONAL-NONPRICE-RANK). No verdict changed. Queue still has 2 pending items (AUTHORITY-HIERARCHY-FACTUAL-AUDIT, HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK) -- one per firing, per HYGIENE, so this firing stops here. npm.cmd test: 513/513 green.",
+  "notes": "AUTHORITY-HIERARCHY-FACTUAL-AUDIT done (commit db110de, pushed). Read-only audit, same pattern as FROZEN-PATH-LIST-RECONCILIATION-AUDIT: quoted ARCHITECT_DIRECTIVE.md/AGENT_RUNBOOK.md/AGENT_PROTOCOL.md authority claims verbatim, dated each from git history (ARCHITECT_DIRECTIVE.md and AGENT_RUNBOOK.md both unchanged since 2026-08-04 creation; AGENT_PROTOCOL.md revised 36 times since 2026-07-30, most recently 2026-09-02, and never once mentions ARCHITECT_DIRECTIVE.md across its whole history). Searched ROADMAP.md/ROADMAP_ARCHIVE.md/state-file ledger and control-block history for any case where the circularity forced a pick between conflicting guidance -- found none; every binding-rule citation in the record names AGENT_PROTOCOL.md alone. Reported: circularity is latent, not active. Established as fact that the live loop treats AGENT_PROTOCOL.md as binding (sole citation source; its Full control section matches the live scheduled-task prompt almost verbatim; its Artifact-publishing-paused section is the only one of the three that explicitly asserts precedence over a conflicting instruction elsewhere). Characterized 3 reconciliation options, none chosen -- human decision, as scoped. No edit to any of the three documents. npm.cmd test: 513/513 green. Queue still has 3 pending items (HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK, VERDICTS-TOURNAMENT-CITATION-GAP-FIX, UNSOURCED-STUDY-RECORD-POLICY) -- one per firing, per HYGIENE, so this firing stops here.",
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-09-02T10:16:35.618Z"
+  "updated_at": "2026-09-02T15:05:15.232Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -249,7 +249,7 @@
    },
    {
     "id": "AUTHORITY-HIERARCHY-FACTUAL-AUDIT",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "read-only audit of the agent-instruction documents' authority claims; reports options, decides nothing, edits none of them",
     "depends_on": [],
@@ -386,14 +386,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-20T00:00:58.000Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "pull-blocked-exit",
-   "detail": "STEP 0.3: git pull --rebase failed on unstaged changes present at session start, not created this run: brokers/ibkr.mjs (daily-bar YYYYMMDD-to-epoch timestamp fix, ~20 lines) + brokers/ibkr.test.mjs (+16 lines of tests) modified, plus untracked scripts/equities-baseline-port.mjs and universe.txt (new equities-baseline work). package.json (the prior blocker cause) is now clean - resolved between firings - but different unrelated in-progress work has since appeared and blocks pull. Per hygiene rules, did not stash/checkout/reset/clean any of it. Last persistent-pull-blocker notification was 2026-08-19T10:02:01Z (>6h stale), so attempted PushNotification per dedup policy; tool reported not sent (terminal active, redundant) - recorded regardless, as a NEW dated notifications key (persistent-pull-blocker-2026-08-20) rather than overwriting the existing persistent-pull-blocker entry, since that entrys message references the live-trading env-gate identifier in its own historical prose and .git/hooks/pre-commit scans full diffs including removed lines - same convention already used for the 2026-08-10 dated key per its own note field. Exiting per STEP 0.3 to let next firing retry the pull; no code work attempted, control untouched (remains IDLE).",
-   "commit": null,
-   "tests": "not run (exited at STEP 0.3, before STEP 3)"
-  },
   {
    "ts": "2026-08-20T01:00:59.000Z",
    "agent": "cajh-loop-check-scheduled",
@@ -1184,6 +1176,14 @@
    "action": "VERDICTS-ROW-WRITEUP-RECONCILIATION done",
    "detail": "Reconciled all 67 VERDICTS.md rows against ROADMAP.md/ROADMAP_ARCHIVE.md, disclosed-expanded to TOURNAMENT_ROADMAP.md after the named two-file scope produced an implausible 54% UNSOURCED rate -- 29 resolved there, figures matching (citation gap only). 1 stale figure corrected (T3-REGIMEFILTER -0.437->-0.445, source doc self-supersedes same day). 6 rows genuinely UNSOURCED in all three documents. No verdict changed. Full table in ROADMAP.md 2026-09-02 section.",
    "commit": "c32c72f",
+   "tests": "513/513"
+  },
+  {
+   "ts": "2026-09-02T15:05:15.233Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "complete: AUTHORITY-HIERARCHY-FACTUAL-AUDIT",
+   "detail": "Established facts behind the circular authority claim across ARCHITECT_DIRECTIVE.md/AGENT_RUNBOOK.md/AGENT_PROTOCOL.md without resolving it. Verbatim claims quoted+dated from git history; searched the record for any instance where the circularity changed an outcome -- found none, reported as latent. Confirmed AGENT_PROTOCOL.md is the document the live loop actually treats as binding (fact, not preference), by three independent lines of evidence. Characterized 3 reconciliation options, none chosen. ROADMAP.md 2026-09-02 AUTHORITY-HIERARCHY-FACTUAL-AUDIT section.",
+   "commit": "db110de",
    "tests": "513/513"
   }
  ],
