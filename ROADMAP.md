@@ -3889,3 +3889,136 @@ SAME-COMMIT, 0/24 ANOMALOUS — is reported exactly that plainly.
 
 **Corrected:** nothing. **Edited:** no study write-up. **Follow-up:** none needed — no anomaly
 survived investigation. `npm.cmd test`: 513/513 green, run before this entry was written.
+
+## 2026-09-02 — CORRECTION-FAMILY-COUNTER-AUDIT: the formal-NHST family's n=22 and every published q-value independently reconfirmed — zero arithmetic errors, one documentation-completeness gap named
+
+Pre-registered task (`.agent_state.json` work_queue): independently reconstruct
+`MULTIPLE_COMPARISONS_AUDIT.md` §2's formal-NHST correction family from `ROADMAP.md`/
+`ROADMAP_ARCHIVE.md` — not from the audit document itself — and check its stated family size
+(22), its per-study p-values, and its published BH-FDR q-values against that independent
+reconstruction. WHY: every q-value this project has ever published depends on this counter, a
+single miscount would shift every q in the table, and the counter itself had never been
+independently audited before this item. This item does **not** propose narrowing, splitting, or
+re-scoping the family — `ALPHA_DEFINITION.md` §4b's prohibition on narrowing the correction
+family binds here in full, and the question was only ever whether the count of what is already
+in the family is arithmetically right.
+
+**Method.** Enumerated every study in `ROADMAP.md`/`ROADMAP_ARCHIVE.md` that reports a raw
+p-value against a pre-registered significance gate, working from those two files' dated
+sections directly (grepping for `permutation test`, `sign-flip`, `meanIC=`/`block-perm p`,
+`significance gate`, and `p=0.` patterns) rather than copying `MULTIPLE_COMPARISONS_AUDIT.md`'s
+own table. Cross-checked every study found this way against `VERDICTS.md` for a second,
+independent citation. Then compared the reconstructed list against the audit document's stated
+22-entry table, and independently recomputed Benjamini-Hochberg from the 22 raw p-values by
+hand (standard step-up: `q_(i) = min_{k>=i}(p_(k) * n / k)`, running minimum from the largest
+rank down), comparing every resulting q-value against the published one.
+
+**Reconstruction result: 22 sub-tests across 19 studies, matching the audit's stated count
+exactly.** Full per-study table, with each p-value's source location verified by direct read of
+the original write-up (not the audit document's transcription of it):
+
+| Rank (by p) | Study / sub-test | Raw p | Verified against | Match? |
+|---:|---|---:|---|---|
+| 1 | LOG-REGRESSION-BANDS-CRYPTO (holdout, primary) | 0.0002 | `ROADMAP_ARCHIVE.md:3956` | yes |
+| 2 | B5-REVERSAL L=3 (train) | 0.0010 | `ROADMAP_ARCHIVE.md:776` | yes |
+| 3 | CLASSIFIER-FUNDING-FEATURE (holdout, primary) | 0.0099 | `ROADMAP_ARCHIVE.md:822` | yes |
+| 4 | EQUITIES-MADIP-OUT-OF-SAMPLE (holdout, primary) | 0.0116 | `ROADMAP_ARCHIVE.md:4106` | yes |
+| 5 | Classifier P5 (holdout, primary) | 0.0198 | `ROADMAP_ARCHIVE.md:620` | yes |
+| 6 | C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES | 0.0365 | `ROADMAP.md:2111,2120` | yes |
+| 7 | Low-vol B4 negBeta (train) | 0.0579 | `ROADMAP_ARCHIVE.md:516,498` | yes |
+| 8 | EQUITIES-MADIP-SIGNIFICANCE (holdout, primary) | 0.0648 | `ROADMAP_ARCHIVE.md:3488` | yes |
+| 9 | CROSS-SECTIONAL-NONPRICE-RANK (train, OI-change IC) | 0.1249 | `VERDICTS.md` row + commit `0583013` — **no dated `ROADMAP.md`/`ROADMAP_ARCHIVE.md` section exists for this study** (see finding below) | yes (value), gap (source) |
+| 10 | EQUITIES-BREAKOUT-SIGNIFICANCE (holdout, primary) | 0.2036 | `ROADMAP_ARCHIVE.md:2550` | yes |
+| 11 | Low-vol B4 negVol (train) | 0.2278 | `ROADMAP_ARCHIVE.md:515,495` | yes |
+| 12 | B5-REVERSAL L=5 (train) | 0.4226 | `ROADMAP_ARCHIVE.md:779` | yes |
+| 13 | MOMENTUM-SHORT-HORIZON-RECHECK L=14 (train) | 0.4266 | `ROADMAP_ARCHIVE.md:1428,1436` | yes |
+| 14 | C0-SIGNAL-COMBINATION | 0.4708 | `ROADMAP.md:1906` | yes |
+| 15 | MOMENTUM-SHORT-HORIZON-RECHECK L=7 (train) | 0.6024 | `ROADMAP_ARCHIVE.md:1424,1435` | yes |
+| 16 | EQUITIES-BREAKOUT-OUT-OF-SAMPLE (holdout, primary) | 0.6165 | `ROADMAP_ARCHIVE.md:3685` | yes |
+| 17 | Momentum M7 (train, residual IC) | 0.7013 | `ROADMAP_ARCHIVE.md:376,399` | yes |
+| 18 | GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL (holdout, primary) | 0.7113 | `ROADMAP_ARCHIVE.md:4692` | yes |
+| 19 | STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC | 0.7183 | `ROADMAP_ARCHIVE.md:5025` | yes |
+| 20 | WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC | 0.9251 | `ROADMAP_ARCHIVE.md:4944` | yes |
+| 21 | LOG-REGRESSION-BANDS-EQUITIES (holdout, primary) | 0.9750 | `ROADMAP_ARCHIVE.md:4503` (cites its own §2 addition) | yes |
+| 22 | ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL (holdout, primary) | 0.9990 | `ROADMAP_ARCHIVE.md:4867,4885` | yes |
+
+Every raw p-value quoted in `MULTIPLE_COMPARISONS_AUDIT.md` §2's table reproduces exactly against
+the original study write-up, to the digit, in all 22 cases.
+
+**Independent BH-FDR recomputation, by hand, from these 22 raw p-values (not copied from the
+audit document):** using the standard step-up adjusted-p formula, computed `p_(i) * 22 / i` for
+every rank, then took the running minimum from rank 22 down to rank 1. Result for the ranks the
+audit document states explicitly:
+
+| Rank | Study | This item's independently computed q | Audit's published q | Match? |
+|---:|---|---:|---:|---|
+| 1 | LOG-REGRESSION-BANDS-CRYPTO | 0.0044 | 0.0044 | yes |
+| 2 | B5-REVERSAL L=3 | 0.0110 | 0.0110 | yes |
+| 3 | CLASSIFIER-FUNDING-FEATURE | 0.0638 | 0.0638 | yes |
+| 4 | EQUITIES-MADIP-OUT-OF-SAMPLE | 0.0638 | 0.0638 | yes |
+| 5 | Classifier P5 | 0.0871 | 0.0871 | yes |
+| 6 | C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES | 0.1338 | 0.1338 | yes |
+| 7 | Low-vol B4 negBeta | 0.1782 | (audit gives range 0.1782–0.9990 for ranks 7–22, not itemized) | consistent — 0.1782 is this range's own lower bound |
+| 22 | ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL | 0.9990 | (same range) | consistent — 0.9990 is this range's own upper bound |
+
+All 22 ranks were computed, not just the ones itemized above (ranks 8–21 fall strictly between
+0.1782 and 0.9990, monotonically non-decreasing, exactly as the BH step-up procedure requires —
+full 22-row vector available by re-running the same arithmetic, not reproduced in full here since
+the audit document doesn't itemize ranks 7–22 individually either, only the ones a status flip
+touched). **Zero discrepancies found between this independent recomputation and the published
+q-values, at any rank checked.** The two formally-surviving sub-tests at q=0.05
+(`LOG-REGRESSION-BANDS-CRYPTO`, `B5-REVERSAL L=3`) are confirmed correct by this independent
+arithmetic, as is the non-survival of every other entry, including the four (`CLASSIFIER-
+FUNDING-FEATURE`, `EQUITIES-MADIP-OUT-OF-SAMPLE`, `Classifier P5`, `C2-CONTINUOUS-MACRO-
+CONDITIONER-EQUITIES`) whose q-values have moved across updates as the family grew.
+
+**AGENT_PROTOCOL.md cross-check.** Its "Multiple-comparisons discipline" section states the same
+family size (22 sub-tests, 19 studies as of 2026-08-29) — consistent with both
+`MULTIPLE_COMPARISONS_AUDIT.md` and this item's independent reconstruction. No discrepancy across
+the three sources.
+
+**One finding, not an arithmetic error: `CROSS-SECTIONAL-NONPRICE-RANK` (rank 9, p=0.1249) has no
+dated write-up section in `ROADMAP.md` or `ROADMAP_ARCHIVE.md`.** Every other entry in the family
+has its own `## <date> — STUDY-NAME` (or equivalent `###` sub-)section in one of the two roadmap
+files, which is how this item verified the other 21 p-values against source. This one does not —
+searched by exact identifier, by its module name (`cross-sectional-nonprice-rank.mjs`, confirmed
+to live at the repo root, not under `scripts/`), and by section header pattern; it appears in
+both files only as an inline mention inside *other* studies' bucket-lists (e.g.
+`ROADMAP_ARCHIVE.md:2396`, a cost-sensitivity study's classification table), never as its own
+dated entry. The study is still fully traceable — its own `VERDICTS.md` row (quoting train
+meanIC=-0.0395, p=0.1249, q=0.2498 at the time it joined) and its introducing commit (`0583013`,
+2026-08-19, message quotes the identical p=0.1249) both independently confirm the value used in
+the family table — so this is **not** a membership question and nothing here is being narrowed,
+added, or re-scoped. It is a documentation-completeness gap: one family member is reconstructible
+from `VERDICTS.md` and git history but not from `ROADMAP.md`/`ROADMAP_ARCHIVE.md` the way every
+other member is. Recommended as a small follow-up for whichever future item next touches
+`ROADMAP.md` citation gaps (the same class of issue `DEAD-CODE-AND-ASSET-AUDIT`, 2026-09-01,
+found and fixed for `scripts/` path citations) — not actioned here, since this item's scope is
+the counter's arithmetic, not roadmap completeness.
+
+**No study found reporting a p-value against this family's null while absent from the family.**
+Checked the adjacent candidates explicitly: `EQUITIES-BREAKOUT-SIGNIFICANCE`'s and
+`EQUITIES-BREAKOUT-OUT-OF-SAMPLE`'s `anticipate` negative controls (p=0.6701, p=0.1310) are
+correctly excluded — both write-ups state explicitly that a negative control's p-value "gates no
+decision" and does not join the family, since no candidate hypothesis is under evaluation for
+`anticipate` in either case. `MACRO-REGIME-PRIMARY-SIGNAL` and its two follow-ons
+(`MACRO-REGIME-PRIMARY-SIGNAL-EQUITIES`, `MACRO-REGIME-EQUITIES-SPLIT-FRACTION-DIAGNOSTIC`) never
+compute a p-value at all — each closes as a sample-size non-verdict (1 holdout regime episode,
+below the pre-registered n>=8 floor) before the statistical test ever runs, confirmed by reading
+each section directly (no `p=` anywhere in any of the three). `SPECTRAL-CYCLE-DETECTION-CRYPTO`
+explicitly self-excludes with its own stated reasoning (7,150 pooled within-study p-values,
+corrected internally by its own BH-FDR pass, zero survivors — "does **not** join
+`MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST cross-study family... there is nothing here to add
+to it"), the same pattern the audit document's own §1 table already documents for
+`PAIRS-COINTEGRATION-STATARB`'s internal 105-pair screen. No membership gap found in either
+direction.
+
+**No entry present in the family without a traceable study.** All 22 rows resolved to a real,
+dated (or, for the one exception above, git-history-dated) source with a matching raw p-value.
+
+**Verdict: the family-size counter (22) is correct, and every published q-value this item checked
+survives independent recomputation.** Nothing corrected — there was no arithmetic to correct.
+Membership: no narrowing, splitting, or re-scoping proposed or found warranted; the one gap found
+(`CROSS-SECTIONAL-NONPRICE-RANK`'s missing dated section) is a documentation-completeness question,
+reported per this item's own instruction to report rather than act on anything outside strict
+arithmetic correction. `npm.cmd test`: 513/513 green (read-only audit — no code touched).
