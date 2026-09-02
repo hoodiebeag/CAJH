@@ -168,6 +168,25 @@ section are correct. That contradiction is precisely why the ledger exists.
 names the index at which it breaks, so a removed or altered historical entry is detectable rather
 than merely discouraged.
 
+## The promotion gate and the D2 runner (added 2026-09-02)
+
+`promotion.mjs`'s `promotionGate()` scores a candidate against ten conditions — the six in
+`ALPHA_DEFINITION.md` §3, plus pre-registration, the matched-geometry null, the baseline
+controls, and a cluster-aware reading of §3.3. It returns PASS, FAIL or **BLOCKED**, and BLOCKED
+is neither a soft fail nor a soft pass: a missing input means the question was never asked. PASS
+is unreachable by omission — there is no permissive default anywhere in it.
+
+**Use it for new work only.** It is not retroactive. Do not re-score, supersede or annotate any
+verdict already written in `VERDICTS.md` or `ROADMAP.md`; those were decided under the conditions
+stated at the time.
+
+**A PASS is the D1 bar and nothing else.** `paper.mjs` is the generic D2 log-only runner: it
+records decisions and would-be fills to an append-only journal and imports no broker, no exchange
+client, and nothing that can reach a venue, so there is no code path from it to a trade. Its
+`d2Status()` reports whether the standing 60-day / 50-trade minimum is met; a met minimum
+schedules the human review at D3 and confers no authority beyond that. Nothing in either file
+advances a candidate on its own, and no agent may.
+
 ## Phase duties
 
 - **ARCHITECT** — structure only: imports, interfaces, function stubs with explicit

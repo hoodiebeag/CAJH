@@ -17,3 +17,4 @@ __pycache__/
 level_cooldowns.json
 candles-upload.tar.gz*
 .assistant_snapshots/
+paper-runs/
