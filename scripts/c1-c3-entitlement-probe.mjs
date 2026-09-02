@@ -29,6 +29,7 @@
  * without disclosure. This script does not substitute one at all.
  */
 
+import { pathToFileURL } from "url";
 import { preregister, linkRun, findPreregistration } from "../registry.mjs";
 import { saveExperiment } from "../researchlab.mjs";
 
@@ -289,6 +290,26 @@ async function main() {
   console.log(`\nC1: ${result.gate.c1.verdict}\nC3: ${result.gate.c3.verdict}\nrun: ${file}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+/**
+ * Is this module being run directly, rather than imported by a test?
+ *
+ * The obvious form — comparing `import.meta.url` against `` `file://${process.argv[1]}` `` —
+ * is silently false on Windows, where argv[1] is a backslash path like `C:\\cajh\\scripts\\x.mjs`
+ * while `import.meta.url` is `file:///C:/cajh/scripts/x.mjs`. The guard never matched, so
+ * `main()` never ran on the one machine that can actually reach IB Gateway, and the script
+ * exited silently with status 0. Caught by HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK, 2026-09-02.
+ * `pathToFileURL` does the platform-correct conversion, producing exactly the form
+ * `import.meta.url` already carries on both platforms.
+ */
+export function isDirectRun(metaUrl, argv1) {
+  if (!argv1) return false;
+  try {
+    return metaUrl === pathToFileURL(argv1).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isDirectRun(import.meta.url, process.argv[1])) {
   main().catch((err) => { console.error(err); process.exitCode = 1; });
 }

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { GATE, PREREGISTRATION, evaluateGate, parseFredCsv } from "./scripts/c1-c3-entitlement-probe.mjs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { GATE, PREREGISTRATION, evaluateGate, isDirectRun, parseFredCsv } from "./scripts/c1-c3-entitlement-probe.mjs";
 
 const expiries = (n, strikes) => Array.from({ length: n }, (_, i) => ({ expiry: `2026100${i}`, strikes }));
 
@@ -133,4 +134,29 @@ test("a probe with nothing in it is UNAVAILABLE or BLOCKED, never AVAILABLE", ()
     assert.notEqual(g.c1.verdict, "AVAILABLE");
     assert.notEqual(g.c3.verdict, "AVAILABLE");
   }
+});
+
+// ---------- direct-run guard ----------
+
+test("the direct-run guard matches a real path on this platform", () => {
+  const here = fileURLToPath(new URL("./scripts/c1-c3-entitlement-probe.mjs", import.meta.url));
+  const url = pathToFileURL(here).href;
+  assert.equal(isDirectRun(url, here), true);
+  assert.equal(isDirectRun(url, fileURLToPath(new URL("./paper.mjs", import.meta.url))), false);
+});
+
+test("the guard matches a Windows backslash argv, which the naive string form silently missed", () => {
+  // The regression: on Windows argv[1] is "C:\\cajh\\scripts\\x.mjs" while import.meta.url is
+  // "file:///C:/cajh/scripts/x.mjs", so `file://${argv[1]}` never matched and main() never ran
+  // on the one machine that can reach IB Gateway. Asserted against the real conversion rather
+  // than a hardcoded string so it stays true if Node's encoding changes.
+  const winPath = "C:\\cajh\\scripts\\c1-c3-entitlement-probe.mjs";
+  const href = pathToFileURL(winPath).href;
+  assert.equal(isDirectRun(href, winPath), true);
+  assert.notEqual(href, `file://${winPath}`, "the naive form and the correct form must differ here");
+});
+
+test("the guard is false when nothing was passed, so importing the module runs nothing", () => {
+  assert.equal(isDirectRun("file:///x.mjs", undefined), false);
+  assert.equal(isDirectRun("file:///x.mjs", ""), false);
 });
