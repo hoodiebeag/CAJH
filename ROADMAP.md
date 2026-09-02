@@ -4150,3 +4150,112 @@ text — likely defined in funding-gate-h11.mjs's own pre-registration comment, 
 audit's document scope. Not a contradiction, just unverifiable from the cited prose alone.
 
 npm.cmd test: 513/513 green (documentary reconciliation, one VERDICTS.md figure corrected, no code touched).
+
+## 2026-09-02 — AUTHORITY-HIERARCHY-FACTUAL-AUDIT: facts behind the circular authority claim — latent, not active; no edit made
+
+**Scope discipline.** Same pattern as `FROZEN-PATH-LIST-RECONCILIATION-AUDIT` above: this item does
+not resolve which document governs — that is a governance decision reserved for the human, already
+on their list per `AGENT-DOC-DEDUPLICATION`'s finding. This item only establishes the facts: what
+each document claims, when each claim was written, whether the circularity has ever actually forced
+an agent to choose, and which document the live loop behaves as though it treats as binding. Nothing
+was edited: `ARCHITECT_DIRECTIVE.md`, `AGENT_RUNBOOK.md`, and `AGENT_PROTOCOL.md` are all read-only
+in this pass.
+
+**The three claims, verbatim.**
+
+| Document | Location | Claim |
+|---|---|---|
+| `ARCHITECT_DIRECTIVE.md` | Header, lines 3–4 | "This document is authoritative; where any earlier spec, queue note, or control block conflicts with it, this wins." |
+| `AGENT_RUNBOOK.md` | Header, lines 3–4 | "`ARCHITECT_DIRECTIVE.md` and `AGENT_PROTOCOL.md` remain authoritative when anything differs." (both named, unordered — no tiebreaker between them) |
+| `AGENT_PROTOCOL.md` | Line 1, and throughout | Line 1 self-describes as "Binding contract for all three agents in this repo." Read in full (679 lines, every section) — it never once mentions `ARCHITECT_DIRECTIVE.md` by name, and never claims supremacy over it. Confirmed by `git log -p` across all 36 commits in this file's history: the string `ARCHITECT_DIRECTIVE` does not appear anywhere in the file's history, added or removed. |
+
+The circularity as originally reported by `AGENT-DOC-DEDUPLICATION`: `ARCHITECT_DIRECTIVE.md` claims
+supremacy over `AGENT_RUNBOOK.md`; `AGENT_RUNBOOK.md` claims `ARCHITECT_DIRECTIVE.md` and
+`AGENT_PROTOCOL.md` are both authoritative with no order between them; `AGENT_PROTOCOL.md` makes no
+claim about either. It is not a three-way cycle in the strict graph sense (`AGENT_PROTOCOL.md` points
+at nothing) — it is one document asserting unilateral supremacy, a second naming two co-equal
+authorities including the first, and a third staying silent while being the one the loop actually
+uses. Confirmed accurate on rereading all three documents in full for this item.
+
+**Dating each claim from git history.**
+
+- `ARCHITECT_DIRECTIVE.md`'s authority claim was written in the file's creation commit, `758f3d2`
+  (2026-08-04). The file was touched once since, by `AGENT-DOC-DEDUPLICATION` on 2026-09-01
+  (`2cfcce9`) — that commit's diff (checked directly) only rewrote Appendix B's dead-spec-file list;
+  it did not touch lines 1–4. The authority claim is unchanged since 2026-08-04, roughly one month.
+- `AGENT_RUNBOOK.md`'s authority claim was written in the file's creation commit, `d6ce4a8`
+  (2026-08-04, same day). `git log -p --follow` across all 16 commits touching this file shows the
+  claim line appearing only as unchanged context in every later diff (most recently `cd74a03`,
+  2026-08-19, which edited a different section) — never as an added or removed line. Unchanged since
+  creation.
+- `AGENT_PROTOCOL.md` was created six days earlier, `a54b0e3` (2026-07-30), and has been revised 36
+  times since, most recently `5b6e860` (2026-09-02, this same date) — it is by a wide margin the most
+  actively maintained of the three. Its "Full control" section (added `1dab9c2`, 2026-08-07) is the
+  document that actually records the point where the live `cajh-loop-check` loop stopped using the
+  three-role Architect/Executor/Verifier pipeline the other two documents still describe in full.
+  Neither `ARCHITECT_DIRECTIVE.md` nor `AGENT_RUNBOOK.md` has been revised since that date to
+  acknowledge the pipeline they describe is no longer how the live loop runs — `AGENT-DOC-DEDUPLICATION`
+  already flagged this staleness as a separate, related finding.
+
+**Has the circularity ever changed an outcome?** Searched `ROADMAP.md`, `ROADMAP_ARCHIVE.md`, the
+current `.agent_state.json` ledger (100 entries), and the full git history of `.agent_state.json`'s
+`control` blocks for any case where two of these three documents gave conflicting guidance and an
+agent had to pick, or reported being unsure which governed. **Found nothing.** Every citation of one
+of these documents as "binding" or "authoritative" found in the record — and there are dozens, mostly
+in the multiple-comparisons discipline section of `AGENT_PROTOCOL.md` itself and its citations
+throughout `ROADMAP.md`/`ROADMAP_ARCHIVE.md` (the family-size counter rule, the `SEALED_SYMBOLS`
+re-run rule, the calendar-holdout retirement rule) — cites `AGENT_PROTOCOL.md` alone, with no
+competing citation of `ARCHITECT_DIRECTIVE.md` or `AGENT_RUNBOOK.md` for the same decision, and no
+instance of an agent stating uncertainty about which document to follow. The one unrelated hit for
+"authoritative" in the ledger concerns a different question entirely (whether `.agent_state.json`'s
+top-level or nested `notifications` map governs dedup — resolved in a single firing, nothing to do
+with these three documents). **The circularity is latent, not active**: it is a real, uncorrected
+defect in what these documents claim about each other, but it has not — as far as the available
+record shows — ever caused a firing to pick the wrong rule or stall on indecision.
+
+**Which document the live loop currently behaves as though it treats as binding.** `AGENT_PROTOCOL.md`,
+as a fact, not a preference — for three independent reasons found in this pass:
+
+1. It is the only one of the three ever cited by name when a firing actually applies a binding rule
+   (the multiple-comparisons family-size counters, the `SEALED_SYMBOLS` re-run rule, the calendar
+   holdout retirement) — checked exhaustively above.
+2. Its own "Full control" section (2026-08-07) is the operative description of how the live
+   `cajh-loop-check` scheduled task actually runs today — the scheduled task's own prompt, which this
+   very firing executes under, describes the same single-pass design in nearly identical language
+   ("no role labels ... you now design, implement, and self-check in one continuous pass") without
+   ever mentioning `ARCHITECT_DIRECTIVE.md` or `AGENT_RUNBOOK.md`.
+3. Its "Artifact publishing is PAUSED" section (2026-09-02) explicitly asserts precedence over a
+   conflicting instruction elsewhere ("Where the two disagree, this section wins — the same
+   precedence the 'Closed research programs' section above relies on") — a pattern of `AGENT_PROTOCOL.md`
+   resolving conflicts unilaterally that neither of the other two documents exhibits anywhere in their
+   own text.
+
+**Reconciliation options (characterized, not chosen — this is the human's call).**
+
+1. **Make `AGENT_PROTOCOL.md` explicitly supreme**, with `ARCHITECT_DIRECTIVE.md` and
+   `AGENT_RUNBOOK.md` reduced to subordinate references. This matches operational reality exactly (per
+   the three reasons above) and requires the smallest conceptual change, but concretely means editing
+   `ARCHITECT_DIRECTIVE.md`'s self-declared "this document is authoritative" line — the same kind of
+   safety-adjacent header edit `AGENT-DOC-DEDUPLICATION` explicitly declined to make unilaterally.
+2. **Add a dated supersession notice to the two older documents** (a short header note on
+   `ARCHITECT_DIRECTIVE.md` and `AGENT_RUNBOOK.md` stating that `AGENT_PROTOCOL.md`'s 2026-08-07 "Full
+   control" section governs current operation, while leaving the original authority claims and the
+   three-role pipeline description in place as historical record). Lower-risk than option 1 — it adds
+   rather than rewrites — but leaves the literal contradiction unresolved in favor of a note about
+   which side wins in practice.
+3. **Leave all three as intentional historical record**, on the reasoning `AGENT_PROTOCOL.md` itself
+   already gives for the other stale sections it explicitly supersedes ("kept as historical record of
+   the design that ran... still accurate for reasoning about *why* certain invariants exist, but they
+   no longer describe current enforcement") — extending that same treatment to the header claims
+   themselves rather than writing a new notice. Cheapest option; relies on a future reader (human or
+   agent) independently reaching the same "which one actually governs" conclusion this audit reached,
+   rather than being told directly.
+
+**What is NOT unguarded while this is open.** The circularity concerns document-level precedence for
+process/workflow rules — which pipeline shape, which notification policy, which multiple-comparisons
+discipline applies. It has no bearing on the one enforcement mechanism that cannot be talked around:
+`scripts/check-protected-logic.cjs` via `.git/hooks/pre-commit`, which is independent of all three
+documents' text and blocks any staged diff touching the protected live-trading identifiers regardless
+of which governance document a firing believes it is following.
+
+`npm.cmd test`: 513/513 green (documentary audit, no code touched).
