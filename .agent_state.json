@@ -4,9 +4,9 @@
   "status": "idle",
   "target_file": null,
   "objective": null,
-  "notes": "AUTHORITY-HIERARCHY-FACTUAL-AUDIT done (commit db110de, pushed). Read-only audit, same pattern as FROZEN-PATH-LIST-RECONCILIATION-AUDIT: quoted ARCHITECT_DIRECTIVE.md/AGENT_RUNBOOK.md/AGENT_PROTOCOL.md authority claims verbatim, dated each from git history (ARCHITECT_DIRECTIVE.md and AGENT_RUNBOOK.md both unchanged since 2026-08-04 creation; AGENT_PROTOCOL.md revised 36 times since 2026-07-30, most recently 2026-09-02, and never once mentions ARCHITECT_DIRECTIVE.md across its whole history). Searched ROADMAP.md/ROADMAP_ARCHIVE.md/state-file ledger and control-block history for any case where the circularity forced a pick between conflicting guidance -- found none; every binding-rule citation in the record names AGENT_PROTOCOL.md alone. Reported: circularity is latent, not active. Established as fact that the live loop treats AGENT_PROTOCOL.md as binding (sole citation source; its Full control section matches the live scheduled-task prompt almost verbatim; its Artifact-publishing-paused section is the only one of the three that explicitly asserts precedence over a conflicting instruction elsewhere). Characterized 3 reconciliation options, none chosen -- human decision, as scoped. No edit to any of the three documents. npm.cmd test: 513/513 green. Queue still has 3 pending items (HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK, VERDICTS-TOURNAMENT-CITATION-GAP-FIX, UNSOURCED-STUDY-RECORD-POLICY) -- one per firing, per HYGIENE, so this firing stops here.",
+  "notes": "HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK done (commit b5c12c0, pushed). Pre-registered (registry.mjs, id HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK) a fixed sample of 5 headline figures -- one per distinct study family, restricted to cache-only/no-egress scripts, chosen in ROADMAP.md chronological order (not cherry-picked for reproducibility), C1/C3 gate scripts excluded as needing live IBKR/FRED. Re-ran each cited script UNMODIFIED as a subprocess against current cache: EQUITIES-BREAKOUT-SIGNIFICANCE, EQUITIES-MADIP-OUT-OF-SAMPLE (DJTA-20), BOS-SHORT-EQUITIES-BASELINE, VOL-CONTRACTION-SAMPLE-EXTENSION (AXIS C), DATE-CLUSTERED-RESAMPLING-DJTA20 (date-clustered CI). All 5 REPRODUCES at stated precision, 0 DRIFTS, 0 CANNOT-RUN -- no recorded figure touched (none needed correcting). New scripts/headline-figure-reproducibility-spotcheck.mjs only, additive/read-only/cache-only; no frozen path touched. Aside noted in ROADMAP.md, not fixed: c1-c3-entitlement-probe.mjs's import.meta.url direct-execution guard is always false on this Windows machine (backslash vs forward-slash path string comparison), so main() never runs on direct invocation -- relevant for whoever picks up C1-C3-ENTITLEMENT-PROBE-RUN next. npm.cmd test: 659/659 green. Queue still has 4 pending items (VERDICTS-TOURNAMENT-CITATION-GAP-FIX, UNSOURCED-STUDY-RECORD-POLICY, C1-C3-ENTITLEMENT-PROBE-RUN, PIPELINE-ADOPTION-PILOT) -- one per firing, per HYGIENE, so this firing stops here.",
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-09-02T15:05:15.232Z"
+  "updated_at": "2026-09-02T16:12:11.486Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -259,7 +259,7 @@
    },
    {
     "id": "HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "new: scripts/headline-figure-reproducibility-spotcheck.mjs (additive, read-only); re-runs existing study scripts unmodified",
     "depends_on": [],
@@ -406,14 +406,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-20T01:00:59.000Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "pull-blocked-exit",
-   "detail": "STEP 0.3: git pull --rebase failed again on the same unstaged content as the prior firing (03c5b8b): brokers/ibkr.mjs + brokers/ibkr.test.mjs modified, plus untracked scripts/equities-baseline-port.mjs and universe.txt, none created this run. git fetch + git log HEAD..origin/main confirmed zero new remote commits, so this is a purely local dirty-tree block, not an actual missed sync. Did not stash/checkout/reset/clean any of it. MISTAKE MADE AND CORRECTED: checked blackboard.notifications.persistent-pull-blocker (base key, last sent 2026-08-19T10:02:01Z, >6h stale) and sent a PushNotification without also checking the dated key persistent-pull-blocker-2026-08-20 that the immediately-prior firing had set only about 1 hour earlier (2026-08-20T00:00:58Z) - that dated key was inside the 6h dedup window and should have suppressed this send. The notification (\"Mobile push requested\") already fired before the oversight was caught, so it stands as a duplicate; cannot be unsent. A first attempt to record this via a full JSON.stringify rewrite of this file was caught before commit - it reformatted all ~1370 lines (2-space indent + LF vs this file's 1-space indent + CRLF) and tripped scripts/check-protected-logic.cjs on unrelated historical mentions of the protected trading-safety identifiers elsewhere in the file's older entries; reverted with git checkout and redone as this surgical Edit instead, touching only this entry and one notifications key. No code work attempted, control untouched (remains IDLE).",
-   "commit": null,
-   "tests": "not run (exited at STEP 0.3, before STEP 3)"
-  },
   {
    "ts": "2026-08-20T02:00:59.000Z",
    "agent": "cajh-loop-check-scheduled",
@@ -1205,6 +1197,14 @@
    "detail": "Established facts behind the circular authority claim across ARCHITECT_DIRECTIVE.md/AGENT_RUNBOOK.md/AGENT_PROTOCOL.md without resolving it. Verbatim claims quoted+dated from git history; searched the record for any instance where the circularity changed an outcome -- found none, reported as latent. Confirmed AGENT_PROTOCOL.md is the document the live loop actually treats as binding (fact, not preference), by three independent lines of evidence. Characterized 3 reconciliation options, none chosen. ROADMAP.md 2026-09-02 AUTHORITY-HIERARCHY-FACTUAL-AUDIT section.",
    "commit": "db110de",
    "tests": "513/513"
+  },
+  {
+   "ts": "2026-09-02T16:12:11.487Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "research-item-done",
+   "detail": "HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK: 5/5 pre-registered headline figures (one per study family, cache-only scripts, chronological selection) reproduce today against today's cache -- 0 DRIFTS, 0 CANNOT-RUN. Noted (not fixed): c1-c3-entitlement-probe.mjs direct-execution guard is broken on Windows.",
+   "commit": "b5c12c0",
+   "tests": "659/659"
   }
  ],
  "automation": {
