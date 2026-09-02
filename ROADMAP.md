@@ -3594,3 +3594,71 @@ for removal.
 **Files touched this item:** `ROADMAP.md` only — the two citation fixes above (in the
 `MADIP-REALISED-R-CONDITION-2` section and the `CRYPTO-EFFECTIVE-SAMPLE-AUDIT` section) plus this
 entry. No code, config, or test file changed. `npm.cmd test`: 513/513 green, run before commit.
+
+## 2026-09-02 — AGENT-DOC-DEDUPLICATION: rule matrix across the five agent-instruction documents — two dead-file references corrected, everything else reported for human judgment
+
+**Scope.** Audited `AGENTS.md`, `AGENT_NOTES.md`, `AGENT_RUNBOOK.md`, `ARCHITECT_DIRECTIVE.md`,
+`AGENT_PROTOCOL.md` for overlapping rules, contradictions, and stale references. `CLAUDE.md` was
+explicitly out of scope and was not read as part of this audit's rule matrix (it is the human's
+own instructions to the assistant, not project protocol). Per this item's own task text,
+`AGENT_PROTOCOL.md` is treated as the authoritative home for binding rules; where a rule is
+duplicated the correct fix is a pointer to `AGENT_PROTOCOL.md`, never deletion; any judgment call
+about which of two live rules should win is reported here, not resolved unilaterally; no safety
+rule, pre-registration requirement, multiple-comparisons rule, or gate threshold was touched.
+
+**Method.** Read all five documents in full (`AGENT_PROTOCOL.md` is 654 lines; the rest are
+1,600–19,500 bytes each). Extracted every file/script/threshold reference from each document and
+checked it against the working tree and `git log --diff-filter=D` for demonstrable staleness.
+Compared the frozen-path lists, the role-pipeline descriptions, and the "which document wins"
+claims across documents against `.agent_state.json`'s actual current `control`/`blackboard`
+shape and against the live `cajh-loop-check` scheduled-task definition (external to this repo,
+at `~/.claude/scheduled-tasks/cajh-loop-check/SKILL.md`) as the ground truth for what the loop
+actually does today.
+
+**Rule matrix — duplicated rules.**
+
+| Rule | Where it lives | Assessment |
+|---|---|---|
+| Live-trading safety invariants (never enable the live-trading env flag, halted-by-default, frozen-path change discipline, fail-closed on unknown state, never `git reset --hard`/`clean`/broad `checkout`/`restore`/force-push on work you don't own) | `AGENT_PROTOCOL.md` "Hard rules" §1–9 (loop/state-file mechanics framing) **and** `ARCHITECT_DIRECTIVE.md` §2.1–2.4 (substantive safety framing, richer detail — e.g. the explicit live-trading-flag prohibition and the fail-closed condition list have no equivalent verbatim in `AGENT_PROTOCOL.md`'s Hard rules) | Real overlap, but **not a verbatim duplicate** — each document states unique safety substance the other omits. Per this item's own "do not weaken, relax, or reword any safety rule" instruction, **left untouched in both places** rather than consolidated to a pointer; a human should decide whether `ARCHITECT_DIRECTIVE.md` §2 should become a pointer to `AGENT_PROTOCOL.md`'s Hard rules plus its own unique clauses, since collapsing safety-adjacent text is exactly the kind of edit this item was scoped to avoid making unilaterally. |
+| `git pull --rebase` / commit-before-handoff / re-read state before writing discipline | `AGENT_PROTOCOL.md` Hard rules #5/#9, `ARCHITECT_DIRECTIVE.md` §2.3/§10, `AGENT_RUNBOOK.md` "Every run" #2, `AGENT_NOTES.md`'s dated incident entries (informal, narrative) | Same rule, four framings. `AGENT_NOTES.md`'s copies are historical incident narration (an agent explaining what it did/learned on a specific date), not restated instruction — those are fine as-is. The `AGENT_RUNBOOK.md`/`ARCHITECT_DIRECTIVE.md` copies are genuine restatements of `AGENT_PROTOCOL.md`'s rule; **not converted to pointers** in this pass because `AGENT_RUNBOOK.md` already opens with "`ARCHITECT_DIRECTIVE.md` and `AGENT_PROTOCOL.md` remain authoritative when anything differs," which functions as an implicit pointer, and further edits risked touching safety-adjacent prose for a purely cosmetic gain. |
+| Windows `npm.cmd test`/`npm.cmd ci` invocation (not `npm test`/`npm install`) | `AGENT_PROTOCOL.md` Hard rule #7, `AGENT_RUNBOOK.md` "Every run" #3/#4 | Consistent across both, no contradiction, no stale content. No action needed. |
+
+**Rule matrix — contradictions.**
+
+| Contradiction | Evidence | Resolution |
+|---|---|---|
+| **Authority hierarchy is circular.** `ARCHITECT_DIRECTIVE.md`'s header states "This document is authoritative; where any earlier spec, queue note, or control block conflicts with it, this wins." `AGENT_RUNBOOK.md`'s header states "`ARCHITECT_DIRECTIVE.md` and `AGENT_PROTOCOL.md` remain authoritative when anything differs" (both, unordered). `AGENT_PROTOCOL.md` never explicitly claims supremacy over `ARCHITECT_DIRECTIVE.md`. | Each document's own text, read together. | **Reported, not resolved.** This item's own task text directs treating `AGENT_PROTOCOL.md` as authoritative for binding rules, which is applied throughout this audit, but that instruction doesn't itself amend `ARCHITECT_DIRECTIVE.md`'s self-declared authority claim — doing so is a governance decision for a human, not a stale-reference fix. |
+| **Three-role pipeline (Architect → Executor → Verifier) is stale for the actual running loop.** `AGENT_RUNBOOK.md`'s "Executor handoff"/"Architect queue contract"/"Verifier handoff" sections and all of `ARCHITECT_DIRECTIVE.md` §3/§8/§9/§13 describe routing work through three separate role turns gated by `control.status` values `ARCHITECT_PENDING`/`EXECUTOR_PENDING`/`VERIFIER_PENDING`. `AGENT_PROTOCOL.md`'s "Full control" section (dated 2026-08-07, confirmed current: the live `cajh-loop-check` scheduled-task definition explicitly says "no role labels... you now design, implement, and self-check in one continuous pass") states this pipeline is retired for the live loop and kept only as historical record. `.agent_state.json`'s actual `control.status` values in current use are `"idle"`/`"BLOCKED"`, not the three-role enum. Grep confirms `ARCHITECT_PENDING`/`EXECUTOR_PENDING`/`VERIFIER_PENDING` appear only inside these three documents, nowhere in any script or the actual state file. | `git log -1` per file (`ARCHITECT_DIRECTIVE.md` last touched 2026-08-04, `AGENT_RUNBOOK.md`'s role-pipeline sections not revised since); `AGENT_PROTOCOL.md`'s "Full control" section, most recently confirmed live by the external scheduled-task definition this run is itself executing under. | **Reported, not resolved.** `AGENT_PROTOCOL.md` itself already says these older sections in *other* documents are "kept as historical record... still accurate for reasoning about why certain invariants exist, but they no longer describe current enforcement" — but that supersession notice lives only in `AGENT_PROTOCOL.md`, not as a pointer added to `AGENT_RUNBOOK.md`/`ARCHITECT_DIRECTIVE.md` themselves. Whether to add a superseded-notice to those two documents (mirroring `blackboard.frozen_paths_note`'s pattern) or leave them as intentional historical reference is a judgment call left for a human — not applied here since it's neither a verbatim-duplicate-to-pointer fix nor a dead-file-reference fix, the two categories this item authorized. |
+| **Frozen-path file lists disagree across three sources.** `AGENT_PROTOCOL.md` Hard rule #6: 6 files (`scanner.js`, `monitor.js`, `trader.js`, `bot.js`, `strategy.js`, `backtest.js`). `ARCHITECT_DIRECTIVE.md` §2.2: 8 files (adds `storage.js` and `commands.js`). `.agent_state.json`'s `blackboard.frozen_paths` (the actual current list): 7 files (adds `commands.js` only, not `storage.js`). | Direct read of all three sources. | **Reported, not resolved** — this is safety-adjacent content (a list gating which files need `allow_live_edit`), explicitly out of scope for this item to edit even though `blackboard.frozen_paths_note` already states the list "no longer gates anything directly" for the live loop (only `scripts/check-protected-logic.cjs`'s identifier scan matters operationally now). The three lists disagreeing is a real documentation defect regardless of current operational moot-ness, and reconciling them is a human call. |
+
+**Rule matrix — stale references (file/script/threshold no longer exists).**
+
+| Reference | Location | Evidence it's stale | Action |
+|---|---|---|---|
+| `MOMENTUM_SPEC.md`, `FOLLOWON_SPECS.md`, `SIGNAL3_CLASSIFIER_SPEC.md` | `ARCHITECT_DIRECTIVE.md` Appendix B | Deleted in commit `3cb1264` ("remove settled research pre-registration specs"); confirmed absent from working tree. | **Fixed.** Appendix B rewritten to state which specs were removed, why, and in which commit, and to list only the two specs that remain (`SELF_AWARENESS_SPEC.md`, `VERDICT_TEMPLATE.md`). |
+| `LOGIN_FIX_SPEC.md` | `ARCHITECT_DIRECTIVE.md` Appendix B | Deleted in commit `b8ec21d` ("remove resolved one-off specs"); confirmed absent. | **Fixed** — same edit as above. |
+| `AGENTS_COORDINATION.md` | `AGENT_NOTES.md`, in a dated session-log entry ("`AGENTS_COORDINATION.md`'s scope agreement stands") | Merged into `AGENT_NOTES.md` itself in commit `ab52036` ("merge into single notes file, agree scope") — the file no longer exists because its content *is* this file. | **Fixed.** Reworded to "This file's scope agreement stands (formerly `AGENTS_COORDINATION.md`, merged into this single notes file in `ab52036`)" — corrects the dangling pointer without altering the historical narrative's substance. |
+| `harvest.mjs` | `ARCHITECT_DIRECTIVE.md` Appendix C.2, as one of four example filenames illustrating "prefer new files over frozen ones" (`momentum.mjs`, `classifier.mjs`, `harvest.mjs`, `data.js`) | The other three examples exist and are live research modules; `harvest.mjs` has no creation or deletion commit in `git log` — it appears to have been an aspirational example name that was never built, not a file that "no longer exists." | **Not touched.** Low-confidence judgment call (aspirational placeholder vs. typo vs. abandoned plan) that doesn't change the rule's meaning either way; reported rather than guessed at. |
+| `agent-orchestrator.ps1`, `agent-state-validator.ps1`, `security.test.mjs`, and other filenames inside `AGENT_NOTES.md`'s dated 2026-08-04 session-log entries | `AGENT_NOTES.md` | These are explicitly timestamped point-in-time snapshots of that day's `work_queue` state, not present-tense claims — several no longer exist in the working tree, which is expected and not misleading given the framing. | **Not touched** — correctly scoped as historical record already; editing them would misrepresent what the log entry actually documented at the time. |
+
+**`AGENTS.md` vs `CLAUDE.md` observation (informational only, no action).** `AGENTS.md`'s four
+numbered sections are near-verbatim identical to `CLAUDE.md`'s sections 1–4 (Think Before Coding,
+Simplicity First, Surgical Changes, Goal-Driven Execution), differing mainly in that `CLAUDE.md`
+has an additional "Output Style" section 5 and a longer closing sentence. `CLAUDE.md` is explicitly
+out of scope for this item (it is the human's own instructions to the assistant, not project
+protocol governed by `AGENT_PROTOCOL.md`), so no action was taken and none is recommended here —
+noted only so a future pass doesn't rediscover the overlap from scratch.
+
+**M5–P3 research gates in `AGENT_RUNBOOK.md`'s "Research guardrails" section** (sealed-holdout,
+economic-view, verdict, pre-registration, forward-metric, classifier-matrix, logistic-model,
+holdout/permutation gates) were checked for staleness against `blackboard.phase_directive_new_mechanism`'s
+closure of the price-structure/Template-A program. These gates document general holdout/permutation
+*methodology* standards, not the specific closed program, and remain independently citable if a
+future momentum/equities/FX study reopens under new data — **left as-is**, no staleness found.
+
+**Fixes applied this item:** `ARCHITECT_DIRECTIVE.md` (Appendix B stale-spec references corrected)
+and `AGENT_NOTES.md` (one dangling `AGENTS_COORDINATION.md` pointer corrected). No safety rule,
+pre-registration requirement, multiple-comparisons rule, or gate threshold was weakened, reworded,
+or removed. No file deleted. `CLAUDE.md` untouched. Every contradiction and duplicated-rule finding
+above that required a judgment call was left unresolved and is flagged in this section for a human
+decision. `npm.cmd test`: run and confirmed green before commit (see commit for exact count).

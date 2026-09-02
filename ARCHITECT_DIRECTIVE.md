@@ -250,12 +250,16 @@ preferred. **Do not expand asset classes to compensate for a missing edge.**
 
 ## Appendix B — Relationship to the research specs
 
-The research program (`MOMENTUM_SPEC.md`, `FOLLOWON_SPECS.md`, `SIGNAL3_CLASSIFIER_SPEC.md`,
-`SELF_AWARENESS_SPEC.md`, `LOGIN_FIX_SPEC.md`, `VERDICT_TEMPLATE.md`) is **P4 research + P1/P2
-reliability** work under this directive. Per §13.8, these are valid and retained, but they sit
-**behind unresolved P0 capital-safety remediation** discovered in the §4 audit. The login fix
-(LOGIN_FIX_SPEC) is P1 reliability. Self-knowledge (C-tasks) is a feature and sits behind safety.
-Self-editing (D-tasks) remains hard-gated behind a human per §2.1.
+The research program originally spanned `MOMENTUM_SPEC.md`, `FOLLOWON_SPECS.md`,
+`SIGNAL3_CLASSIFIER_SPEC.md`, `SELF_AWARENESS_SPEC.md`, `LOGIN_FIX_SPEC.md`, and
+`VERDICT_TEMPLATE.md`. `MOMENTUM_SPEC.md`, `FOLLOWON_SPECS.md`, and `SIGNAL3_CLASSIFIER_SPEC.md`
+were removed as settled research pre-registration specs (commit `3cb1264`); `LOGIN_FIX_SPEC.md`
+was removed as a resolved one-off spec (commit `b8ec21d`). `SELF_AWARENESS_SPEC.md` and
+`VERDICT_TEMPLATE.md` remain current. This program is **P4 research + P1/P2 reliability** work
+under this directive. Per §13.8, these are valid and retained, but they sit **behind unresolved
+P0 capital-safety remediation** discovered in the §4 audit. Self-knowledge (C-tasks) is a
+feature and sits behind safety. Self-editing (D-tasks) remains hard-gated behind a human per
+§2.1.
 
 ## Appendix C — Reconciliations (resolve these explicitly; do not let an agent guess)
 
