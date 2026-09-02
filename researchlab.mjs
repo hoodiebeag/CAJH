@@ -35,6 +35,24 @@ export function fileSha256(file) {
   return sha256(fs.readFileSync(file));
 }
 
+/**
+ * Write a file atomically: full contents to a temp file in the same directory, then rename.
+ * A crash or a concurrent reader can therefore see the old file or the new one, never a
+ * half-written one. Research runs are evidence — a truncated run that still parses as JSON is
+ * worse than no run at all, because `loadLatestExperiment` would return it as a finding.
+ */
+export function writeFileAtomic(file, contents) {
+  const dir = path.dirname(file);
+  const tmp = path.join(dir, `.${path.basename(file)}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`);
+  try {
+    fs.writeFileSync(tmp, contents);
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    try { fs.unlinkSync(tmp); } catch { /* temp file already gone */ }
+    throw err;
+  }
+}
+
 export function researchInputProvenance({ pairs = [], universe = [], parameters = {} } = {}) {
   const candles = {};
   for (const pair of [...pairs].sort()) {
@@ -124,7 +142,7 @@ export function loadResearchCandlesWithQuality(pair, minutes = 1440, { gapPolicy
   const { candles, gaps } = resampleBars(loadBars(pair), minutes, { gapPolicy, nowSec });
   const payload = { schema: "cajh-research-cache/v1", provenance, minutes, gapPolicy, nowSec: cacheNowSec, candles, gaps };
   fs.mkdirSync(cacheDir, { recursive: true });
-  fs.writeFileSync(cache, JSON.stringify(payload) + "\n");
+  writeFileAtomic(cache, JSON.stringify(payload) + "\n");
   return payload;
 }
 
@@ -135,12 +153,20 @@ export function saveExperiment(kind, input, result) {
   if (!/^[a-z0-9-]+$/i.test(kind)) throw new Error("Experiment kind must be alphanumeric or hyphenated");
   const dir = path.join(dataDir(), "research-runs");
   fs.mkdirSync(dir, { recursive: true });
-  const id = `${new Date().toISOString().replace(/[:.]/g, "-")}-${kind}`;
-  const file = path.join(dir, `${id}.json`);
+  // Records are immutable once written: never overwritten, never edited in place. Two runs of
+  // the same kind inside one millisecond get distinct ids rather than one clobbering the other.
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  let id = `${stamp}-${kind}`;
+  let file = path.join(dir, `${id}.json`);
+  for (let n = 2; fs.existsSync(file); n++) {
+    id = `${stamp}-${n}-${kind}`;
+    file = path.join(dir, `${id}.json`);
+  }
   const pairs = input?.pairs ?? (input?.pair ? [input.pair] : []);
   const provenance = researchInputProvenance({ pairs, universe: input?.universe ?? [], parameters: input?.parameters ?? input ?? {} });
   const payload = { schema: "cajh-research-run/v1", id, kind, createdAt: new Date().toISOString(), provenance, input, result };
-  fs.writeFileSync(file, JSON.stringify(payload, null, 2) + "\n");
+  if (fs.existsSync(file)) throw new Error(`Refusing to overwrite an existing research run: ${file}`);
+  writeFileAtomic(file, JSON.stringify(payload, null, 2) + "\n");
   return file;
 }
 

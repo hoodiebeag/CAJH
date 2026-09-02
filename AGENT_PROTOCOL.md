@@ -140,6 +140,34 @@ to-publish list, and do not pre-build the file in anticipation of being asked.
 The full instruction, the reasoning, and the deck's last-published state are recorded in
 `.agent_state.json`'s `blackboard.deck_publishing_paused`.
 
+## The research registry is the record of what a study agreed to before it ran (added 2026-09-02)
+
+`registry.mjs` writes an append-only, hash-chained ledger at `research-registry/ledger.jsonl`.
+It is committed to the repository, unlike `research-runs/`, which is local and gitignored.
+
+**Before running a study that will produce a verdict, call `preregister()`.** It requires the
+hypothesis, the falsifiable gate, the universe, the time split, the symbol split, the cost
+assumptions, and the seed — all of them, because a study whose gate can be reconstructed only
+from the write-up is a study whose gate could have moved. Attach the result afterwards with
+`linkRun()`. Pre-registrations are immutable: registering the same id twice throws rather than
+replacing the first one.
+
+**Before spending any sealed holdout, call `sealedHoldoutStatus()` and believe it over prose.**
+`consumeHoldout()` refuses a second look at an already-spent symbol. An override exists, and it
+is not a loophole: it requires a named authorizer and a stated reason, and both are written into
+the ledger. An unattended firing does not authorize its own override — that is a human decision,
+like the `.git/ALLOW_PROTECTED_EDIT` marker.
+
+**The current state, recorded in the ledger:** the whole pool (AVAX, LINK, NEAR, SUI, UNI) was
+spent on 2026-08-29 by `VOL-CONTRACTION-SEALED-VALIDATION` and returned inconclusive. `available`
+is empty and `fresh` is false. Note that `.agent_state.json`'s `blackboard.sealed_symbols_unchanged`
+still describes the pool as reserved and is stale; where the two disagree, the ledger and this
+section are correct. That contradiction is precisely why the ledger exists.
+
+**Nothing in the ledger is ever deleted or edited.** `verifyLedger()` recomputes the chain and
+names the index at which it breaks, so a removed or altered historical entry is detectable rather
+than merely discouraged.
+
 ## Phase duties
 
 - **ARCHITECT** — structure only: imports, interfaces, function stubs with explicit
