@@ -407,14 +407,6 @@
  },
  "ledger": [
   {
-   "ts": "2026-08-20T02:00:59.000Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "pull-blocked-exit",
-   "detail": "STEP 0.3: git pull --rebase failed again on the same unstaged content as the prior two firings (03c5b8b, and the 01:00:59Z entry): brokers/ibkr.mjs + brokers/ibkr.test.mjs modified, plus untracked scripts/equities-baseline-port.mjs and universe.txt, none created this run. git fetch + git log HEAD..origin/main confirmed zero new remote commits, so this remains a purely local dirty-tree block, not an actual missed sync. Did not stash/checkout/reset/clean any of it. This is now the 3rd consecutive firing blocked on the identical unstaged content. Dedup: per the immediately-prior firings explicit handoff note, checked root.notifications[\"persistent-pull-blocker-2026-08-20\"] (lastSentAt 2026-08-20T00:00:58Z) rather than the erroneous -b duplicate key or the stale blackboard.notifications.persistent-pull-blocker entry (which still references an unrelated resolved package.json incident) - that key is ~2h old, well under the 6h dedup window, so no PushNotification sent this firing; notifications maps left untouched. No code work attempted, control untouched (remains IDLE, work_queue unexamined). A human still needs to commit, stash, or otherwise clear the ibkr.mjs/equities-baseline-port work to unblock the loop.",
-   "commit": null,
-   "tests": "not run (exited at STEP 0.3, before STEP 3)"
-  },
-  {
    "ts": "2026-08-20T03:01:03.000Z",
    "agent": "cajh-loop-check-scheduled",
    "action": "pull-blocked-exit",
@@ -1205,6 +1197,14 @@
    "detail": "HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK: 5/5 pre-registered headline figures (one per study family, cache-only scripts, chronological selection) reproduce today against today's cache -- 0 DRIFTS, 0 CANNOT-RUN. Noted (not fixed): c1-c3-entitlement-probe.mjs direct-execution guard is broken on Windows.",
    "commit": "b5c12c0",
    "tests": "659/659"
+  },
+  {
+   "ts": "2026-09-02T20:03:30.921Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "blocked-pull-foreign-changes",
+   "detail": "STEP 0.3: git pull --rebase failed on unstaged ROADMAP.md/VERDICTS.md changes plus untracked universe.txt, none created this run. git fetch origin main + git log HEAD..origin/main confirmed zero new remote commits and zero local commits ahead -- purely a local dirty-tree block, not a missed sync. Inspected (read-only, did not stash/checkout/reset/clean/commit) the diff: ROADMAP.md gained one new dated section and VERDICTS.md had roughly 28 rows edited, both self-describing as a completed VERDICTS-TOURNAMENT-CITATION-GAP-FIX pass (24 citation insertions + 4 commit-hash placeholder fixes, claims npm.cmd test 659/659 green). This is the next pending work_queue item by description, but control.notes from the last commit (acbcf62) shows no record of this firing having started it, so it is most likely a prior firing that completed STEP 3 but crashed or was interrupted before STEP 6 committed it. Per STEP 0.3's literal instruction (never build on unexplained foreign changes, notify and exit), did not verify or commit it myself -- left it for human review exactly as found. universe.txt itself re-confirmed as pre-existing legitimate fetch-equity-ohlc.mjs input (per DEAD-CODE-AND-ASSET-AUDIT, unrelated to this block), left untouched. Checked top-level notifications map (canonical) for dedup on this specific content -- no existing key covered it, so sent one PushNotification and recorded it under a fresh dated key persistent-pull-blocker-2026-09-02. control/work_queue untouched (control remains idle from acbcf62 -- did not overwrite its notes). No code work attempted this firing.",
+   "commit": null,
+   "tests": null
   }
  ],
  "automation": {
@@ -1258,6 +1258,12 @@
    "lastSentAt": "2026-08-20T00:00:58.000Z",
    "message": "cajh: pull still blocked (>13h) by pre-existing unstaged brokers/ibkr.mjs daily-bar timestamp fix + new equities-baseline-port.mjs/universe.txt. Not created by loop, needs your review/commit.",
    "deliveryResult": "Not sent - terminal active, output already reaches user (tool-reported redundant, not a delivery failure)."
+  },
+  "persistent-pull-blocker-2026-09-02": {
+   "lastSentAt": "2026-09-02T20:03:30.921Z",
+   "message": "cajh: pull blocked - uncommitted VERDICTS-TOURNAMENT-CITATION-GAP-FIX work in ROADMAP.md/VERDICTS.md sits unstaged, not from this run. Looks complete but needs your review before I commit or discard it.",
+   "deliveryResult": "Mobile push requested (tool call succeeded; delivery to device not independently confirmed - see notification_policy.known_gap).",
+   "note": "New dated key per established convention (avoids touching older dated entries whose message lines could re-trip check-protected-logic.cjs). Dedup checked against the top-level notifications map (canonical, per the 2026-08-20-b ledger correction), not blackboard.notifications (stale duplicate). No prior top-level key covers this specific content (ROADMAP.md/VERDICTS.md, not ibkr.mjs/package.json like older dated keys)."
   }
  }
 }
