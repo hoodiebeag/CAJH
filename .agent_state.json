@@ -4,9 +4,9 @@
   "status": "idle",
   "target_file": null,
   "objective": null,
-  "notes": "FROZEN-PATH-LIST-RECONCILIATION-AUDIT done (commit a1df29d, pushed). Read-only frozen-path audit -- see ledger/ROADMAP.md for detail. Queue still has 5 pending items (PRE-REGISTRATION-COMPLIANCE-AUDIT, CORRECTION-FAMILY-COUNTER-AUDIT, VERDICTS-ROW-WRITEUP-RECONCILIATION, AUTHORITY-HIERARCHY-FACTUAL-AUDIT, HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK), staged by a concurrent interactive session (commit 49e594a) to keep the loop busy for ~6 hours while the human is away -- one per firing, per HYGIENE, so this firing stops here rather than picking up a second item. npm.cmd test: 513/513 green.",
+  "notes": "PRE-REGISTRATION-COMPLIANCE-AUDIT done (commit 74b79bf, pushed). Read-only git-history audit of the 24 scripts/ files carrying a formal PRE-REGISTRATION block (enumerated structurally, not by name -- 16 more files mention pre-registration informally and were spot-checked separately, clean). Result: 24/24 SAME-COMMIT (script+block+ROADMAP.md write-up landed together), 0/24 ANOMALOUS, 0 modified post-commit. One --follow rename false-positive (macro-regime-equities-split-fraction-diagnostic.mjs vs macro-regime-primary-signal-equities.mjs) chased down and disproven before being reported. Method's own blind spot stated plainly in ROADMAP.md: same-commit compliance cannot rule out the number being computed before the block text was written, same sitting, same commit -- git history cannot close that gap. See ROADMAP.md 2026-09-02 PRE-REGISTRATION-COMPLIANCE-AUDIT section for full per-script table. Queue still has 4 pending items (CORRECTION-FAMILY-COUNTER-AUDIT, VERDICTS-ROW-WRITEUP-RECONCILIATION, AUTHORITY-HIERARCHY-FACTUAL-AUDIT, HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK) -- one per firing, per HYGIENE, so this firing stops here. npm.cmd test: 513/513 green.",
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-09-02T06:20:00.000Z"
+  "updated_at": "2026-09-02T07:06:40.607Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -203,7 +203,7 @@
    },
    {
     "id": "PRE-REGISTRATION-COMPLIANCE-AUDIT",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "read-only audit of git history and scripts/ headers; reports only, corrects nothing",
     "depends_on": [],
@@ -362,14 +362,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-19T20:12:01.083Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "closed-work-queue-item",
-   "detail": "MAE-MFE-STOP-PLACEMENT-DIAGNOSTIC: instrumented backtestMultiTF with real per-trade MAE/MFE tracking (new additive excursions field), ran breakout/anticipate holdout diagnostic across 28/28 assets. anticipate losers lean RAN-STRAIGHT-TO-STOP (1509/2765, margin 253); breakout is a coin flip (1045/2086, no claim). Diagnostic only, no gate, no parameter change. 479->488 tests green.",
-   "commit": "f5c55cd",
-   "tests": "488 pass, 0 fail, 0 skip"
-  },
   {
    "ts": "2026-08-19T21:12:39.030Z",
    "agent": "cajh-loop-check-scheduled",
@@ -1161,6 +1153,14 @@
    "detail": "Read-only audit of the three-way frozen-path file-list disagreement (AGENT_PROTOCOL.md 6 files / ARCHITECT_DIRECTIVE.md 8 files / blackboard.frozen_paths 7 files), plus a fourth internal AGENT_PROTOCOL.md list found in passing. Per-file facts for the two divergent files (storage.js, commands.js): live-trading-state content, live-bot-path reachability, hook-identifier hit count (no identifiers quoted). Divergence dated from git history back to day one (2026-07-30) and a collateral-loss commit on 2026-08-04. Four reconciliation options characterized, none chosen -- human decision, as scoped. No source file edited. Full writeup: ROADMAP.md.",
    "commit": "a1df29d",
    "tests": "513/513 pass"
+  },
+  {
+   "ts": "2026-09-02T07:06:40.608Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "PRE-REGISTRATION-COMPLIANCE-AUDIT done",
+   "detail": "Read-only audit: 24 scripts/ files carry a formal PRE-REGISTRATION block (structural enumeration, not name-pattern -- excluded 16 more files that only use the word informally, spot-checked those too). All 24: introduction commit added script+block+ROADMAP.md write-up together (SAME-COMMIT), zero blocks edited in any later commit. 0 COMPLIANT (strict before-results), 24 SAME-COMMIT, 0 ANOMALOUS. Caught and disproved one false anomaly from a git log --follow rename mismatch before reporting it. Stated the method's epistemic limit explicitly (same-commit cannot prove the number wasn't computed before the block text). Full table in ROADMAP.md.",
+   "commit": "74b79bf",
+   "tests": "513/513 green"
   }
  ],
  "automation": {
