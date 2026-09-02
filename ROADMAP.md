@@ -3662,3 +3662,107 @@ pre-registration requirement, multiple-comparisons rule, or gate threshold was w
 or removed. No file deleted. `CLAUDE.md` untouched. Every contradiction and duplicated-rule finding
 above that required a judgment call was left unresolved and is flagged in this section for a human
 decision. `npm.cmd test`: run and confirmed green before commit (see commit for exact count).
+
+---
+
+## 2026-09-02 — FROZEN-PATH-LIST-RECONCILIATION-AUDIT: facts behind the three-way frozen-path disagreement
+
+**Scope discipline.** This item does not reconcile the three lists — that choice gates which files
+need `allow_live_edit`-equivalent care and is a governance decision reserved for the human, already
+on their list per `AGENT-DOC-DEDUPLICATION`'s finding above. This item only separates the factual
+question from that governance one: what each source actually says, which files are only in some of
+them, what those files actually are today, and when the sources diverged. Nothing below was edited:
+`AGENT_PROTOCOL.md`, `ARCHITECT_DIRECTIVE.md`, `.agent_state.json`'s `blackboard.frozen_paths`, and
+`frozen_paths_note` are all read-only in this pass.
+
+**The three lists, verbatim.**
+
+| Source | Location | List |
+|---|---|---|
+| `AGENT_PROTOCOL.md` | Hard rule #6 (line 70) | `scanner.js`, `monitor.js`, `trader.js`, `bot.js`, `strategy.js`, `backtest.js` — **6 files** |
+| `ARCHITECT_DIRECTIVE.md` | §2.2 (line 42) | `bot.js`, `scanner.js`, `strategy.js`, `trader.js`, `monitor.js`, `storage.js`, `commands.js`, `backtest.js` — **8 files** |
+| `.agent_state.json` | `blackboard.frozen_paths` (current) | `scanner.js`, `monitor.js`, `trader.js`, `bot.js`, `strategy.js`, `backtest.js`, `commands.js` — **7 files** |
+
+Ancillary finding, outside this item's scope but surfaced while reading the sources: `AGENT_PROTOCOL.md`
+itself contains a *second*, internally inconsistent frozen-path list. Its own "Full control" section
+(line 222–224, dated 2026-08-07) restates the frozen set as 7 files, adding `commands.js` — i.e. it
+matches `blackboard.frozen_paths`, not its own Hard rule #6 three sections earlier. Not reconciled here
+for the same scope reason as the cross-document disagreement.
+
+**Files that don't appear in all three: `storage.js` and `commands.js`.**
+
+| File | In which lists | Order-placement / live-trading-state logic? | Reached by the live bot path? | Contains any `scripts/check-protected-logic.cjs`-scanned identifier? |
+|---|---|---|---|---|
+| `storage.js` | `ARCHITECT_DIRECTIVE.md` only | No. Config/position/stats persistence (`config.json`, `positions.json` read/write) and a `DATA_DIR`-writability preflight check gating whether live trading may start at all. State-adjacent (the data live trading depends on), not order-placement or halt/resume logic itself. | Yes — `bot.js` (the `package.json` `"main"` entry point) imports it directly for config load/save and the preflight check. | No. Zero matches against the current identifier list (read from the script itself, not quoted here). |
+| `commands.js` | `ARCHITECT_DIRECTIVE.md` and `blackboard.frozen_paths`, not `AGENT_PROTOCOL.md` | Yes. Exports the Discord command handlers that directly call into halt/resume and manual-sell logic. | Yes — `bot.js` imports and registers its handlers directly. | Yes — matches 4 of the 13 scanned identifiers (halt, resume, trading-enabled-check, and one order-placement call), read structurally from the script rather than from memory. |
+
+Also noted in passing (not requested by this item, but relevant context): `strategy.js` and
+`backtest.js` — present in **all three** lists with no disagreement — currently contain **zero**
+matches against the scanned identifier list. This doesn't bear on the storage.js/commands.js question
+and isn't a recommendation to change anything; it's left for whoever makes the reconciliation call to
+weigh alongside the rest.
+
+**Divergence history, from git.**
+
+- **2026-07-30, 15:02:21.** `AGENT_PROTOCOL.md` Hard rule #6 (6 files, no `commands.js`, no `storage.js`)
+  is written in commit `a54b0e3`, defining the original Architect/Executor/Verifier contract.
+- **2026-07-30, 15:03:29 — 67 seconds later, same session.** `.agent_state.json` gains its
+  `blackboard.frozen_paths` key for the first time, in commit `ca43049`, already listing **7** files —
+  the same 6 plus `commands.js`. The two sources disagreed from the moment the second one was created;
+  this was never a list that drifted apart over time.
+- **2026-08-04, 06:42:42.** Commit `0b45be5` ("chore: queue p0 persistence remediation") extends
+  `blackboard.frozen_paths` to 8 files, adding `storage.js` — briefly matching what `ARCHITECT_DIRECTIVE.md`
+  would state 9 hours later.
+- **2026-08-04, 15:41:44.** `ARCHITECT_DIRECTIVE.md` §2.2 is written in commit `758f3d2` ("Add
+  spec/directive docs..."), independently enumerating 8 files (adding both `storage.js` and
+  `commands.js` to the original 6) — a third independent enumeration, not copied from either
+  existing source verbatim (order and grouping differ from both).
+- **2026-08-04, 16:25:31 — 44 minutes later.** Commit `ca490e4` ("verifier: MR1 test failure...")
+  rewrites `.agent_state.json`'s entire `blackboard` object as part of an unrelated state-file
+  cleanup (also dropping several other blackboard keys — `verdict_integrity`, `bom_defect`,
+  `red_baseline_rule`, `systemic_finding`, `strategy_selection_policy` — in the same rewrite). The
+  new `frozen_paths` reverts to the original 7-file form from `ca43049`, incidentally losing
+  `storage.js` again. The commit message does not mention `frozen_paths` at all — this reads as
+  collateral effect of a broad blackboard rewrite, not a deliberate decision to drop `storage.js`.
+- **From `ca490e4` (2026-08-04) to today (2026-09-02, ~314 intervening `.agent_state.json` commits):**
+  `blackboard.frozen_paths` has stayed at the same 7 files. `AGENT_PROTOCOL.md` Hard rule #6 and
+  `ARCHITECT_DIRECTIVE.md` §2.2 have not been touched since their creation commits above. The
+  three-way (really four-way, counting `AGENT_PROTOCOL.md`'s own internal second list) disagreement
+  has stood unresolved for roughly a month.
+
+**Reconciliation options (characterized, not chosen — this is the human's call).**
+
+1. **Adopt the operational list** (what `scripts/check-protected-logic.cjs` actually scans for,
+   which is narrower and orthogonal to all three file lists — it matches identifiers anywhere in the
+   repo, not a fixed file set). Would mean treating all three/four file-scoped lists as historical
+   framing only, formalizing what `frozen_paths_note` already says informally. Implication: the
+   file-list concept stops mattering operationally at all; only the hook's identifier scan gates
+   anything. Cheapest to state, but changes what "frozen path" means going forward for humans reading
+   the docs, not just for the loop.
+2. **Adopt the broadest list** (`ARCHITECT_DIRECTIVE.md`'s 8: add `storage.js` back to
+   `blackboard.frozen_paths` and to `AGENT_PROTOCOL.md` Hard rule #6). Implication: `storage.js`
+   would be treated as needing the same care as the six/seven undisputed files, which is defensible
+   given it gates the live-trading preflight check even though it currently contains none of the
+   hook-scanned identifiers — a file can be safety-adjacent without containing today's protected
+   identifiers if a future edit could add trading-state logic to it.
+3. **Adopt the current operational list** (`blackboard.frozen_paths`'s 7: `commands.js` in,
+   `storage.js` out) as authoritative, and update `AGENT_PROTOCOL.md` Hard rule #6 (add `commands.js`,
+   also fixing its own internal inconsistency with its "Full control" section) and
+   `ARCHITECT_DIRECTIVE.md` §2.2 (drop `storage.js`) to match. Implication: narrowest change from
+   what's actually been in force the past month, but requires deciding `storage.js` doesn't belong,
+   which cuts against option 2's reasoning above.
+4. **Make one source authoritative, the others pointers** (e.g. `AGENT_PROTOCOL.md` states the list
+   once, `ARCHITECT_DIRECTIVE.md` and the state file reference it by name rather than restating it).
+   Implication: eliminates the possibility of future silent drift between copies, at the cost of an
+   extra indirection for anyone reading only one of the documents.
+
+**What is NOT unguarded while this is open.** `frozen_paths_note` (unedited by this item) already
+states, and this audit confirms by direct reading of the hook script, that none of the three file
+lists gates anything mechanically today. The only operational enforcement is
+`scripts/check-protected-logic.cjs` via `.git/hooks/pre-commit`, which scans every staged diff — any
+file, not scoped to any of these lists — for a fixed identifier set (the live-trading env gate,
+the halt/resume state machine, and the order-validation chain) and refuses the commit without a
+fresh human-created override marker. That scan is independent of which file-list version is
+"correct" and is unaffected by leaving this reconciliation open.
+
+`npm.cmd test`: run before this item, confirmed green (no code touched, no test-affecting change made).
