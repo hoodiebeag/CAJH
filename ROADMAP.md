@@ -4022,3 +4022,131 @@ Membership: no narrowing, splitting, or re-scoping proposed or found warranted; 
 (`CROSS-SECTIONAL-NONPRICE-RANK`'s missing dated section) is a documentation-completeness question,
 reported per this item's own instruction to report rather than act on anything outside strict
 arithmetic correction. `npm.cmd test`: 513/513 green (read-only audit — no code touched).
+
+## 2026-09-02 — VERDICTS-ROW-WRITEUP-RECONCILIATION
+
+BOOKKEEPING/INTEGRITY, not new research — not caught by D1. Checked every one of VERDICTS.md's
+67 data rows (the file's own row count as of this item, not the 90-line estimate the work_queue
+entry guessed from the file's line count including header prose) against the dated write-up it
+cites, using six parallel read-only reconciliation agents (11-12 rows each) followed by direct
+verification of every gap they surfaced.
+
+**Scope note, disclosed up front:** the work_queue task text named `ROADMAP.md` and
+`ROADMAP_ARCHIVE.md` as the two files to search before calling a row `UNSOURCED`. Running the
+first pass against exactly those two files produced 36 `UNSOURCED` findings — an implausibly high
+fraction (54%) for a project whose evidence discipline has held up clean on every other audit this
+month. Before accepting that headline, the actual write-ups for all 36 were searched for in
+`TOURNAMENT_ROADMAP.md`, the third document `VERDICTS.md`'s own preamble names as a canonical
+verdict source (verdicts were split across `ROADMAP.md`, `TOURNAMENT_ROADMAP.md`, and
+`.agent_state.json`, per that preamble). 29 of the 36 were found there, full dated sections, with
+every checkable figure matching. Treating those 29 as `UNSOURCED` would have been a false headline
+produced by an incomplete task specification, not a real finding — so this item expanded its own
+search scope to all three files rather than report a number it already knew to be wrong. This is a
+disclosed deviation from the literal task text, not a silent one, and it narrows the genuine gap
+from 36 to 7 real candidates (of which 6 confirmed absent from all three files below).
+
+### Classification summary (67/67 rows)
+
+| Classification | Count |
+|---|---|
+| AGREES — sourced in ROADMAP.md/ROADMAP_ARCHIVE.md, figures match | 31 |
+| AGREES — sourced only in TOURNAMENT_ROADMAP.md, figures match (citation-gap, not corrected here) | 29 |
+| DIVERGES — corrected in this commit | 1 |
+| UNSOURCED — no dated write-up in any of the three documents | 6 |
+| Total | 67 |
+
+No verdict classification changed anywhere. No figure re-derived by backtest.
+
+### DIVERGES (1) — corrected
+
+**T3-REGIMEFILTER** (VERDICTS.md, row for 2026-08-07, commit 4d63fd8). The row's deciding-metric
+field read: Holdout avgR -0.379 vs -0.437 unfiltered (gate: >-0.10 required). Its write-up
+(TOURNAMENT_ROADMAP.md, Track 3 — RESULT, 2026-08-07) states explicitly, same date, in its own
+text that -0.437 predates the larger/updated watchlist Track 1 actually ran against, that the two
+numbers were previously cited interchangeably there, and that this was corrected the same day
+(2026-08-07) — Track 1's own actual run reports breakout's unfiltered holdout avgR as **-0.445**,
+not -0.437. VERDICTS.md never picked up that same-day correction. This is not ambiguous wording or
+a suspect write-up — the source document unambiguously supersedes its own number, dated the same
+day as the row it feeds. Corrected VERDICTS.md's comparison figure from -0.437 to -0.445,
+annotated with today's date and this item as source, per the task's own instruction to correct
+only where the write-up unambiguously contradicts the row. The row's own figure (-0.379), verdict
+(FAIL), holdout n (1408) and commit were already correct and are unchanged.
+
+### UNSOURCED (6) — no dated write-up found in ROADMAP.md, ROADMAP_ARCHIVE.md, or TOURNAMENT_ROADMAP.md
+
+| ID | Row date | What exists instead |
+|---|---|---|
+| MR1 | 2026-08-05 | One incidental commit-message cross-reference (ROADMAP.md:3720) and a file-inventory table row (rsi-reversion-study.mjs). git show 0bfc60c confirms a test-fixture-coverage commit consistent with "Implemented, not promoted" — no dated hypothesis write-up anywhere. |
+| DCA-MARTINGALE | 2026-08-08 | Commit adaef56 touches only code/test files (git show --stat confirms no markdown). Full-history search (git log --all -p -S "DCA-MARTINGALE" -- *.md) finds only the VERDICTS.md row itself and passing list-mentions. Figures exist only in the commit message. |
+| DCA-ANTIMARTINGALE | 2026-08-08 | Same pattern as DCA-MARTINGALE; commit 80ce307, code-only, no markdown touched. |
+| GRID-SIM | 2026-08-08 | Commit 5af61dc, code-only (grid.mjs/grid.test.mjs); two passing mentions in ROADMAP_ARCHIVE.md (inside H11's write-up and a summary list), no dedicated section. Checked TOURNAMENT_ROADMAP.md too — no match beyond unrelated fee/ATR grid sweeps. |
+| PAIRS-COINTEGRATION-STATARB | 2026-08-19 | Zero hits in any of the three files beyond passing mentions (a retrospective bullet inside COST-COMPONENT-ATTRIBUTION that itself cites VERDICTS.md as its source — circular, not independent) and its own VERDICTS.md row's Bottom-line summary paragraph. Confirmed absent from TOURNAMENT_ROADMAP.md by direct grep (no match). |
+| CROSS-SECTIONAL-NONPRICE-RANK | 2026-08-19 | Already identified as a gap by CORRECTION-FAMILY-COUNTER-AUDIT (2026-09-02, commit 96ef19e) — not a new finding, reproduced independently here by this item's own search before checking that prior audit's text. Traceable only via its VERDICTS.md row and introducing commit 0583013. |
+
+None of these six is a numeric contradiction — each is a study that was implemented, committed,
+and (for the four with real commits) run, but never received its own dated section in any of the
+three roadmap documents. MR1's row already reads "Implemented, not promoted" rather than a formal
+verdict, consistent with never having a write-up. The four with real trade data
+(DCA-MARTINGALE, DCA-ANTIMARTINGALE, GRID-SIM figures; PAIRS-COINTEGRATION-STATARB's negative
+relationship-screen result) are recorded nowhere except their own commit messages and their
+VERDICTS.md row — the row is, today, the only durable record of what happened. Not corrected; per
+the task's own scope this is a documentary-completeness question, reported rather than resolved.
+A follow-up could either (a) promote each row's own text into a proper dated
+ROADMAP.md/ROADMAP_ARCHIVE.md section reconstructed from the commit plus row, or (b) accept the
+VERDICTS.md row itself as the canonical record for infra-scale items that were never meant to get
+a full write-up — that judgment call is left open rather than made here.
+
+### AGREES — sourced only in TOURNAMENT_ROADMAP.md (29), citation gap not corrected
+
+Every figure checked in all 29 matched its TOURNAMENT_ROADMAP.md write-up exactly (verdict,
+deciding metric, holdout n, date). Three rows (ATR-ADAPTIVE-STOP-CONFIRMATORY,
+WIDE-STOP-HIGH-TARGET-ASYMMETRY, SCALED-EXIT-LADDER-CONFIRMATORY) already say in their own
+VERDICTS.md text to see TOURNAMENT_ROADMAP.md for the full grid; the other 26 give the reader no
+hint that the write-up lives outside ROADMAP.md/ROADMAP_ARCHIVE.md. This is the same class of
+citation gap DEAD-CODE-AND-ASSET-AUDIT (2026-09-01) found and fixed for scripts/ path citations,
+applied here to a different pair of documents. Not corrected in this pass — adding a file pointer
+to 26 rows is a larger, mechanical edit better run as its own dedicated item (touching VERDICTS.md
+at scale, same reasoning WORK-QUEUE-RETENTION-PASS-2 used for running a large-object rewrite as a
+dedicated firing) rather than folded into a reconciliation pass whose own done_when is about
+figures, not citations. Full list: Roadmap v2 (rejected), T1-ZEROCOST, T1B-BREAKOUT-COSTFIX,
+T2-VOLCONTRACTION, T4-PORTFOLIO-MOMENTUM, T4-COVERAGE-FIX, T5-DECAY-EXIT, T6-TIMEFRAME-ISOLATION,
+TRAIL-STOP-EXIT, H3-HIGHER-LOW-RECLAIM, RANGE-SWEEP-RECLAIM, TREND-GATE-MA, TREND-GATE-STRUCTURE,
+PORTFOLIO-LIVE-SIGNAL-SIM, FUNDING-MEANREV, ONCHAIN-FLOW-GATE, FIB-PULLBACK, VOL-CONFIRM-BREAKOUT,
+ATR-ADAPTIVE-STOP-CONFIRMATORY, WIDE-STOP-HIGH-TARGET-ASYMMETRY, SCALED-EXIT-LADDER-CONFIRMATORY,
+T4-PORTFOLIO-MOMENTUM-PHASE4, OPEN-INTEREST-TREND-CONFIRMATION, LIQUIDATION-CASCADE-REVERSAL,
+FUTURES-BASIS-DIRECTIONAL-SIGNAL, LONG-SHORT-RATIO-CONTRARIAN, TOP-TRADERS-DIVERGENCE,
+ORDER-FLOW-AGGRESSOR-IMBALANCE, ROLLING-VOLATILITY-REGIME-TIMING.
+
+Minor, non-blocking observations noted in passing (not corrected, none is a checkable field):
+four rows (H11, PWR3, PWR4, T4-COVERAGE-FIX) carry commit-field placeholders like
+"(PWR3 commit)" where a real resolvable short hash exists (e511b73, 9837597, d304419,
+9a34c82 respectively) — cosmetic, left for whoever next touches these rows at scale.
+
+### AGREES — sourced directly in ROADMAP.md/ROADMAP_ARCHIVE.md (31)
+
+Trade intensity, Momentum M7, Low-vol B4, Classifier P5, PWR3, PWR4, H11, B5-REVERSAL,
+CLASSIFIER-FUNDING-FEATURE, B5-REVERSAL-PHASE3-FUTURES-COST, B5-REVERSAL-PHASE4-PORTFOLIO-SIM,
+FUNDING-CARRY-DECAY-CHECK, MOMENTUM-SHORT-HORIZON-RECHECK, MACRO-REGIME-PRIMARY-SIGNAL,
+LOG-REGRESSION-BANDS-CRYPTO, SPECTRAL-CYCLE-DETECTION-CRYPTO, SPECTRAL-CYCLE-DETECTION-EQUITIES,
+LOG-REGRESSION-BANDS-EQUITIES, MACRO-REGIME-PRIMARY-SIGNAL-EQUITIES,
+GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL, ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL,
+WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC, STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC,
+MACRO-REGIME-EQUITIES-SPLIT-FRACTION-DIAGNOSTIC, EQUITIES-BREAKOUT-OUT-OF-SAMPLE,
+EQUITIES-ALL-FAMILIES-BASELINE, EQUITIES-COST-ASSUMPTION-SENSITIVITY, C0-SIGNAL-COMBINATION,
+C2-CONTINUOUS-MACRO-CONDITIONER-EQUITIES, VOL-CONTRACTION-CASE-CLOSURE.
+
+One row in this group, **Order-flow** (pre-2026-08-04), agrees on its checkable fields but its
+write-up itself (ROADMAP_ARCHIVE.md, 2026-07-30 (night) section) contains one unsupported
+sub-claim flagged in passing, not corrected: the closing line "Big-print share: nothing anywhere"
+has no supporting test, feature definition, or data table anywhere in that section — no big-print
+signal is ever defined or measured before that one sentence. This does not affect the row's
+overall verdict (Complete, no edge, consistent with the section's three other, fully-supported
+sub-findings) and is reported per the task's write-up-looks-suspect category rather than treated
+as a row-level DIVERGE, since the row does not misstate anything the write-up actually supports.
+One row in this group, **H11**, agrees on every field the write-up states, but the row's specific
+gate thresholds (train trades>=200 and holdout trades>=80, both avgR>0, holdout positive-asset
+rate>=50%) were not found restated anywhere in ROADMAP.md/ROADMAP_ARCHIVE.md/TOURNAMENT_ROADMAP.md
+text — likely defined in funding-gate-h11.mjs's own pre-registration comment, outside this
+audit's document scope. Not a contradiction, just unverifiable from the cited prose alone.
+
+npm.cmd test: 513/513 green (documentary reconciliation, one VERDICTS.md figure corrected, no code touched).
