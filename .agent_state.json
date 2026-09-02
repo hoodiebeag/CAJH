@@ -4,9 +4,9 @@
   "status": "idle",
   "target_file": null,
   "objective": null,
-  "notes": "CORRECTION-FAMILY-COUNTER-AUDIT done (commit 96ef19e, pushed). Independent reconstruction of the formal-NHST correction family from ROADMAP.md/ROADMAP_ARCHIVE.md (not the audit doc): 22 sub-tests/19 studies confirmed, all 22 raw p-values verified against source, BH-FDR independently recomputed with zero discrepancies against published q-values. One documentation-completeness gap named (CROSS-SECTIONAL-NONPRICE-RANK has no dated roadmap section, traceable only via VERDICTS.md + commit 0583013) but not actioned -- out of this item's scope. No membership change, no q-value correction, per ALPHA_DEFINITION.md section 4b's standing prohibition on narrowing the family. Full per-study table in ROADMAP.md 2026-09-02 CORRECTION-FAMILY-COUNTER-AUDIT section. Queue still has 3 pending items (VERDICTS-ROW-WRITEUP-RECONCILIATION, AUTHORITY-HIERARCHY-FACTUAL-AUDIT, HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK) -- one per firing, per HYGIENE, so this firing stops here. npm.cmd test: 513/513 green.",
+  "notes": "VERDICTS-ROW-WRITEUP-RECONCILIATION done (commit c32c72f, pushed). Checked all 67 VERDICTS.md rows against ROADMAP.md/ROADMAP_ARCHIVE.md, then disclosed-expanded to TOURNAMENT_ROADMAP.md after the two-file-only pass gave an implausible 54% UNSOURCED rate -- 29 rows resolved there cleanly (citation gap, figures match, not corrected). Net: 60 AGREES (31 direct + 29 via TOURNAMENT_ROADMAP.md), 1 DIVERGES corrected (T3-REGIMEFILTER -0.437->-0.445, same-day self-supersession in its own source doc), 6 genuinely UNSOURCED in all three documents (MR1, DCA-MARTINGALE, DCA-ANTIMARTINGALE, GRID-SIM, PAIRS-COINTEGRATION-STATARB, CROSS-SECTIONAL-NONPRICE-RANK). No verdict changed. Queue still has 2 pending items (AUTHORITY-HIERARCHY-FACTUAL-AUDIT, HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK) -- one per firing, per HYGIENE, so this firing stops here. npm.cmd test: 513/513 green.",
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-09-02T08:08:04.407Z"
+  "updated_at": "2026-09-02T10:16:35.618Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -225,13 +225,15 @@
    },
    {
     "id": "VERDICTS-ROW-WRITEUP-RECONCILIATION",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "VERDICTS.md rows checked against their ROADMAP.md / ROADMAP_ARCHIVE.md write-ups; corrections only where a row provably contradicts its own source",
     "depends_on": [],
     "note": "SCOPING: 30-60 min. No egress, no candles. BOOKKEEPING/INTEGRITY, not new research - not caught by D1, state that explicitly. WHY: VERDICTS.md now carries 67 rows and is the project's single index of what has been ruled out. CLASSIFIER-P5-ECONOMICS-ROW-STALENESS proved a published row can silently diverge from reality and sit wrong for weeks - its economics figure had been double-counting cost since the day it was published. That was found by accident during an unrelated study. This item checks the whole file deliberately. DISTINCT FROM VERDICTS-COST-CONSTANT-STALENESS-SWEEP, which traced one specific computational defect through its call sites; this asks a different question of every row - does the row agree with the write-up it cites. A row can be internally consistent and still misreport its source.",
     "task": "Check every VERDICTS.md row against the write-up it cites. For each row, locate the corresponding dated section in ROADMAP.md or ROADMAP_ARCHIVE.md and compare the row's verdict, deciding metric, holdout n and date against what that section actually reports. Classify each row as AGREES, DIVERGES with the specific field and both values quoted, or UNSOURCED where no corresponding write-up can be found. Report the full table - a row's absence from the divergence list must be a recorded finding, not an omission. Note that the archive migration moved 48 sections to ROADMAP_ARCHIVE.md, so search both files before calling anything unsourced. For rows that DIVERGE, correct the row to match its write-up and annotate it with the date and this item as the source of the correction, but ONLY where the write-up unambiguously contradicts the row; where the two are merely differently worded, or where the write-up itself looks wrong, REPORT rather than edit and recommend a follow-up. Do not change any verdict classification - KILLED stays KILLED - and do not touch rows that agree. Do not re-derive any figure by running a backtest; this is a documentary reconciliation, and a row that cannot be checked without recomputation must be reported as such rather than guessed at.",
-    "done_when": "Every VERDICTS.md row checked against its cited write-up in either ROADMAP.md or ROADMAP_ARCHIVE.md, with both files searched before any row is called unsourced. Full classification table of AGREES, DIVERGES with field and both values quoted, or UNSOURCED. Diverging rows corrected only where the write-up unambiguously contradicts them, each annotated with date and source; ambiguous cases and suspect write-ups reported rather than edited. No verdict classification changed. No figure re-derived by backtest; rows needing recomputation flagged as such. Recorded in ROADMAP.md. npm.cmd test green."
+    "done_when": "Every VERDICTS.md row checked against its cited write-up in either ROADMAP.md or ROADMAP_ARCHIVE.md, with both files searched before any row is called unsourced. Full classification table of AGREES, DIVERGES with field and both values quoted, or UNSOURCED. Diverging rows corrected only where the write-up unambiguously contradicts them, each annotated with date and source; ambiguous cases and suspect write-ups reported rather than edited. No verdict classification changed. No figure re-derived by backtest; rows needing recomputation flagged as such. Recorded in ROADMAP.md. npm.cmd test green.",
+    "completed_at": "2026-09-02T10:16:35.618Z",
+    "executor_result": "Checked all 67 VERDICTS.md data rows against their cited write-ups. Task text named ROADMAP.md/ROADMAP_ARCHIVE.md only; a first pass against just those two produced an implausible 36/67 UNSOURCED, so the search was disclosed-expanded to TOURNAMENT_ROADMAP.md (named by VERDICTS.md's own preamble as a third canonical verdict source) -- 29 of the 36 resolved cleanly there, every figure matching (citation gap, not a factual error, not corrected). Final: 31 AGREES direct, 29 AGREES via TOURNAMENT_ROADMAP.md, 1 DIVERGES corrected (T3-REGIMEFILTER: stale -0.437 comparison figure -> -0.445, per TOURNAMENT_ROADMAP.md's own same-day supersession note), 6 UNSOURCED in all three documents (MR1, DCA-MARTINGALE, DCA-ANTIMARTINGALE, GRID-SIM, PAIRS-COINTEGRATION-STATARB, CROSS-SECTIONAL-NONPRICE-RANK -- the last already a known gap from CORRECTION-FAMILY-COUNTER-AUDIT). No verdict classification changed, no figure re-derived by backtest. Full table and detail in ROADMAP.md 2026-09-02 section. Commit c32c72f, pushed to origin/main. npm.cmd test: 513/513 green."
    },
    {
     "id": "FROZEN-PATH-LIST-RECONCILIATION-AUDIT",
@@ -364,14 +366,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-19T22:13:23.592Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "closed-work-queue-item",
-   "detail": "EXECUTION-DELAY-DECAY-CURVE: added entryDelayBars param to backtest.js (default 0, backward-compatible), wired into anticipate + shared dip/breakout branch. New scripts/execution-delay-decay-curve.mjs re-runs breakout/anticipate holdout baselines at 0/1/2/3/5 bar delay - BOTH families degrade monotonically at every step (anticipate -0.8842R->-1.6242R, breakout -0.8640R->-2.2953R), zero exceptions. Closes the maker-execution cost-reduction thesis (PWR5-PHASE4) on a mechanism basis: waiting for a resting fill is itself delay, and it costs more than the fee savings it targets. Descriptive, no gate, no strategy param changed. 4 new tests, suite 488->492 green. Recorded in ROADMAP.md.",
-   "commit": "621d95c",
-   "tests": "492/492 green"
-  },
   {
    "ts": "2026-08-20T00:00:58.000Z",
    "agent": "cajh-loop-check-scheduled",
@@ -1162,6 +1156,14 @@
    "action": "CORRECTION-FAMILY-COUNTER-AUDIT done",
    "detail": "Independently reconstructed the formal-NHST correction family (22 sub-tests/19 studies) from ROADMAP.md/ROADMAP_ARCHIVE.md directly, verified all 22 p-values against source, hand-recomputed BH-FDR -- zero arithmetic errors found anywhere. One documentation gap named (CROSS-SECTIONAL-NONPRICE-RANK missing a dated write-up section) but not fixed, out of scope. Full table in ROADMAP.md 2026-09-02 section.",
    "commit": "96ef19e",
+   "tests": "513/513"
+  },
+  {
+   "ts": "2026-09-02T10:16:35.618Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "VERDICTS-ROW-WRITEUP-RECONCILIATION done",
+   "detail": "Reconciled all 67 VERDICTS.md rows against ROADMAP.md/ROADMAP_ARCHIVE.md, disclosed-expanded to TOURNAMENT_ROADMAP.md after the named two-file scope produced an implausible 54% UNSOURCED rate -- 29 resolved there, figures matching (citation gap only). 1 stale figure corrected (T3-REGIMEFILTER -0.437->-0.445, source doc self-supersedes same day). 6 rows genuinely UNSOURCED in all three documents. No verdict changed. Full table in ROADMAP.md 2026-09-02 section.",
+   "commit": "c32c72f",
    "tests": "513/513"
   }
  ],
