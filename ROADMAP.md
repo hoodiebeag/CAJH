@@ -3766,3 +3766,126 @@ fresh human-created override marker. That scan is independent of which file-list
 "correct" and is unaffected by leaving this reconciliation open.
 
 `npm.cmd test`: run before this item, confirmed green (no code touched, no test-affecting change made).
+
+## 2026-09-02 — PRE-REGISTRATION-COMPLIANCE-AUDIT: every formally pre-registered study is SAME-COMMIT-compliant — zero anomalies found across 24 scripts, with the method's own blind spot stated plainly
+
+**Why this audit.** Pre-registration is this project's central honesty mechanism: study after study
+asserts that its hypothesis, gate threshold, cost model, split, and seed were fixed in the script
+header *before* any result was computed. Nothing had ever verified that claim from the actual git
+record. This item does — read-only, git-history-and-header analysis only, no candles touched, no
+backtest run, no study corrected or rewritten.
+
+**Enumeration method (structural, not name-pattern).** A loose text search for "pre-registrat*"
+(case-insensitive) matches 40 of the 60 files in `scripts/`, but most of those only use
+"pre-registered" as a descriptive adjective inside an unrelated named section (`CONFIG —`,
+`BAND WIDTH —`, `CONSTRUCT —`, a `// comment` on a constant) — there is no discrete block a reader
+could point to as "this is what was frozen in advance." The structural criterion used here: a
+literal, capitalized **`PRE-REGISTRATION`** heading functioning as its own section (with or without
+`====` delimiters) — something excerptable as a stand-alone unit, independent of the file's name.
+That criterion yields exactly **24 scripts**. The other 16 (`wider-hysteresis-band-cost-drag-
+diagnostic.mjs`, `still-wider-hysteresis-band-active-address-diagnostic.mjs`,
+`gdelt-wider-hysteresis-band-diagnostic.mjs`, `phase4-t4-momentum-portfolio-sim.mjs`,
+`phase4-b5-portfolio-sim.mjs`, `active-address-count-primary-signal.mjs`,
+`vol-contraction-sealed-validation.mjs`, `bos-short-equities-baseline.mjs`,
+`vol-contraction-sample-extension.mjs`, `macro-regime-primary-signal-equities.mjs`,
+`gdelt-news-sentiment-primary-signal.mjs`, `options-skew-data-depth-check.mjs`,
+`macro-regime-primary-signal.mjs`, `equities-breakout-commission-floor-position-sizing.mjs`,
+`per-epoch-gross-edge.mjs`, `zero-cost-floor-all-families.mjs`) reference pre-registration
+informally (often citing another study's formal block by name) and are out of scope for the
+per-script table below, but were spot-checked below anyway (see "Informal-mention files" below)
+since 6 of them had a second commit worth checking.
+
+**Method per script.** For each of the 24: `git log` (no `--follow`) to find every commit touching
+the file; the oldest is the introduction commit. Extracted the literal `PRE-REGISTRATION` block text
+at the introduction commit and at every later commit that touched the file, diffing consecutive
+versions to find whether the block's content ever changed post-introduction. Cross-referenced
+`ROADMAP.md`'s own `diff --stat` at the introduction commit to see whether the results write-up
+landed in the same commit as the script.
+
+**One `--follow` false positive caught and corrected.** An initial pass used `git log --follow`,
+which uses content-similarity rename detection. For `macro-regime-equities-split-fraction-
+diagnostic.mjs`, `--follow` chained it to the unrelated, merely-similar `macro-regime-primary-
+signal-equities.mjs` (2026-08-25) as a fabricated "prior version," making the file falsely appear
+to have gained its `PRE-REGISTRATION` block two days after introduction — which would have been
+this audit's one ANOMALOUS finding. Re-run without `--follow` (exact path only) shows the file has
+exactly one commit (`ff9ef704`, 2026-08-27) and the block was present in it from the start. Recorded
+here because it is exactly the kind of false lead a less careful pass through git history could
+report as a real finding; `--follow`-based rename detection should not be trusted for this project's
+convention of near-duplicate diagnostic-variant scripts without cross-checking `git show <hash>:<path>`
+actually resolves in that commit.
+
+**Result: all 24 are SAME-COMMIT, zero ANOMALOUS.** Every one of the 24 scripts was introduced in a
+single commit that simultaneously added the script (with its `PRE-REGISTRATION` block already
+present, in full) *and* the corresponding `ROADMAP.md` write-up recording the result. None of the 24
+blocks have been modified in any later commit — the only later touches (9 of the 24 files, all via
+one commit, `450677c5`, 2026-09-01) were `DOCS-ARCHIVE-CONVENTION`'s citation repoint (`ROADMAP.md`
+→ `ROADMAP_ARCHIVE.md` in a `SOURCED FROM:` comment outside the block), not edits to any
+pre-registered hypothesis, threshold, seed, or config value. Per this project's own convention
+(stated explicitly in several of the blocks themselves, e.g. `equities-madip-significance.mjs`),
+SAME-COMMIT is the *normal* pattern here, not a deviation, and is compliant provided — as verified
+above — the block was never edited after landing.
+
+| # | Script | Intro commit | Date | Block present at intro | Block modified since | ROADMAP.md in same commit | Class |
+|---|---|---|---|---|---|---|---|
+| 1 | `equities-breakout-significance.mjs` | `af555ef07d` | 2026-08-21 | yes | no | yes | SAME-COMMIT |
+| 2 | `equities-breakout-out-of-sample.mjs` | `698688e63b` | 2026-08-22 | yes | no | yes | SAME-COMMIT |
+| 3 | `equities-madip-out-of-sample.mjs` | `bcf1cd95b0` | 2026-08-22 | yes | no | yes | SAME-COMMIT |
+| 4 | `equities-madip-significance.mjs` | `473a185186` | 2026-08-22 | yes | no | yes | SAME-COMMIT |
+| 5 | `log-regression-bands-equities.mjs` | `a1430df8ff` | 2026-08-22 | yes | no | yes | SAME-COMMIT |
+| 6 | `log-regression-bands-crypto.mjs` | `a833d6ae6f` | 2026-08-22 | yes | no | yes | SAME-COMMIT |
+| 7 | `spectral-cycle-detection-crypto.mjs` | `8506359e12` | 2026-08-22 | yes | no | yes | SAME-COMMIT |
+| 8 | `spectral-cycle-detection-equities.mjs` | `84e52d86a1` | 2026-08-22 | yes | no | yes | SAME-COMMIT |
+| 9 | `phase3-b5-reversal-rerun.mjs` | `e742eb37a8` | 2026-08-13 | yes | no | yes | SAME-COMMIT |
+| 10 | `macro-regime-equities-split-fraction-diagnostic.mjs` | `ff9ef70403` | 2026-08-27 | yes | no | yes | SAME-COMMIT |
+| 11 | `cross-family-trade-overlap-audit.mjs` | `d14a319722` | 2026-08-28 | yes | no | yes | SAME-COMMIT |
+| 12 | `date-clustered-resampling-audit.mjs` | `f837295daf` | 2026-08-28 | yes | no | yes | SAME-COMMIT |
+| 13 | `madip-random-entry-control.mjs` | `e3816ae5d4` | 2026-08-28 | yes | no | yes | SAME-COMMIT |
+| 14 | `madip-realised-r-condition-2.mjs` | `98d1caa872` | 2026-08-28 | yes | no | yes | SAME-COMMIT |
+| 15 | `madip-survivability-condition-5.mjs` | `0a6fa21dc5` | 2026-08-28 | yes | no | yes | SAME-COMMIT |
+| 16 | `required-sample-for-durable-pass.mjs` | `78f879ee3d` | 2026-08-28 | yes | no | yes | SAME-COMMIT |
+| 17 | `date-clustered-resampling-djta20.mjs` | `74989abc5d` | 2026-08-29 | yes | no | yes | SAME-COMMIT |
+| 18 | `c0-signal-combination.mjs` | `e294b66996` | 2026-08-29 | yes | no | yes | SAME-COMMIT |
+| 19 | `c2-continuous-macro-conditioner.mjs` | `c5d526c969` | 2026-08-29 | yes | no | yes | SAME-COMMIT |
+| 20 | `breakeven-lock-counterfactual.mjs` | `3e81c2a068` | 2026-08-29 | yes | no | yes | SAME-COMMIT |
+| 21 | `equities-breadth-vs-random-entry-null.mjs` | `51190e077b` | 2026-08-29 | yes | no | yes | SAME-COMMIT |
+| 22 | `geometry-null-down-window-probe.mjs` | `e5a3a0712d` | 2026-08-29 | yes | no | yes | SAME-COMMIT |
+| 23 | `random-entry-null-window-sensitivity.mjs` | `5b1269bb16` | 2026-08-29 | yes | no | yes | SAME-COMMIT |
+| 24 | `crypto-effective-sample-audit.mjs` | `06564b092d` | 2026-09-01 | yes | no | yes | SAME-COMMIT |
+
+**Counts by class.** COMPLIANT (block landed in a commit strictly before its results commit): **0**.
+SAME-COMMIT (block and results landed together, block never edited after): **24**. ANOMALOUS (block
+modified between run and publication, or added after results were recorded): **0**. This project's
+own convention is evidently to write the script (block included) and the write-up in one sitting and
+commit them together — COMPLIANT-in-the-strict-sense essentially cannot occur here structurally,
+which is worth naming rather than treating 0 as a gap.
+
+**Informal-mention files, spot-checked.** Of the 16 files that mention pre-registration informally
+(no discrete block), 6 have a second commit: `wider-hysteresis-band-cost-drag-diagnostic.mjs`,
+`still-wider-hysteresis-band-active-address-diagnostic.mjs`, `gdelt-wider-hysteresis-band-
+diagnostic.mjs`, `phase4-t4-momentum-portfolio-sim.mjs`, `phase4-b5-portfolio-sim.mjs`,
+`active-address-count-primary-signal.mjs`. All 6 second commits are the same `450677c5` archive
+citation repoint, confirmed by direct diff to touch only `ROADMAP.md`/`ROADMAP_ARCHIVE.md` citation
+text in comments, never a pre-registered parameter, config, or threshold value. No further action
+warranted; these 16 were not table-enumerated because they carry no discrete block to classify, per
+the structural criterion above — the finding here is only that none of their informal pre-
+registration mentions were touched post-introduction either.
+
+**What this method cannot prove — stated plainly, not glossed over.** Git history proves a
+`PRE-REGISTRATION` block was never *retroactively edited* after being committed. It cannot prove the
+number quoted as "pre-registered" wasn't computed first, in the same working session, with the block
+text written to match afterward, all before a single commit — same-commit compliance is necessary
+but not sufficient for the underlying honesty claim, and no git-history method can close that gap.
+This is exactly the "compliant provided the block was not edited after the run" caveat this item's
+own task text anticipated, and it is the reason SAME-COMMIT is reported as its own class rather than
+folded into COMPLIANT: the two are not the same guarantee. Within what git history *can* check, the
+result is unambiguous: zero blocks were ever edited after landing, across all 24.
+
+**Expected-clean-result honesty check.** This audit went in expecting a clean bill (per the task's
+own framing) and did not go looking for a scandal — but the one candidate anomaly it did surface
+(`macro-regime-equities-split-fraction-diagnostic.mjs`, via the `--follow` false positive) was
+chased down and disproven rather than reported uninvestigated, and is documented above precisely
+because a less careful pass could have shipped it as a real finding. The actual result — 24/24
+SAME-COMMIT, 0/24 ANOMALOUS — is reported exactly that plainly.
+
+**Corrected:** nothing. **Edited:** no study write-up. **Follow-up:** none needed — no anomaly
+survived investigation. `npm.cmd test`: 513/513 green, run before this entry was written.
