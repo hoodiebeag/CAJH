@@ -1,7 +1,7 @@
 /**
  * EQUITIES-BREAKOUT-SIGNIFICANCE (additive, read-only research, cache-only — no IBKR egress).
  *
- * EQUITIES-BASELINE-PORT (2026-08-19, ROADMAP.md) measured `breakout` net +0.1866R over 61
+ * EQUITIES-BASELINE-PORT (2026-08-19, ROADMAP_ARCHIVE.md) measured `breakout` net +0.1866R over 61
  * holdout trades on a point-in-time DJIA-30 universe at real IBKR costs — the first net-positive
  * real-cost result in this project's history. That item's own writeup states plainly: no
  * permutation test or significance check was run, and 61 trades is far thinner than crypto's

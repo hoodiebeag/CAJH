@@ -94,7 +94,7 @@ const UNIVERSES = {
       "HON", "CRM", "AAPL", "INTC", "TRV", "BA", "IBM", "UNH", "CAT", "JNJ",
       "VZ", "CVX", "JPM", "V", "CSCO", "MCD", "WMT", "KO", "MRK", "DIS",
     ],
-    realAvgRCited: 0.1526, // ROADMAP.md 2026-08-22, cross-checked against a fresh run below
+    realAvgRCited: 0.1526, // ROADMAP_ARCHIVE.md 2026-08-22, cross-checked against a fresh run below
   },
   "DJTA-20": {
     cacheDir: path.join(".", "research-cache", "equities-1d-djta-oos"),
@@ -102,7 +102,7 @@ const UNIVERSES = {
       "ALK", "CAR", "CHRW", "CSX", "DAL", "EXPD", "FDX", "AAL", "JBHT", "KEX",
       "LSTR", "MATX", "NSC", "ODFL", "R", "LUV", "UBER", "UNP", "UAL", "UPS",
     ],
-    realAvgRCited: 0.2994, // ROADMAP.md 2026-08-22, cross-checked against a fresh run below
+    realAvgRCited: 0.2994, // ROADMAP_ARCHIVE.md 2026-08-22, cross-checked against a fresh run below
   },
 };
 

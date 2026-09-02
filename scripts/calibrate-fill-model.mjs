@@ -2,7 +2,7 @@
  * PWR5-MAKER-FILL-COST-REDUCTION diagnostic (throwaway, read-only). Not part of the app —
  * empirically calibrates cost-model.mjs's touch-based fill model against real 1-minute
  * candles for three liquidity tiers, so the cost scenario matrix isn't guessing at fill
- * probability. Deletable after ROADMAP.md's finding is written.
+ * probability. Deletable after ROADMAP_ARCHIVE.md's finding is written.
  *
  * Method: at every SAMPLE_STRIDE-th bar in a bounded recent window, place a hypothetical
  * resting limit order at `close * (1 -/+ offset)` (buy below / sell above) and ask

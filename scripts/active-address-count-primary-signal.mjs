@@ -4,7 +4,7 @@
  * price/positioning history (same family as MACRO-REGIME-PRIMARY-SIGNAL / GDELT-NEWS-SENTIMENT-
  * PRIMARY-SIGNAL, both of which this reuses the mechanism shape from).
  *
- * SOURCED FROM: WHALE-WALLET-ACCUMULATION-PRIMARY's own ROADMAP.md writeup (2026-08-22), which
+ * SOURCED FROM: WHALE-WALLET-ACCUMULATION-PRIMARY's own ROADMAP_ARCHIVE.md writeup (2026-08-22), which
  * closed as a data-availability non-verdict for true wallet-level accumulation tracking (no free
  * per-wallet-identity source exists) but explicitly named its own escape hatch: accept
  * n-unique-addresses as a DELIBERATELY DIFFERENT, pre-registered hypothesis in its own right (does a

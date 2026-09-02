@@ -18,7 +18,7 @@
  * IBKR OPTIONS ACCESS IS INTERMITTENT, NOT A FIXED CAPABILITY — stated explicitly rather than
  * overclaimed either way. EQUITIES-BREAKOUT-OUT-OF-SAMPLE's control.notes (this run's prior
  * commit) recorded Gateway UP and doing a live 20-symbol fetch; this run's own pre-check (see
- * ROADMAP.md writeup) found 127.0.0.1:4002 refusing connections minutes later. The honest
+ * ROADMAP_ARCHIVE.md writeup) found 127.0.0.1:4002 refusing connections minutes later. The honest
  * reading is "reachable when the Gateway process happens to be running on the research
  * machine," not "reachable" or "unreachable" as a static fact — recorded as such below.
  */

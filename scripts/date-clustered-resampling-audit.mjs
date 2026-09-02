@@ -70,7 +70,7 @@ const DATE_BOOTSTRAP_SEED_BASE = 20260829;
 
 // Exact unmodified configs, verbatim from their sealed studies. `recorded` is what
 // EQUITIES-BREAKOUT-SIGNIFICANCE (2026-08-21) and EQUITIES-MADIP-SIGNIFICANCE (2026-08-22)
-// reported on ROADMAP.md, for the replication check.
+// reported on ROADMAP_ARCHIVE.md, for the replication check.
 const FAMILIES = [
   ["breakout",
     { entryMode: "breakout", trendGate: false, alignMode: "none", minStopPct: .01, maxStopPct: .06, tpR: 3, lockBreakeven: true },

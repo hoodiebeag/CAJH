@@ -4,7 +4,7 @@
  * point estimate is holdout-positive and same-signed as train, but the 95% block-bootstrap
  * CI includes zero) through a real shared-capital equity-curve simulation, reusing
  * portfolio.mjs's simulatePortfolio directly rather than building a second engine, per this
- * item's own instruction to reuse machinery where practical. Deletable after ROADMAP.md's
+ * item's own instruction to reuse machinery where practical. Deletable after ROADMAP_ARCHIVE.md's
  * finding is written.
  *
  * SCOPING DECISION, stated explicitly rather than silently narrowed: this item's task text

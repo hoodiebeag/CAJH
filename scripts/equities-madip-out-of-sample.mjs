@@ -1,7 +1,7 @@
 /**
  * EQUITIES-MADIP-OUT-OF-SAMPLE (additive, read-only research, cache-only — no IBKR egress).
  *
- * EQUITIES-MADIP-SIGNIFICANCE (2026-08-22, ROADMAP.md) found `ma_dip`'s positive point estimate
+ * EQUITIES-MADIP-SIGNIFICANCE (2026-08-22, ROADMAP_ARCHIVE.md) found `ma_dip`'s positive point estimate
  * (475 trades, avgR +0.1526, p=0.0648) the closest any equities result has come to nominal
  * significance in this project's history, but it does not survive BH-FDR at n=14 and its 95% CI
  * still includes zero. This item is the out-of-sample re-check that EQUITIES-BREAKOUT-

@@ -24,7 +24,7 @@ Benjamini-Hochberg FDR correction at q=0.05, **only `B5-REVERSAL (L=3)` survives
 `B5-REVERSAL` is itself KILLED on economics (net -0.0025 to -0.0243R per trade at the real
 ~1.7% round-trip cost; `VERDICTS.md` B5-REVERSAL row). `CLASSIFIER-FUNDING-FEATURE` flipped
 from survivor to non-survivor purely because the family grew from 10 to 11 tests
-(`EQUITIES-BREAKOUT-SIGNIFICANCE`, `ROADMAP.md` 2026-08-21 section; `MULTIPLE_COMPARISONS_AUDIT.md`
+(`EQUITIES-BREAKOUT-SIGNIFICANCE`, `ROADMAP_ARCHIVE.md` 2026-08-21 section; `MULTIPLE_COMPARISONS_AUDIT.md`
 §2) — a look-elsewhere effect observed in practice, not hypothetical. Net reading: this
 project has three statistically-real-but-economically-dead effects (a short-horizon reversal
 signal, an entry-time classifier, and its funding-augmented variant) and one still-unresolved
@@ -54,18 +54,18 @@ once and found nothing to trade.
 Open-interest change as a PRIMARY cross-sectional ranking signal (not a gate) came back
 wrong-signed at train (meanIC=-0.0395, p=0.1249, pre-registered sign was positive) — killed
 before holdout was ever gate-relevant (`CROSS-SECTIONAL-NONPRICE-RANK`, `VERDICTS.md`,
-`ROADMAP.md` 2026-08-19).
+`ROADMAP_ARCHIVE.md` 2026-08-19).
 
 **Both price-structure baselines are non-stationary, and it does not matter.** Permutation
 ANOVA across 5 chronological epochs of full local history: `breakout` F(4,10499)=7.459,
 p=0.000999; `anticipate` F(4,13569)=13.967, p=0.000999 — both reject stationarity decisively
-(`SIGNAL-DECAY-TEMPORAL-STABILITY`, `ROADMAP.md` 2026-08-19). But neither family's avgR ever
+(`SIGNAL-DECAY-TEMPORAL-STABILITY`, `ROADMAP_ARCHIVE.md` 2026-08-19). But neither family's avgR ever
 approaches breakeven in any epoch under NET cost, and — critically, because non-stationarity
 alone cannot rule out a hidden working regime buried by pooling and cost — the same question
 was re-asked at zero cost, per epoch: **0/10 epoch-family cells clear a meaningfully positive
 gross-edge gate** (avgR>+0.10, trades>=150, positiveAssets/assets>=0.5); `breakout` epoch 3 is
 the nearest miss at +0.093 avgR, clearing the other two clauses alone
-(`PER-EPOCH-GROSS-EDGE`, `ROADMAP.md` 2026-08-22). **The non-stationarity is real, but it moves
+(`PER-EPOCH-GROSS-EDGE`, `ROADMAP_ARCHIVE.md` 2026-08-22). **The non-stationarity is real, but it moves
 gross edge around within a band that never crosses into "meaningful," in either family, in any
 of the 5 epochs measured.** This closes the specific "is there a working regime the pooled
 average hides" hypothesis, not just the pooled-average question that was already closed
@@ -74,25 +74,25 @@ separately.
 **Cost is the dominant, structurally-quantified lever — and even eliminating it entirely does
 not rescue the crypto price-structure baselines.** Fee is exactly 94.1% of total drag for both
 `breakout` and `anticipate`, by construction of the cost formula, not by measurement
-coincidence (`COST-COMPONENT-ATTRIBUTION`, `ROADMAP.md` 2026-08-19). Driving fee to a literal
+coincidence (`COST-COMPONENT-ATTRIBUTION`, `ROADMAP_ARCHIVE.md` 2026-08-19). Driving fee to a literal
 zero floor leaves `breakout` at +0.0091R (razor-thin, one-basis-point scale, would not survive
 any real execution friction) and `anticipate` at -0.1331R (its gross edge is itself already
 negative — there is nothing for a cost fix to amortize). Extended to all 12 families currently
 in `tournament.mjs`: **0/12 clear a meaningfully positive gross-edge bar**
 (avgR>+0.10, trades>=150, positiveAssets/assets>=0.5) — 4 families clear zero at gross
 (`ma_dip`, `vol_contraction`, `breakout`, `h3`), none clears the material bar
-(`ZERO-COST-FLOOR-ALL-FAMILIES`, `ROADMAP.md` 2026-08-22). The nearest miss,
+(`ZERO-COST-FLOOR-ALL-FAMILIES`, `ROADMAP_ARCHIVE.md` 2026-08-22). The nearest miss,
 `vol_contraction` (+0.2177R gross, 52.4% positive assets), fails only on trade count
 (98<150) — a sample-size ceiling, not a fee problem, and there is no cost-side fix for a
 sample-size problem. **The full 2-D fee×slippage grid (`COST-SENSITIVITY-SURFACE`,
-`ROADMAP.md` 2026-08-20) confirms this from the other direction: `breakout` crosses net-zero
+`ROADMAP_ARCHIVE.md` 2026-08-20) confirms this from the other direction: `breakout` crosses net-zero
 only at an idealized futures-maker/zero-slip corner that `PWR5`/`PHASE4`/
 `EXECUTION-DELAY-DECAY-CURVE` already independently ruled unrealistic (real fill latency
 degrades that exact execution assumption sharply); `anticipate` never crosses zero anywhere on
 the grid.**
 
 **The maker-execution thesis is closed on mechanism, not just on one cost point.**
-`EXECUTION-DELAY-DECAY-CURVE` (`ROADMAP.md` 2026-08-19) directly tested the hidden assumption
+`EXECUTION-DELAY-DECAY-CURVE` (`ROADMAP_ARCHIVE.md` 2026-08-19) directly tested the hidden assumption
 every prior cost-reduction study shared — that a signal bar fills immediately — by adding real
 entry-delay bars and found sharp degradation with latency. Waiting for a resting maker fill
 *is* execution delay; the mechanism that would need to work for maker-cost rescue to matter is
@@ -102,10 +102,10 @@ itself what kills these families when tested directly.
 yet survive its own significance test.** Porting the exact, unmodified `breakout`/`anticipate`
 configs onto a real 30-symbol Dow-30-grade universe at real IBKR costs produced the first
 net-positive real-cost result in this project: `breakout` net +0.1866R over 61 holdout trades
-(`EQUITIES-BASELINE-PORT`, `ROADMAP.md` 2026-08-19). A pre-registered sign-flip permutation
+(`EQUITIES-BASELINE-PORT`, `ROADMAP_ARCHIVE.md` 2026-08-19). A pre-registered sign-flip permutation
 test on that same result came back p=0.2036, 95% CI **[-0.2700, +0.6192]** — includes zero —
 and does not survive the recomputed 11-test BH-FDR correction (ranks 6th of 11, q=0.358)
-(`EQUITIES-BREAKOUT-SIGNIFICANCE`, `ROADMAP.md` 2026-08-21). This is not a killed result and
+(`EQUITIES-BREAKOUT-SIGNIFICANCE`, `ROADMAP_ARCHIVE.md` 2026-08-21). This is not a killed result and
 not a confirmed one: 61 trades over one ~7-month window is not enough sample to distinguish
 signal from noise, and that item's own writeup names the specific weaknesses (single holdout
 window, single 30-symbol universe, cost assumptions not measured from real NBBO data) that the

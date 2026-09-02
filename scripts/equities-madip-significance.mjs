@@ -1,7 +1,7 @@
 /**
  * EQUITIES-MADIP-SIGNIFICANCE (additive, read-only research, cache-only — no IBKR egress).
  *
- * EQUITIES-ALL-FAMILIES-BASELINE (2026-08-22, ROADMAP.md) ran all 12 unmodified `tournament.mjs`
+ * EQUITIES-ALL-FAMILIES-BASELINE (2026-08-22, ROADMAP_ARCHIVE.md) ran all 12 unmodified `tournament.mjs`
  * families against the cached 30-symbol equity universe and found `ma_dip` combining the
  * largest usable holdout sample of the twelve (475 trades) with a comfortably net-positive
  * avgR (+0.1526) — unlike `breakout` (61 trades, already significance-tested and CI-includes-zero

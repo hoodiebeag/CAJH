@@ -99,16 +99,16 @@ async function probeTradesBackfillFeasibility() {
     const secondsPerPage = spanSeconds; // wall-clock market time covered by one 1000-row page
     const pagesPerYear = secondsPerPage ? Math.ceil((365 * 24 * 3600) / secondsPerPage) : null;
     // Kraken's public tier is rate-limited (undocumented exact figure, but the project's own
-    // prior order-flow backfill - ROADMAP.md 2026-07-30, "~430k flow-bearing 1-minute bars...
+    // prior order-flow backfill - ROADMAP_ARCHIVE.md 2026-07-30, "~430k flow-bearing 1-minute bars...
     // ~hours per pair" for a ~4-month window on 3 pairs - is the only real measured data point
     // this project holds; used here as a citation, not re-derived from scratch.
     const priorBackfillMonths = 4;
     const priorBackfillPairs = 3;
-    const priorBackfillHoursPerPair = "several (ROADMAP.md 2026-07-30 entry, reported as '~hours per pair', not pinned to an exact figure)";
+    const priorBackfillHoursPerPair = "several (ROADMAP_ARCHIVE.md 2026-07-30 entry, reported as '~hours per pair', not pinned to an exact figure)";
     row.reachable = tradesPerPage > 0;
     row.samplePage = { tradesPerPage, spanSecondsCoveredByOnePage: secondsPerPage, sampledWindowStart: new Date(rows[0]?.[2] * 1000).toISOString(), sampledWindowEnd: new Date(rows[rows.length - 1]?.[2] * 1000).toISOString() };
     row.extrapolation = { pagesNeededForOneYearOnePair: pagesPerYear };
-    row.priorProjectPrecedent = { source: "ROADMAP.md 2026-07-30 order-flow backfill", months: priorBackfillMonths, pairs: priorBackfillPairs, wallClockPerPair: priorBackfillHoursPerPair };
+    row.priorProjectPrecedent = { source: "ROADMAP_ARCHIVE.md 2026-07-30 order-flow backfill", months: priorBackfillMonths, pairs: priorBackfillPairs, wallClockPerPair: priorBackfillHoursPerPair };
     row.note = `Trade-print density is high even in a comparatively quiet historical window sampled here (${tradesPerPage} trades span only ${secondsPerPage}s of market time on 2025-01-01), implying roughly ${pagesPerYear} paginated requests to cover one asset for one year at this rate - and this project's own prior attempt at exactly this kind of backfill (order-flow study, 2026-07-30) needed "hours per pair" for a ~4-month window on only 3 pairs. A representative holdout window in this project spans many months to years across a multi-asset watchlist (12-28 symbols) - full backfill is directionally feasible in wall-clock terms for a small number of pairs over a short window, but is not a 30-60 minute operation and was explicitly out of this item's scope for that reason. This is a SECONDARY constraint: even a complete trade-print backfill gives price/size/side/time only, not book depth - it cannot supply the queue-position or partial-fill inputs the task requires (see Depth probe above), so backfill feasibility does not by itself resolve the data question.`;
   } catch (e) {
     row.reachable = false;

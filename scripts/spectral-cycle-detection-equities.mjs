@@ -1,7 +1,7 @@
 /**
  * SPECTRAL-CYCLE-DETECTION-EQUITIES (additive, cache-only research — no IBKR egress).
  *
- * Companion to SPECTRAL-CYCLE-DETECTION-CRYPTO (2026-08-22, ROADMAP.md/VERDICTS.md: closed
+ * Companion to SPECTRAL-CYCLE-DETECTION-CRYPTO (2026-08-22, ROADMAP_ARCHIVE.md/VERDICTS.md: closed
  * NO-SIGNIFICANT-PERIODICITY). Reuses that item's periodogram/AR(1)-red-noise/BH-FDR method
  * UNCHANGED (this item's own work_queue note: "reuses the crypto implementation"). STRUCTURAL
  * REQUIREMENT carried over unmodified: any surviving cycle must generate market EXPOSURE

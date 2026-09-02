@@ -268,6 +268,51 @@ Apply this rule whenever work_queue is touched at scale — a dedicated retentio
 STEP 5 restock once the done count has grown past the cap again — not just as a one-time
 cleanup.
 
+## ROADMAP.md archive retention (added 2026-09-02 — old dated sections are historical record, not a live-firing read)
+
+`ROADMAP.md` grows monotonically the same way `work_queue` used to: every dated study section
+stays in the one file forever, so the file the loop re-reads on every firing keeps growing even
+though most of it documents work closed weeks ago. Unlike `work_queue`'s done items, a
+`ROADMAP.md` section's own prose usually *is* the only record of a study's numbers — dropping it
+the way an old `work_queue` entry is dropped would delete the project's evidence base, not just a
+working-state pointer. So this rule moves sections verbatim to `ROADMAP_ARCHIVE.md` instead of
+deleting them.
+
+**Retention rule.** Pick a cutoff date from the actual distribution of dated sections by size —
+state the cutoff and the reasoning before moving anything, the same discipline the work-queue
+rule's N=15 was chosen under. Move every dated section at or before the cutoff to
+`ROADMAP_ARCHIVE.md`, verbatim, in original order. Leave in `ROADMAP.md` a dated index of what
+moved (date, title, one-line pointer) so nothing becomes unfindable. Leave every section after
+the cutoff in place — that recent tail is exactly what a firing needs to read without following a
+pointer.
+
+**Carve-out sub-rule (added by the first archive pass, after a real block).** Before moving a
+candidate section, check whether it contains any of the identifiers
+`scripts/check-protected-logic.cjs` matches (read them from that file, not from memory — they
+change independently of this rule). A section that does must be EXCLUDED from the move and left
+in `ROADMAP.md` in full, with a one-line reason recorded in the archive index, even though its
+date is before the cutoff — relocating it produces a removed line in `ROADMAP.md` and an added
+line in `ROADMAP_ARCHIVE.md`, and the hook scans added-or-removed lines in every file, so the
+move itself trips the same block a real logic change would. This is not a bug to route around:
+the first archive pass hit exactly this, escalated correctly (no `--no-verify`, no override
+marker, no reselecting the cutoff to dodge the scanner), and a human resolved it by confirming the
+carve-out approach needs no authorization at all, since excluding the section removes the
+collision instead of overriding the hook. Every future archive pass inherits this sub-rule instead
+of rediscovering it by being blocked the same way.
+
+**After moving anything**, find every reference to a moved section elsewhere in the repository —
+`ROADMAP.md` itself, `VERDICTS.md`, `ALPHA_DEFINITION.md`, `MULTIPLE_COMPARISONS_AUDIT.md`,
+`AGENT_PROTOCOL.md`, `TOURNAMENT_ROADMAP.md`, `.agent_state.json` work_queue item text, and script
+header comments — and repoint the ones that name a specific moved section or line, so a citation
+still resolves. A bare, undated mention of "ROADMAP.md" (a convention reference, a generic
+pointer with no section identified) does not need repointing; only citations tied to a section
+that actually moved do.
+
+Apply this rule whenever `ROADMAP.md` grows large enough that most of it is no longer recent —
+there is no fixed re-trigger threshold yet, unlike work_queue's N=15 cap; use judgment the way the
+first pass did, informed by the byte/section-count measurement this section's own history left in
+`ROADMAP.md`'s archive index.
+
 ## Multiple-comparisons discipline for pre-registered studies (added 2026-08-19)
 
 Full derivation and the audit that motivated this: `MULTIPLE_COMPARISONS_AUDIT.md`. This
@@ -330,7 +375,7 @@ fail):**
   differing only in band width, so its p-value is substantially correlated with both
   `WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC`'s and `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL`'s
   rather than an independent draw — three correlated sub-tests now sit near the bottom of the
-  ranking. Full writeup in `ROADMAP.md`'s 2026-08-27
+  ranking. Full writeup in `ROADMAP_ARCHIVE.md`'s 2026-08-27
   STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC section and `MULTIPLE_COMPARISONS_AUDIT.md`
   §2. Updated by WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC (2026-08-27): a follow-on to
   ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL, sourced directly from that study's own named next lever —
@@ -361,7 +406,7 @@ fail):**
   surface: unlike prior additions, this one is NOT a new information source — it reuses the
   predecessor's exact data/cost basis/holdout window, differing only in band width, so its p-value
   is substantially correlated with ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL's rather than an independent
-  draw. Full writeup in `ROADMAP.md`'s 2026-08-27 WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC section
+  draw. Full writeup in `ROADMAP_ARCHIVE.md`'s 2026-08-27 WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC section
   and `MULTIPLE_COMPARISONS_AUDIT.md` §2. Updated by ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL (2026-08-27): added a BTC-only active-address-count
   exposure signal (blockchain.com Charts API `n-unique-addresses`, genuinely exogenous data),
   staged per `WHALE-WALLET-ACCUMULATION-PRIMARY`'s own named escape hatch — a deliberately
@@ -392,7 +437,7 @@ fail):**
   now recorded across three separate updates, this time landing on a still-live result rather
   than an already-KILLED one, which is exactly the scenario this discipline exists to catch
   before anyone treats a marginal formal survival as a permanent property of a study. Full
-  writeup in `ROADMAP.md`'s 2026-08-27 ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL section and
+  writeup in `ROADMAP_ARCHIVE.md`'s 2026-08-27 ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL section and
   `MULTIPLE_COMPARISONS_AUDIT.md` §2. Updated by GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL (2026-08-23): added a GDELT news-volume/tone
   regime exposure signal on crypto — genuinely exogenous data, same family as
   `MACRO-REGIME-PRIMARY-SIGNAL`, run on that study's own 12-asset universe/window, but with a
@@ -418,7 +463,7 @@ fail):**
   sub-tests still formally survive at n=17, unchanged from n=16 — this update tightens
   thresholds without reordering the top of the table, unlike either of the two prior updates
   (one loosened via a very small p-value at rank 1, one tightened via a very large p-value that
-  displaced the prior last-place entry). Full writeup in `ROADMAP.md`'s 2026-08-23
+  displaced the prior last-place entry). Full writeup in `ROADMAP_ARCHIVE.md`'s 2026-08-23
   GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL section and `MULTIPLE_COMPARISONS_AUDIT.md` §2. Updated by
   LOG-REGRESSION-BANDS-EQUITIES (2026-08-22): added the equities companion to
   `LOG-REGRESSION-BANDS-CRYPTO` — identical method (byte-identical OLS/band/hysteresis
@@ -441,7 +486,7 @@ fail):**
   gross edge structurally larger than crypto's) does **not** reproduce for this method — instead
   both markets show the same benchmark-direction artifact in opposite directions, which is a
   more useful finding than either a clean replication or a clean non-replication would have
-  been. Full writeup in `ROADMAP.md`'s 2026-08-22 LOG-REGRESSION-BANDS-EQUITIES section and
+  been. Full writeup in `ROADMAP_ARCHIVE.md`'s 2026-08-22 LOG-REGRESSION-BANDS-EQUITIES section and
   `MULTIPLE_COMPARISONS_AUDIT.md` §2. **Material side effect: `CLASSIFIER-FUNDING-FEATURE` flips
   from survivor back to non-survivor** purely because the family grew (its own p=0.0099 is
   unchanged; its rank-3 threshold tightens from `3/15×0.05=0.01000` (n=15, where it barely
@@ -464,7 +509,7 @@ fail):**
   `CLASSIFIER-FUNDING-FEATURE`'s rank-3 threshold tightens from 0.01071 (n=14) to 0.01000
   (n=15) as the new entry is inserted directly below it, but its own unchanged p=0.0099 still
   clears (q=0.0495, barely) — `LOG-REGRESSION-BANDS-CRYPTO` (q=0.0030) and `B5-REVERSAL L=3`
-  (q=0.0075) are essentially unaffected. Full writeup in `ROADMAP.md`'s 2026-08-22
+  (q=0.0075) are essentially unaffected. Full writeup in `ROADMAP_ARCHIVE.md`'s 2026-08-22
   EQUITIES-MADIP-OUT-OF-SAMPLE section and `MULTIPLE_COMPARISONS_AUDIT.md` §2. Updated by
   LOG-REGRESSION-BANDS-CRYPTO (2026-08-22): added a log-price-vs-log-time
   regression-band exposure signal's sign-flip permutation p-value (per-asset holdout
@@ -477,7 +522,7 @@ fail):**
   buy-and-hold return over their holdout window — any reduced-exposure strategy is rewarded by
   a benchmark that is falling almost everywhere. Signal-minus-always-flat delta is significantly
   NEGATIVE (mean -0.2892, 95% CI [-0.4154,-0.1644]). Recorded KILLED in `VERDICTS.md` despite
-  the nominal BH-FDR survival — full writeup in `ROADMAP.md`'s 2026-08-22 LOG-REGRESSION-BANDS-CRYPTO
+  the nominal BH-FDR survival — full writeup in `ROADMAP_ARCHIVE.md`'s 2026-08-22 LOG-REGRESSION-BANDS-CRYPTO
   section and `MULTIPLE_COMPARISONS_AUDIT.md` §2. **Material side effect: CLASSIFIER-FUNDING-FEATURE
   flips from non-survivor back to survivor** purely because the family grew (its own p=0.0099 is
   unchanged; it moved from rank 2 to rank 3 as the new entry displaced it, and the rank-3
@@ -579,7 +624,7 @@ result writeup that it is re-examining already-spent data — never silently.
 
 ## Walk-forward judge recommendation (added 2026-08-22)
 
-WALKFORWARD-REVALIDATION-OF-BASELINE (`ROADMAP.md`, 2026-08-22) applied
+WALKFORWARD-REVALIDATION-OF-BASELINE (`ROADMAP_ARCHIVE.md`, 2026-08-22) applied
 `researchlib.mjs`'s `walkForwardSeriesWindows` (4 rolling folds, 23-asset active pool, sealed
 pool untouched) to the `breakout`/`anticipate` baselines and found a family-dependent result:
 `anticipate`'s fold-to-fold avgR drift is statistically significant (permutation ANOVA

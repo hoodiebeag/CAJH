@@ -29,7 +29,7 @@ VERDICTS.md at all:**
 - `T4-PORTFOLIO-MOMENTUM` and `T4-COVERAGE-FIX` are the same study (a coverage-bug rerun of
   the same four variants, verdict unchanged) — counted once, not twice.
 - That leaves **44 distinct studies in VERDICTS.md.**
-- `SEASONALITY-DAYOFWEEK-SESSION` (ROADMAP.md, 2026-08-18) is a real study — 20 reported
+- `SEASONALITY-DAYOFWEEK-SESSION` (ROADMAP_ARCHIVE.md, 2026-08-18) is a real study — 20 reported
   cells across day-of-week and session axes for both `breakout`/`anticipate` — but it never
   got a VERDICTS.md row because it is explicitly descriptive/exploratory by its own task
   wording, not gated. It belongs in the count regardless: a descriptive breakdown still
@@ -99,7 +99,7 @@ reorder the top ranks) — its q tightens from 0.0528 (n=16) to 0.0561 (n=17), s
 EQUITIES-MADIP-OUT-OF-SAMPLE remains a survivor but tightens (q=0.0464→0.0493, threshold
 `4/17×0.05=0.01176` vs its unchanged p=0.0116). LOG-REGRESSION-BANDS-CRYPTO (q=0.0032→0.0034) and
 B5-REVERSAL L=3 (q=0.0080→0.0085) are essentially unaffected. Three sub-tests still formally
-survive at n=17, unchanged from n=16. Full writeup: ROADMAP.md's 2026-08-23
+survive at n=17, unchanged from n=16. Full writeup: ROADMAP_ARCHIVE.md's 2026-08-23
 GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL section. Previously updated 2026-08-22 by
 LOG-REGRESSION-BANDS-EQUITIES —
 the equities companion to LOG-REGRESSION-BANDS-CRYPTO below, identical method (byte-identical
@@ -157,7 +157,7 @@ by ZERO-COST-FLOOR-ALL-FAMILIES — a real point-estimate/trade-count gate, avgR
 trades>=150 AND positiveAssets/assets>=0.5, against all 12 `tournament.mjs` families at zero
 cost, 0/12 cleared it; joined the economic-gate-only bucket below, a 49th study. Previously
 updated 2026-08-21 post-audit by EQUITIES-BREAKOUT-SIGNIFICANCE — see its own row in the
-Formal NHST table below and ROADMAP.md, not VERDICTS.md, since it cleared no gate — a 48th
+Formal NHST table below and ROADMAP_ARCHIVE.md, not VERDICTS.md, since it cleared no gate — a 48th
 study; the prior post-audit update, CROSS-SECTIONAL-NONPRICE-RANK, brought the count to 47),
 not 14.
 Breakdown by kind:
@@ -236,7 +236,7 @@ between the current non-survivors `Classifier P5` (rank 5) and `Low-vol B4 negBe
 time, but its own q-value (0.1338) is nowhere near the 0.05 line. One of the two remaining survivors is a
 demonstrated benchmark artifact (rank 1, see below).**
 `LOG-REGRESSION-BANDS-CRYPTO`
-(2026-08-22, `ROADMAP.md`) tested a log-price-vs-log-time regression-band exposure signal
+(2026-08-22, `ROADMAP_ARCHIVE.md`) tested a log-price-vs-log-time regression-band exposure signal
 against crypto buy-and-hold: p=0.0002, the smallest raw p-value ever recorded in this family,
 formally the strongest BH-FDR survivor (q=0.0028). The SAME study computed an always-flat
 (never-trade) control against the identical buy-and-hold benchmark and found it outperforms
@@ -247,7 +247,7 @@ strategy near-automatically. The signal-minus-always-flat delta (the only fair t
 the band itself adds information) is significantly NEGATIVE: mean -0.2892, 95% CI
 [-0.4154, -0.1644], entirely below zero. Recorded KILLED in `VERDICTS.md` despite the nominal
 BH-FDR survival. This is disclosed here, in the correction math itself, rather than only in
-`ROADMAP.md`'s narrative, because the mechanical family-size rule below requires every reported
+`ROADMAP_ARCHIVE.md`'s narrative, because the mechanical family-size rule below requires every reported
 p-value to be added and judged — it has no way to know a benchmark confound sits behind one of
 them, and this document should not silently launder that gap.
 
@@ -279,7 +279,7 @@ already net of the same real IBKR commission + slippage cost basis this entire e
 subfamily uses, and the point estimate on this fresh DJTA-20 universe (+0.2994) is *larger*
 than the original DJIA-30 estimate (+0.1526), not smaller — the opposite of what a
 look-elsewhere-inflated result would be expected to do on honest replication. Full writeup:
-`ROADMAP.md`'s 2026-08-22 `EQUITIES-MADIP-OUT-OF-SAMPLE` section.
+`ROADMAP_ARCHIVE.md`'s 2026-08-22 `EQUITIES-MADIP-OUT-OF-SAMPLE` section.
 
 **This update (n=15→n=16): `LOG-REGRESSION-BANDS-EQUITIES` joins as the 16th entry, landing
 dead last (rank 16, p=0.9750, wrong sign).** The equities companion to
@@ -300,7 +300,7 @@ strategy (crypto); a benchmark rising almost everywhere punishes one (equities).
 is evidence the band itself carries information. Median ΔR² (log-log vs drift model) -0.1184 —
 same qualitative finding as crypto, the power-law framing fits worse than plain drift. Recorded
 a plain KILLED verdict (wrong sign, no benchmark-artifact caveat needed since it never cleared
-raw significance). Full writeup: `ROADMAP.md`'s 2026-08-22 `LOG-REGRESSION-BANDS-EQUITIES`
+raw significance). Full writeup: `ROADMAP_ARCHIVE.md`'s 2026-08-22 `LOG-REGRESSION-BANDS-EQUITIES`
 section.
 
 **Material side effect: `CLASSIFIER-FUNDING-FEATURE` flips from survivor back to
@@ -388,7 +388,7 @@ rewarded by a one-directional benchmark. The likely driver instead: ~64 holdout 
 at this project's real per-side cost (~0.85%) is roughly 54% of cumulative cost drag alone —
 the pre-registered ±1%/±0.1 hysteresis bands slowed but did not eliminate whipsaw against
 GDELT's noisy daily series. Recorded a plain KILLED verdict (wrong sign, no benchmark-artifact
-caveat needed — the loss is not explained by benchmark direction). Full writeup: `ROADMAP.md`'s
+caveat needed — the loss is not explained by benchmark direction). Full writeup: `ROADMAP_ARCHIVE.md`'s
 2026-08-23 `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL` section.
 
 **Material side effect: none flip.** `GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL`'s p=0.7113 inserts
@@ -438,7 +438,7 @@ Intensity signal under an identical band convention, now reproduced on a structu
 exogenous input. Recorded a plain KILLED verdict (wrong sign, no benchmark-artifact caveat
 needed — holdout buy-and-hold here is already negative, -42.14%, and the strategy is MORE
 negative, -71.46%, so this is not a falling-benchmark-rewards-any-exit-signal confound). Full
-writeup: `ROADMAP.md`'s 2026-08-27 `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL` section.
+writeup: `ROADMAP_ARCHIVE.md`'s 2026-08-27 `ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL` section.
 
 **Material side effect: `EQUITIES-MADIP-OUT-OF-SAMPLE` flips from survivor to non-survivor —
 purely from family-size growth, its own p-value unchanged.** This is the first flip this document
@@ -454,7 +454,7 @@ above that line (q=0.0522, no longer surviving). **This is not a re-examination 
 Nothing about `EQUITIES-MADIP-OUT-OF-SAMPLE`'s own data, method, or economic result has changed —
 its point estimate (+0.2994, 95% CI [0.0509, 0.5350] excluding zero), its out-of-sample
 replication on a fresh universe, and its net-of-cost economics all stand exactly as recorded in
-`ROADMAP.md`'s 2026-08-22 section. What changed is purely mechanical: BH-FDR's rejection region
+`ROADMAP_ARCHIVE.md`'s 2026-08-22 section. What changed is purely mechanical: BH-FDR's rejection region
 depends on the full family's size, and a large p-value added anywhere in the family tightens
 every threshold above it, with no floor on how close to the boundary a prior survivor can be
 sitting. `EQUITIES-MADIP-OUT-OF-SAMPLE` was already the family's most marginal survivor (q=0.0493
@@ -503,7 +503,7 @@ consistent with cost drag being part of the story. But ~88 holdout flips at real
 both segments) remains indistinguishable from chance in both band widths — widening the band
 reduces how often a directionless signal gets acted on, it cannot supply direction the underlying
 comparison never had. Recorded a partial-explanation verdict (not KILLED, not a real finding) in
-`VERDICTS.md`. Full writeup: `ROADMAP.md`'s 2026-08-27 `WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC`
+`VERDICTS.md`. Full writeup: `ROADMAP_ARCHIVE.md`'s 2026-08-27 `WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC`
 section.
 
 **Material side effect: none flip.** `WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC`'s p=0.9251
@@ -561,7 +561,7 @@ rate (48.2% train, 52.8% holdout) remains indistinguishable from chance at this 
 no band width tested has produced a real directional signal. Recorded a continued-partial-
 explanation verdict (not KILLED, not a real finding) in `VERDICTS.md`. No further band-width
 follow-on staged — this A/B/C chain is treated as closed per this document's own discipline against
-open-ended parameter sweeps. Full writeup: `ROADMAP.md`'s 2026-08-27
+open-ended parameter sweeps. Full writeup: `ROADMAP_ARCHIVE.md`'s 2026-08-27
 `STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC` section.
 
 **Material side effect: none flip.** `STILL-WIDER-HYSTERESIS-BAND-ACTIVE-ADDRESS-DIAGNOSTIC`'s

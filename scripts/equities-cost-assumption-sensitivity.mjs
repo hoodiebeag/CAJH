@@ -1,7 +1,7 @@
 /**
  * EQUITIES-COST-ASSUMPTION-SENSITIVITY (additive, read-only research; not part of the app).
  * EQUITIES-BASELINE-PORT reported `breakout` net +0.1866R over 61 holdout trades on real IBKR
- * costs — the first net-positive real-cost result in this project's history (see ROADMAP.md
+ * costs — the first net-positive real-cost result in this project's history (see ROADMAP_ARCHIVE.md
  * 2026-08-19). Two components of that cost basis were stated as ASSUMPTIONS, not measurements:
  *   - slippage/spread: 0.0005 (5bps) per side, called "a deliberately conservative estimate" in
  *     the original writeup, not measured from IBKR's own NBBO tick history.

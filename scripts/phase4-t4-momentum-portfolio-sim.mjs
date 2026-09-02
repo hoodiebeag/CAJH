@@ -6,7 +6,7 @@
  * "closer but not clearing" and left for a human/future firing to decide whether it's
  * worth the same complete test. Reuses portfolio.mjs's simulatePortfolio directly (real
  * code, real candle panel), same engine B5-REVERSAL's own PHASE4 script
- * (scripts/phase4-b5-portfolio-sim.mjs) used. Deletable after ROADMAP.md's finding is
+ * (scripts/phase4-b5-portfolio-sim.mjs) used. Deletable after ROADMAP_ARCHIVE.md's finding is
  * written.
  *
  * SCOPING DECISION, stated explicitly: PHASE2's triage (scripts/phase2-triage.mjs) only
@@ -19,7 +19,7 @@
  *
  * COST-SCENARIO DECISION, disclosed rather than silently picked: PHASE2 flagged "futures
  * maker (fee-only)" as T4's best case (Sharpe 0.493). But B5-REVERSAL's own PHASE3 (see
- * ROADMAP.md 2026-08-13, "Pre-registered before any holdout number was computed") rejected
+ * ROADMAP_ARCHIVE.md 2026-08-13, "Pre-registered before any holdout number was computed") rejected
  * a maker assumption for exactly this shape of strategy — "a resting maker order risking a
  * missed fill is not realistic for a signal whose edge depends on entering at the scheduled
  * rebalance" — and chose futures TAKER instead, despite it being the worse-looking cost

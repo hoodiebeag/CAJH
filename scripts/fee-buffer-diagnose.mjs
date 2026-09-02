@@ -2,7 +2,7 @@
  * FEE-BUFFER-REVIEW diagnostic (throwaway, read-only). Not part of the app —
  * run once to quantify whether FEE_BUFFER_PCT=0.01 covers the real round-trip
  * cost, using entrySignal's actual swing-stop distribution over real candle data.
- * Deletable after ROADMAP.md's finding is written.
+ * Deletable after ROADMAP_ARCHIVE.md's finding is written.
  */
 import "dotenv/config";
 import { loadCandles } from "../data.js";

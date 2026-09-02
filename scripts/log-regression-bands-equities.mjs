@@ -1,7 +1,7 @@
 /**
  * LOG-REGRESSION-BANDS-EQUITIES (additive, cache-only research — no IBKR egress).
  *
- * Companion to LOG-REGRESSION-BANDS-CRYPTO (2026-08-22, ROADMAP.md/VERDICTS.md), reusing that
+ * Companion to LOG-REGRESSION-BANDS-CRYPTO (2026-08-22, ROADMAP_ARCHIVE.md/VERDICTS.md), reusing that
  * item's method UNCHANGED per this item's own work_queue note ("Change NOTHING about the method
  * between the two runs ... or the comparison is worthless"). The crypto run's pre-registered
  * primary test nominally survived family-wide BH-FDR (p=0.0002, rank 1/14) but was KILLED because

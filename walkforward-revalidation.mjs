@@ -2,7 +2,7 @@
  * WALKFORWARD-REVALIDATION-OF-BASELINE: descriptive diagnostic asking whether a rolling
  * walk-forward re-fit changes the picture for the `breakout`/`anticipate` baselines, or
  * whether the single chronological 70/30 split every prior verdict in this project relied on
- * is an adequate summary. Motivated directly by SIGNAL-DECAY-TEMPORAL-STABILITY (ROADMAP.md,
+ * is an adequate summary. Motivated directly by SIGNAL-DECAY-TEMPORAL-STABILITY (ROADMAP_ARCHIVE.md,
  * 2026-08-19), which found both baselines NON-STATIONARY across calendar time — a single
  * pooled split can't distinguish "no edge" from "regime changed under a fixed split." Purely
  * descriptive: no gate, no VERDICTS.md row, no existing verdict altered (this item's own task

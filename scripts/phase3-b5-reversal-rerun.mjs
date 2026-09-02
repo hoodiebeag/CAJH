@@ -7,7 +7,7 @@
  * `splitRecentRows(panel.rows, 4).train` over the CONTROLLED (STABLE_13) universe - never
  * on the actual held-out 16-symbol universe that its own statistical-significance test
  * (`study.primary.symbolHoldout`) already uses. That gap is exactly what PHASE3 exists to
- * close. Deletable after ROADMAP.md's finding is written.
+ * close. Deletable after ROADMAP_ARCHIVE.md's finding is written.
  *
  * PRE-REGISTRATION (written before any holdout number below is computed or examined,
  * per this item's own methodology requirement):

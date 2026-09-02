@@ -4,7 +4,7 @@
  * study's verdict by reducing exposure-flip frequency (and thus turnover cost), isolating cost drag
  * from signal-direction as the driver of the original loss.
  *
- * SOURCED FROM: ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL's own writeup (2026-08-27, ROADMAP.md), which
+ * SOURCED FROM: ACTIVE-ADDRESS-COUNT-PRIMARY-SIGNAL's own writeup (2026-08-27, ROADMAP_ARCHIVE.md), which
  * named this explicitly as "the most plausible next lever if anyone wants to test whether cost drag
  * alone explains the loss" after diagnosing ~91% cumulative cost drag from 107 holdout exposure flips
  * on a ±1% band — the same whipsaw failure mode GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL diagnosed for its

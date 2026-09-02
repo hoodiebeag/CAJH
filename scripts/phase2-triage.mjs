@@ -2,7 +2,7 @@
  * PHASE2-MAX-SURVIVABLE-COST diagnostic (throwaway, read-only). Not part of the app —
  * re-derives each of the four cost-killed signals' post-cost result at PHASE1's five real
  * cost scenarios, using each study's OWN real code and (where available) its own saved
- * sealed-run evidence rather than a fresh assumption. Deletable after ROADMAP.md's finding
+ * sealed-run evidence rather than a fresh assumption. Deletable after ROADMAP_ARCHIVE.md's finding
  * is written.
  *
  * Method per signal:
@@ -27,7 +27,7 @@ import { loadWatchlist, symbolToKrakenId } from "./../researchlib.mjs";
 import { loadResearchCandles } from "./../researchlab.mjs";
 import { portfolioStrategies, simulatePortfolio } from "./../portfolio.mjs";
 
-// ─── PHASE1 cost scenarios (round-trip %, from cost-model.mjs / ROADMAP.md 2026-08-13) ──
+// ─── PHASE1 cost scenarios (round-trip %, from cost-model.mjs / ROADMAP_ARCHIVE.md 2026-08-13) ──
 const SCENARIOS = [
   { label: "spot taker", roundTrip: 0.0170 },
   { label: "spot maker (fee-only)", roundTrip: 0.0080 },
@@ -65,7 +65,7 @@ function classifierTriage(label, { selected009, selected017, baseline009, baseli
 }
 
 classifierTriage("Classifier P5", { selected009: -0.4616, selected017: null, baseline009: -0.5178, baseline017: null });
-// P5 has only ONE real reported cost point (0.009) in ROADMAP.md/VERDICTS.md - it was never
+// P5 has only ONE real reported cost point (0.009) in ROADMAP_ARCHIVE.md/VERDICTS.md - it was never
 // re-run at the corrected 0.017 rate. Cannot verify affine-ness with a 2nd point the way
 // CLASSIFIER-FUNDING-FEATURE can; reported honestly below instead of silently assuming it.
 
@@ -113,6 +113,6 @@ function t4Triage() {
       `${holdout.sharpe.toFixed(3).padStart(13)}   ${(holdout.totalReturn * 100).toFixed(1).padStart(12)}%   ${(holdout.maxDrawdown * 100).toFixed(1).padStart(11)}%`
     );
   }
-  console.log("(gate: holdout Sharpe > 0.5 AND holdout totalReturn > 0 AND holdout maxDrawdown > -35%, train leg not shown here — see ROADMAP.md writeup)");
+  console.log("(gate: holdout Sharpe > 0.5 AND holdout totalReturn > 0 AND holdout maxDrawdown > -35%, train leg not shown here — see ROADMAP_ARCHIVE.md writeup)");
 }
 t4Triage();

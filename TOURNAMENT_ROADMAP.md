@@ -1711,7 +1711,7 @@ row and as 36 decision journal entries
 
 ## 2026-08-15 — T4-PORTFOLIO-MOMENTUM-PHASE4: closing the explicitly-flagged PHASE4 gap
 
-Closes the gap ROADMAP.md's PHASE2-MAX-SURVIVABLE-COST finding (2026-08-13) explicitly left
+Closes the gap ROADMAP_ARCHIVE.md's PHASE2-MAX-SURVIVABLE-COST finding (2026-08-13) explicitly left
 open: "T4-PORTFOLIO-MOMENTUM does not formally proceed under a strict reading of this item's
 own gate... whether that's worth a dedicated PHASE3/PHASE4 re-run despite not clearing 0.5
 Sharpe at any scenario tested is a judgment call for whoever restocks the queue next." Every
@@ -1736,7 +1736,7 @@ standing convention (`portfolio.mjs`'s standard chronological 70/30 time split o
 `runPortfolioStudy`/T4-COVERAGE-FIX/PHASE2.
 
 **Cost-scenario decision, disclosed:** PHASE2 flagged "futures maker (fee-only)" as T4's best
-case. But B5-REVERSAL's own PHASE3 (ROADMAP.md, 2026-08-13) explicitly rejected a maker
+case. But B5-REVERSAL's own PHASE3 (ROADMAP_ARCHIVE.md, 2026-08-13) explicitly rejected a maker
 assumption for this exact strategy shape — "a resting maker order risking a missed fill is
 not realistic for a signal whose edge depends on entering at the scheduled rebalance" — and
 used futures TAKER instead, despite it scoring worse. T4-PORTFOLIO-MOMENTUM is the same shape

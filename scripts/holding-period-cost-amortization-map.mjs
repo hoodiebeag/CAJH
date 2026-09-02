@@ -16,7 +16,7 @@
  * cost doesn't affect exit timing). Trades are then bucketed by barsHeld and gross/net R are
  * reported per bucket.
  *
- * IMPORTANT — this reports a relationship, it does not license a decision. See ROADMAP.md
+ * IMPORTANT — this reports a relationship, it does not license a decision. See ROADMAP_ARCHIVE.md
  * for the explicit statement that no exit parameter is changed and no holding-period value
  * is recommended: selecting a holding period after seeing which bucket looks best would be
  * exactly the exit re-tuning already prohibited on these negative-EV families (anticipate).

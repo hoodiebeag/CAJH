@@ -93,7 +93,7 @@ const SEED = 20260829; // this project's per-script local-seed convention, today
 
 // Verbatim copy of tournament.mjs's `families` array (lines 6-19), same convention as
 // equities-all-families-baseline.mjs. Citation columns are EQUITIES-ALL-FAMILIES-BASELINE's
-// net trades/avgR (ROADMAP.md 2026-08-22, corrected 2026-08-28), cross-checked below.
+// net trades/avgR (ROADMAP_ARCHIVE.md 2026-08-22, corrected 2026-08-28), cross-checked below.
 const FAMILIES = [
   ["anticipate", { entryMode: "anticipate", trendGate: false, alignMode: "none", minStopPct: .015, maxStopPct: .06, tpR: 4, lockBreakeven: true }, { trades: 303, avgR: -0.0438 }],
   ["bos", { entryMode: "bos", trendGate: true, trendGateMode: "ma", minStopPct: .015, maxStopPct: .06, tpR: 4, lockBreakeven: true }, { trades: 60, avgR: 0.1728 }],

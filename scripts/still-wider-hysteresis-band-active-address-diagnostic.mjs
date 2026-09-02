@@ -5,7 +5,7 @@
  * item), continuing to isolate whether turnover-driven cost drag, rather than signal direction,
  * explains the construct's holdout loss.
  *
- * SOURCED FROM: WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC's own writeup (2026-08-27, ROADMAP.md),
+ * SOURCED FROM: WIDER-HYSTERESIS-BAND-COST-DRAG-DIAGNOSTIC's own writeup (2026-08-27, ROADMAP_ARCHIVE.md),
  * which named a still-wider ±5% band as "the next diagnostic step if anyone wants to keep isolating
  * cost drag" after the ±3% band cut holdout episodes only 107->88 (-17.8%) for a 3x width increase,
  * with cost drag remaining 3.8x the size of the shrunken strategy-vs-buy-hold gap. That writeup's

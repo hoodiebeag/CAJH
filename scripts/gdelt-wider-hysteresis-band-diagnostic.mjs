@@ -5,7 +5,7 @@
  * from signal-direction as the driver of the original loss.
  *
  * SOURCED FROM: GDELT-NEWS-SENTIMENT-PRIMARY-SIGNAL's own "what would actually resolve this" section
- * (2026-08-23, ROADMAP.md): "A wider hysteresis band (tested against a fresh, not-yet-examined
+ * (2026-08-23, ROADMAP_ARCHIVE.md): "A wider hysteresis band (tested against a fresh, not-yet-examined
  * window, to avoid fitting the band to this run's own holdout) ... would be the natural next lever,
  * if this line is revisited — not attempted here since it would require a second holdout look at
  * data this run has already spent." This diagnostic is that exact next lever, run for the first time.
