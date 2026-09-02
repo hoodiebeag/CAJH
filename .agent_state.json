@@ -352,9 +352,9 @@
     "message": "cajh: queue empty again (17/17 done). Crypto price-structure closed by directive, C0-C3 resolved; C1/C3 need your IBKR entitlement answers to proceed. No legitimate new item to queue."
    },
    "persistent-pull-blocker": {
-    "lastSentAt": "2026-08-19T10:02:01.000Z",
-    "message": "cajh: pull still blocked (>6h) by pre-existing unstaged package.json allowScripts.canvas change. Not created by the loop, needs your look.",
-    "deliveryResult": "Mobile push requested (tool call succeeded; delivery to device not independently confirmed - see notification_policy.known_gap)."
+    "lastSentAt": "2026-09-02T21:01:20.522Z",
+    "message": "cajh: pull still blocked by uncommitted ROADMAP.md/VERDICTS.md/universe.txt changes not made by the loop. Needs your look (not touched since last flag on 8/19).",
+    "deliveryResult": "PushNotification tool call returned not-sent (terminal active / redundant per tool policy) - not a Remote Control delivery confirmation, see notification_policy.known_gap."
    },
    "new-pass-verdict": {
     "lastSentAt": "2026-09-02T04:09:07.776Z",
