@@ -116,6 +116,30 @@ not to be queued until C0 resolves.
 path in `SELF_AWARENESS_SPEC.md` and explicit human sign-off at D3. `SEALED_SYMBOLS` was spent
 on 2026-08-29 and returned inconclusive — nothing may assume a fresh sealed pool exists.
 
+## Artifact publishing is PAUSED (added 2026-09-02 — human instruction, binding)
+
+The human's words, 2026-09-02: *"No more artifacts unless I ask for them, you're wasting
+usage credits."*
+
+**Do not publish or republish the human-facing deck, and do not create any new artifact,
+unless the human explicitly asks for it in that same session.** This overrides every earlier
+standing instruction to keep the deck current — including the "republish when a conclusion
+changes" rule that was in force until this date. **A changed conclusion is no longer a reason
+to publish.**
+
+This section exists because that superseded instruction still sits in the `CAJH loop keeper`
+scheduled-task prompt, which could not be edited when this was recorded (its management server
+was unreachable). Where the two disagree, **this section wins** — the same precedence the
+"Closed research programs" section above relies on. The scheduled-task prompt should be
+corrected when it is reachable again; until then, treat its `DECK` section as revoked.
+
+**What to do instead.** When a finding would previously have triggered a republish, say so in
+one line in the run's own report and move on. Do not batch pending deck edits, do not keep a
+to-publish list, and do not pre-build the file in anticipation of being asked.
+
+The full instruction, the reasoning, and the deck's last-published state are recorded in
+`.agent_state.json`'s `blackboard.deck_publishing_paused`.
+
 ## Phase duties
 
 - **ARCHITECT** — structure only: imports, interfaces, function stubs with explicit
