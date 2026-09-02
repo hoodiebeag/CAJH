@@ -300,6 +300,13 @@
     "roadmap_entry": "ROADMAP.md, 2026-08-29, section 'PHASE-DIRECTIVE-COMPLETION-SUMMARY: closing blackboard.phase_directive_new_mechanism's C0-C3 sequence'"
    }
   },
+  "deck_publishing_paused": {
+   "recorded_at": "2026-09-02",
+   "instruction": "Human, verbatim: 'No more artifacts unless I ask for them, you're wasting usage credits.'",
+   "rule": "DO NOT publish or republish the deck, or create any new artifact, unless the human explicitly asks in that session. This overrides every prior standing instruction to keep the deck current, including the republish-when-a-conclusion-changes rule that was in force until now. A changed conclusion is NO LONGER a reason to publish.",
+   "what_to_do_instead": "When a finding would previously have triggered a republish, say so in the chat report in one line and move on. Do not batch pending deck edits, do not maintain a to-publish list, and do not pre-build the file in anticipation.",
+   "deck_last_published": "2026-09-02, 16 slides, https://claude.ai/code/artifact/bcb90ed4-db08-4128-a1fe-b435f8ee49a4 . Accurate as of that date. If the human later asks for it, re-read the live artifact first and rebuild from that, since this session cannot be woken by republishes elsewhere (the artifact service refused a wake subscription, HTTP 403)."
+  },
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
