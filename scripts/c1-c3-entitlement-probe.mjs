@@ -120,21 +120,32 @@ export function evaluateGate(probe, gate = GATE) {
     c1 = "BLOCKED";
     c1Reasons.push(`no IB Gateway connection: ${probe.ibkr?.error ?? "not attempted"}`);
   } else {
-    const qualifying = (probe.c1?.underlyings ?? []).filter((u) => {
+    const legs = (probe.c1?.underlyings ?? []).map((u) => {
       const expiries = (u.expiries ?? []).filter((e) => (e.strikes ?? 0) >= gate.c1.minStrikesPerExpiry);
-      const enoughChain = expiries.length >= gate.c1.minExpiries;
-      const enoughIv = (u.ivBars ?? 0) >= gate.c1.minIvBars;
-      c1Reasons.push(
-        `${u.symbol}: ${expiries.length} qualifying expiries (need ${gate.c1.minExpiries}), ` +
-        `${u.ivBars ?? 0} IV bars (need ${gate.c1.minIvBars})`,
-      );
-      return enoughChain && enoughIv;
+      const enough = expiries.length >= gate.c1.minExpiries && (u.ivBars ?? 0) >= gate.c1.minIvBars;
+      // A request that errored or timed out having returned NOTHING did not answer the
+      // question. Scoring it as UNAVAILABLE would put "this account cannot enumerate option
+      // chains" on the record when all that happened was a request that never completed --
+      // the same absence-of-evidence-is-not-evidence-of-absence line the FRED network control
+      // exists to hold, applied to the IBKR side where it was originally missed.
+      const inconclusive = !!u.error && expiries.length === 0 && (u.ivBars ?? 0) === 0;
+      c1Reasons.push(inconclusive
+        ? `${u.symbol}: request did not complete (${u.error}) and returned nothing -- inconclusive, not a finding about entitlement`
+        : `${u.symbol}: ${expiries.length} qualifying expiries (need ${gate.c1.minExpiries}), ` +
+          `${u.ivBars ?? 0} IV bars (need ${gate.c1.minIvBars})` + (u.error ? ` [partial: ${u.error}]` : ""));
+      return { enough, inconclusive };
     });
-    c1 = qualifying.length ? "AVAILABLE" : "UNAVAILABLE";
+    if (legs.some((l) => l.enough)) c1 = "AVAILABLE";
+    else if (legs.length === 0 || legs.every((l) => l.inconclusive)) c1 = "BLOCKED";
+    else c1 = "UNAVAILABLE";
   }
 
   let c3 = "UNAVAILABLE";
-  const fxOk = (probe.c3?.pairs ?? []).filter((p) => (p.bars ?? 0) >= gate.c3.minFxBars);
+  const fxPairs = probe.c3?.pairs ?? [];
+  const fxOk = fxPairs.filter((p) => (p.bars ?? 0) >= gate.c3.minFxBars);
+  // Bars that arrived are affirmative evidence however the request ended; a pair that returned
+  // nothing AND errored is inconclusive rather than unavailable.
+  const fxInconclusive = fxPairs.filter((p) => !!p.error && (p.bars ?? 0) === 0);
   const control = probe.c3?.control;
   const nonUsdOk = (probe.c3?.series ?? []).filter((s) => s.ok && (s.observations ?? 0) >= gate.c3.minSeriesObservations);
   // Say "not attempted" rather than "0 of 4", which reads like four requests that came back
@@ -154,8 +165,14 @@ export function evaluateGate(probe, gate = GATE) {
     c3 = "BLOCKED";
     c3Reasons.push(`network control ${gate.c3.controlSeries} did not resolve (${control?.reason ?? "not attempted"}); non-USD answers are uninterpretable`);
   } else {
-    c3 = (fxOk.length >= gate.c3.minPairsWithBars && nonUsdOk.length >= gate.c3.minNonUsdSeries)
-      ? "AVAILABLE" : "UNAVAILABLE";
+    if (fxOk.length >= gate.c3.minPairsWithBars && nonUsdOk.length >= gate.c3.minNonUsdSeries) {
+      c3 = "AVAILABLE";
+    } else if (fxPairs.length > 0 && fxInconclusive.length === fxPairs.length) {
+      c3 = "BLOCKED";
+      c3Reasons.push("every FX request errored having returned nothing -- inconclusive, not a finding about entitlement");
+    } else {
+      c3 = "UNAVAILABLE";
+    }
   }
 
   return {
@@ -181,7 +198,7 @@ async function fetchFred(seriesId) {
 /** Everything that needs a live gateway, isolated so the rest of the file loads without one. */
 async function probeIbkr() {
   const ib = await import("@stoqey/ib");
-  const { IBApi, EventName, Option, Forex, WhatToShow, BarSizeSetting } = ib;
+  const { IBApi, EventName, Option, Forex, Stock, WhatToShow, BarSizeSetting } = ib;
   const api = new IBApi({ host: HOST, port: PORT });
   let nextId = 9000;
   const reqId = () => nextId++;
@@ -197,79 +214,149 @@ async function probeIbkr() {
   });
   if (!connected.connected) return { ibkr: connected, c1: null, fx: null };
 
-  const collect = (start, onEvent, endEvent) => new Promise((resolve) => {
+  /**
+   * Run one request and collect its rows.
+   *
+   * `onRow(id, push, finish)` registers the data listener and returns its remover, so every
+   * listener is torn down when the request settles. Leaking one per request was harmless here
+   * only because each checks its own request id.
+   */
+  const collect = (start, onRow, endEvent) => new Promise((resolve) => {
     const id = reqId();
     const acc = [];
-    let settled = false;
+    let settled = false, removeRow = () => {};
     const finish = (v) => {
       if (settled) return;
       settled = true;
-      api.off(endEvent, onEnd); api.off(EventName.error, onErr);
+      removeRow();
+      if (endEvent) api.off(endEvent, onEnd);
+      api.off(EventName.error, onErr);
+      clearTimeout(timer);
       resolve(v);
     };
     const onEnd = () => finish({ ok: true, rows: acc });
     const onErr = (a, b, c) => { if (a === id || b === id) finish({ ok: false, reason: String(c ?? b ?? a), rows: acc }); };
-    onEvent(id, acc, finish);
-    api.on(endEvent, onEnd);
+    removeRow = onRow(id, (row) => acc.push(row), finish);
+    if (endEvent) api.on(endEvent, onEnd);
     api.on(EventName.error, onErr);
-    setTimeout(() => finish({ ok: false, reason: "timeout", rows: acc }), REQUEST_TIMEOUT_MS);
+    const timer = setTimeout(() => finish({ ok: false, reason: "timeout", rows: acc }), REQUEST_TIMEOUT_MS);
     start(id);
   });
 
+  /**
+   * Historical bars. Completion is signalled INSIDE the historicalData stream, as a row whose
+   * `time` begins with "finished" -- not by a separate historicalDataEnd event. This is the same
+   * quirk `brokers/ibkr.mjs`'s own fetchOHLC already handles; the first version of this probe
+   * waited on historicalDataEnd instead, so every FX request sat until its 30s timeout and was
+   * recorded with error:"timeout" despite having received all 1297 of its bars. Reusing the
+   * house pattern rather than re-deriving it is the whole point of it being written down.
+   */
+  const histBars = (contract, duration, whatToShow) => collect(
+    (id) => api.reqHistoricalData(id, contract, "", duration, BarSizeSetting.DAYS_ONE, whatToShow, 1, 2, false),
+    (id, push, finish) => {
+      let seen = 0;
+      const h = (rid, time) => {
+        if (rid !== id) return;
+        if (String(time).startsWith("finished")) return finish({ ok: true, count: seen });
+        seen++;
+        push(time);
+      };
+      api.on(EventName.historicalData, h);
+      return () => api.off(EventName.historicalData, h);
+    },
+    null,
+  );
+
+  /**
+   * Resolve a stock's IBKR contract id.
+   *
+   * reqSecDefOptParams's last argument is the UNDERLYING CONTRACT ID, and the first version of
+   * this probe passed a literal 0. That is why SPY and QQQ came back with zero expiries on
+   * 2026-09-03 -- the request was malformed, not the account unentitled. The chain cannot be
+   * enumerated without the real conId, so it is looked up first.
+   */
+  const conIdFor = async (symbol) => {
+    const r = await collect(
+      (id) => api.reqContractDetails(id, new Stock(symbol, "SMART", "USD")),
+      (id, push) => {
+        const h = (rid, details) => { if (rid === id && details?.contract?.conId) push(details.contract.conId); };
+        api.on(EventName.contractDetails, h);
+        return () => api.off(EventName.contractDetails, h);
+      },
+      EventName.contractDetailsEnd,
+    );
+    return { conId: r.rows?.[0] ?? null, error: r.ok ? null : r.reason };
+  };
+
   const underlyings = [];
   for (const symbol of GATE.c1.underlyings) {
+    const { conId, error: conIdError } = await conIdFor(symbol);
+    if (!conId) {
+      underlyings.push({ symbol, expiries: [], ivBars: 0, error: conIdError ?? "no contract id returned" });
+      continue;
+    }
     const chain = await collect(
-      (id) => api.reqSecDefOptParams(id, symbol, "", "STK", 0),
-      (id, acc) => api.on(EventName.securityDefinitionOptionParameter,
-        (rid, exchange, _u, _t, _m, expirations, strikes) => {
+      (id) => api.reqSecDefOptParams(id, symbol, "", "STK", conId),
+      (id, push) => {
+        const h = (rid, exchange, _u, _t, _m, expirations, strikes) => {
           if (rid !== id) return;
-          for (const e of expirations ?? []) acc.push({ expiry: e, strikes: (strikes ?? []).length, exchange });
-        }),
+          for (const e of expirations ?? []) {
+            push({ expiry: e, strikes: (strikes ?? []).length, strikeList: strikes ?? [], exchange });
+          }
+        };
+        api.on(EventName.securityDefinitionOptionParameter, h);
+        return () => api.off(EventName.securityDefinitionOptionParameter, h);
+      },
       EventName.securityDefinitionOptionParameterEnd,
     );
-    const expiries = chain.ok ? dedupeExpiries(chain.rows) : [];
+    const expiries = dedupeExpiries(chain.rows ?? []);
+    let ivBars = 0, error = chain.ok ? null : chain.reason;
     const first = expiries[0];
-    let ivBars = 0, ivError = chain.ok ? null : chain.reason;
-    if (first) {
-      const iv = await collect(
-        (id) => api.reqHistoricalData(
-          id, new Option(symbol, first.expiry, first.strike, "C"), "", "2 Y",
-          BarSizeSetting.DAYS_ONE, WhatToShow.OPTION_IMPLIED_VOLATILITY, 1, 2, false),
-        (id, acc) => api.on(EventName.historicalData, (rid, time) => {
-          if (rid === id && !String(time).startsWith("finished")) acc.push(time);
-        }),
-        EventName.historicalDataEnd,
-      );
-      ivBars = iv.rows.length;
-      if (!iv.ok) ivError = iv.reason;
+    if (first?.strike) {
+      const iv = await histBars(
+        new Option(symbol, first.expiry, first.strike, "C"), "2 Y", WhatToShow.OPTION_IMPLIED_VOLATILITY);
+      ivBars = iv.count ?? iv.rows?.length ?? 0;
+      if (!iv.ok) error = iv.reason;
+    } else if (!error && expiries.length) {
+      error = "chain enumerated but carried no strike to price an IV series against";
     }
-    underlyings.push({ symbol, expiries, ivBars, error: ivError });
+    underlyings.push({ symbol, conId, expiries, ivBars, error });
   }
 
   const pairs = [];
   for (const [base, quote] of GATE.c3.pairs) {
-    const bars = await collect(
-      (id) => api.reqHistoricalData(
-        id, new Forex(base, quote), "", "5 Y",
-        BarSizeSetting.DAYS_ONE, WhatToShow.MIDPOINT, 1, 2, false),
-      (id, acc) => api.on(EventName.historicalData, (rid, time) => {
-        if (rid === id && !String(time).startsWith("finished")) acc.push(time);
-      }),
-      EventName.historicalDataEnd,
-    );
-    pairs.push({ pair: `${base}${quote}`, bars: bars.rows.length, error: bars.ok ? null : bars.reason });
+    const bars = await histBars(new Forex(base, quote), "5 Y", WhatToShow.MIDPOINT);
+    pairs.push({ pair: `${base}${quote}`, bars: bars.count ?? bars.rows?.length ?? 0, error: bars.ok ? null : bars.reason });
   }
 
   try { api.disconnect(); } catch { /* already gone */ }
   return { ibkr: connected, c1: { underlyings }, fx: pairs };
 }
 
-/** One entry per expiry, carrying the widest strike count seen and a strike to request IV for. */
+/**
+ * One entry per expiry, carrying the widest strike list seen and one concrete strike to price an
+ * IV series against.
+ *
+ * The strike matters: the first version left it null, so the IV request was built as
+ * `new Option(symbol, expiry, null, "C")` and could never have returned bars even against a
+ * fully entitled account. The median of the listed strikes is used as a cheap at-the-money
+ * proxy -- an exact ATM strike would need a spot quote, which is a market-data subscription
+ * question this probe is deliberately not asking.
+ */
 function dedupeExpiries(rows) {
   const byExpiry = new Map();
   for (const r of rows) {
+    const strikes = Array.isArray(r.strikeList) ? r.strikeList : [];
     const prev = byExpiry.get(r.expiry);
-    if (!prev || r.strikes > prev.strikes) byExpiry.set(r.expiry, { expiry: r.expiry, strikes: r.strikes, strike: null });
+    if (!prev || r.strikes > prev.strikes) {
+      const sorted = [...strikes].sort((a, b) => a - b);
+      byExpiry.set(r.expiry, {
+        expiry: r.expiry,
+        strikes: r.strikes,
+        strike: sorted.length ? sorted[Math.floor(sorted.length / 2)] : null,
+        exchange: r.exchange,
+      });
+    }
   }
   return [...byExpiry.values()].sort((a, b) => a.expiry.localeCompare(b.expiry));
 }

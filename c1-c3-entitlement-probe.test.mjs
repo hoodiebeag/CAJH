@@ -168,3 +168,62 @@ test("an unattempted FX leg says so rather than reporting zero of four", () => {
   assert.ok(g.c3.reasons.some((r) => /not attempted/.test(r)));
   assert.ok(!g.c3.reasons.some((r) => /^0 of \d+ pairs returned/.test(r)));
 });
+
+// ---------- inconclusive is not unavailable ----------
+
+test("a C1 leg that errored having returned nothing is BLOCKED, not UNAVAILABLE", () => {
+  // The 2026-09-03 run 2 exactly: gateway connected, both underlyings timed out with zero rows.
+  // Scoring that UNAVAILABLE would put "this account cannot enumerate option chains" on the
+  // record when no request ever completed.
+  const g = evaluateGate({
+    ibkr: CONNECTED,
+    c1: { underlyings: [
+      { symbol: "SPY", expiries: [], ivBars: 0, error: "timeout" },
+      { symbol: "QQQ", expiries: [], ivBars: 0, error: "timeout" },
+    ] },
+    c3: PASSING.c3,
+  });
+  assert.equal(g.c1.verdict, "BLOCKED");
+  assert.ok(g.c1.reasons.every((r) => /inconclusive, not a finding about entitlement/.test(r)));
+});
+
+test("a clean chain that is simply too thin is UNAVAILABLE, which is a real finding", () => {
+  const g = evaluateGate({ ...PASSING, c1: { underlyings: [{ symbol: "SPY", expiries: expiries(1, 40), ivBars: 900 }] } });
+  assert.equal(g.c1.verdict, "UNAVAILABLE");
+  assert.ok(!g.c1.reasons.some((r) => /inconclusive/.test(r)));
+});
+
+test("one inconclusive leg does not block a verdict the other leg actually answered", () => {
+  const g = evaluateGate({ ...PASSING, c1: { underlyings: [
+    { symbol: "SPY", expiries: [], ivBars: 0, error: "timeout" },
+    { symbol: "QQQ", expiries: expiries(6, 40), ivBars: 700 },
+  ] } });
+  assert.equal(g.c1.verdict, "AVAILABLE");
+});
+
+test("a partial leg that returned data despite an error is scored on the data, and flagged", () => {
+  const g = evaluateGate({ ...PASSING, c1: { underlyings: [{ symbol: "SPY", expiries: expiries(6, 40), ivBars: 700, error: "timeout" }] } });
+  assert.equal(g.c1.verdict, "AVAILABLE");
+  assert.ok(g.c1.reasons.some((r) => /\[partial: timeout\]/.test(r)));
+});
+
+test("FX bars that arrived count even when the request ended badly", () => {
+  // Run 2's real shape: 1297 bars per pair, every one carrying error "timeout" because the
+  // completion sentinel was missed. Data that arrived is affirmative evidence.
+  const pairs = GATE.c3.pairs.map(([b, q]) => ({ pair: `${b}${q}`, bars: 1297, error: "timeout" }));
+  const g = evaluateGate({ ...PASSING, c3: { ...PASSING.c3, pairs } });
+  assert.equal(g.c3.verdict, "AVAILABLE");
+});
+
+test("FX pairs that all errored with no bars are BLOCKED, not UNAVAILABLE", () => {
+  const pairs = GATE.c3.pairs.map(([b, q]) => ({ pair: `${b}${q}`, bars: 0, error: "timeout" }));
+  const g = evaluateGate({ ...PASSING, c3: { ...PASSING.c3, pairs } });
+  assert.equal(g.c3.verdict, "BLOCKED");
+  assert.ok(g.c3.reasons.some((r) => /inconclusive, not a finding about entitlement/.test(r)));
+});
+
+test("FX pairs that answered cleanly but short are UNAVAILABLE, a real finding", () => {
+  const pairs = GATE.c3.pairs.map(([b, q]) => ({ pair: `${b}${q}`, bars: 50, error: null }));
+  const g = evaluateGate({ ...PASSING, c3: { ...PASSING.c3, pairs } });
+  assert.equal(g.c3.verdict, "UNAVAILABLE");
+});

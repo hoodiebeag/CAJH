@@ -4472,3 +4472,68 @@ at all — four empty responses and four requests never sent are different facts
 stated the wrong one. It now reports `"FX pairs not attempted"` when the list is empty, with a
 regression test built from this exact run. A reason line that overstates what was tested is the
 same defect as a verdict that overstates what was found.
+
+
+## 2026-09-03 — C1-C3-ENTITLEMENT-PROBE-RUN 2: C3 is AVAILABLE on real IBKR data; C1's "UNAVAILABLE" was my own bug and is retracted to BLOCKED
+
+Second run, gateway up, connection established. Run record
+`research-runs/2026-09-03T10-10-51-487Z-c1-c3-entitlement-probe.json`. The raw gate output said
+`C1: UNAVAILABLE, C3: AVAILABLE`. **C3 stands. C1 does not, and is retracted here rather than
+recorded.**
+
+### C3 — AVAILABLE, on evidence that actually arrived
+
+All four pairs returned **1297 daily MIDPOINT bars** each against a 5-year request — about 259
+bars a year, which is the right shape for FX. Identical counts across four pairs is expected
+rather than suspicious: spot FX shares one trading calendar. Combined with run 1's six non-USD
+rate series, both halves of `C3-FX-CARRY-DATA-GATE` are now answered:
+
+| Leg | Result |
+|---|---|
+| IDEALPRO historical FX bars | EURUSD / GBPUSD / USDJPY / AUDUSD, 1297 daily MIDPOINT bars each |
+| Non-USD short-rate series | six of six resolve, complete on their own spans (run 1) |
+
+**This says the data exists and nothing more.** The probe's own output carries the sentence:
+*"AVAILABLE means the data exists and a study could be built. It is not a result about returns."*
+No FX carry study is authorized by this; it needs its own pre-registration, and the sequencing
+rule is untouched.
+
+### C1 — the reported UNAVAILABLE is retracted; the correct verdict is BLOCKED
+
+SPY and QQQ both came back with zero expiries and zero IV bars, and the gate scored that
+UNAVAILABLE. That is wrong, and it would have written *"this account cannot enumerate option
+chains"* into the permanent record. Both legs also carried `"error": "timeout"` — **no request
+ever completed.** Zero rows from a request that did not finish is absence of evidence.
+
+Three defects, all mine, all now fixed:
+
+1. **The gate conflated "errored with nothing" and "answered, insufficient."** It now returns
+   BLOCKED for a leg that errored having returned nothing, UNAVAILABLE only for one that answered
+   cleanly and fell short. This is the same distinction the FRED network control was built to
+   preserve on the other side of the probe — the principle was already in the file, applied to one
+   half and not the other.
+2. **`reqSecDefOptParams` was called with a literal `0` for the underlying contract id.** That
+   argument is the real conId, which must be resolved first via `reqContractDetails`. The request
+   was malformed, so a fully entitled account would have returned exactly what this one did. This
+   is the most likely single cause of the empty chains.
+3. **Historical-data completion was waited for on the wrong event.** `@stoqey/ib` signals the end
+   of a bar stream *inside* `historicalData`, as a row whose `time` begins with `"finished"`, not
+   via `historicalDataEnd`. `brokers/ibkr.mjs`'s own `fetchOHLC` already documents and handles
+   this. Because the probe waited on `historicalDataEnd`, every FX request sat until its 30-second
+   timeout and was recorded as `error: "timeout"` **despite having received all 1297 of its bars**
+   — which is why C3's evidence is sound while its transport looked broken. The house pattern was
+   written down precisely so it would not have to be rediscovered; not reusing it was the error.
+
+Also fixed while in there: `dedupeExpiries` carried `strike: null`, so the IV request was built as
+`new Option(symbol, expiry, null, "C")` and could not have returned bars against any account,
+entitled or not. It now selects the median listed strike as a cheap at-the-money proxy — an exact
+ATM strike needs a spot quote, which is a market-data-subscription question this probe is
+deliberately not asking. Data listeners are now removed when a request settles rather than
+accumulating one per request.
+
+**C1's account-side question is therefore still open and still unanswered after two runs.** Seven
+new tests pin the inconclusive-versus-unavailable distinction, built from run 2's exact shape so
+they would have failed against the code that produced it.
+
+`SEALED_SYMBOLS` untouched. No order placed, no account or position data read, nothing under
+`brokers/` modified, no GATE threshold changed.
