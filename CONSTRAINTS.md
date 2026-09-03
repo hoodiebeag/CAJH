@@ -55,6 +55,20 @@ justifies changing that.
 - **The frozen-path list** — three documents disagreed (6 vs 8 vs 7 files); put to the human, who
   had no answer. Unresolved.
 
+## The autonomous loop is retired
+
+The 5-hourly keeper cron was deleted on 2026-09-03. The hourly loop on the owner's machine is
+external to this repository and must be stopped there; until it is, it will keep pulling work.
+
+`.agent_state.json` is now historical. Its ledger is a hundred entries of what the loop did and
+the safety hook has a narrow exemption keyed to that array, so the file stays where it is rather
+than being moved or emptied. Nothing should read it as a live work queue.
+
+The loop is why this repository grew a research pipeline, a promotion gate, a paper-trade runner
+and four protocol documents in two days without producing a single finding about markets. A
+scheduler creates demand for tasks, and an agent asked to keep a queue stocked will stock it.
+**Work should be started by a person deciding it is worth doing.**
+
 ## Housekeeping
 
 Artifact and deck publishing is paused (human instruction, 2026-09-02).

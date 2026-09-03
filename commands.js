@@ -141,76 +141,6 @@ export async function handleReconcile(message) {
   if (res == null) await message.reply("⚠️ Couldn't reach Kraken to reconcile — try again shortly.");
 }
 
-// ─── !research  (owner-only: run the next ready hypothesis via agent-tools.mjs) ──
-// Never touches trader.js/monitor.js — cajh cannot place an order or !resume from here.
-const MAX_REPLY_CHARS = 1800;
-const truncateReply = (text) => (text.length > MAX_REPLY_CHARS ? text.slice(0, MAX_REPLY_CHARS - 1) + "…" : text);
-
-export async function handleResearch(message) {
-  const { listPendingHypotheses, assertHypothesisExecutable, executeAgentScript, recordHypothesisResult } = await import("./agent-tools.mjs");
-
-  const pending = listPendingHypotheses();
-  if (!pending.length) return message.reply("No pending hypotheses in DATA_DIR/hypotheses/.");
-
-  let record = null;
-  const notReady = [];
-  for (const candidate of pending) {
-    try { record = assertHypothesisExecutable(candidate.id); break; }
-    catch (err) { notReady.push(`${candidate.id}: ${err.message}`); }
-  }
-  if (!record) return message.reply(truncateReply(`No hypothesis is ready to run yet:\n${notReady.join("\n")}`));
-
-  await message.reply(`🧪 Running **${record.id}** — ${record.entryFamily} — ${record.hypothesis}`);
-
-  const scriptRel = `hypotheses/${record.id}.mjs`;
-  let status, result;
-  try {
-    const run = executeAgentScript(scriptRel);
-    if (run.status !== 0) {
-      status = "killed";
-      result = { error: `${scriptRel} exited ${run.status}${run.timedOut ? " (timed out)" : ""}`, stderr: run.stderr.slice(0, 500) };
-    } else {
-      const lastLine = run.stdout.trim().split("\n").filter(Boolean).pop();
-      const parsed = lastLine ? JSON.parse(lastLine) : null;
-      if (parsed?.status === "passed" || parsed?.status === "killed") {
-        status = parsed.status;
-        result = parsed.result ?? parsed;
-      } else {
-        status = "killed";
-        result = { error: `${scriptRel} did not print a trailing {status, result} JSON line`, stdout: run.stdout.slice(0, 500) };
-      }
-    }
-  } catch (err) {
-    status = "killed";
-    result = { error: err.message };
-  }
-
-  recordHypothesisResult(record.id, status, result);
-  const icon = status === "passed" ? "✅" : "🛑";
-  await message.channel.send(truncateReply(
-    `${icon} **${record.id}** → **${status}**\n${record.hypothesis}\nResult: \`${JSON.stringify(result)}\``
-  ));
-}
-
-// ─── !notes [slug]  (owner-only: list or print DATA_DIR/agent-notes/*) ──────────
-export async function handleNotes(message, slug) {
-  const { listAgentDir, readAgentFile } = await import("./agent-tools.mjs");
-
-  if (!slug) {
-    const entries = listAgentDir("agent-notes").filter((e) => e.type === "file");
-    if (!entries.length) return message.reply("No agent notes yet — DATA_DIR/agent-notes/ is empty.");
-    return message.reply(truncateReply(`**Agent notes:**\n${entries.map((e) => `• ${e.name}`).join("\n")}`));
-  }
-
-  if (!/^[a-zA-Z0-9._-]+$/.test(slug)) return message.reply("⚠️ Invalid note name — letters, numbers, `.`, `_`, `-` only.");
-  try {
-    const text = readAgentFile(`agent-notes/${slug}`);
-    await message.reply(truncateReply(`**agent-notes/${slug}**\n\`\`\`\n${text}\n\`\`\``));
-  } catch (err) {
-    await message.reply(`⚠️ ${err.message}`);
-  }
-}
-
 // ─── !port  (whole-account portfolio) ──────────────────────────────────────────
 
 export async function handlePort(message) {
@@ -286,8 +216,6 @@ export async function handleHelp(message, state) {
     `> \`!status\` — Bot status\n\n` +
 
     `**Research (owner-only, no trades):**\n` +
-    `> \`!research\` — Run the next ready hypothesis, record passed/killed\n` +
-    `> \`!notes\` · \`!notes <file>\` — List/read cajh's own research notes\n\n` +
 
     `**Extras (AI, no trades):**\n` +
     `> \`@cajh $BTC\` — Pull charts (requires $ prefix)\n` +
