@@ -407,14 +407,6 @@
  },
  "ledger": [
   {
-   "ts": "2026-08-19T23:30:00.000Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "closed-work-queue-item",
-   "detail": "EQUITIES-BASELINE-PORT: ported breakout/anticipate (unmodified) onto a real Dow-30-as-of-2024-08-19 equity universe via live IBKR daily OHLC (paper port, read-only). Cost basis sourced/cited (IBKR Pro Fixed 0.005/share + 5bps/side slippage). Results: breakout net +0.1866R (vs crypto -0.864R - sign flips positive), anticipate net -0.0438R (vs crypto -0.884R - stays negative, ~20x smaller drag). Small sample (61/303 trades), no verdict, no live equities trading. Found+fixed a real IBKR daily-bar time-parsing bug (bare YYYYMMDD not epoch seconds) with new test coverage. 492 -> 493 tests green.",
-   "commit": "31aa980",
-   "tests": "493 pass, 0 fail, 0 skip"
-  },
-  {
    "ts": "2026-08-20T04:09:23.368Z",
    "agent": "cajh-loop-check-scheduled",
    "action": "HOLDING-PERIOD-COST-AMORTIZATION-MAP closed",
@@ -1202,8 +1194,16 @@
    "ts": "2026-09-03T04:01:21.000Z",
    "agent": "cajh-loop-check-scheduled",
    "action": "blocked-pull-foreign-changes",
-   "detail": "STEP 0.3: git pull --rebase failed again on the identical unstaged content as the immediately prior firing (655743d): ROADMAP.md/VERDICTS.md unstaged modifications plus untracked universe.txt, none created this run, git diff --stat unchanged from the 09-02T20:03:30.921Z description (ROADMAP.md +36/-0, VERDICTS.md 56 lines touched, still the VERDICTS-TOURNAMENT-CITATION-GAP-FIX work). Did not stash/checkout/reset/clean/commit any of it. Checked the canonical top-level notifications map first this time (not blackboard.notifications, which is the known stale legacy copy) -- persistent-pull-blocker-2026-09-02 was lastSentAt 2026-09-02T20:03:30.921Z, ~8h old and past the 6h dedup window, so sent one PushNotification (tool reported 'Not sent - terminal active, output already reaches user', a redundant-delivery no-op, not a failure) and recorded it under a fresh dated key persistent-pull-blocker-2026-09-03 to avoid touching the 09-02 entry's message text (protected-logic hook re-trip risk per established convention). Ledger was at the 100-entry cap so dropped the oldest entry (2026-08-20T03:01:03.000Z pull-blocked-exit) before appending this one. control/work_queue untouched (control remains idle from acbcf62, notes preserved as-is). No code work attempted this firing -- a human still needs to commit, stash, or discard the ROADMAP.md/VERDICTS.md/universe.txt content to unblock the loop.",
+   "detail": "STEP 0.3: git pull --rebase failed again on the identical unstaged content as the immediately prior firing (655743d): ROADMAP.md/VERDICTS.md unstaged modifications plus untracked universe.txt, none created this run, git diff --stat unchanged from the 09-02T20:03:30.921Z description (ROADMAP.md +36/-0, VERDICTS.md 56 lines touched, still the VERDICTS-TOURNAMENT-CITATION-GAP-FIX work). Did not stash/checkout/reset/clean/commit any of it. Checked the canonical top-level notifications map first this time (not blackboard.notifications, which is the known stale legacy copy) -- persistent-pull-blocker-2026-09-02 was lastSentAt 2026-09-02T20:03:30.921Z, ~8h old and past the 6h dedup window, so sent one PushNotification (tool reported 'Not sent - terminal active, output already reaches user', a redundant-delivery no-op, not a failure) and recorded it under a fresh dated key persistent-pull-blocker-2026-09-03 to avoid touching the 09-02 entry's message text (protected-logic hook re-trip risk per established convention). Ledger was at the 100-entry cap so dropped the oldest entry (2026-08-20T03:01:03.000Z pull-blocked-exit) before appending this one. control/work_queue untouched (control remains idle from acbcf62, notes preserved as-is). No code work attempted this firing -- a human still needs to commit, stash, or discard the ROADMAP.md/VERDICTS.md/universe.txt content to unblock the loop. This is the 3rd consecutive firing blocked on this exact ROADMAP.md/VERDICTS.md/universe.txt cause (after 37c6160, 655743d), per AGENT_PROTOCOL.md's newly-discovered 'countable trace' rule (see next entry).",
    "commit": null,
+   "tests": null
+  },
+  {
+   "ts": "2026-09-03T04:01:21.000Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "push-rejected-remote-diverged",
+   "detail": "After committing the ledger entry above (local commit 37d772b, .agent_state.json only), git push was rejected: origin/main had advanced by 2 commits (e5a866b, 2f563c8) not present locally, diverging from the same base (37c6160) my local branch also built on. git fetch confirmed the divergence is real, not a fetch-staleness artifact. Read both incoming commits: e5a866b (from a different session/machine, session_01BoxFiG8iVMnsB1Kf1nEhxU) fixes a genuine Windows bug in c1-c3-entitlement-probe.mjs's direct-run guard (import.meta.url vs backslash argv[1]) and also touches .agent_state.json (2 lines) -- the same file my local commits touch, so a straightforward fast-forward push is not possible. 2f563c8 adds a new AGENT_PROTOCOL.md section ('A blocked firing must leave a countable trace', added 2026-09-03) requiring exactly the kind of ledger entry this firing already independently wrote, plus an explicit rule against self-created ALLOW_PROTECTED_EDIT markers or reselecting a different item when blocked -- this firing did neither. Also learned from e5a866b's message that VERDICTS-TOURNAMENT-CITATION-GAP-FIX's own work_queue text was amended to warn future firings not to start it blind while the dirty tree is unreviewed, confirming a human decision is still the intended unblock path, not automation. Did not attempt to resolve the divergence: no rebase (working tree still carries the same ROADMAP.md/VERDICTS.md/universe.txt unstaged content that failed the original pull, and git rebase requires a clean tree, same failure mode expected), no merge, no force-push, no stash, no reset of anything -- including the local 37d772b commit itself, which is left in place unpushed rather than discarded, since it is real work (this firing's own ledger/notification recording) and reversing it would just recreate the same recording work for whichever firing eventually resolves the tree. Sent one PushNotification about the push rejection specifically (distinct content from the dirty-tree notification already sent this firing) -- result 'Mobile push not sent (Remote Control inactive)', recorded below. Net state at exit: 1 unpushed local commit (37d772b) sitting on top of the same divergence point origin/main also advanced from; next firing (or a human) must resolve the ROADMAP.md/VERDICTS.md/universe.txt dirty tree before either machine's queued .agent_state.json commits can sync. No code work attempted, control/work_queue untouched.",
+   "commit": "37d772b (local, unpushed)",
    "tests": null
   }
  ],
@@ -1270,6 +1270,12 @@
    "message": "cajh: pull still blocked - same uncommitted ROADMAP.md/VERDICTS.md/universe.txt content as 9/2, still not from this run. Needs your review before I can commit or discard it.",
    "deliveryResult": "Not sent - terminal active, output already reaches user (tool-reported redundant, not a delivery failure).",
    "note": "Canonical top-level key persistent-pull-blocker-2026-09-02 (lastSentAt 2026-09-02T20:03:30.921Z) was ~8h old, past the 6h dedup window, and git status/diff confirmed identical unstaged content (ROADMAP.md +36/-0-ish, VERDICTS.md ~56 lines, untracked universe.txt) -- same VERDICTS-TOURNAMENT-CITATION-GAP-FIX work still sitting uncommitted, unrelated to this run. New dated key per established convention rather than editing the 09-02 entry."
+  },
+  "push-rejected-diverged-2026-09-03": {
+   "lastSentAt": "2026-09-03T04:01:21.000Z",
+   "message": "cajh: state-commit push rejected -- origin/main diverged (2 new commits touch .agent_state.json). Local commit stranded unpushed. Still blocked by same dirty ROADMAP/VERDICTS/universe.txt tree, unrelated machine.",
+   "deliveryResult": "Mobile push not sent (Remote Control inactive).",
+   "note": "Distinct reasonKey/content from persistent-pull-blocker-* (which covers the dirty-tree cause) -- this covers the separate, newly-discovered fact that origin/main advanced past this firing's base (37c6160) with a commit that also edits .agent_state.json, so this firing's own state-commit (37d772b) cannot fast-forward push. No prior key covers this content, so not a dedup candidate."
   }
  }
 }
