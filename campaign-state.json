@@ -9,9 +9,9 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-03T21:50:00Z",
- "phase": "sweep18 done; leader now level with buy-and-hold BTC at a quarter of its drawdown",
- "runsTested": 1780,
+ "updatedAt": "2026-09-03T22:00:00Z",
+ "phase": "sweep19 done; cross-sectional selection built and swept",
+ "runsTested": 1822,
  "base": {
   "trendGate": false,
   "alignMode": "none",
@@ -183,6 +183,12 @@
    "axis": "beTriggerR x filters x trendMa combined",
    "configs": 60,
    "result": "NEW LEADER. $4077.96 on 148 trades at 13.54% DD -- level with buy-and-hold BTC ($4105.94) at roughly a quarter of its 52.06% drawdown."
+  },
+  {
+   "phase": "sweep19",
+   "axis": "crossSection lookback x topN",
+   "configs": 42,
+   "result": "Built the last idea from the literature search: rank the universe by trailing Sharpe and trade only the leaders. It does NOT help returns. Tighter selection monotonically lowers the balance and lowers the drawdown, the same risk/return dial every other filter turned out to be: topN 12 gives $3685.85 at 10.96% DD, topN 3 gives $2363.77 at 7.81%. The nominal new best, topN 20 of 29 pairs at $4175.64, filters almost nothing -- it drops 5 trades of 148 for +2.4%, which is noise at this sample size, not selection working."
   }
  ],
  "leader": {
@@ -198,6 +204,10 @@
   "beTriggerR": 2.5,
   "beLockR": 0.2,
   "filters": {
+   "crossSection": {
+    "lookback": 120,
+    "topN": 20
+   },
    "atrPctBand": {
     "period": 14,
     "min": 0.03,
@@ -205,30 +215,10 @@
    }
   },
   "riskPct": 0.005,
-  "trades": 148,
-  "meanR": 2.1641,
-  "finalBalance": 4077.96,
+  "trades": 143,
+  "finalBalance": 4175.64,
   "maxDrawdownPct": 13.54,
-  "vsBenchmark": "BTC buy-and-hold is $4105.94 at 52.06% DD. Same money, a quarter of the hole.",
-  "null": {
-   "vsAnyBar": {
-    "excessR": 1.7264,
-    "p": 0.00525,
-    "z": 3.37,
-    "mdeR": 1.4341,
-    "detectable": true,
-    "nullBalance": 1382.04
-   },
-   "vsGatedBars": {
-    "excessR": 1.8619,
-    "p": 0.0035,
-    "z": 3.51,
-    "mdeR": 1.4879,
-    "detectable": true,
-    "nullBalance": 1250.41
-   }
-  },
-  "fragility": "top 5 of 148 trades carry 80.9% of all R; win rate 38.5%"
+  "honestNote": "Above BTC buy-and-hold ($4105.94) for the first time, but the margin over the previous leader ($4077.96) comes from dropping 5 trades with a near-no-op filter setting. Treat $4078 and $4176 as the same number. The defensible claim is BTC's return at a quarter of BTC's drawdown, not beating it."
  },
  "benchmark": {
   "btcBuyAndHold": 4105.94,
@@ -252,7 +242,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Cross-sectional pair selection by trailing Sharpe -- the last idea from the literature search still unbuilt, and the one most likely to help, since the concentration analysis shows the return comes from a few pairs. Then: re-run the leave-one-pair-out and per-year robustness on the NEW leader (the old numbers are for the pre-sweep16 config), and a multi-timeframe series so alignMode is testable at all.",
+ "nextUp": "Re-run the robustness pass (leave-one-pair-out, trim-top-winners, per-year) on the CURRENT leader -- the recorded numbers are for the pre-sweep16 config. Then: a multi-timeframe series so alignMode and the higher-TF bias are testable at all (they are structurally dead in the single-TF runs done so far), and volatility-targeted position sizing, which is the remaining literature idea and is the only one that changes the balance without changing which trades are taken.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -378,5 +368,30 @@
    "pyquantlab regime-filtered trend",
    "quantmonitor SMA+ATR regime rules"
   ]
+ },
+ "riskReturnDial": {
+  "note": "Every filter built so far trades return for drawdown rather than adding return.",
+  "examples": {
+   "no filters": {
+    "final": 3934.79,
+    "dd": 13.54
+   },
+   "atrPctBand": {
+    "final": 4077.96,
+    "dd": 13.54
+   },
+   "crossSection topN12": {
+    "final": 3685.85,
+    "dd": 10.96
+   },
+   "crossSection topN3": {
+    "final": 2363.77,
+    "dd": 7.81
+   },
+   "all four of adx+btc+slope+atr": {
+    "final": 2624.88,
+    "dd": 8.57
+   }
+  }
  }
 }

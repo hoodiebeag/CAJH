@@ -29,7 +29,7 @@ import { backtestMultiTF } from "./backtest.js";
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { simulateEquity, leaderboard } from "./equity.mjs";
 import { FEE_RATE, SLIPPAGE_PCT } from "./strategy.js";
-import { buildEntryGate } from "./filters.mjs";
+import { buildEntryGate, sharpeRankTable } from "./filters.mjs";
 
 export const SPLIT = Object.freeze({
   // Full period, per the owner's 2026-09-03 direction. Kept as named fields so a later session
@@ -60,10 +60,20 @@ export function runConfig(config, { minutes = 1440, from = SPLIT.trainStart, to 
   // is built per pair here and never leaves the run. BTC is loaded once because btcRegime needs a
   // market-wide series that no single pair's chart contains.
   const btcCandles = config.filters?.btcRegime ? slice("XBTUSD", minutes, from, to) : null;
+  // The cross-sectional rank is a property of the whole universe at a moment, so it is built once
+  // and shared. Building it inside each pair's gate would rank all 29 pairs once per pair.
+  const series = {};
   for (const pair of universe) {
     const candles = slice(pair, minutes, from, to);
-    if (candles.length < 120) continue;
-    const entryGate = config.filters ? buildEntryGate(config.filters, { candles, entryMins: minutes, btcCandles }) : null;
+    if (candles.length >= 120) series[pair] = candles;
+  }
+  const sharpeRanks = config.filters?.crossSection
+    ? sharpeRankTable(series, { lookback: config.filters.crossSection.lookback ?? 60 })
+    : null;
+  for (const [pair, candles] of Object.entries(series)) {
+    const entryGate = config.filters
+      ? buildEntryGate(config.filters, { candles, entryMins: minutes, btcCandles, sharpeRanks, pair })
+      : null;
     const r = backtestMultiTF({ series: [{ label: String(minutes), mins: minutes, candles }] },
       { ...config, entryGate, entryTf: String(minutes), feeRate: config.feeRate ?? FEE_RATE, slipPct: config.slipPct ?? SLIPPAGE_PCT });
     symbolsUsed++;

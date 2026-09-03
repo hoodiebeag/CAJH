@@ -20,6 +20,10 @@
  *   atrPctBand     Volatility regime. A 1%-ATR market and an 8%-ATR market are not the same trade.
  *   btcRegime      Crypto is close to a one-factor market. Whether BTC is above its own average is
  *                  a market-wide state that no single pair's chart contains.
+ *   crossSection   The concentration analysis found the return lives in a handful of pairs -- two
+ *                  ZECUSD trades carried 35% of all R. Ranking the universe by trailing Sharpe and
+ *                  trading only the leaders is the standard answer, and unlike the others it needs
+ *                  information no single pair has: where this pair stands against the rest, now.
  *
  * Every indicator is computed on the entry timeframe from closed bars only. `at(tClose)` resolves
  * the bar by its close time, which is what entryGate is handed, so a filter can never see the bar
@@ -106,13 +110,67 @@ export function closeTimeIndex(candles, entryMins) {
 }
 
 /**
+ * Trailing Sharpe of log returns, annualised by sqrt(barsPerYear). Index i is the value as of bar
+ * i's close. Zero-variance windows return null rather than Infinity -- a flat stretch is not an
+ * infinitely good risk-adjusted return, and letting it rank first would put the deadest pair in
+ * the universe at the top of the list.
+ */
+export function trailingSharpe(candles, lookback = 60, barsPerYear = 365) {
+  const n = candles.length;
+  const out = new Array(n).fill(null);
+  const ret = new Array(n).fill(null);
+  for (let i = 1; i < n; i++) {
+    const a = Number(candles[i - 1].close), b = Number(candles[i].close);
+    if (a > 0 && b > 0) ret[i] = Math.log(b / a);
+  }
+  for (let i = lookback; i < n; i++) {
+    let sum = 0, count = 0;
+    for (let j = i - lookback + 1; j <= i; j++) if (ret[j] !== null) { sum += ret[j]; count++; }
+    if (count < lookback / 2) continue;
+    const mean = sum / count;
+    let sq = 0;
+    for (let j = i - lookback + 1; j <= i; j++) if (ret[j] !== null) sq += (ret[j] - mean) ** 2;
+    const sd = Math.sqrt(sq / (count - 1));
+    if (sd > 0) out[i] = (mean / sd) * Math.sqrt(barsPerYear);
+  }
+  return out;
+}
+
+/**
+ * Bar time -> the universe ranked best-first by trailing Sharpe as of that bar.
+ *
+ * Built once per configuration and shared by every pair, because computing it inside each pair's
+ * gate would rank the universe once per pair per run. Pairs are keyed by bar time rather than bar
+ * index: nine pairs in this bundle start two years after the others, so index i is a different
+ * date in different series and ranking by index would compare 2023 against 2025.
+ */
+export function sharpeRankTable(universe, { lookback = 60, barsPerYear = 365 } = {}) {
+  const byTime = new Map();
+  for (const [pair, candles] of Object.entries(universe)) {
+    const sh = trailingSharpe(candles, lookback, barsPerYear);
+    for (let i = 0; i < candles.length; i++) {
+      if (sh[i] === null) continue;
+      const t = Number(candles[i].time);
+      if (!byTime.has(t)) byTime.set(t, []);
+      byTime.get(t).push([pair, sh[i]]);
+    }
+  }
+  const ranked = new Map();
+  for (const [t, entries] of byTime) {
+    entries.sort((a, b) => b[1] - a[1]);
+    ranked.set(t, entries.map((e) => e[0]));
+  }
+  return ranked;
+}
+
+/**
  * Compile a spec into an entryGate. Unknown keys throw rather than silently passing everything --
  * a typo in a filter name would otherwise read as "this filter does nothing", and a sweep would
  * log the result under a name it never applied.
  */
-export function buildEntryGate(spec, { candles, entryMins, btcCandles = null } = {}) {
+export function buildEntryGate(spec, { candles, entryMins, btcCandles = null, sharpeRanks = null, pair = null } = {}) {
   if (!spec || !Object.keys(spec).length) return null;
-  const known = ["maSlope", "adx", "maxExtension", "atrPctBand", "btcRegime"];
+  const known = ["maSlope", "adx", "maxExtension", "atrPctBand", "btcRegime", "crossSection"];
   for (const key of Object.keys(spec)) {
     if (!known.includes(key)) throw new Error(`filters: unknown filter "${key}" (known: ${known.join(", ")})`);
   }
@@ -161,6 +219,17 @@ export function buildEntryGate(spec, { candles, entryMins, btcCandles = null } =
         if (times[mid] + entryMins * 60 <= tClose) { found = mid; lo = mid + 1; } else { hi = mid - 1; }
       }
       return found >= 0 && s[found] !== null && Number(btcCandles[found].close) > s[found];
+    });
+  }
+
+  if (spec.crossSection) {
+    const { topN = 8 } = spec.crossSection;
+    if (!sharpeRanks || !pair) throw new Error("filters: crossSection needs sharpeRanks and pair -- refusing to pass a filter it cannot evaluate");
+    checks.push((i) => {
+      const ranked = sharpeRanks.get(Number(candles[i].time));
+      if (!ranked) return false;
+      const at = ranked.indexOf(pair);
+      return at >= 0 && at < topN;
     });
   }
 

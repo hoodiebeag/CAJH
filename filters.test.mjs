@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { atr, sma, adx, closeTimeIndex, buildEntryGate } from "./filters.mjs";
+import { atr, sma, adx, closeTimeIndex, buildEntryGate, trailingSharpe, sharpeRankTable } from "./filters.mjs";
 
 const bars = (specs) => specs.map(([h, l, c], i) => ({ time: 1000 + i * 86400, high: h, low: l, close: c }));
 const flat = (n, px) => bars(Array.from({ length: n }, () => [px, px, px]));
@@ -75,4 +75,53 @@ test("closeTimeIndex maps every bar's close time to its own index", () => {
   const idx = closeTimeIndex(c, 1440);
   assert.equal(idx.get(Number(c[3].time) + 1440 * 60), 3);
   assert.equal(idx.size, 5);
+});
+
+test("trailingSharpe is null on a flat series rather than infinite", () => {
+  // A dead pair has zero variance. Reporting that as an infinitely good risk-adjusted return would
+  // rank the most lifeless series in the universe first, which is the opposite of the intent.
+  const flatBars = flat(200, 100);
+  assert.equal(trailingSharpe(flatBars, 60).at(-1), null);
+});
+
+test("trailingSharpe is positive on a rising series and negative on a falling one", () => {
+  assert.ok(trailingSharpe(ramp(300), 60).at(-1) > 0);
+  assert.ok(trailingSharpe(ramp(300, 400, -1), 60).at(-1) < 0);
+});
+
+test("the rank table keys on bar time, so pairs with different start dates are compared by date", () => {
+  // Nine pairs in the real bundle start two years after the rest. Ranking by bar index would put
+  // one pair's 2023 next to another's 2025.
+  const early = ramp(300);
+  const late = ramp(300).map((c) => ({ ...c, time: c.time + 100 * 86400 }));
+  const ranks = sharpeRankTable({ EARLY: early, LATE: late }, { lookback: 60 });
+  const overlapT = Number(late[100].time);
+  assert.deepEqual([...ranks.get(overlapT)].sort(), ["EARLY", "LATE"]);
+  const beforeLateStarts = Number(early[70].time);
+  assert.deepEqual(ranks.get(beforeLateStarts), ["EARLY"], "LATE has no bar on that date at all");
+});
+
+test("crossSection admits exactly the top N of the ranked universe", () => {
+  const a = ramp(300, 100, 2), b = ramp(300, 100, 0.1), c = ramp(300, 400, -1);
+  const series = { A: a, B: b, C: c };
+  const ranks = sharpeRankTable(series, { lookback: 60 });
+  const at = Number(a[200].time);
+  const order = ranks.get(at);
+  assert.equal(order.length, 3);
+  const gateFor = (pair, topN) =>
+    buildEntryGate({ crossSection: { lookback: 60, topN } }, { candles: series[pair], entryMins: 1440, sharpeRanks: ranks, pair });
+  const tClose = at + 1440 * 60;
+  // Whichever pair the ranking puts first is the one topN=1 admits, and the others are refused.
+  assert.equal(gateFor(order[0], 1)(tClose), true);
+  assert.equal(gateFor(order[1], 1)(tClose), false);
+  assert.equal(gateFor(order[1], 2)(tClose), true);
+  assert.equal(gateFor(order[2], 2)(tClose), false);
+  assert.equal(gateFor(order[2], 3)(tClose), true);
+  // The falling series must not be ranked above both rising ones.
+  assert.notEqual(order[0], "C");
+});
+
+test("crossSection refuses to compile without the universe it needs to rank against", () => {
+  assert.throws(() => buildEntryGate({ crossSection: { topN: 3 } }, { candles: ramp(300), entryMins: 1440 }),
+    /needs sharpeRanks and pair/);
 });
