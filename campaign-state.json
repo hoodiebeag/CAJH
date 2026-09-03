@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-03T23:25:00Z",
- "phase": "sweep23/24 done; execution realism priced, and it improved the result",
+ "updatedAt": "2026-09-03T23:45:00Z",
+ "phase": "walk-forward built; first out-of-sample evidence in the campaign",
  "runsTested": 2206,
  "base": {
   "trendGate": false,
@@ -277,7 +277,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Re-run entrynull-run.mjs on the current leader at k=4000 -- the last null was two configuration changes ago. Then the honest remaining question is out-of-sample: every number here is best-of-2206 on one sample, and the owner declined a holdout. The nearest available substitutes are a walk-forward (fit on an expanding window, score the next quarter only) and the equities test the owner originally named as the goal, which needs data this container does not have.",
+ "nextUp": "Strengthen the walk-forward by refitting what FIXED currently holds constant -- the filters, the fill delay, and ideally the entry mode. If the result survives refitting those too it is worth much more than it is now. Also worth running: the same walk-forward with the decision window starting 2025-01-01, so the training period contains the 2024 regime rather than only 2023.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -452,5 +452,39 @@
   "1.5x fee + 4x slip": 4003.34,
   "as modelled": 4874.7,
   "note": "Run at the pre-delay leader; the shape is what matters, not the level."
- }
+ },
+ "walkForward": {
+  "runner": "walkforward.mjs (node walkforward.mjs, ~2 min), pinned by walkforward.test.mjs",
+  "construction": "Each quarter of 2024-01-01..2026-03-31 is scored by parameters fitted only on bars that closed before it began. Nine quarters chained into one curve.",
+  "result": {
+   "trades": 135,
+   "meanR": 1.1448,
+   "finalBalance": 1974.68,
+   "maxDrawdownPct": 13.02
+  },
+  "sameWindowNoStrategy": {
+   "btc": 1544.1,
+   "btcMaxDrawdownPct": 52.06,
+   "equalWeightBasket": 779.28
+  },
+  "inSampleComparison": {
+   "sameWindowFittedOnAllData": {
+    "meanR": 1.8522,
+    "finalBalance": 2381.2
+   },
+   "reading": "+1.85R in-sample against +1.14R out-of-sample over the identical window. That gap is the size of the hindsight, measured rather than guessed: roughly 40% of the apparent edge was the search seeing the answer."
+  },
+  "parameterStability": "trendMa 150 and minStopPct 0.03 and volTarget 0.05 chosen in ALL NINE quarters; beTriggerR 2.5 in seven of nine. The search is not chasing noise. Note it never picks the full-sample leader's trendMa 200.",
+  "quarterlyShape": "Four of nine quarters positive. The return is concentrated in 2024Q1 (+2.84R), 2024Q4 (+1.73R) and 2025Q3 (+2.90R) -- the same fat-tail dependence as the in-sample result.",
+  "leaksStillPresent": "This is NOT a clean holdout and must not be quoted as one. The grid was designed after seeing full-sample results; the universe was chosen after seeing all of it; and walkforward.mjs's FIXED block holds the entry mode, the filters, and the one-bar fill delay constant at values selected in-sample rather than refitting them. Refitting those too would be the stronger test and has not been run."
+ },
+ "bugsFound": [
+  {
+   "where": "walkforward.mjs, first version",
+   "symptom": "reported -0.42R and $883.39 out of sample -- a clean negative result",
+   "cause": "each quarter's run was truncated at the quarter end, amputating every position still open when the quarter closed. With 50-to-200-bar holds that is most of them, and the amputated part is the tail that carries a trend follower's return.",
+   "caught": "by checking the same configurations held FIXED over the identical window, which scored +0.74R to +1.85R. A -0.42R result next to a +1.85R result for the same trades is not a finding, it is a bug.",
+   "fix": "exits now run to the end of the data; only ENTRY dates are confined to the decision window. Letting a trade run its course after entry is not lookahead -- its exit rule was fixed when it was entered. Pinned by a test."
+  }
+ ]
 }
