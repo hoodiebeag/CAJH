@@ -12,10 +12,16 @@
  * `runsTested` travels with every result for exactly that reason, and the holdout below is the
  * only thing that can turn a search outcome into a finding.
  *
- * THE SPLIT, fixed before the first configuration was run:
- *   train    2023-01-01 .. 2025-06-30   every parameter may be tuned here, freely, forever
- *   holdout  2025-07-01 .. 2026-03-31   NOT READ BY THIS FILE. Sealed until the owner says stop.
- * Nothing in the search may look at the holdout. One evaluation, once, at the end.
+ * NO HOLDOUT. The owner directed on 2026-09-03 that the full period be used for the search, after
+ * being shown the case for sealing 2025-07 onward and declining it. That is their call and it is
+ * recorded here rather than argued again.
+ *
+ * WHAT IT COSTS, stated once so every reader of these numbers knows: every configuration is
+ * tuned and scored on the same data, so the leaderboard's winner is the best of N draws from a
+ * single sample. At large N a good-looking winner appears whether or not any edge exists, and
+ * there is now no untouched period that could tell those two cases apart. The balances here are
+ * IN-SAMPLE and are not evidence of an edge. `runsTested` travels with every row so the size of
+ * the search is always visible next to its result.
  */
 
 import fs from "fs";
@@ -25,8 +31,11 @@ import { simulateEquity, leaderboard } from "./equity.mjs";
 import { FEE_RATE, SLIPPAGE_PCT } from "./strategy.js";
 
 export const SPLIT = Object.freeze({
-  trainStart: "2023-01-01", trainEnd: "2025-06-30",
-  holdoutStart: "2025-07-01", holdoutEnd: "2026-03-31",
+  // Full period, per the owner's 2026-09-03 direction. Kept as named fields so a later session
+  // can reinstate a split by changing this object alone.
+  trainStart: "2023-01-01", trainEnd: "2026-03-31",
+  holdoutStart: null, holdoutEnd: null,
+  sealed: false,
 });
 export const STATE_FILE = "campaign-state.json";
 export const LOG_FILE = "campaign-log.jsonl";
