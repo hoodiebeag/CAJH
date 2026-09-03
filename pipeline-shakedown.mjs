@@ -190,4 +190,14 @@ function real() {
   return res;
 }
 
-if (process.argv[2] === "--selftest") selftest(); else if (import.meta.url.endsWith(process.argv[1]?.replace(/\\/g, "/") ?? "")) real();
+// Guarded properly: the previous form was `import.meta.url.endsWith(argv[1] ?? "")`, and
+// `endsWith("")` is true for every string. So importing this module for its helpers ran the real
+// cache-reading path, which is how a stray "No cache at ..." line appeared during a crypto run
+// that never asked for it. Third instance of this class of bug in this repository -- the probe's
+// Windows guard, bundle-candles' missing guard, and now this one.
+const directRun = process.argv[1] &&
+  import.meta.url === (await import("url")).pathToFileURL(process.argv[1]).href;
+if (directRun) {
+  if (process.argv[2] === "--selftest") selftest();
+  else real();
+}
