@@ -9,9 +9,9 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-03T22:10:00Z",
- "phase": "robustness pass re-run on the current leader",
- "runsTested": 1822,
+ "updatedAt": "2026-09-03T22:25:00Z",
+ "phase": "sweep20/21 done; the multi-timeframe dimension is finally exercised",
+ "runsTested": 2138,
  "base": {
   "trendGate": false,
   "alignMode": "none",
@@ -189,6 +189,18 @@
    "axis": "crossSection lookback x topN",
    "configs": 42,
    "result": "Built the last idea from the literature search: rank the universe by trailing Sharpe and trade only the leaders. It does NOT help returns. Tighter selection monotonically lowers the balance and lowers the drawdown, the same risk/return dial every other filter turned out to be: topN 12 gives $3685.85 at 10.96% DD, topN 3 gives $2363.77 at 7.81%. The nominal new best, topN 20 of 29 pairs at $4175.64, filters almost nothing -- it drops 5 trades of 148 for +2.4%, which is noise at this sample size, not selection working."
+  },
+  {
+   "phase": "sweep20",
+   "axis": "higherTfs x alignMode x swing window",
+   "configs": 120,
+   "result": "Adding a higher timeframe to the breakout leader collapses it: 143 trades to 71, $4175.64 to $1289.87. The cause is not alignment -- alignMode and n were flagged INERT by the new detector, byte-identical across every value. It is that trendSrc is the HIGHEST timeframe present, so a 3-day series turns the 200-period MA gate into a 600-day lookback. Supplying a higher timeframe is not an alignment-only change."
+  },
+  {
+   "phase": "sweep21",
+   "axis": "alignMode where it is actually wired",
+   "configs": 96,
+   "result": "bos and anticipate are the only modes that consult alignMode, and only with a higher timeframe present. Swept there it genuinely binds -- anticipate on a weekly anchor gives 237 trades/$2390 at alignMode none against 162/$2539 at first -- but nothing beats the leader. Best is $3833.05 (anticipate, 3-day anchor, alignMode none, trendMa 20) at a 21.77% drawdown. 'first' and 'all' are identical with a single higher timeframe, as they must be."
   }
  ],
  "leader": {
@@ -242,7 +254,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "A multi-timeframe series, so alignMode and the higher-TF bias are testable at all -- they are structurally dead in every single-TF run done so far, which means an entire dimension of the strategy has never been exercised. Then volatility-targeted position sizing, the remaining literature idea, and the only one that changes the balance without changing which trades are taken.",
+ "nextUp": "Volatility-targeted position sizing -- the last literature idea, and the only one that changes the balance without changing which trades are taken: size each trade so its expected volatility contribution is equal rather than its stop distance. Then re-run the null on the current leader at higher k, and sweep feeBufferPct and entryDelayBars, neither of which has been touched.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -401,5 +413,15 @@
     "dd": 8.57
    }
   }
+ },
+ "silentNoOpsFound": {
+  "why": "A parameter the engine accepts and ignores produces byte-identical rows that read as a swept axis. Four found so far.",
+  "found": {
+   "stopMode": "only implemented for entryMode anticipate; now throws",
+   "alignMode": "only consulted by bos and anticipate, and only with a higher timeframe present; now documented in backtest.js",
+   "n (swing window)": "inert for breakout, which uses a lookback window rather than pivots",
+   "trailStartR": "inert whenever trailStartR <= trailR, because max() keeps the original stop"
+  },
+  "guard": "sweep.mjs's inertAxes() now names any axis whose values never changed a balance, printed above every table."
  }
 }

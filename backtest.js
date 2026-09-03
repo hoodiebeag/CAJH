@@ -95,6 +95,14 @@ export function backtestMultiTF({ series } = {}, {
   lockBreakeven = LOCK_BREAKEVEN, beTriggerR = BE_TRIGGER_R, beLockR = BE_LOCK_R, feeBufferPct = FEE_BUFFER_PCT,
   feeRate = FEE_RATE, slipPct = SLIPPAGE_PCT,
   trendGate = TREND_GATE, trendMa = TREND_MA, trendGateMode = TREND_GATE_MODE,
+  // alignMode: how the higher timeframes' structural bias must line up before an entry is allowed.
+  // ONLY CONSULTED BY entryMode "bos" AND "anticipate". Every other mode -- breakout, ma_dip, rsi,
+  // support, fib_pullback, sweep_reclaim and the rest -- goes through the shared candidate branch,
+  // which never computes alignment, so alignMode is inert for them. It is also inert for ALL modes
+  // when `series` holds a single timeframe, since there are then no higher timeframes to align
+  // against and every mode evaluates true. Note too that supplying a higher timeframe is not
+  // alignment-only: `trendSrc` is the HIGHEST timeframe present, so adding one moves the trendGate
+  // and chopFilter anchor and changes what trendMa counts in calendar time.
   entryTf = null, alignMode = "all", minRoomR = 0, entryMode = "bos",
   // Exit model (all optional; defaults reproduce the original 4R-or-die behaviour):
   trailR = null,          // trailing stop distance in R below the running peak (null = off)

@@ -52,12 +52,44 @@ export function gridSweep({ base = {}, axes, axis, phase, opts = {}, top = 12, q
   }
   logRuns(rows);
 
+  const inert = inertAxes(rows, axes);
   const ranked = [...rows].sort((a, b) => b.finalBalance - a.finalBalance);
   if (!quiet) {
     console.log(`\n${phase}: ${rows.length} configs over ${axis}, ${Math.round((Date.now() - t0) / 1000)}s`);
+    for (const key of inert) {
+      console.log(`  !! AXIS "${key}" CHANGED NOTHING -- every value produced identical balances. `
+        + `The parameter is not wired for these entry modes, or the grid never made it bind. `
+        + `Do not report these rows as a swept axis.`);
+    }
     console.log(fmt(ranked.slice(0, top), Object.keys(axes)));
   }
+  ranked.inertAxes = inert;
   return ranked;
+}
+
+/**
+ * Axes that made no difference to any configuration.
+ *
+ * This exists because the campaign has now found four parameters that a sweep accepted and the
+ * engine silently ignored -- stopMode outside "anticipate", alignMode outside "bos"/"anticipate",
+ * the swing window for breakout, and trailStartR whenever it sat below trailR. Each one produced a
+ * block of byte-identical rows that read as a swept axis and was nothing of the kind. An axis is
+ * called inert when holding every OTHER axis fixed and moving this one never changes the balance.
+ */
+export function inertAxes(rows, axes) {
+  const keys = Object.keys(axes);
+  const inert = [];
+  for (const key of keys) {
+    const others = keys.filter((k) => k !== key);
+    const groups = new Map();
+    for (const r of rows) {
+      const sig = JSON.stringify(others.map((k) => r.config[k]));
+      if (!groups.has(sig)) groups.set(sig, new Set());
+      groups.get(sig).add(r.finalBalance);
+    }
+    if (axes[key].length > 1 && [...groups.values()].every((s) => s.size === 1)) inert.push(key);
+  }
+  return inert;
 }
 
 /** A fixed-width table of the axis values plus the numbers that decide the campaign. */

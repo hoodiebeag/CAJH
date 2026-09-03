@@ -73,3 +73,36 @@ export function coverage(minutes = 1440, root = BUNDLE) {
     };
   });
 }
+
+/**
+ * Aggregate bundle bars up to a longer timeframe.
+ *
+ * data.js's resampleBars cannot be used here: its validator requires a buyVol field the bundle's
+ * six-column format does not carry, and adding a fake one to satisfy a validator would defeat the
+ * point of having it. This is the bundle's own shape, resampled on the bundle's own terms.
+ *
+ * Buckets are floor(time / span) * span, the same rule data.js uses. On a 10080-minute span that
+ * puts week boundaries on Thursdays, because the Unix epoch was a Thursday -- an arbitrary but
+ * consistent 7-day grid, not a calendar week. Nothing downstream depends on which day it starts.
+ *
+ * The final bucket may be partial. That is safe for a backtest here because backtest.js addresses
+ * a higher-timeframe bar by its CLOSE time (time + span), which for an incomplete final bucket
+ * lies beyond the data, so no entry can ever read it.
+ */
+export function resampleBundleCandles(candles, spanMinutes) {
+  if (!Number.isInteger(spanMinutes) || spanMinutes < 1) throw new Error("resampleBundleCandles: spanMinutes must be a positive integer");
+  const span = spanMinutes * 60;
+  const out = new Map();
+  for (const c of [...candles].sort((a, b) => Number(a.time) - Number(b.time))) {
+    const t = Math.floor(Number(c.time) / span) * span;
+    const o = Number(c.open), h = Number(c.high), l = Number(c.low), cl = Number(c.close);
+    if (![o, h, l, cl].every(Number.isFinite)) continue;
+    const bar = out.get(t);
+    if (!bar) { out.set(t, { time: t, open: o, high: h, low: l, close: cl, volume: Number(c.volume) || 0 }); continue; }
+    if (h > bar.high) bar.high = h;
+    if (l < bar.low) bar.low = l;
+    bar.close = cl;
+    bar.volume += Number(c.volume) || 0;
+  }
+  return [...out.values()].sort((a, b) => a.time - b.time);
+}

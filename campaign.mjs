@@ -26,7 +26,7 @@
 
 import fs from "fs";
 import { backtestMultiTF } from "./backtest.js";
-import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
+import { loadBundleCandles, availablePairs, resampleBundleCandles } from "./bundle-loader.mjs";
 import { simulateEquity, leaderboard } from "./equity.mjs";
 import { FEE_RATE, SLIPPAGE_PCT } from "./strategy.js";
 import { buildEntryGate, sharpeRankTable } from "./filters.mjs";
@@ -74,7 +74,16 @@ export function runConfig(config, { minutes = 1440, from = SPLIT.trainStart, to 
     const entryGate = config.filters
       ? buildEntryGate(config.filters, { candles, entryMins: minutes, btcCandles, sharpeRanks, pair })
       : null;
-    const r = backtestMultiTF({ series: [{ label: String(minutes), mins: minutes, candles }] },
+    // `higherTfs` resamples the entry series upward. Without at least one, alignMode and the
+    // higher-timeframe bias are structurally dead -- the bias list is empty and every alignMode
+    // evaluates true -- so 80 configurations of alignMode once returned byte-identical rows.
+    const tfSeries = [{ label: String(minutes), mins: minutes, candles }];
+    for (const mins of config.higherTfs ?? []) {
+      if (mins <= minutes) throw new Error(`campaign: higherTfs entry ${mins} is not above the ${minutes}-minute entry timeframe`);
+      tfSeries.push({ label: String(mins), mins, candles: resampleBundleCandles(candles, mins) });
+    }
+    tfSeries.sort((a, b) => a.mins - b.mins);
+    const r = backtestMultiTF({ series: tfSeries },
       { ...config, entryGate, entryTf: String(minutes), feeRate: config.feeRate ?? FEE_RATE, slipPct: config.slipPct ?? SLIPPAGE_PCT });
     symbolsUsed++;
     for (const x of r.excursions) {
