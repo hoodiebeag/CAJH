@@ -111,6 +111,10 @@ export function backtestMultiTF({ series } = {}, {
   // "atr" = a volatility-scaled stop atrStopK ATRs below entry, so the invalidation is
   // the same "size of move" on a 1%-ATR major and a 8%-ATR alt. R scales with it, so a
   // wider stop means a proportionally smaller position, not more risk.
+  // ONLY IMPLEMENTED FOR entryMode "anticipate". Every other mode places a structural stop
+  // and ignores this; passing "atr" to one of them throws rather than silently doing nothing,
+  // because a sweep once logged seven "breakout with an ATR stop" rows at seven values of
+  // atrStopK, all byte-identical to the structural run, under a label it had never applied.
   stopMode = "structural",
   atrStopK = 3,
   atrPeriod = 14,
@@ -164,6 +168,9 @@ export function backtestMultiTF({ series } = {}, {
 } = {}) {
   if (direction !== "long" && direction !== "short") {
     throw new Error(`backtestMultiTF: unknown direction "${direction}" (must be "long" or "short")`);
+  }
+  if (stopMode === "atr" && entryMode !== "anticipate") {
+    throw new Error(`backtestMultiTF: stopMode "atr" is only implemented for entryMode "anticipate", not "${entryMode}" — it would be silently ignored and the run would be logged under a stop it never used`);
   }
   if (direction === "short") {
     if (entryMode !== "bos") {

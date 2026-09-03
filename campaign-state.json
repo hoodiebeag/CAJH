@@ -9,9 +9,9 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-03T21:25:00Z",
- "phase": "sweep12 done; 240m timeframe tested and worse",
- "runsTested": 1545,
+ "updatedAt": "2026-09-03T21:35:00Z",
+ "phase": "sweep13/14 done; a silent no-op parameter found and closed",
+ "runsTested": 1584,
  "base": {
   "trendGate": false,
   "alignMode": "none",
@@ -147,6 +147,18 @@
    "axis": "240m timeframe",
    "configs": 81,
    "result": "clearly worse. Best is bos/trendMa600/minStop3%/hold300 at $1630 with a 73.72% drawdown, against the daily leader's $3672 at 13.99%. Six times the bars means six times the trades and six times the cost; the campaign's cost identity (0.017/stopPct per trade) does not care that the bars are shorter. The daily timeframe is where this works."
+  },
+  {
+   "phase": "sweep13",
+   "axis": "partialAtR x partialFrac",
+   "configs": 18,
+   "result": "banking any of a runner hurts, monotonically. Best is the smallest possible bank (25% at 12R) at $3010.25 against $3543.12 with no partial; taking 75% off at 5R gives $2107. This is the concentration finding restated as a control: the tail IS the return, so realising part of it removes the return."
+  },
+  {
+   "phase": "sweep14",
+   "axis": "stopMode atr x atrStopK",
+   "configs": 21,
+   "result": "INVALID for breakout and bos. stopMode is only implemented for entryMode anticipate, so seven atrStopK values produced seven byte-identical rows. Those 14 rows are marked invalid in the log and backtestMultiTF now throws instead of ignoring the parameter. anticipate does respond: atrStopK 3 gives $1928.99 at a 10.51% drawdown on 98 trades, still below the structural leader."
   }
  ],
  "leader": {
@@ -192,7 +204,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "partialAtR/partialFrac -- bank part of a runner. It attacks the leader's actual fragility directly (top 5 of 156 trades are 84.5% of all R) by converting some tail into realised gain. Then stopMode atr + atrStopK, filter COMBINATIONS rather than one at a time, and cross-sectional pair selection by trailing Sharpe.",
+ "nextUp": "Filter COMBINATIONS (adx AND btcRegime AND maSlope together, not one at a time) -- singly each was noise-level, and the case for them is that they veto different bars. Then cross-sectional pair selection by trailing Sharpe, the one idea from the literature search still unbuilt. Also worth a pass: swing window n, beTriggerR/beLockR on the gated leader, and alignMode now that a real trend gate exists to interact with it.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {

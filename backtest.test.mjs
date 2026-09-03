@@ -801,3 +801,15 @@ test("SHORT-SIDE-ENGINE-CAPABILITY: direction \"short\" is rejected when lockBre
   const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
   assert.throws(() => backtestMultiTF({ series }, { entryTf: "1h", entryMode: "bos", direction: "short" }));
 });
+
+test('stopMode "atr" throws for an entryMode that would ignore it', () => {
+  // sweep14 logged seven "breakout with an ATR stop" rows at seven values of atrStopK, every one
+  // byte-identical to the structural run, because only "anticipate" implements the ATR stop. A
+  // silently ignored parameter puts rows in the log under a label that was never applied.
+  const series = [{ label: "1440", mins: 1440, candles: [] }];
+  for (const entryMode of ["breakout", "bos", "rsi", "ma_dip"]) {
+    assert.throws(() => backtestMultiTF({ series }, { entryMode, stopMode: "atr" }), /only implemented for entryMode "anticipate"/);
+  }
+  assert.doesNotThrow(() => backtestMultiTF({ series }, { entryMode: "anticipate", stopMode: "atr" }));
+  assert.doesNotThrow(() => backtestMultiTF({ series }, { entryMode: "breakout" }));
+});
