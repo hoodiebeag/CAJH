@@ -17,8 +17,14 @@
 
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
-export const BUNDLE = process.env.CANDLE_BUNDLE || "candle-bundle";
+// Anchored to this file, not to the working directory. A relative default made the whole bundle
+// vanish when a script was run from anywhere but the repository root, and `availablePairs` then
+// returned an empty universe with no error -- a sweep would have logged "0 trades" rows that
+// looked like a strategy finding nothing rather than a loader finding no data.
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+export const BUNDLE = process.env.CANDLE_BUNDLE || path.join(HERE, "candle-bundle");
 
 export function availableTimeframes(root = BUNDLE) {
   if (!fs.existsSync(root)) return [];
@@ -26,6 +32,9 @@ export function availableTimeframes(root = BUNDLE) {
 }
 
 export function availablePairs(minutes = 1440, root = BUNDLE) {
+  // A missing bundle is a broken setup and must not read as an empty universe. A missing
+  // timeframe inside a real bundle is a legitimate "not collected", so that still returns [].
+  if (!fs.existsSync(root)) throw new Error(`bundle-loader: no candle bundle at ${root} (set CANDLE_BUNDLE to override)`);
   const dir = path.join(root, String(minutes));
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir).filter((f) => f.endsWith(".csv")).map((f) => f.replace(/\.csv$/, "")).sort();

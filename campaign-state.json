@@ -1,21 +1,168 @@
 {
  "schema": "cajh-campaign/v1",
- "split": { "trainStart": "2023-01-01", "trainEnd": "2026-03-31", "holdoutStart": null, "holdoutEnd": null, "sealed": false },
+ "split": {
+  "trainStart": "2023-01-01",
+  "trainEnd": "2026-03-31",
+  "holdoutStart": null,
+  "holdoutEnd": null,
+  "sealed": false
+ },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-03T20:20:00Z",
- "phase": "sweep3 done",
- "runsTested": 564,
- "base": { "trendGate": false, "alignMode": "none", "maxStopPct": 0.20, "lockBreakeven": true },
+ "updatedAt": "2026-09-03T20:45:00Z",
+ "phase": "sweep4 + random-entry null done",
+ "runsTested": 732,
+ "base": {
+  "trendGate": false,
+  "alignMode": "none",
+  "maxStopPct": 0.2,
+  "lockBreakeven": true
+ },
  "sweptAxes": [
-  { "phase": "baseline", "axis": "entryMode", "configs": 12 },
-  { "phase": "sweep1", "axis": "minStopPct", "configs": 84, "grid": [0, 0.02, 0.03, 0.05, 0.08, 0.10, 0.15, 0.20] },
-  { "phase": "sweep2", "axis": "tpR x minStopPct", "configs": 288, "grid": { "tpR": [1.5, 2, 3, 4, 5, 6, 8, 12], "minStopPct": [0.05, 0.10, 0.15] } },
-  { "phase": "sweep3", "axis": "tpR high range", "configs": 180, "grid": { "tpR": [12, 16, 24, 40, 100], "minStopPct": [0.05, 0.10, 0.15] } }
+  {
+   "phase": "baseline",
+   "axis": "entryMode",
+   "configs": 12
+  },
+  {
+   "phase": "sweep1",
+   "axis": "minStopPct",
+   "configs": 84,
+   "grid": [
+    0,
+    0.02,
+    0.03,
+    0.05,
+    0.08,
+    0.1,
+    0.15,
+    0.2
+   ]
+  },
+  {
+   "phase": "sweep2",
+   "axis": "tpR x minStopPct",
+   "configs": 288,
+   "grid": {
+    "tpR": [
+     1.5,
+     2,
+     3,
+     4,
+     5,
+     6,
+     8,
+     12
+    ],
+    "minStopPct": [
+     0.05,
+     0.1,
+     0.15
+    ]
+   }
+  },
+  {
+   "phase": "sweep3",
+   "axis": "tpR high range",
+   "configs": 180,
+   "grid": {
+    "tpR": [
+     12,
+     16,
+     24,
+     40,
+     100
+    ],
+    "minStopPct": [
+     0.05,
+     0.1,
+     0.15
+    ]
+   }
+  },
+  {
+   "phase": "sweep4",
+   "axis": "maxHold x tpR",
+   "configs": 168,
+   "grid": {
+    "maxHold": [
+     10,
+     25,
+     50,
+     100,
+     200,
+     400,
+     800
+    ],
+    "tpR": [
+     4,
+     100
+    ]
+   }
+  }
  ],
- "leader": { "entryMode": "bos", "minStopPct": 0.05, "tpR": 100, "trades": 605, "finalBalance": 2889.62, "maxDrawdownPct": 51.2 },
- "benchmark": { "btcBuyAndHold": 4105.94, "equalWeightBasket": 1419.93, "solBuyAndHold": 8311, "startingBalance": 1000 },
- "readThisFirst": "The leader is BELOW buy-and-hold BTC. tpR=100 with a 5% stop places the target ~500% away, so it is never hit and the real exit is the 100-bar timeout -- i.e. the sweep bought a ~100-day hold in a rising market. Run benchmarks() from benchmark.mjs under every leaderboard.",
- "unsweptAxes": ["maxHold", "maxStopPct", "lockBreakeven", "beTriggerR", "beLockR", "trailR", "trailStartR", "trailingTpPct", "partialAtR", "stopMode", "atrStopK", "trendGate", "trendGateMode", "trendMa", "alignMode", "chopFilter", "n (swing window)", "riskPct", "240-minute timeframe", "universe selection"],
- "nextUp": "maxHold. sweep3 showed the timeout is doing the work once tpR is large, so maxHold is the live lever, not tpR. Sweep it against tpR=100 and against a real tpR to separate hold length from target."
+ "leader": {
+  "entryMode": "bos",
+  "minStopPct": 0.05,
+  "tpR": 100,
+  "trades": 605,
+  "finalBalance": 2889.62,
+  "maxDrawdownPct": 51.2
+ },
+ "benchmark": {
+  "btcBuyAndHold": 4105.94,
+  "equalWeightBasket": 1419.93,
+  "solBuyAndHold": 8311,
+  "startingBalance": 1000
+ },
+ "readThisFirst": "The leader is BELOW buy-and-hold BTC and its entries do not beat random. tpR=100 on a 5% stop puts the target ~500% away so it is never hit; the real exit is the hold cap, and the sweep bought exposure in a rising market. Run benchmark.mjs under every leaderboard and entrynull-run.mjs after every few sweeps.",
+ "unsweptAxes": [
+  "maxStopPct",
+  "beTriggerR",
+  "beLockR",
+  "trailR",
+  "trailStartR",
+  "trailingTpPct",
+  "partialAtR",
+  "stopMode",
+  "atrStopK",
+  "trendGate",
+  "trendGateMode",
+  "trendMa",
+  "alignMode",
+  "chopFilter",
+  "n (swing window)",
+  "riskPct",
+  "240-minute timeframe",
+  "universe selection"
+ ],
+ "nextUp": "Stop sweeping entry rules -- the null says they carry nothing detectable. The axes that can still move the balance are the ones that change exposure and cost, not timing: trailR/trailStartR and trailingTpPct (capture trend instead of a fixed timeout), riskPct (exposure scaling), stopMode atr vs structural, and universe selection. Also worth pricing: a config's balance against buy-and-hold of the SAME pairs it traded, not the whole basket.",
+ "randomEntryNull": {
+  "runner": "entrynull-run.mjs",
+  "bos 5% tpR100 hold100": {
+   "observedMeanR": 0.4576,
+   "nullMeanR": 0.3604,
+   "excessR": 0.0973,
+   "p": 0.3273,
+   "mdeR": 0.7665,
+   "nullBalance": 2971.85
+  },
+  "breakout 5% tpR100 hold400": {
+   "observedMeanR": 0.9807,
+   "nullMeanR": 0.3966,
+   "excessR": 0.5842,
+   "p": 0.1329,
+   "mdeR": 1.4401,
+   "nullBalance": 1790.36
+  },
+  "breakout 5% tpR4 hold100": {
+   "observedMeanR": -0.0299,
+   "nullMeanR": -0.1324,
+   "excessR": 0.1025,
+   "p": 0.1239,
+   "mdeR": 0.2478,
+   "nullBalance": 749.73
+  },
+  "reading": "The leader's entry rule is worth 0.0973R against a coin flip with identical geometry, and a random-entry account ends ABOVE it. No config's excess reaches what this test could detect, so the honest statement is not 'no edge' but 'no edge large enough to see through the noise a 100R target creates'."
+ }
 }
