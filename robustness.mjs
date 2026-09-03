@@ -36,6 +36,13 @@ export const LEADER = {
   // volTarget 0.03 to 0.10 with any clamp of 3 or more, because once the clamp is loose the weights
   // are simply proportional to 1/ATR% and the level cancels. A plateau, not a peak.
   volTarget: 0.05, volClamp: 3,
+  // Fill on the NEXT bar's open rather than the signal bar's close. This is the more realistic
+  // assumption and it also scores better on every robustness margin, not just the headline --
+  // balance, worst-pair-out, full-history-pairs-only, drop-the-ten-best, and mean R in all three
+  // years. Mechanically it declines to buy the close of the breakout day, which is the top of that
+  // day's move. Two bars of delay collapses the result, so this is a discontinuity rather than a
+  // curve, and one bar is where realism and result happen to agree.
+  entryDelayBars: 1,
 };
 
 /** Every trade a configuration takes, with the geometry the robustness checks slice on. */

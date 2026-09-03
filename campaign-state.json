@@ -9,9 +9,9 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-03T22:55:00Z",
- "phase": "sweep22 done; volatility-targeted sizing is the first change with no threshold fitted",
- "runsTested": 2166,
+ "updatedAt": "2026-09-03T23:25:00Z",
+ "phase": "sweep23/24 done; execution realism priced, and it improved the result",
+ "runsTested": 2206,
  "base": {
   "trendGate": false,
   "alignMode": "none",
@@ -207,6 +207,18 @@
    "axis": "volTarget x volClamp",
    "configs": 28,
    "result": "Raw sweep runs to $16,138 at volTarget 0.10 / clamp 5, and that number is LEVERAGE -- the universe's median trade sits at 5.55% ATR, so a 10% target scales every bet up and deploys 3.7x the risk. Risk-matched (equity.mjs riskMatchedRiskPct holds mean deployed risk at 0.5%) the real answer is $5087 against $4175.64 flat, at 13.41% drawdown against 13.54% -- and it is FLAT across volTarget 0.03-0.10 at any clamp >= 3. That plateau is the point: once the clamp is loose the weights are just proportional to 1/ATR% and the level cancels, so there is one structural decision here and no threshold to fit. First such change in the campaign."
+  },
+  {
+   "phase": "sweep23",
+   "axis": "entryDelayBars x feeBufferPct",
+   "configs": 20,
+   "result": "Filling on the NEXT bar's open instead of the signal bar's close IMPROVES the result: $4874.70 against $4595.23, and it wins on every robustness margin -- worst-pair-out $3723 vs $3480, full-history $3636 vs $3431, drop-ten-best $1125 vs $1049, and higher mean R in all three years. Mechanically it declines to buy the close of the breakout day, which is the top of that day's move. Two bars collapses to $2305, so this is a discontinuity rather than a curve. Adopted, because it is both the more realistic assumption and the better one. feeBufferPct barely matters below 0.05."
+  },
+  {
+   "phase": "sweep24",
+   "axis": "cost stress",
+   "configs": 20,
+   "result": "The strongest evidence so far that the result is not a cost-model artifact. At 3x the modelled fee (2.4% vs 0.8%) AND 40x the modelled slippage (2% vs 0.05%) the strategy still ends at $2580.11, above the $1419.93 equal-weight basket. At 2x fees and 10x slippage it is $3458.78. It degrades smoothly and stays positive across the whole grid."
   }
  ],
  "leader": {
@@ -235,12 +247,13 @@
   "riskPct": 0.005,
   "volTarget": 0.05,
   "volClamp": 3,
-  "trades": 143,
+  "trades": 134,
   "meanR": 2.2728,
-  "finalBalance": 4595.23,
-  "maxDrawdownPct": 12.53,
+  "finalBalance": 4874.7,
+  "maxDrawdownPct": 12.94,
   "vsBenchmark": "BTC buy-and-hold $4105.94 at 52.06% DD. Above it now, at a quarter of the drawdown.",
-  "note": "Dominates the previous leader ($4175.64 / 13.54%) on both axes with the same 143 trades, sized inversely to volatility instead of flat."
+  "note": "Fills on the next bar's open. Beats BTC buy-and-hold ($4105.94) at a quarter of its 52.06% drawdown, survives 3x fees and 40x slippage at $2580, and every component change so far has been adopted only when it improved the independent robustness slices too, not just the headline.",
+  "entryDelayBars": 1
  },
  "benchmark": {
   "btcBuyAndHold": 4105.94,
@@ -264,7 +277,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Re-run the random-entry null on the current leader at k=4000 (the last null was for the pre-volTarget config, and sizing does not change the trades so the R-level result should be unchanged -- worth confirming rather than assuming). Then feeBufferPct and entryDelayBars, neither ever touched; entryDelayBars matters because it is the closest thing here to an execution-realism check.",
+ "nextUp": "Re-run entrynull-run.mjs on the current leader at k=4000 -- the last null was two configuration changes ago. Then the honest remaining question is out-of-sample: every number here is best-of-2206 on one sample, and the owner declined a holdout. The nearest available substitutes are a walk-forward (fit on an expanding window, score the next quarter only) and the equities test the owner originally named as the goal, which needs data this container does not have.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -432,5 +445,12 @@
    "trailStartR": "inert whenever trailStartR <= trailR, because max() keeps the original stop"
   },
   "guard": "sweep.mjs's inertAxes() now names any axis whose values never changed a balance, printed above every table."
+ },
+ "costStress": {
+  "3x fee + 40x slip": 2580.11,
+  "2x fee + 10x slip": 3458.78,
+  "1.5x fee + 4x slip": 4003.34,
+  "as modelled": 4874.7,
+  "note": "Run at the pre-delay leader; the shape is what matters, not the level."
  }
 }

@@ -5,9 +5,9 @@ import { report, summarise, LEADER } from "./robustness.mjs";
 const R = report();
 
 test("the leader reproduces exactly -- a silent change to the engine or the bundle fails here", () => {
-  assert.equal(R.all.trades, 143);
-  assert.equal(R.all.finalBalance, 4595.23);
-  assert.equal(R.all.maxDrawdownPct, 12.53);
+  assert.equal(R.all.trades, 134);
+  assert.equal(R.all.finalBalance, 4874.70);
+  assert.equal(R.all.maxDrawdownPct, 12.94);
 });
 
 test("it is positive in every full year standalone, not one good year", () => {
@@ -17,7 +17,7 @@ test("it is positive in every full year standalone, not one good year", () => {
 });
 
 test("it survives losing any single pair", () => {
-  assert.ok(R.leaveOnePairOut[0].finalBalance > 3000,
+  assert.ok(R.leaveOnePairOut[0].finalBalance > 3500,
     `worst case is ${R.leaveOnePairOut[0].without} at $${R.leaveOnePairOut[0].finalBalance}`);
 });
 
@@ -51,6 +51,23 @@ test("the pinned LEADER is the configuration the campaign state names", () => {
   assert.equal(LEADER.trendMa, 200);
   assert.equal(LEADER.beTriggerR, 2.5);
   assert.equal(LEADER.volTarget, 0.05);
+  assert.equal(LEADER.entryDelayBars, 1);
+});
+
+test("a one-bar fill delay wins on every margin, not just the headline balance", () => {
+  // Adopted because it is the more realistic assumption AND the better one. A spike in a single
+  // number would not be enough; agreement across independent slices is what makes it credible.
+  const immediate = report({ ...LEADER, entryDelayBars: 0 });
+  assert.ok(R.all.finalBalance > immediate.all.finalBalance);
+  assert.ok(R.leaveOnePairOut[0].finalBalance > immediate.leaveOnePairOut[0].finalBalance);
+  assert.ok(R.fullHistoryPairsOnly.finalBalance > immediate.fullHistoryPairsOnly.finalBalance);
+  const drop10 = (r) => r.trimTopWinners.find((x) => x.dropped === 10).finalBalance;
+  assert.ok(drop10(R) > drop10(immediate));
+});
+
+test("two bars of delay collapses it -- the improvement is a discontinuity, not a trend", () => {
+  const twoBars = report({ ...LEADER, entryDelayBars: 2 });
+  assert.ok(twoBars.all.finalBalance < R.all.finalBalance / 1.8, `two-bar delay gave $${twoBars.all.finalBalance}`);
 });
 
 test("volatility targeting improves the leader on BOTH balance and drawdown", () => {
