@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-03T23:45:00Z",
- "phase": "walk-forward built; first out-of-sample evidence in the campaign",
+ "updatedAt": "2026-09-04T00:05:00Z",
+ "phase": "walk-forward variants; FINDINGS.md updated",
  "runsTested": 2206,
  "base": {
   "trendGate": false,
@@ -277,7 +277,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Strengthen the walk-forward by refitting what FIXED currently holds constant -- the filters, the fill delay, and ideally the entry mode. If the result survives refitting those too it is worth much more than it is now. Also worth running: the same walk-forward with the decision window starting 2025-01-01, so the training period contains the 2024 regime rather than only 2023.",
+ "nextUp": "The refit-everything walk-forward is running (entry mode, fill delay and filters refitted per quarter rather than held at in-sample values, 576 configs x 9 quarters). If the result survives that, it is worth much more than it is now. After that the honest frontier is EQUITIES -- the market the owner named as the actual target -- which this container has no data for.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -476,7 +476,29 @@
   },
   "parameterStability": "trendMa 150 and minStopPct 0.03 and volTarget 0.05 chosen in ALL NINE quarters; beTriggerR 2.5 in seven of nine. The search is not chasing noise. Note it never picks the full-sample leader's trendMa 200.",
   "quarterlyShape": "Four of nine quarters positive. The return is concentrated in 2024Q1 (+2.84R), 2024Q4 (+1.73R) and 2025Q3 (+2.90R) -- the same fat-tail dependence as the in-sample result.",
-  "leaksStillPresent": "This is NOT a clean holdout and must not be quoted as one. The grid was designed after seeing full-sample results; the universe was chosen after seeing all of it; and walkforward.mjs's FIXED block holds the entry mode, the filters, and the one-bar fill delay constant at values selected in-sample rather than refitting them. Refitting those too would be the stronger test and has not been run."
+  "leaksStillPresent": "This is NOT a clean holdout and must not be quoted as one. The grid was designed after seeing full-sample results; the universe was chosen after seeing all of it; and walkforward.mjs's FIXED block holds the entry mode, the filters, and the one-bar fill delay constant at values selected in-sample rather than refitting them. Refitting those too would be the stronger test and has not been run.",
+  "laterStarts": {
+   "from 2025-01-01": {
+    "trades": 61,
+    "meanR": 0.9752,
+    "final": 1127.19,
+    "dd": 9.9,
+    "quarters": {
+     "25Q1": -1.1466,
+     "25Q2": -0.8352,
+     "25Q3": 2.9004,
+     "25Q4": -0.8006,
+     "26Q1": -0.7557
+    }
+   },
+   "from 2025-07-01": {
+    "trades": 42,
+    "meanR": 1.8462,
+    "final": 1206.97,
+    "dd": 6.34
+   },
+   "reading": "This is the caveat that matters most. The whole out-of-sample result is three quarters out of nine -- 2024Q1, 2024Q4 and 2025Q3. The other six are negative. Restricted to 2025 the walk-forward is positive ONLY because of 2025Q3; four of its five quarters lose money. A book running this would have spent most of its time losing and made everything back in three quarters. That is the trade-level tail dependence showing up at the quarter level, and it is what trend following is -- but it means nobody should read $1974.68 as a steady climb."
+  }
  },
  "bugsFound": [
   {

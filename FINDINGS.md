@@ -36,6 +36,11 @@ artifact** — confirmed 2026-08-29 without modifying the cost formula.
 **What this closes:** cheaper fills cannot rescue a strategy with no gross edge. Neither can
 filters. A gate applied to a population with zero expectancy selects a subset of zero expectancy.
 
+> **Corrected 2026-09-03.** That last sentence is sound arithmetic on a premise that turned out to
+> be wrong for this population. See the addendum at the end of this document: these families were
+> cost-destroyed rather than zero-expectancy, and a wider stop taken rarely is a different
+> population, not a subset of this one.
+
 ## Equities: costs are survivable, and the apparent edge was the window
 
 Equities looked more promising for a while, and the reason it did is the most useful thing the
@@ -207,3 +212,78 @@ the question was never asked.
 
 Nothing has passed it. The gate has never been run against a real candidate, which is worth
 stating plainly rather than letting the existence of the machinery imply otherwise.
+
+---
+
+# Addendum, 2026-09-03: the backtest campaign
+
+Everything above stands for what it tested. This section records a campaign that tested something
+different and got a different answer, and it is placed here rather than woven into the text above
+so that neither result quietly overwrites the other.
+
+## One sentence above is now too strong
+
+> "A gate applied to a population with zero expectancy selects a subset of zero expectancy."
+
+That is sound arithmetic and the wrong premise. The population was not zero-expectancy — it was
+**cost-destroyed**, which is a different thing and admits a different escape. Cost in R is roughly
+`0.017 / stopPct` at Kraken taker rates, so a 1% stop pays 1.70R in fees and slippage before the
+trade does anything while a 15% stop pays 0.11R. The families in the tournament traded tight stops
+often; a wider stop taken rarely is not a subset of that population, it is a different one.
+
+The demonstration: `ma_dip` at no stop floor takes 2,796 trades and ends at $0 — genuinely wiped
+out, not a modelling artifact. The same family at a 15% floor takes 65 trades and ends at $1,138.
+
+## What the campaign found
+
+A daily-bar long-only trend-following construction on 29 Kraken pairs: `breakout` entries, a
+200-day moving-average trend gate, a 3% minimum stop, no take-profit that is ever reached, a
+100-bar hold cap, a breakeven stop armed at 2.5R, a volatility floor, sizing inversely to each
+instrument's ATR, and fills on the next bar's open.
+
+| | balance from $1000 | max drawdown |
+|---|---|---|
+| in-sample, best of 2,206 configurations | $4,874.70 | 12.94% |
+| **walk-forward, parameters fitted only on the past** | **$1,974.68** | **13.02%** |
+| BTC buy-and-hold, same walk-forward window | $1,544.10 | 52.06% |
+| equal-weight basket of all 29 pairs, same window | $779.28 | — |
+
+## The three things that make it worth recording
+
+**It survives a matched-geometry random-entry null.** Same pairs, same stop distances, same target,
+same fee, random entry bar: excess 1.73R, p=0.005. It survives the harder version too — random
+entries restricted to bars the trend gate itself allows — where the excess grows rather than
+shrinks, so the gate is not doing the work alone.
+
+**It survives cost stress.** At three times the modelled fee and forty times the modelled slippage
+it still ends above the equal-weight basket.
+
+**The walk-forward's parameter choices are stable.** `trendMa 150`, `minStopPct 0.03` and
+`volTarget 0.05` were chosen in all nine quarters. A search fitting noise does not do that.
+
+## The three things that stop it being a finding
+
+**In-sample bias is measured, and it is large.** Over the identical window, fitted on all data:
++1.85R. Fitted only on the past: +1.14R. Roughly 40% of the apparent edge was the search seeing
+the answer.
+
+**The return is three quarters out of nine.** 2024Q1, 2024Q4 and 2025Q3 carry it; the other six are
+negative. Restricted to 2025 the walk-forward is positive only because of one quarter. At the trade
+level the same shape: the top 5 of 143 trades are 79.7% of all R, the median trade is −1.11R, and
+the win rate is 39.2%. This is what trend following looks like, and it also means the mean is an
+unstable statistic and every p-value here rests on a handful of observations.
+
+**The walk-forward is not a holdout and must not be quoted as one.** The grid was designed after
+seeing full-sample results, the universe was chosen after seeing all of it, and the entry mode,
+filters and fill delay were held at in-sample values rather than refitted.
+
+## What has not been tested
+
+Equities — the market the owner named as the actual target. This container holds crypto daily and
+4-hour bars only. Nothing above transfers until it is run there, and the earlier equities result in
+this document is a warning about exactly that: an apparent edge that turned out to be the window's
+payoff geometry.
+
+Runners: `robustness.mjs`, `walkforward.mjs`, `entrynull-run.mjs`, `benchmark.mjs`. Every
+configuration ever scored is in `campaign-log.jsonl`; the state and the caveats are in
+`campaign-state.json`.
