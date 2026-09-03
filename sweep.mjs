@@ -64,7 +64,7 @@ export function gridSweep({ base = {}, axes, axis, phase, opts = {}, top = 12, q
 export function fmt(rows, axisKeys) {
   const head = [...axisKeys, "trades", "final$", "return%", "maxDD%"];
   const body = rows.map((r) => [
-    ...axisKeys.map((k) => String(r.config[k])),
+    ...axisKeys.map((k) => cell(r.config[k])),
     String(r.trades ?? 0),
     r.effectivelyRuined ? `${r.finalBalance} RUINED` : String(r.finalBalance),
     String(r.totalReturnPct ?? ""),
@@ -73,4 +73,14 @@ export function fmt(rows, axisKeys) {
   const w = head.map((h, i) => Math.max(h.length, ...body.map((b) => b[i].length)));
   const line = (cells) => cells.map((c, i) => c.padEnd(w[i])).join("  ");
   return [line(head), ...body.map(line)].join("\n");
+}
+
+/**
+ * An axis value as a cell. Objects go through JSON, because an axis whose values are specs -- the
+ * filter sweeps -- rendered every distinct row as "[object Object]", which is a table that cannot
+ * be read at all: the winning configuration was indistinguishable from the losing one.
+ */
+function cell(v) {
+  if (v === null || v === undefined) return String(v);
+  return typeof v === "object" ? JSON.stringify(v) : String(v);
 }

@@ -20,3 +20,14 @@ test("fmt marks a ruined row so a small balance is never read as a survivor", ()
   const out = fmt([{ config: { tpR: 4 }, trades: 9, finalBalance: 0.0001, effectivelyRuined: true }], ["tpR"]);
   assert.match(out, /RUINED/);
 });
+
+test("an object-valued axis renders as its spec, not as [object Object]", () => {
+  // The filter sweeps have specs for axis values. String(spec) collapsed every distinct row to the
+  // same text, so the table could not say which filter won.
+  const out = fmt([
+    { config: { filters: { adx: { min: 20 } } }, trades: 5, finalBalance: 1200 },
+    { config: { filters: { adx: { min: 30 } } }, trades: 4, finalBalance: 1100 },
+  ], ["filters"]);
+  assert.match(out, /\{"adx":\{"min":20\}\}/);
+  assert.doesNotMatch(out, /\[object Object\]/);
+});

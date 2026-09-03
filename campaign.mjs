@@ -29,6 +29,7 @@ import { backtestMultiTF } from "./backtest.js";
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { simulateEquity, leaderboard } from "./equity.mjs";
 import { FEE_RATE, SLIPPAGE_PCT } from "./strategy.js";
+import { buildEntryGate } from "./filters.mjs";
 
 export const SPLIT = Object.freeze({
   // Full period, per the owner's 2026-09-03 direction. Kept as named fields so a later session
@@ -55,11 +56,16 @@ export function runConfig(config, { minutes = 1440, from = SPLIT.trainStart, to 
   const universe = pairs ?? availablePairs(minutes);
   const trades = [];
   let symbolsUsed = 0;
+  // `config.filters` is a serialisable spec so it can live in the log; the closure it compiles to
+  // is built per pair here and never leaves the run. BTC is loaded once because btcRegime needs a
+  // market-wide series that no single pair's chart contains.
+  const btcCandles = config.filters?.btcRegime ? slice("XBTUSD", minutes, from, to) : null;
   for (const pair of universe) {
     const candles = slice(pair, minutes, from, to);
     if (candles.length < 120) continue;
+    const entryGate = config.filters ? buildEntryGate(config.filters, { candles, entryMins: minutes, btcCandles }) : null;
     const r = backtestMultiTF({ series: [{ label: String(minutes), mins: minutes, candles }] },
-      { ...config, entryTf: String(minutes), feeRate: config.feeRate ?? FEE_RATE, slipPct: config.slipPct ?? SLIPPAGE_PCT });
+      { ...config, entryGate, entryTf: String(minutes), feeRate: config.feeRate ?? FEE_RATE, slipPct: config.slipPct ?? SLIPPAGE_PCT });
     symbolsUsed++;
     for (const x of r.excursions) {
       if (!Number.isFinite(x.entryTime)) continue; // undated same-bar stops cannot be ordered

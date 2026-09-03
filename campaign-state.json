@@ -9,9 +9,9 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-03T20:50:00Z",
- "phase": "sweep9 done; first config to beat its null",
- "runsTested": 1152,
+ "updatedAt": "2026-09-03T21:15:00Z",
+ "phase": "sweep11 done; entry filters added and swept",
+ "runsTested": 1464,
  "base": {
   "trendGate": false,
   "alignMode": "none",
@@ -129,6 +129,18 @@
    "axis": "riskPct",
    "configs": 64,
    "result": "pure leverage. Same 156 trades at 10% risk end at $1,421,133 with a 94% drawdown."
+  },
+  {
+   "phase": "sweep10",
+   "axis": "maxHold x minStopPct x maxStopPct, gated",
+   "configs": 216,
+   "result": "small gain. minStopPct 0.03 beats 0.05: $3543.12 on 160 trades at 13.99% DD. With the gate on, maxHold 100 now beats 200/400/800 -- the opposite of the ungated sweep4."
+  },
+  {
+   "phase": "sweep11",
+   "axis": "entry filters",
+   "configs": 96,
+   "result": "five new filters, none of them material. Best is atrPctBand min 3% at $3672.04 (+3.6%) by dropping 5 of 160 trades; btcRegime 100 is $3656.32 by dropping 17. Removing a handful of losers from a 156-trade sample moves the balance a few percent by chance, so treat these as unswept rather than as working filters."
   }
  ],
  "leader": {
@@ -136,14 +148,21 @@
   "trendGate": true,
   "trendGateMode": "ma",
   "trendMa": 200,
-  "minStopPct": 0.05,
+  "minStopPct": 0.03,
+  "maxStopPct": 0.2,
   "tpR": 100,
   "maxHold": 100,
   "riskPct": 0.005,
-  "trades": 156,
-  "meanR": 1.8006,
-  "finalBalance": 3424.62,
-  "maxDrawdownPct": 12.43
+  "filters": {
+   "atrPctBand": {
+    "period": 14,
+    "min": 0.03,
+    "max": 1
+   }
+  },
+  "trades": 155,
+  "finalBalance": 3672.04,
+  "maxDrawdownPct": 13.99
  },
  "benchmark": {
   "btcBuyAndHold": 4105.94,
@@ -167,7 +186,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "1) Attack the leader: is trendMa 200 robust or a spike? Test it per-pair and per-year, and check how much of the 156 trades come from one pair. 2) Search the internet for regime/volatility filters worth implementing (the owner asked for this explicitly) and add the good ones to backtest.js. 3) Sweep the remaining exit and stop axes on top of the gated leader rather than on the ungated base.",
+ "nextUp": "The filters need a real test, not a single-threshold pass: combine them (adx AND btcRegime AND slope) rather than one at a time, and sweep on the 240-minute timeframe where there are 6x the bars and the tail statistics are less hostage to a handful of trades. Then: partialAtR/partialFrac (bank part of a runner, which directly attacks the top-5-trades-are-84%-of-R fragility), stopMode atr + atrStopK, and cross-sectional pair selection by trailing Sharpe (the arxiv AdaptiveTrend construction), which is the one idea from the literature search not yet built.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -225,5 +244,73 @@
    "maxDrawdownPct": 94.0
   },
   "reading": "Not a better strategy, the same one levered 20x. A 94% drawdown means $1000 was worth about $60 at the low. Reported because the owner asked for the highest number; the drawdown is reported with it because the number is meaningless without it."
+ },
+ "concentration": {
+  "topPairShare": {
+   "ZECUSD": "34.9% of all R on 2 trades",
+   "XRPUSD": "16.3% on 10",
+   "INJUSD": "11.0% on 5"
+  },
+  "topTradeShare": {
+   "top5": "84.5% of all R",
+   "top10": "110.9%"
+  },
+  "winRate": "40.4%",
+  "medianNetR": -1.1088,
+  "distinctDays": "156 trades on 103 calendar days (1.51x clustering)",
+  "leaveOnePairOut": {
+   "worst": "without ZECUSD $2303.31",
+   "othersAllAbove": 2810
+  },
+  "trimTopWinners": {
+   "drop1": 2290.53,
+   "drop2": 1804.07,
+   "drop3": 1539.88,
+   "drop5": 1216.89,
+   "drop10": 851.71
+  },
+  "perYearStandalone": {
+   "2023": {
+    "trades": 31,
+    "meanR": 3.5945,
+    "final": 1686.88
+   },
+   "2024": {
+    "trades": 69,
+    "meanR": 1.5669,
+    "final": 1641.19
+   },
+   "2025": {
+    "trades": 55,
+    "meanR": 1.1151,
+    "final": 1236.94
+   }
+  },
+  "fullHistoryPairsOnly": {
+   "pairs": 16,
+   "trades": 132,
+   "final": 2225.69
+  },
+  "reading": "A positive-skew trend-following payoff: 40% win rate, median trade -1.11R, and all the profit in a fat right tail. Dropping the 10 best of 156 trades turns +1.80R into -0.21R. That fragility is what trend following IS, not a bug -- but it means the mean is an unstable statistic here and the p=0.005 rests on a few trades. The reassuring half: positive in every year standalone, positive on the 16 full-history pairs alone, and survives dropping any single pair."
+ },
+ "literatureSearched": {
+  "date": "2026-09-03",
+  "implemented": [
+   "maSlope (MA rising, not just price above it)",
+   "adx (trend strength)",
+   "maxExtension (ATR units above the MA)",
+   "atrPctBand (volatility regime)",
+   "btcRegime (BTC above its own MA as a market-wide state)"
+  ],
+  "notYetBuilt": [
+   "rolling-Sharpe cross-sectional pair selection",
+   "asymmetric long/short allocation",
+   "volatility-targeted position sizing"
+  ],
+  "sources": [
+   "arxiv 2602.11708 AdaptiveTrend",
+   "pyquantlab regime-filtered trend",
+   "quantmonitor SMA+ATR regime rules"
+  ]
  }
 }
