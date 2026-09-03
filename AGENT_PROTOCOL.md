@@ -96,6 +96,16 @@ the count of consecutive blocked firings on the same cause. The ledger is the ch
 place for this: it is already append-only, already trimmed to 100, and already exempt from the
 protected-logic hook, so recording a block costs one entry and no risk.
 
+**"Not on the remote" is not the same fact as "discarded."** On 2026-09-03 this session read an
+unchanged `origin/main` and concluded that a completed pass had been thrown away. It had not — it
+was committed locally in `0a0ad35` and had simply never been pushed, because the loop's push was
+rejected by a divergence. The wrong conclusion was then written into a queue item's note as
+"genuine re-do", which would have had the loop redo roughly 24 citations that already existed.
+The remote tells you what was *pushed*, and nothing about what exists on a machine you cannot
+see. Before concluding that work is gone, look for it: `git log` on the other side, a backup
+branch, or ask. This is the same failure the "work not on main is invisible" rule already warns
+about, seen from the opposite direction.
+
 **Do not respond to a block by working around it.** Not by cleaning a tree you do not own (rule
 4), not by reselecting a different item to look productive, and not by creating the
 `.git/ALLOW_PROTECTED_EDIT` marker — that is a human authorization and an unattended firing
