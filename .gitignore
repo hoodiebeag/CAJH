@@ -6,8 +6,8 @@ positions.json
 stats.json
 decision-journal.jsonl
 candles/
-archive/
-archive_full/
+/archive/
+/archive_full/
 flow_*.log
 research-cache/
 research-runs/
