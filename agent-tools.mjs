@@ -27,7 +27,7 @@
  *
  * Importing project modules (e.g. researchlab.mjs) from a hypothesis script: DATA_DIR is
  * commonly a separate volume from the project root (Railway), so a relative static import
- * like `from "./researchlab.mjs"` will NOT resolve — it's relative to the hypothesis
+ * like `from "../researchlab.mjs"` will NOT resolve — it's relative to the hypothesis
  * file's own location under DATA_DIR/hypotheses, not to the project root. executeAgentScript
  * always runs with cwd pinned to the project root, so use a cwd-relative dynamic import:
  *   const { saveExperiment } = await import(new URL("researchlab.mjs", `file://${process.cwd()}/`).href);

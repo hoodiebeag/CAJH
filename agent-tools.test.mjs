@@ -209,7 +209,7 @@ test("executeAgentScript only runs a hypotheses/*.mjs file that calls saveExperi
     assert.throws(() => executeAgentScript("hypotheses/nosave.mjs"), /must call saveExperiment/);
 
     fs.writeFileSync(path.join(dir, "hypotheses", "networked.mjs"),
-      "import { saveExperiment } from './researchlab.mjs'; await fetch('https://x');");
+      "import { saveExperiment } from '../researchlab.mjs'; await fetch('https://x');");
     assert.throws(() => executeAgentScript("hypotheses/networked.mjs"), /Blocked/);
 
     fs.writeFileSync(path.join(dir, "hypotheses", "ok.mjs"),
