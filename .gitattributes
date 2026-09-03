@@ -1,0 +1,4 @@
+# The research ledger is an append-only, hash-chained record. Keep it LF on every platform:
+# CRLF churn would rewrite every line on a Windows checkout, making an append look like a
+# whole-file rewrite in the diff and burying the one line that actually changed.
+research-registry/*.jsonl text eol=lf
