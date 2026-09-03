@@ -9,9 +9,9 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-03T21:15:00Z",
- "phase": "sweep11 done; entry filters added and swept",
- "runsTested": 1464,
+ "updatedAt": "2026-09-03T21:25:00Z",
+ "phase": "sweep12 done; 240m timeframe tested and worse",
+ "runsTested": 1545,
  "base": {
   "trendGate": false,
   "alignMode": "none",
@@ -141,6 +141,12 @@
    "axis": "entry filters",
    "configs": 96,
    "result": "five new filters, none of them material. Best is atrPctBand min 3% at $3672.04 (+3.6%) by dropping 5 of 160 trades; btcRegime 100 is $3656.32 by dropping 17. Removing a handful of losers from a 156-trade sample moves the balance a few percent by chance, so treat these as unswept rather than as working filters."
+  },
+  {
+   "phase": "sweep12",
+   "axis": "240m timeframe",
+   "configs": 81,
+   "result": "clearly worse. Best is bos/trendMa600/minStop3%/hold300 at $1630 with a 73.72% drawdown, against the daily leader's $3672 at 13.99%. Six times the bars means six times the trades and six times the cost; the campaign's cost identity (0.017/stopPct per trade) does not care that the bars are shorter. The daily timeframe is where this works."
   }
  ],
  "leader": {
@@ -186,7 +192,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "The filters need a real test, not a single-threshold pass: combine them (adx AND btcRegime AND slope) rather than one at a time, and sweep on the 240-minute timeframe where there are 6x the bars and the tail statistics are less hostage to a handful of trades. Then: partialAtR/partialFrac (bank part of a runner, which directly attacks the top-5-trades-are-84%-of-R fragility), stopMode atr + atrStopK, and cross-sectional pair selection by trailing Sharpe (the arxiv AdaptiveTrend construction), which is the one idea from the literature search not yet built.",
+ "nextUp": "partialAtR/partialFrac -- bank part of a runner. It attacks the leader's actual fragility directly (top 5 of 156 trades are 84.5% of all R) by converting some tail into realised gain. Then stopMode atr + atrStopK, filter COMBINATIONS rather than one at a time, and cross-sectional pair selection by trailing Sharpe.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
