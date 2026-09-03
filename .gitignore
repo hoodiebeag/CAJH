@@ -18,3 +18,7 @@ level_cooldowns.json
 candles-upload.tar.gz*
 .assistant_snapshots/
 paper-runs/
+
+# transfer bundles -- never commit market data
+/candle-bundle/
+candle-bundle.tar.gz
