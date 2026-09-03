@@ -407,14 +407,6 @@
  },
  "ledger": [
   {
-   "ts": "2026-08-20T03:01:03.000Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "pull-blocked-exit",
-   "detail": "STEP 0.3: git pull --rebase failed again on the identical unstaged content as the prior three firings (03c5b8b onward): brokers/ibkr.mjs + brokers/ibkr.test.mjs modified (a daily-bar YYYYMMDD-to-epoch timestamp fix), plus untracked scripts/equities-baseline-port.mjs and universe.txt, none created this run. git fetch origin main + git log HEAD..origin/main confirmed zero new remote commits, so this remains a purely local dirty-tree block, not an actual missed sync. Did not stash/checkout/reset/clean any of it. This is now the 4th consecutive firing blocked on the identical unstaged content. DEDUP MISTAKE MADE AND CAUGHT BEFORE HARM: initially checked blackboard.notifications.persistent-pull-blocker (the stale legacy copy, last sent 2026-08-19T10:02:01Z re: an unrelated already-resolved package.json issue, >6h old) and called PushNotification without first checking the canonical top-level notifications map - the same class of mistake the 01:00:59Z entry already documented and warned future firings against. The call was a no-op in practice only by luck: the tool itself reported \"Not sent - this terminal is active, so your output here already reaches the user\", so no duplicate mobile push actually went out. Caught the error immediately after and checked the correct key, root.notifications[\"persistent-pull-blocker-2026-08-20\"] (lastSentAt 2026-08-20T00:00:58Z, ~3h old) - well inside the 6h dedup window, so no further notification is warranted this firing regardless. Root-level notifications map left untouched (no new key added, no existing key modified) since the already-standing 00:00:58Z entry still correctly covers this window. No code work attempted, control untouched (remains IDLE, work_queue unexamined). A human still needs to commit, stash, or otherwise clear the ibkr.mjs/equities-baseline-port work to unblock the loop; this is unrelated to any active work_queue item.",
-   "commit": null,
-   "tests": "not run (exited at STEP 0.3, before STEP 3)"
-  },
-  {
    "ts": "2026-08-19T23:30:00.000Z",
    "agent": "cajh-loop-check-scheduled",
    "action": "closed-work-queue-item",
@@ -1205,6 +1197,14 @@
    "detail": "STEP 0.3: git pull --rebase failed on unstaged ROADMAP.md/VERDICTS.md changes plus untracked universe.txt, none created this run. git fetch origin main + git log HEAD..origin/main confirmed zero new remote commits and zero local commits ahead -- purely a local dirty-tree block, not a missed sync. Inspected (read-only, did not stash/checkout/reset/clean/commit) the diff: ROADMAP.md gained one new dated section and VERDICTS.md had roughly 28 rows edited, both self-describing as a completed VERDICTS-TOURNAMENT-CITATION-GAP-FIX pass (24 citation insertions + 4 commit-hash placeholder fixes, claims npm.cmd test 659/659 green). This is the next pending work_queue item by description, but control.notes from the last commit (acbcf62) shows no record of this firing having started it, so it is most likely a prior firing that completed STEP 3 but crashed or was interrupted before STEP 6 committed it. Per STEP 0.3's literal instruction (never build on unexplained foreign changes, notify and exit), did not verify or commit it myself -- left it for human review exactly as found. universe.txt itself re-confirmed as pre-existing legitimate fetch-equity-ohlc.mjs input (per DEAD-CODE-AND-ASSET-AUDIT, unrelated to this block), left untouched. Checked top-level notifications map (canonical) for dedup on this specific content -- no existing key covered it, so sent one PushNotification and recorded it under a fresh dated key persistent-pull-blocker-2026-09-02. control/work_queue untouched (control remains idle from acbcf62 -- did not overwrite its notes). No code work attempted this firing.",
    "commit": null,
    "tests": null
+  },
+  {
+   "ts": "2026-09-03T04:01:21.000Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "blocked-pull-foreign-changes",
+   "detail": "STEP 0.3: git pull --rebase failed again on the identical unstaged content as the immediately prior firing (655743d): ROADMAP.md/VERDICTS.md unstaged modifications plus untracked universe.txt, none created this run, git diff --stat unchanged from the 09-02T20:03:30.921Z description (ROADMAP.md +36/-0, VERDICTS.md 56 lines touched, still the VERDICTS-TOURNAMENT-CITATION-GAP-FIX work). Did not stash/checkout/reset/clean/commit any of it. Checked the canonical top-level notifications map first this time (not blackboard.notifications, which is the known stale legacy copy) -- persistent-pull-blocker-2026-09-02 was lastSentAt 2026-09-02T20:03:30.921Z, ~8h old and past the 6h dedup window, so sent one PushNotification (tool reported 'Not sent - terminal active, output already reaches user', a redundant-delivery no-op, not a failure) and recorded it under a fresh dated key persistent-pull-blocker-2026-09-03 to avoid touching the 09-02 entry's message text (protected-logic hook re-trip risk per established convention). Ledger was at the 100-entry cap so dropped the oldest entry (2026-08-20T03:01:03.000Z pull-blocked-exit) before appending this one. control/work_queue untouched (control remains idle from acbcf62, notes preserved as-is). No code work attempted this firing -- a human still needs to commit, stash, or discard the ROADMAP.md/VERDICTS.md/universe.txt content to unblock the loop.",
+   "commit": null,
+   "tests": null
   }
  ],
  "automation": {
@@ -1264,6 +1264,12 @@
    "message": "cajh: pull blocked - uncommitted VERDICTS-TOURNAMENT-CITATION-GAP-FIX work in ROADMAP.md/VERDICTS.md sits unstaged, not from this run. Looks complete but needs your review before I commit or discard it.",
    "deliveryResult": "Mobile push requested (tool call succeeded; delivery to device not independently confirmed - see notification_policy.known_gap).",
    "note": "New dated key per established convention (avoids touching older dated entries whose message lines could re-trip check-protected-logic.cjs). Dedup checked against the top-level notifications map (canonical, per the 2026-08-20-b ledger correction), not blackboard.notifications (stale duplicate). No prior top-level key covers this specific content (ROADMAP.md/VERDICTS.md, not ibkr.mjs/package.json like older dated keys)."
+  },
+  "persistent-pull-blocker-2026-09-03": {
+   "lastSentAt": "2026-09-03T04:01:21.000Z",
+   "message": "cajh: pull still blocked - same uncommitted ROADMAP.md/VERDICTS.md/universe.txt content as 9/2, still not from this run. Needs your review before I can commit or discard it.",
+   "deliveryResult": "Not sent - terminal active, output already reaches user (tool-reported redundant, not a delivery failure).",
+   "note": "Canonical top-level key persistent-pull-blocker-2026-09-02 (lastSentAt 2026-09-02T20:03:30.921Z) was ~8h old, past the 6h dedup window, and git status/diff confirmed identical unstaged content (ROADMAP.md +36/-0-ish, VERDICTS.md ~56 lines, untracked universe.txt) -- same VERDICTS-TOURNAMENT-CITATION-GAP-FIX work still sitting uncommitted, unrelated to this run. New dated key per established convention rather than editing the 09-02 entry."
   }
  }
 }
