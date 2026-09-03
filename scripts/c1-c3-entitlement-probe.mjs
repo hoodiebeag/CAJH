@@ -128,11 +128,32 @@ export function evaluateGate(probe, gate = GATE) {
       // chains" on the record when all that happened was a request that never completed --
       // the same absence-of-evidence-is-not-evidence-of-absence line the FRED network control
       // exists to hold, applied to the IBKR side where it was originally missed.
-      const inconclusive = !!u.error && expiries.length === 0 && (u.ivBars ?? 0) === 0;
-      c1Reasons.push(inconclusive
-        ? `${u.symbol}: request did not complete (${u.error}) and returned nothing -- inconclusive, not a finding about entitlement`
-        : `${u.symbol}: ${expiries.length} qualifying expiries (need ${gate.c1.minExpiries}), ` +
-          `${u.ivBars ?? 0} IV bars (need ${gate.c1.minIvBars})` + (u.error ? ` [partial: ${u.error}]` : ""));
+      // Chain and IV are separate requests and fail independently, so they are judged
+      // separately. Run 4 enumerated 34 SPY expiries cleanly and had its IV request time out,
+      // and a single per-underlying flag scored that whole leg UNAVAILABLE -- reading "this
+      // account has no implied-volatility history" off a request that never completed. A leg
+      // is inconclusive when the part that FAILED returned nothing, whatever the other part did.
+      const chainErr = u.chainError ?? (expiries.length === 0 ? u.error : null);
+      const ivErr = u.ivError ?? ((u.ivBars ?? 0) === 0 ? u.error : null);
+      const chainInconclusive = !!chainErr && expiries.length === 0;
+      const ivInconclusive = !!ivErr && (u.ivBars ?? 0) === 0;
+      const inconclusive = chainInconclusive || ivInconclusive;
+      const parts = [
+        chainInconclusive
+          ? `chain request did not complete (${chainErr}) and returned nothing -- inconclusive, not a finding about entitlement`
+          : `${expiries.length} qualifying expiries (need ${gate.c1.minExpiries})`
+            // Data arrived AND the request ended badly: score it on the data, but say so, since
+            // a truncated stream can look like a clean short answer.
+            + (chainErr ? ` [partial: ${chainErr}]` : ""),
+        ivInconclusive
+          ? `IV request did not complete (${ivErr}) and returned nothing -- inconclusive, not a finding about entitlement`
+          : `${u.ivBars ?? 0} IV bars (need ${gate.c1.minIvBars})` + (ivErr ? ` [partial: ${ivErr}]` : ""),
+      ];
+      // Records from runs 2-4 carry one `error` for the whole underlying rather than per leg.
+      // When both legs returned data, the per-leg attribution above finds nowhere to put it, and
+      // an error that actually happened would vanish from the report. Surface it on the record.
+      const orphanError = u.error && !chainErr && !ivErr ? ` [partial: ${u.error}]` : "";
+      c1Reasons.push(`${u.symbol}: ${parts.join("; ")}${orphanError}`);
       return { enough, inconclusive };
     });
     if (legs.some((l) => l.enough)) c1 = "AVAILABLE";
@@ -198,7 +219,17 @@ async function fetchFred(seriesId) {
 /** Everything that needs a live gateway, isolated so the rest of the file loads without one. */
 async function probeIbkr() {
   const ib = await import("@stoqey/ib");
-  const { IBApi, EventName, Option, Forex, Stock, WhatToShow, BarSizeSetting } = ib;
+  const { IBApi, EventName, Forex, Stock, WhatToShow, BarSizeSetting, isNonFatalError } = ib;
+
+  // TWS emits benign errors constantly -- the 2100-2999 data-farm band, 10090/10167 for
+  // delayed/partial data, anything prefixed "Warning:". brokers/ibkr.mjs learned this the hard
+  // way ("treating every error as fatal is what made a benign data-farm notice fail a
+  // connection"). The first version of this probe never inspected the event at all, so a real
+  // rejection and a silent drop both surfaced as the same bare "timeout" -- which is why three
+  // runs told us nothing about WHY the IV request failed.
+  const parseError = (a, b, c) => (a instanceof Error)
+    ? { id: -1, code: -1, message: a.message, error: a, socket: true }
+    : { id: a, code: b, message: String(c ?? ""), error: new Error(String(c ?? "")), socket: false };
   const api = new IBApi({ host: HOST, port: PORT });
   let nextId = 9000;
   const reqId = () => nextId++;
@@ -235,7 +266,12 @@ async function probeIbkr() {
       resolve(v);
     };
     const onEnd = () => finish({ ok: true, rows: acc });
-    const onErr = (a, b, c) => { if (a === id || b === id) finish({ ok: false, reason: String(c ?? b ?? a), rows: acc }); };
+    const onErr = (a, b, c) => {
+      const e = parseError(a, b, c);
+      if (!e.socket && e.id !== id) return;              // another request's problem
+      if (!e.socket && isNonFatalError(e.code, e.error)) return;  // informational, data still coming
+      finish({ ok: false, reason: `${e.code}: ${e.message}`, rows: acc });
+    };
     removeRow = onRow(id, (row) => acc.push(row), finish);
     if (endEvent) api.on(endEvent, onEnd);
     api.on(EventName.error, onErr);
@@ -310,17 +346,21 @@ async function probeIbkr() {
       EventName.securityDefinitionOptionParameterEnd,
     );
     const expiries = dedupeExpiries(chain.rows ?? []);
-    let ivBars = 0, error = chain.ok ? null : chain.reason;
-    const first = expiries[0];
-    if (first?.strike) {
-      const iv = await histBars(
-        new Option(symbol, first.expiry, first.strike, "C"), "2 Y", WhatToShow.OPTION_IMPLIED_VOLATILITY);
-      ivBars = iv.count ?? iv.rows?.length ?? 0;
-      if (!iv.ok) error = iv.reason;
-    } else if (!error && expiries.length) {
-      error = "chain enumerated but carried no strike to price an IV series against";
-    }
-    underlyings.push({ symbol, conId, expiries, ivBars, error });
+    const chainError = chain.ok ? null : chain.reason;
+
+    // IV is requested on the UNDERLYING STOCK, not on one option contract. IBKR computes
+    // OPTION_IMPLIED_VOLATILITY from the underlying's whole chain and returns a continuous
+    // series -- which is also the series a variance-risk-premium study actually wants. Run 4
+    // asked against a single Option built from expiries[0], which on 2026-09-03 was an option
+    // expiring THAT DAY: a two-year daily history request against a contract days old could not
+    // have returned anything, entitled or not. Same class of error as the null strike before it.
+    const iv = await histBars(new Stock(symbol, "SMART", "USD"), "2 Y", WhatToShow.OPTION_IMPLIED_VOLATILITY);
+    const ivBars = iv.count ?? iv.rows?.length ?? 0;
+    underlyings.push({
+      symbol, conId, expiries, ivBars,
+      chainError, ivError: iv.ok ? null : iv.reason,
+      error: chainError ?? (iv.ok ? null : iv.reason),
+    });
   }
 
   const pairs = [];

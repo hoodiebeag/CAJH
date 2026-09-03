@@ -227,3 +227,49 @@ test("FX pairs that answered cleanly but short are UNAVAILABLE, a real finding",
   const g = evaluateGate({ ...PASSING, c3: { ...PASSING.c3, pairs } });
   assert.equal(g.c3.verdict, "UNAVAILABLE");
 });
+
+// ---------- chain and IV fail independently ----------
+
+test("a clean chain with an inconclusive IV leg is BLOCKED, not UNAVAILABLE", () => {
+  // Run 4 exactly: SPY enumerated 34 expiries, its IV request timed out with zero bars.
+  // One flag for the whole underlying read that as "no implied-volatility history available".
+  const g = evaluateGate({ ...PASSING, c1: { underlyings: [
+    { symbol: "SPY", expiries: expiries(34, 491), ivBars: 0, chainError: null, ivError: "timeout" },
+  ] } });
+  assert.equal(g.c1.verdict, "BLOCKED");
+  assert.ok(g.c1.reasons.some((r) => /34 qualifying expiries/.test(r)), "the chain result must still be reported");
+  assert.ok(g.c1.reasons.some((r) => /IV request did not complete/.test(r)));
+});
+
+test("a clean chain with a clean but empty IV response is UNAVAILABLE, a real finding", () => {
+  const g = evaluateGate({ ...PASSING, c1: { underlyings: [
+    { symbol: "SPY", expiries: expiries(34, 491), ivBars: 0, chainError: null, ivError: null },
+  ] } });
+  assert.equal(g.c1.verdict, "UNAVAILABLE");
+  assert.ok(!g.c1.reasons.some((r) => /inconclusive/.test(r)));
+});
+
+test("an inconclusive chain leg is reported as such even when IV came back fine", () => {
+  const g = evaluateGate({ ...PASSING, c1: { underlyings: [
+    { symbol: "SPY", expiries: [], ivBars: 800, chainError: "321: rejected", ivError: null },
+  ] } });
+  assert.equal(g.c1.verdict, "BLOCKED");
+  assert.ok(g.c1.reasons.some((r) => /chain request did not complete \(321: rejected\)/.test(r)));
+  assert.ok(g.c1.reasons.some((r) => /800 IV bars/.test(r)));
+});
+
+test("both legs clean and sufficient is still AVAILABLE", () => {
+  const g = evaluateGate({ ...PASSING, c1: { underlyings: [
+    { symbol: "SPY", expiries: expiries(34, 491), ivBars: 504, chainError: null, ivError: null },
+  ] } });
+  assert.equal(g.c1.verdict, "AVAILABLE");
+});
+
+test("the older per-underlying error shape still scores correctly", () => {
+  // Runs 2 and 3 predate the split fields and carry a single `error`. Their records must not
+  // silently re-score to something different when read back.
+  const g = evaluateGate({ ...PASSING, c1: { underlyings: [
+    { symbol: "SPY", expiries: [], ivBars: 0, error: "timeout" },
+  ] } });
+  assert.equal(g.c1.verdict, "BLOCKED");
+});

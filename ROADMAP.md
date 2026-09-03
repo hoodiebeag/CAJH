@@ -4537,3 +4537,62 @@ they would have failed against the code that produced it.
 
 `SEALED_SYMBOLS` untouched. No order placed, no account or position data read, nothing under
 `brokers/` modified, no GATE threshold changed.
+
+
+## 2026-09-03 — C1-C3-ENTITLEMENT-PROBE-RUN 4: option chains DO enumerate on this account; C1's second "UNAVAILABLE" is retracted again, on a narrower version of the same defect
+
+Run record `research-runs/2026-09-03T10-35-13-870Z-c1-c3-entitlement-probe.json`, ledger entries
+committed by the human at `8be776f`. Raw output again read `C1: UNAVAILABLE, C3: AVAILABLE`.
+**C3 stands and is now clean. C1's verdict is retracted for the second time.**
+
+### Confirmed by evidence, not by argument
+
+Two of run 2's three fixes are now demonstrated working:
+
+| Fix | Evidence |
+|---|---|
+| Resolve the real `conId` before `reqSecDefOptParams` | **SPY conId 756733, 34 expiries × 491 strikes (NASDAQOM); QQQ conId 320227571, 33 × 530 (AMEX)** — where run 2 returned zero |
+| Finish on the `"finished"` sentinel inside `historicalData` | all four FX pairs now return `error: null` alongside their 1297 bars, where run 2 marked every one `timeout` |
+
+**This settles the substantive question that run 2's write-up could only speculate about: the
+empty chains were the malformed request, not the account.** This account enumerates option chains
+across 33-34 expiries and ~500 strikes apiece, two years out.
+
+### C1 is still not answered, and the reason is again mine
+
+`ivBars: 0` with `error: "timeout"` on both underlyings. The gate scored the pair UNAVAILABLE
+because the chain leg passed and the IV leg did not. That is the run-2 defect at finer grain: **a
+single inconclusive flag per underlying, when the chain and the IV series are separate requests
+that fail independently.** Reading "this account has no implied-volatility history" off a request
+that never completed is the same mistake, one level down. The gate now judges the two legs
+separately; re-scored, run 4 reads **BLOCKED**, with the 34 enumerated expiries still reported
+rather than discarded.
+
+Three further defects, all found by this run and all fixed:
+
+1. **Real IBKR errors were never surfaced.** The error handler ignored `isNonFatalError`, so it
+   could kill a request on a benign data-farm notice, and its id matching meant genuine
+   rejections fell through to the 30-second timeout. Every failure in runs 1-4 therefore reported
+   as the bare string `"timeout"` regardless of cause — which is precisely why four runs have not
+   told us *why* the IV request fails. It now reuses `brokers/ibkr.mjs`'s own `parseErrorEvent`
+   shape and non-fatal predicate, and reports `code: message`.
+2. **IV was requested against a single option contract.** IBKR computes
+   `OPTION_IMPLIED_VOLATILITY` from the underlying's whole chain and returns a continuous series
+   on the **stock** contract — which is also the series a variance-risk-premium study wants. Worse,
+   the contract chosen was `expiries[0]`, which on 2026-09-03 was an option **expiring that day**:
+   a two-year daily history request against a days-old contract could not have returned anything,
+   entitled or not. Same class of error as the null strike before it, and it was flagged as a
+   suspicion *before* this run rather than retrofitted after.
+3. **An error on a leg that still returned data was silently dropped** from the reason list when
+   the other leg also had data. An error that happened must appear on the record.
+
+### Standing count
+
+Four runs; C3 answered twice over; **C1 unanswered**, with every failure so far traceable to this
+probe rather than to the account. Run 5 is the first that can produce a real C1 finding, because
+it is the first where a failure will carry IBKR's own reason instead of a timeout. If the IV
+series comes back empty from a *completed* request, that is a genuine entitlement finding and will
+be recorded as one.
+
+`SEALED_SYMBOLS` untouched. No order placed, no account or position data read, nothing under
+`brokers/` modified, no GATE threshold changed.
