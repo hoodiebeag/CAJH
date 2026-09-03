@@ -9,9 +9,9 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-03T21:35:00Z",
- "phase": "sweep13/14 done; a silent no-op parameter found and closed",
- "runsTested": 1584,
+ "updatedAt": "2026-09-03T21:50:00Z",
+ "phase": "sweep18 done; leader now level with buy-and-hold BTC at a quarter of its drawdown",
+ "runsTested": 1780,
  "base": {
   "trendGate": false,
   "alignMode": "none",
@@ -159,6 +159,30 @@
    "axis": "stopMode atr x atrStopK",
    "configs": 21,
    "result": "INVALID for breakout and bos. stopMode is only implemented for entryMode anticipate, so seven atrStopK values produced seven byte-identical rows. Those 14 rows are marked invalid in the log and backtestMultiTF now throws instead of ignoring the parameter. anticipate does respond: atrStopK 3 gives $1928.99 at a 10.51% drawdown on 98 trades, still below the structural leader."
+  },
+  {
+   "phase": "sweep15",
+   "axis": "filter combinations, all 16 subsets",
+   "configs": 16,
+   "result": "atrPctBand + btcRegime is the best pair at $3760.75 (13.51% DD). Adding adx or maSlope always LOWERS the balance and always LOWERS the drawdown -- all four together give $2624.88 at 8.57% DD on 78 trades. A real risk/return trade, no free lunch."
+  },
+  {
+   "phase": "sweep16",
+   "axis": "breakeven lock on the gated leader",
+   "configs": 40,
+   "result": "arming the lock LATER helps: beTriggerR 3 with beLockR 0.2 gives $3885.34 against $3543.12 at the 2.0 default. Consistent with the tail thesis -- an early breakeven stop chokes the runners that carry the return."
+  },
+  {
+   "phase": "sweep17",
+   "axis": "swing window x breakout lookback x alignMode",
+   "configs": 80,
+   "result": "n and alignMode are BOTH no-ops for breakout. alignMode is structurally dead in a single-timeframe run (no higher TFs exist, so every mode evaluates true) -- do not sweep it again without a multi-TF series. breakoutLookback does bind; 20 is best."
+  },
+  {
+   "phase": "sweep18",
+   "axis": "beTriggerR x filters x trendMa combined",
+   "configs": 60,
+   "result": "NEW LEADER. $4077.96 on 148 trades at 13.54% DD -- level with buy-and-hold BTC ($4105.94) at roughly a quarter of its 52.06% drawdown."
   }
  ],
  "leader": {
@@ -170,7 +194,9 @@
   "maxStopPct": 0.2,
   "tpR": 100,
   "maxHold": 100,
-  "riskPct": 0.005,
+  "lockBreakeven": true,
+  "beTriggerR": 2.5,
+  "beLockR": 0.2,
   "filters": {
    "atrPctBand": {
     "period": 14,
@@ -178,9 +204,31 @@
     "max": 1
    }
   },
-  "trades": 155,
-  "finalBalance": 3672.04,
-  "maxDrawdownPct": 13.99
+  "riskPct": 0.005,
+  "trades": 148,
+  "meanR": 2.1641,
+  "finalBalance": 4077.96,
+  "maxDrawdownPct": 13.54,
+  "vsBenchmark": "BTC buy-and-hold is $4105.94 at 52.06% DD. Same money, a quarter of the hole.",
+  "null": {
+   "vsAnyBar": {
+    "excessR": 1.7264,
+    "p": 0.00525,
+    "z": 3.37,
+    "mdeR": 1.4341,
+    "detectable": true,
+    "nullBalance": 1382.04
+   },
+   "vsGatedBars": {
+    "excessR": 1.8619,
+    "p": 0.0035,
+    "z": 3.51,
+    "mdeR": 1.4879,
+    "detectable": true,
+    "nullBalance": 1250.41
+   }
+  },
+  "fragility": "top 5 of 148 trades carry 80.9% of all R; win rate 38.5%"
  },
  "benchmark": {
   "btcBuyAndHold": 4105.94,
@@ -204,7 +252,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Filter COMBINATIONS (adx AND btcRegime AND maSlope together, not one at a time) -- singly each was noise-level, and the case for them is that they veto different bars. Then cross-sectional pair selection by trailing Sharpe, the one idea from the literature search still unbuilt. Also worth a pass: swing window n, beTriggerR/beLockR on the gated leader, and alignMode now that a real trend gate exists to interact with it.",
+ "nextUp": "Cross-sectional pair selection by trailing Sharpe -- the last idea from the literature search still unbuilt, and the one most likely to help, since the concentration analysis shows the return comes from a few pairs. Then: re-run the leave-one-pair-out and per-year robustness on the NEW leader (the old numbers are for the pre-sweep16 config), and a multi-timeframe series so alignMode is testable at all.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
