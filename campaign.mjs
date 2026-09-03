@@ -29,7 +29,7 @@ import { backtestMultiTF } from "./backtest.js";
 import { loadBundleCandles, availablePairs, resampleBundleCandles } from "./bundle-loader.mjs";
 import { simulateEquity, leaderboard } from "./equity.mjs";
 import { FEE_RATE, SLIPPAGE_PCT } from "./strategy.js";
-import { buildEntryGate, sharpeRankTable } from "./filters.mjs";
+import { buildEntryGate, sharpeRankTable, atr as atrSeries } from "./filters.mjs";
 
 export const SPLIT = Object.freeze({
   // Full period, per the owner's 2026-09-03 direction. Kept as named fields so a later session
@@ -86,9 +86,20 @@ export function runConfig(config, { minutes = 1440, from = SPLIT.trainStart, to 
     const r = backtestMultiTF({ series: tfSeries },
       { ...config, entryGate, entryTf: String(minutes), feeRate: config.feeRate ?? FEE_RATE, slipPct: config.slipPct ?? SLIPPAGE_PCT });
     symbolsUsed++;
+    // atrPct at the entry bar, so volatility-targeted sizing has something to size against. Keyed
+    // by the bar's own time rather than by position, because an excursion's entryTime is the bar
+    // time and the two only coincide when nothing has been filtered out.
+    const atrByTime = new Map();
+    {
+      const a = atrSeries(candles, config.atrPeriod ?? 14);
+      for (let i = 0; i < candles.length; i++) {
+        const px = Number(candles[i].close);
+        if (a[i] !== null && px > 0) atrByTime.set(Number(candles[i].time), a[i] / px);
+      }
+    }
     for (const x of r.excursions) {
       if (!Number.isFinite(x.entryTime)) continue; // undated same-bar stops cannot be ordered
-      trades.push({ netR: x.r, entryTime: x.entryTime * 1000, symbol: pair });
+      trades.push({ netR: x.r, entryTime: x.entryTime * 1000, symbol: pair, atrPct: atrByTime.get(x.entryTime) });
     }
   }
   return { trades, symbolsUsed };
@@ -98,7 +109,12 @@ export function runConfig(config, { minutes = 1440, from = SPLIT.trainStart, to 
 export function score(config, opts = {}) {
   const { trades, symbolsUsed } = runConfig(config, opts);
   if (!trades.length) return { config, trades: 0, symbolsUsed, finalBalance: opts.startingBalance ?? 1000, empty: true };
-  const eq = simulateEquity(trades, { riskPct: config.riskPct ?? 0.005, startingBalance: opts.startingBalance ?? 1000 });
+  const eq = simulateEquity(trades, {
+    riskPct: config.riskPct ?? 0.005,
+    startingBalance: opts.startingBalance ?? 1000,
+    volTarget: config.volTarget ?? null,
+    volClamp: config.volClamp ?? 3,
+  });
   return {
     config, symbolsUsed,
     trades: eq.trades,

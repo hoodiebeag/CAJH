@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { simulateEquity, leaderboard, DEFAULTS } from "./equity.mjs";
+import { riskMatchedRiskPct, simulateEquity, leaderboard, DEFAULTS } from "./equity.mjs";
 
 const day = 86400000, t0 = Date.parse("2023-01-01");
 const series = (rs) => rs.map((r, i) => ({ netR: r, entryTime: t0 + i * day }));
@@ -77,4 +77,49 @@ test("the leaderboard carries how many configurations produced its winner", () =
 test("defaults are the stated experiment: $1000 and 0.5% risk", () => {
   assert.equal(DEFAULTS.startingBalance, 1000);
   assert.equal(DEFAULTS.riskPct, 0.005);
+});
+
+test("volatility targeting sizes a quiet instrument up and a wild one down", () => {
+  const t = (atrPct, at) => ({ netR: 1, entryTime: at, atrPct, symbol: "X" });
+  const quiet = simulateEquity([t(0.02, 1)], { volTarget: 0.04, startingBalance: 1000, riskPct: 0.01 });
+  const wild = simulateEquity([t(0.08, 1)], { volTarget: 0.04, startingBalance: 1000, riskPct: 0.01 });
+  const flatSized = simulateEquity([t(0.02, 1)], { startingBalance: 1000, riskPct: 0.01 });
+  assert.equal(flatSized.finalBalance, 1010);
+  assert.equal(quiet.finalBalance, 1020, "0.04/0.02 = 2x the base risk");
+  assert.equal(wild.finalBalance, 1005, "0.04/0.08 = half the base risk");
+});
+
+test("the volatility clamp stops a quiet pair sizing up without bound", () => {
+  // A pair whose ATR is 0.1% of price would be sized 40x the base risk on the strength of one
+  // quiet stretch. Quiet and safe are different words.
+  const r = simulateEquity([{ netR: 1, entryTime: 1, atrPct: 0.001 }],
+    { volTarget: 0.04, volClamp: 3, startingBalance: 1000, riskPct: 0.01 });
+  assert.equal(r.finalBalance, 1030, "clamped to 3x, not 40x");
+});
+
+test("volatility targeting refuses to run on trades that carry no volatility", () => {
+  assert.throws(() => simulateEquity([{ netR: 1, entryTime: 1 }], { volTarget: 0.04 }),
+    /needs atrPct on every trade/);
+});
+
+test("volTarget null reproduces the original sizing exactly", () => {
+  const trades = [{ netR: 2, entryTime: 1, atrPct: 0.9 }, { netR: -1, entryTime: 2, atrPct: 0.01 }];
+  const a = simulateEquity(trades, { startingBalance: 1000, riskPct: 0.01 });
+  const b = simulateEquity(trades.map(({ netR, entryTime }) => ({ netR, entryTime })), { startingBalance: 1000, riskPct: 0.01 });
+  assert.equal(a.finalBalance, b.finalBalance);
+});
+
+test("risk matching removes leverage from a volatility-targeting comparison", () => {
+  // A volTarget above the universe's own volatility scales every bet up, so the balance rises for
+  // that reason alone. On the campaign's leader an unmatched sweep reached $16,138 that way.
+  const trades = [{ netR: 1, entryTime: 1, atrPct: 0.02 }, { netR: 1, entryTime: 2, atrPct: 0.08 }];
+  const matched = riskMatchedRiskPct(trades, { volTarget: 0.10, volClamp: 3, riskPct: 0.005 });
+  const weights = trades.map((t) => Math.min(3, Math.max(1 / 3, 0.10 / t.atrPct)));
+  const meanWeight = (weights[0] + weights[1]) / 2;
+  assert.ok(Math.abs(matched * meanWeight - 0.005) < 1e-12, "mean deployed risk must come back to riskPct");
+  assert.ok(matched < 0.005, "a volTarget above the universe's volatility must be scaled DOWN to match");
+});
+
+test("risk matching is the identity when volatility targeting is off", () => {
+  assert.equal(riskMatchedRiskPct([{ netR: 1, entryTime: 1 }], { volTarget: null, riskPct: 0.005 }), 0.005);
 });

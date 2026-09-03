@@ -30,6 +30,12 @@ export const DEFAULTS = Object.freeze({
   // so would report ruined:false while being, in every sense that matters, a wiped-out account.
   // Anything below this fraction of the starting balance is reported as effectively ruined.
   ruinThresholdPct: 0.01,
+  // Volatility targeting, off by default. null = size every trade at riskPct, the original
+  // behaviour. A number is the daily ATR-as-a-fraction-of-price the book is sized toward.
+  volTarget: null,
+  // Hard limit on how far volatility targeting may scale a bet in either direction, as a multiple
+  // of riskPct. Without it a quiet pair sizes up without bound.
+  volClamp: 3,
 });
 
 /**
@@ -40,7 +46,7 @@ export const DEFAULTS = Object.freeze({
  * order IS the result here, so guessing it would silently change the answer.
  */
 export function simulateEquity(trades, opts = {}) {
-  const { startingBalance, riskPct, fixedFractional, ruinThresholdPct } = { ...DEFAULTS, ...opts };
+  const { startingBalance, riskPct, fixedFractional, ruinThresholdPct, volTarget, volClamp } = { ...DEFAULTS, ...opts };
   if (!(startingBalance > 0)) throw new Error("simulateEquity: startingBalance must be positive");
   if (!(riskPct > 0 && riskPct < 1)) throw new Error("simulateEquity: riskPct must be between 0 and 1");
 
@@ -49,15 +55,33 @@ export function simulateEquity(trades, opts = {}) {
     const at = Number(t.entryTime);
     if (!Number.isFinite(r)) throw new Error(`simulateEquity: trade ${i} has no finite netR`);
     if (!Number.isFinite(at)) throw new Error(`simulateEquity: trade ${i} has no entryTime; order decides the result and must not be guessed`);
-    return { r, at, symbol: t.symbol ?? null };
+    return { r, at, symbol: t.symbol ?? null, atrPct: Number(t.atrPct) };
   }).sort((a, b) => a.at - b.at);
+
+  // Volatility targeting. Fixed-fractional sizing already equalises risk PER STOP, and because a
+  // structural stop sits roughly a volatility unit away the two are close -- but not the same, and
+  // where they diverge this scales the bet toward a constant volatility contribution instead:
+  //   riskPct_i = riskPct * volTarget / atrPct_i,  clamped to [1/volClamp, volClamp] of riskPct.
+  // The clamp is not optional. A pair whose ATR is 0.2% of price would otherwise be sized twenty
+  // times the base risk on the strength of one quiet week, which is how a volatility-targeted book
+  // discovers that quiet and safe are different words.
+  if (volTarget !== null) {
+    if (!(volTarget > 0)) throw new Error("simulateEquity: volTarget must be positive when set");
+    if (!(volClamp >= 1)) throw new Error("simulateEquity: volClamp must be at least 1");
+    const missing = rows.filter((row) => !(row.atrPct > 0)).length;
+    if (missing) throw new Error(`simulateEquity: volTarget needs atrPct on every trade; ${missing} of ${rows.length} have none`);
+  }
+  const weight = (row) => {
+    if (volTarget === null) return 1;
+    return Math.min(volClamp, Math.max(1 / volClamp, volTarget / row.atrPct));
+  };
 
   let balance = startingBalance, peak = startingBalance, maxDD = 0, ruined = false;
   const ruinFloor = startingBalance * ruinThresholdPct;
   let effectivelyRuinedAt = null;
   const curve = [];
   for (const row of rows) {
-    const riskDollars = fixedFractional ? balance * riskPct : startingBalance * riskPct;
+    const riskDollars = (fixedFractional ? balance * riskPct : startingBalance * riskPct) * weight(row);
     balance += row.r * riskDollars;
     if (balance <= 0) { balance = 0; ruined = true; curve.push({ at: row.at, balance }); break; }
     if (effectivelyRuinedAt === null && balance < ruinFloor) effectivelyRuinedAt = row.at;
@@ -103,4 +127,27 @@ export function leaderboard(results, { runsTested = results.length } = {}) {
       `looks, the top result is expected to look good whether or not any edge exists; treat the ` +
       `figure as a search outcome, not as evidence, until it is checked on data not used to pick it.`,
   };
+}
+
+/**
+ * The riskPct at which a volatility-targeted book deploys the same AVERAGE risk as a flat one.
+ *
+ * Without this, every comparison of volatility targeting is a comparison of leverage. Raising
+ * volTarget above the universe's own volatility scales every bet up, and the balance rises for
+ * that reason alone -- a sweep of volTarget on the campaign's leader ran to $16,138 purely by
+ * deploying 3.7x the risk. Matching the mean weight to 1 removes the leverage from the comparison
+ * and leaves only the question worth asking: does sizing inversely to volatility allocate the same
+ * total risk better than sizing it flat?
+ */
+export function riskMatchedRiskPct(trades, { volTarget, volClamp = 3, riskPct = DEFAULTS.riskPct } = {}) {
+  if (volTarget === null || volTarget === undefined) return riskPct;
+  if (!(volTarget > 0)) throw new Error("riskMatchedRiskPct: volTarget must be positive");
+  if (!(volClamp >= 1)) throw new Error("riskMatchedRiskPct: volClamp must be at least 1");
+  const weights = trades.map((t) => {
+    const atrPct = Number(t.atrPct);
+    if (!(atrPct > 0)) throw new Error("riskMatchedRiskPct: every trade needs a positive atrPct");
+    return Math.min(volClamp, Math.max(1 / volClamp, volTarget / atrPct));
+  });
+  if (!weights.length) return riskPct;
+  return riskPct / (weights.reduce((s, w) => s + w, 0) / weights.length);
 }

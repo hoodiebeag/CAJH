@@ -21,7 +21,7 @@
 import { backtestMultiTF } from "./backtest.js";
 import { slice, SPLIT } from "./campaign.mjs";
 import { availablePairs } from "./bundle-loader.mjs";
-import { buildEntryGate, sharpeRankTable } from "./filters.mjs";
+import { buildEntryGate, sharpeRankTable, atr } from "./filters.mjs";
 import { simulateEquity } from "./equity.mjs";
 import { FEE_RATE, SLIPPAGE_PCT } from "./strategy.js";
 import { pathToFileURL } from "url";
@@ -31,6 +31,11 @@ export const LEADER = {
   minStopPct: 0.03, maxStopPct: 0.20, tpR: 100, maxHold: 100,
   lockBreakeven: true, beTriggerR: 2.5, beLockR: 0.2,
   filters: { crossSection: { lookback: 120, topN: 20 }, atrPctBand: { period: 14, min: 0.03, max: 1 } },
+  // Size inversely to each instrument's own volatility rather than flat. This is the one change in
+  // the campaign with no threshold to fit: at matched deployed risk the result is flat across
+  // volTarget 0.03 to 0.10 with any clamp of 3 or more, because once the clamp is loose the weights
+  // are simply proportional to 1/ATR% and the level cancels. A plateau, not a peak.
+  volTarget: 0.05, volClamp: 3,
 };
 
 /** Every trade a configuration takes, with the geometry the robustness checks slice on. */
@@ -52,17 +57,24 @@ export function collect(config, { minutes = 1440, from = SPLIT.trainStart, to = 
       : null;
     const r = backtestMultiTF({ series: [{ label: String(minutes), mins: minutes, candles }] },
       { ...config, entryGate, entryTf: String(minutes), feeRate: FEE_RATE, slipPct: SLIPPAGE_PCT });
+    const a = atr(candles, config.atrPeriod ?? 14);
+    const atrByTime = new Map();
+    for (let i = 0; i < candles.length; i++) {
+      const px = Number(candles[i].close);
+      if (a[i] !== null && px > 0) atrByTime.set(Number(candles[i].time), a[i] / px);
+    }
     for (const x of r.excursions) {
       if (!Number.isFinite(x.entryTime)) continue;
-      trades.push({ symbol: pair, netR: x.r, entryTime: x.entryTime * 1000, stopPct: x.risk / x.entry, barsHeld: x.barsHeld });
+      trades.push({ symbol: pair, netR: x.r, entryTime: x.entryTime * 1000, stopPct: x.risk / x.entry,
+        barsHeld: x.barsHeld, atrPct: atrByTime.get(x.entryTime) });
     }
   }
   return { trades, series };
 }
 
-export function summarise(trades, { riskPct = 0.005, startingBalance = 1000 } = {}) {
+export function summarise(trades, { riskPct = 0.005, startingBalance = 1000, volTarget = null, volClamp = 3 } = {}) {
   if (!trades.length) return { trades: 0, meanR: null, finalBalance: startingBalance, maxDrawdownPct: 0 };
-  const eq = simulateEquity(trades, { riskPct, startingBalance });
+  const eq = simulateEquity(trades, { riskPct, startingBalance, volTarget, volClamp });
   return {
     trades: trades.length,
     meanR: +(trades.reduce((s, t) => s + t.netR, 0) / trades.length).toFixed(4),
@@ -73,6 +85,7 @@ export function summarise(trades, { riskPct = 0.005, startingBalance = 1000 } = 
 
 export function report(config = LEADER, opts = {}) {
   const { trades, series } = collect(config, opts);
+  opts = { volTarget: config.volTarget ?? null, volClamp: config.volClamp ?? 3, ...opts };
   const out = { all: summarise(trades, opts) };
 
   out.leaveOnePairOut = [...new Set(trades.map((t) => t.symbol))]

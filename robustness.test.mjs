@@ -6,8 +6,8 @@ const R = report();
 
 test("the leader reproduces exactly -- a silent change to the engine or the bundle fails here", () => {
   assert.equal(R.all.trades, 143);
-  assert.equal(R.all.finalBalance, 4175.64);
-  assert.equal(R.all.maxDrawdownPct, 13.54);
+  assert.equal(R.all.finalBalance, 4595.23);
+  assert.equal(R.all.maxDrawdownPct, 12.53);
 });
 
 test("it is positive in every full year standalone, not one good year", () => {
@@ -17,7 +17,7 @@ test("it is positive in every full year standalone, not one good year", () => {
 });
 
 test("it survives losing any single pair", () => {
-  assert.ok(R.leaveOnePairOut[0].finalBalance > 2500,
+  assert.ok(R.leaveOnePairOut[0].finalBalance > 3000,
     `worst case is ${R.leaveOnePairOut[0].without} at $${R.leaveOnePairOut[0].finalBalance}`);
 });
 
@@ -50,4 +50,14 @@ test("the pinned LEADER is the configuration the campaign state names", () => {
   assert.equal(LEADER.entryMode, "breakout");
   assert.equal(LEADER.trendMa, 200);
   assert.equal(LEADER.beTriggerR, 2.5);
+  assert.equal(LEADER.volTarget, 0.05);
+});
+
+test("volatility targeting improves the leader on BOTH balance and drawdown", () => {
+  // The comparison that justifies it is risk-matched (see equity.mjs riskMatchedRiskPct): at the
+  // same mean deployed risk, sizing inversely to volatility beats flat sizing. Here it is simply
+  // run at the same riskPct, where it deploys slightly LESS risk and still wins on both axes.
+  const flat = report({ ...LEADER, volTarget: null });
+  assert.ok(R.all.finalBalance > flat.all.finalBalance, `${R.all.finalBalance} vs ${flat.all.finalBalance}`);
+  assert.ok(R.all.maxDrawdownPct < flat.all.maxDrawdownPct, `${R.all.maxDrawdownPct} vs ${flat.all.maxDrawdownPct}`);
 });

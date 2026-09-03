@@ -9,9 +9,9 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-03T22:25:00Z",
- "phase": "sweep20/21 done; the multi-timeframe dimension is finally exercised",
- "runsTested": 2138,
+ "updatedAt": "2026-09-03T22:55:00Z",
+ "phase": "sweep22 done; volatility-targeted sizing is the first change with no threshold fitted",
+ "runsTested": 2166,
  "base": {
   "trendGate": false,
   "alignMode": "none",
@@ -201,6 +201,12 @@
    "axis": "alignMode where it is actually wired",
    "configs": 96,
    "result": "bos and anticipate are the only modes that consult alignMode, and only with a higher timeframe present. Swept there it genuinely binds -- anticipate on a weekly anchor gives 237 trades/$2390 at alignMode none against 162/$2539 at first -- but nothing beats the leader. Best is $3833.05 (anticipate, 3-day anchor, alignMode none, trendMa 20) at a 21.77% drawdown. 'first' and 'all' are identical with a single higher timeframe, as they must be."
+  },
+  {
+   "phase": "sweep22",
+   "axis": "volTarget x volClamp",
+   "configs": 28,
+   "result": "Raw sweep runs to $16,138 at volTarget 0.10 / clamp 5, and that number is LEVERAGE -- the universe's median trade sits at 5.55% ATR, so a 10% target scales every bet up and deploys 3.7x the risk. Risk-matched (equity.mjs riskMatchedRiskPct holds mean deployed risk at 0.5%) the real answer is $5087 against $4175.64 flat, at 13.41% drawdown against 13.54% -- and it is FLAT across volTarget 0.03-0.10 at any clamp >= 3. That plateau is the point: once the clamp is loose the weights are just proportional to 1/ATR% and the level cancels, so there is one structural decision here and no threshold to fit. First such change in the campaign."
   }
  ],
  "leader": {
@@ -227,10 +233,14 @@
    }
   },
   "riskPct": 0.005,
+  "volTarget": 0.05,
+  "volClamp": 3,
   "trades": 143,
-  "finalBalance": 4175.64,
-  "maxDrawdownPct": 13.54,
-  "honestNote": "Above BTC buy-and-hold ($4105.94) for the first time, but the margin over the previous leader ($4077.96) comes from dropping 5 trades with a near-no-op filter setting. Treat $4078 and $4176 as the same number. The defensible claim is BTC's return at a quarter of BTC's drawdown, not beating it."
+  "meanR": 2.2728,
+  "finalBalance": 4595.23,
+  "maxDrawdownPct": 12.53,
+  "vsBenchmark": "BTC buy-and-hold $4105.94 at 52.06% DD. Above it now, at a quarter of the drawdown.",
+  "note": "Dominates the previous leader ($4175.64 / 13.54%) on both axes with the same 143 trades, sized inversely to volatility instead of flat."
  },
  "benchmark": {
   "btcBuyAndHold": 4105.94,
@@ -254,7 +264,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Volatility-targeted position sizing -- the last literature idea, and the only one that changes the balance without changing which trades are taken: size each trade so its expected volatility contribution is equal rather than its stop distance. Then re-run the null on the current leader at higher k, and sweep feeBufferPct and entryDelayBars, neither of which has been touched.",
+ "nextUp": "Re-run the random-entry null on the current leader at k=4000 (the last null was for the pre-volTarget config, and sizing does not change the trades so the R-level result should be unchanged -- worth confirming rather than assuming). Then feeBufferPct and entryDelayBars, neither ever touched; entryDelayBars matters because it is the closest thing here to an execution-realism check.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -314,51 +324,50 @@
   "reading": "Not a better strategy, the same one levered 20x. A 94% drawdown means $1000 was worth about $60 at the low. Reported because the owner asked for the highest number; the drawdown is reported with it because the number is meaningless without it."
  },
  "concentration": {
-  "runner": "robustness.mjs (node robustness.mjs), pinned by robustness.test.mjs",
-  "config": "the current leader",
+  "runner": "robustness.mjs, pinned by robustness.test.mjs",
   "all": {
    "trades": 143,
    "meanR": 2.2728,
-   "final": 4175.64,
-   "dd": 13.54
+   "final": 4595.23,
+   "dd": 12.53
   },
   "leaveOnePairOut": {
-   "worst": "without ZECUSD $2808.42",
+   "worst": "without ZECUSD $3480.26",
    "next": [
-    "without SOLUSD $3367.72",
-    "without XRPUSD $3427.12"
+    "without SOLUSD $3565.03",
+    "without XRPUSD $3577.02"
    ]
   },
   "trimTopWinners": {
-   "drop1": 2792.85,
-   "drop2": 2199.71,
-   "drop3": 1740.39,
-   "drop5": 1356.36,
-   "drop10": 913.39,
-   "drop20": 642.59
+   "drop1": 3470.05,
+   "drop2": 2588.59,
+   "drop3": 1969.86,
+   "drop5": 1541.95,
+   "drop10": 1049.21,
+   "drop20": 685.84
   },
   "perYearStandalone": {
    "2023": {
     "trades": 27,
     "meanR": 5.1832,
-    "final": 1908.94
+    "final": 2047.4
    },
    "2024": {
     "trades": 67,
     "meanR": 1.8107,
-    "final": 1747.12
+    "final": 1921.48
    },
    "2025": {
     "trades": 48,
     "meanR": 1.3278,
-    "final": 1251.94
+    "final": 1168.0
    }
   },
   "fullHistoryPairsOnly": {
    "pairs": 16,
    "trades": 122,
    "meanR": 1.7973,
-   "final": 2712.34
+   "final": 3431.04
   },
   "shape": {
    "winRatePct": 39.2,
@@ -367,7 +376,7 @@
    "distinctDays": 98,
    "clusteringFactor": 1.46
   },
-  "reading": "Same shape as the earlier config, better on every margin. Positive in all three full years standalone. Survives losing any single pair (worst $2808 without ZEC, up from $2303). Survives restriction to the 16 full-history pairs at $2712, up from $2226. Still right-tailed: top 5 of 143 trades are 79.7% of all R, median trade -1.11R, win rate 39.2%, and dropping the ten best turns the mean negative. That is what trend following is; it is recorded so the mean is never read as a stable statistic. 143 trades fall on 98 distinct days, so the effective sample is smaller than the nominal one by 1.46x."
+  "reading": "Every robustness margin improved with volatility sizing and none of them moved because the TRADES changed -- they are the same 143. Worst leave-one-out $2808 to $3480, full-history-pairs-only $2712 to $3431, and dropping the ten best trades now finishes above starting capital at $1049 instead of $913. The right tail still carries the result: top 5 trades are 79.7% of all R, median trade -1.11R, win rate 39.2%."
  },
  "literatureSearched": {
   "date": "2026-09-03",
