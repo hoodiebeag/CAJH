@@ -4283,3 +4283,39 @@ All five REPRODUCES — every compared field lands within the stated precision (
 **Engineering note.** New `scripts/headline-figure-reproducibility-spotcheck.mjs` only (additive, read-only, cache-only, no network egress; spawns the five cited scripts as subprocesses, never imports or modifies them). No test file added, matching this project's established convention for read-only diagnostic scripts (no production code changed). `backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/`bot.js`/`trader.js`/`scanner.js` untouched; grep-confirmed against the actual staged diff before commit that no protected trading-safety identifier appears in it. `npm.cmd test`: 659/659 green.
 
 **Aside, out of this item's scope — noted, not fixed here.** While reading `scripts/c1-c3-entitlement-probe.mjs` to confirm it was correctly excluded from this item's universe, its `if (import.meta.url === \`file://${process.argv[1]}\`)` direct-execution guard was checked against this machine's actual `node` behavior: on Windows, `process.argv[1]` is backslash-path (`C:\...`) while `import.meta.url` is a forward-slash `file:///C:/...` URL, so the string comparison is always false and `main()` never runs when the script is invoked directly (confirmed with a throwaway `.mjs` reproducing the exact guard). This item's own new script therefore calls `main()` unconditionally at module scope instead (matching all five scripts it re-runs, none of which use this guard). `C1-C3-ENTITLEMENT-PROBE-RUN` — the pending item that actually needs to run `c1-c3-entitlement-probe.mjs` on this machine — will hit this directly; flagging it here rather than silently working around it in that item's own script.
+
+---
+
+## 2026-09-02 — VERDICTS-TOURNAMENT-CITATION-GAP-FIX: closing the 26-row citation gap
+
+BOOKKEEPING, not new research — D1 does not apply. Applied the citation-only fix VERDICTS-ROW-WRITEUP-RECONCILIATION
+(2026-09-02, above) scoped out as "a larger, mechanical edit better run as its own dedicated item": of the 29 rows
+whose full write-up lives only in TOURNAMENT_ROADMAP.md, 3 (ATR-ADAPTIVE-STOP-CONFIRMATORY,
+WIDE-STOP-HIGH-TARGET-ASYMMETRY, SCALED-EXIT-LADDER-CONFIRMATORY) already said so in their own row text; the
+other 26 gave the reader no hint the write-up lives outside ROADMAP.md/ROADMAP_ARCHIVE.md.
+
+**What changed.** For each of the 26, re-located its TOURNAMENT_ROADMAP.md section by line number (grep, not
+trusting the prior audit's prose alone) and confirmed it still exists before citing it. Appended
+`(see TOURNAMENT_ROADMAP.md: <section title>)` to the end of each row's Hypothesis cell (VERDICTS.md column 2) —
+the same position, though not verbatim the same wording, the 3 already-citing rows use. Two of the 26
+(T4-PORTFOLIO-MOMENTUM, T4-COVERAGE-FIX) turned out to already carry an explicit, section-named citation inside
+their own Deciding-metric cell ("see TOURNAMENT_ROADMAP.md Track 4 RESULT for full table" /
+`"see TOURNAMENT_ROADMAP.md \"T4-COVERAGE-FIX rerun\" for full old-vs-new table"`) — left untouched rather than
+duplicated, since the task's own done_when only requires a citation exist, and the task separately forbids
+touching the Deciding-metric cell at all. TREND-GATE-MA and TREND-GATE-STRUCTURE both cite the same section
+(`TEST-TREND-GATE-FILTER RESULT (2026-08-13)`) since that is genuinely one shared write-up for both gate modes,
+consistent with how the row text itself already cross-references the two.
+
+**Commit-field placeholders fixed (4).** The prior audit's aside — H11, PWR3, PWR4, T4-COVERAGE-FIX carried
+placeholder text like `(PWR3 commit)` where a real short hash was already known — applied here rather than
+re-derived: verified each hash resolves to a real, subject-matching commit before writing it in (`git show
+--no-patch`), then replaced the Commit cell only. H11 -> `e511b73`, PWR3 -> `9837597`, PWR4 -> `d304419`,
+T4-COVERAGE-FIX -> `9a34c82`.
+
+**Scope held.** No Verdict, Deciding-metric, or Holdout-n cell touched anywhere — diff is exactly 28 changed
+VERDICTS.md rows (24 citation insertions + 4 commit-hash replacements, no overlap between the two sets). The 6
+genuinely-UNSOURCED rows from the same prior audit (MR1, DCA-MARTINGALE, DCA-ANTIMARTINGALE, GRID-SIM,
+PAIRS-COINTEGRATION-STATARB, CROSS-SECTIONAL-NONPRICE-RANK) were not touched — that is
+`UNSOURCED-STUDY-RECORD-POLICY`'s decision, still pending in the queue, not this item's.
+
+`npm.cmd test`: 659/659 green (documentary citation pass, no production code touched).
