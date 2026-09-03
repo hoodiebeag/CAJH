@@ -143,3 +143,34 @@ test("the pre-registration states the gate and refuses to overclaim", () => {
   assert.equal(GATE.horizonDays, 5);
   assert.equal(evaluate([]).meaning.includes("not a return"), true);
 });
+
+// ---------- calibration at the real sample size ----------
+
+function measureMany(premium, seeds, n = 520) {
+  const out = [];
+  for (let s = 1; s <= seeds; s++) {
+    const { ivs, prices } = synthetic({ n, sigma: 0.18, premium, seed: s });
+    out.push(scoreUnderlying("X", ivs, prices, { h: 5 }));
+  }
+  return out;
+}
+
+test("at 520 bars the estimator has usable power for a 2-point premium", () => {
+  const rs = measureMany(0.02, 40);
+  const detected = rs.filter((r) => r.excludesZero).length;
+  assert.ok(detected >= 32, `expected >=80% power, detected ${detected}/40`);
+});
+
+test("at 520 bars the false-positive rate stays at or under nominal", () => {
+  // The check that decides whether any real reading can be believed.
+  const rs = measureMany(0, 40);
+  const falsePos = rs.filter((r) => r.excludesZero).length;
+  assert.ok(falsePos <= 4, `${falsePos}/40 zero-premium runs falsely excluded zero (nominal 5% = 2)`);
+});
+
+test("residual bias on a zero-premium series stays well under the effect being hunted", () => {
+  const rs = measureMany(0, 40);
+  const mean = rs.reduce((a, r) => a + r.meanVrpVolPoints, 0) / rs.length;
+  assert.ok(Math.abs(mean) < 0.003,
+    `residual bias ${(mean * 100).toFixed(2)} vol pts should be far below the 1.08 the variance fix removed`);
+});
