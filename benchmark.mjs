@@ -29,12 +29,23 @@ export function buyAndHold(pair, { minutes = 1440, from, to, startingBalance = 1
   const open = Number(candles[0].close);
   const close = Number(candles.at(-1).close);
   if (!(open > 0) || !(close > 0)) return null;
+  // Peak-to-trough on the held position, so a strategy's maxDrawdownPct has something to be read
+  // against. A balance that beats buy-and-hold while halving the drawdown is a different claim
+  // from one that beats it by holding through a deeper hole, and only this column separates them.
+  let peak = open, maxDD = 0;
+  for (const c of candles) {
+    const low = Number(c.low ?? c.close), high = Number(c.high ?? c.close);
+    peak = Math.max(peak, high);
+    if (peak > 0) maxDD = Math.max(maxDD, (peak - low) / peak);
+  }
+
   return {
     pair,
     bars: candles.length,
     start: new Date(Number(candles[0].time) * 1000).toISOString().slice(0, 10),
     end: new Date(Number(candles.at(-1).time) * 1000).toISOString().slice(0, 10),
     finalBalance: +(startingBalance * (close / open)).toFixed(2),
+    maxDrawdownPct: +(maxDD * 100).toFixed(2),
   };
 }
 
@@ -52,11 +63,17 @@ export function benchmarks({ minutes = 1440, from, to, startingBalance = 1000, m
   rows.sort((a, b) => b.finalBalance - a.finalBalance);
   const basket = rows.length ? +(rows.reduce((s, r) => s + r.finalBalance, 0) / rows.length).toFixed(2) : null;
   const btc = rows.find((r) => r.pair === "XBTUSD") ?? null;
-  return { rows, basket, btc: btc ? btc.finalBalance : null, pairsUsed: rows.length, startingBalance };
+  return {
+    rows, basket,
+    btc: btc ? btc.finalBalance : null,
+    btcMaxDrawdownPct: btc ? btc.maxDrawdownPct : null,
+    pairsUsed: rows.length, startingBalance,
+  };
 }
 
 /** One line, for printing under any leaderboard. */
 export function benchmarkLine(b) {
-  return `benchmark, same window, no strategy: BTC $${b.btc ?? "n/a"}, `
+  const dd = b.btcMaxDrawdownPct === null ? "" : ` at a ${b.btcMaxDrawdownPct}% drawdown`;
+  return `benchmark, same window, no strategy: BTC $${b.btc ?? "n/a"}${dd}, `
     + `equal-weight basket of ${b.pairsUsed} pairs $${b.basket ?? "n/a"} (from $${b.startingBalance})`;
 }

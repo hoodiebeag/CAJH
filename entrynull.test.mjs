@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { simulateExit, randomEntryDrawer } from "./entrynull.mjs";
+import { simulateExit, randomEntryDrawer, maAboveMask } from "./entrynull.mjs";
 
 const flat = (n, px) => Array.from({ length: n }, () => ({ close: px, high: px, low: px }));
 const NOCOST = { feeRate: 0, slipPct: 0, tpR: 100, maxHold: 100 };
@@ -55,4 +55,35 @@ test("the drawer only ever draws pairs the strategy actually traded", () => {
   let rng = 0.999999;
   // Every draw resolves against A; B is unreachable because it is not in the observed list.
   for (let i = 0; i < 20; i++) assert.ok(draw(() => (rng = (rng * 7919) % 1)) !== undefined);
+});
+
+test("maAboveMask marks exactly the bars whose close beats their own moving average", () => {
+  const rising = Array.from({ length: 10 }, (_, i) => ({ close: 100 + i, high: 100 + i, low: 100 + i }));
+  // Every bar from index period-1 on is above a trailing average of lower closes; the last bar is
+  // excluded because a trade cannot be entered where there is no bar left to hold it.
+  assert.deepEqual(maAboveMask(rising, 3), [2, 3, 4, 5, 6, 7, 8]);
+  const falling = rising.map((c, i) => ({ close: 200 - i, high: 200 - i, low: 200 - i }));
+  assert.deepEqual(maAboveMask(falling, 3), []);
+});
+
+test("an eligible-bar pool confines the null to the gated regime", () => {
+  const c = Array.from({ length: 50 }, (_, i) => ({ close: 100 + i, high: 101 + i, low: 99 + i }));
+  const draw = randomEntryDrawer({
+    observed: [{ symbol: "A", stopPct: 0.05 }],
+    seriesByPair: { A: c },
+    eligibleByPair: { A: [10] },
+    exit: { tpR: 100, maxHold: 5, lockBreakeven: false, feeRate: 0, slipPct: 0 },
+  });
+  const only = simulateExit(c, 10, { stopPct: 0.05, tpR: 100, maxHold: 5, lockBreakeven: false, feeRate: 0, slipPct: 0 });
+  for (let i = 0; i < 10; i++) assert.equal(draw(() => Math.random()), only);
+});
+
+test("a pair with no eligible bars yields no draw rather than a silent fallback to any bar", () => {
+  const draw = randomEntryDrawer({
+    observed: [{ symbol: "A", stopPct: 0.05 }],
+    seriesByPair: { A: Array.from({ length: 20 }, () => ({ close: 100, high: 100, low: 100 })) },
+    eligibleByPair: { A: [] },
+    exit: { tpR: 100, maxHold: 5, lockBreakeven: false, feeRate: 0, slipPct: 0 },
+  });
+  assert.equal(draw(() => 0.5), null);
 });

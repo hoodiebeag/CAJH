@@ -60,7 +60,7 @@ export function simulateExit(candles, entryIdx, {
  * `observed` is the strategy's own excursion list, each { symbol, stopPct }. `seriesByPair` maps
  * a pair to its candle array -- the same slices the strategy ran on.
  */
-export function randomEntryDrawer({ observed, seriesByPair, exit }) {
+export function randomEntryDrawer({ observed, seriesByPair, exit, eligibleByPair = null }) {
   if (!observed?.length) throw new Error("randomEntryDrawer: observed trades are required to match geometry");
   const pairs = observed.map((t) => t.symbol);
   const stops = observed.map((t) => t.stopPct).filter((s) => Number.isFinite(s) && s > 0);
@@ -71,9 +71,38 @@ export function randomEntryDrawer({ observed, seriesByPair, exit }) {
     const candles = seriesByPair[pair];
     if (!candles || candles.length < 2) return null;
     const stopPct = stops[Math.floor(random() * stops.length)];
-    const entryIdx = Math.floor(random() * (candles.length - 1));
+    let entryIdx;
+    if (eligibleByPair) {
+      const pool = eligibleByPair[pair];
+      if (!pool?.length) return null;
+      entryIdx = pool[Math.floor(random() * pool.length)];
+    } else {
+      entryIdx = Math.floor(random() * (candles.length - 1));
+    }
     return simulateExit(candles, entryIdx, { ...exit, stopPct });
   };
+}
+
+/**
+ * Bars whose close sits above their own simple moving average -- the same condition backtest.js's
+ * "ma" trend gate applies, recomputed here so a null can be drawn from inside the gate.
+ *
+ * The distinction this exists to draw: a regime gate is not an entry rule. Restricting random
+ * entries to gated bars asks whether the ENTRY carries anything once the regime filter is granted
+ * to both sides. An unrestricted null cannot separate the two, and would credit the entry rule
+ * with the gate's whole contribution.
+ */
+export function maAboveMask(candles, period) {
+  if (!Number.isInteger(period) || period < 1) throw new Error("maAboveMask: period must be a positive integer");
+  const closes = candles.map((c) => Number(c.close));
+  const out = [];
+  let sum = 0;
+  for (let i = 0; i < closes.length; i++) {
+    sum += closes[i];
+    if (i >= period) sum -= closes[i - period];
+    if (i >= period - 1 && i < closes.length - 1 && closes[i] > sum / period) out.push(i);
+  }
+  return out;
 }
 
 /** A deterministic drawer for tests and for reproducing a single null draw by hand. */

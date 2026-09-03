@@ -9,9 +9,9 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-03T20:45:00Z",
- "phase": "sweep4 + random-entry null done",
- "runsTested": 732,
+ "updatedAt": "2026-09-03T20:50:00Z",
+ "phase": "sweep9 done; first config to beat its null",
+ "runsTested": 1152,
  "base": {
   "trendGate": false,
   "alignMode": "none",
@@ -99,44 +99,75 @@
      100
     ]
    }
+  },
+  {
+   "phase": "sweep5",
+   "axis": "trailR x trailStartR",
+   "configs": 180,
+   "result": "worse everywhere; best $1482 vs $2889 untrailed. trailStartR is a no-op whenever trailStartR <= trailR, because max() keeps the original stop."
+  },
+  {
+   "phase": "sweep6",
+   "axis": "trailingTpPct",
+   "configs": 84,
+   "result": "worse everywhere; best $1298."
+  },
+  {
+   "phase": "sweep7",
+   "axis": "trendGate x mode x trendMa",
+   "configs": 120,
+   "result": "NEW LEADER. breakout + ma gate + trendMa 200: $3424.62 on 156 trades at 12.43% maxDD."
+  },
+  {
+   "phase": "sweep8",
+   "axis": "trendMa high range",
+   "configs": 72,
+   "result": "200 is an interior peak, but a sharp one: 150 $3373, 200 $3425, 250 $2282, 300 $1590."
+  },
+  {
+   "phase": "sweep9",
+   "axis": "riskPct",
+   "configs": 64,
+   "result": "pure leverage. Same 156 trades at 10% risk end at $1,421,133 with a 94% drawdown."
   }
  ],
  "leader": {
-  "entryMode": "bos",
+  "entryMode": "breakout",
+  "trendGate": true,
+  "trendGateMode": "ma",
+  "trendMa": 200,
   "minStopPct": 0.05,
   "tpR": 100,
-  "trades": 605,
-  "finalBalance": 2889.62,
-  "maxDrawdownPct": 51.2
+  "maxHold": 100,
+  "riskPct": 0.005,
+  "trades": 156,
+  "meanR": 1.8006,
+  "finalBalance": 3424.62,
+  "maxDrawdownPct": 12.43
  },
  "benchmark": {
   "btcBuyAndHold": 4105.94,
+  "btcMaxDrawdownPct": 52.06,
   "equalWeightBasket": 1419.93,
   "solBuyAndHold": 8311,
   "startingBalance": 1000
  },
- "readThisFirst": "The leader is BELOW buy-and-hold BTC and its entries do not beat random. tpR=100 on a 5% stop puts the target ~500% away so it is never hit; the real exit is the hold cap, and the sweep bought exposure in a rising market. Run benchmark.mjs under every leaderboard and entrynull-run.mjs after every few sweeps.",
+ "readThisFirst": "breakout + a 200-day MA trend gate is the first config to beat its own random-entry null by a detectable margin (p=0.005, excess 1.55R vs an MDE of 1.34R), and it does it at a 12.43% drawdown against BTC's 52.06%. It is still the best of 1152 in-sample configurations, so treat it as the thing to attack next, not as a finding. Everything before it -- long tpR, long maxHold -- was buying exposure in a rising market.",
  "unsweptAxes": [
   "maxStopPct",
   "beTriggerR",
   "beLockR",
-  "trailR",
-  "trailStartR",
-  "trailingTpPct",
-  "partialAtR",
-  "stopMode",
-  "atrStopK",
-  "trendGate",
-  "trendGateMode",
-  "trendMa",
-  "alignMode",
+  "partialAtR/partialFrac",
+  "stopMode atr + atrStopK",
   "chopFilter",
+  "alignMode",
   "n (swing window)",
-  "riskPct",
+  "minRoomR",
   "240-minute timeframe",
-  "universe selection"
+  "universe selection",
+  "new filters not yet in backtest.js"
  ],
- "nextUp": "Stop sweeping entry rules -- the null says they carry nothing detectable. The axes that can still move the balance are the ones that change exposure and cost, not timing: trailR/trailStartR and trailingTpPct (capture trend instead of a fixed timeout), riskPct (exposure scaling), stopMode atr vs structural, and universe selection. Also worth pricing: a config's balance against buy-and-hold of the SAME pairs it traded, not the whole basket.",
+ "nextUp": "1) Attack the leader: is trendMa 200 robust or a spike? Test it per-pair and per-year, and check how much of the 156 trades come from one pair. 2) Search the internet for regime/volatility filters worth implementing (the owner asked for this explicitly) and add the good ones to backtest.js. 3) Sweep the remaining exit and stop axes on top of the gated leader rather than on the ungated base.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -163,6 +194,36 @@
    "mdeR": 0.2478,
    "nullBalance": 749.73
   },
-  "reading": "The leader's entry rule is worth 0.0973R against a coin flip with identical geometry, and a random-entry account ends ABOVE it. No config's excess reaches what this test could detect, so the honest statement is not 'no edge' but 'no edge large enough to see through the noise a 100R target creates'."
+  "reading": "The leader's entry rule is worth 0.0973R against a coin flip with identical geometry, and a random-entry account ends ABOVE it. No config's excess reaches what this test could detect, so the honest statement is not 'no edge' but 'no edge large enough to see through the noise a 100R target creates'.",
+  "breakout + ma200 gate (the leader)": {
+   "observedMeanR": 1.8006,
+   "trades": 156,
+   "vs random entry on any bar": {
+    "nullMeanR": 0.3803,
+    "excessR": 1.4202,
+    "p": 0.0075,
+    "z": 3.06,
+    "mdeR": 1.3001,
+    "detectable": true,
+    "nullBalance": 1344.99
+   },
+   "vs random entry restricted to gated bars": {
+    "nullMeanR": 0.2474,
+    "excessR": 1.5532,
+    "p": 0.005,
+    "z": 3.25,
+    "mdeR": 1.3407,
+    "detectable": true,
+    "nullBalance": 1212.7
+   },
+   "reading": "The first configuration in this campaign whose excess over a matched-geometry random entry exceeds what the test can detect. It survives the harder version too: restricting the random entries to bars the 200-MA gate allows makes the excess LARGER, so the gate is not doing the work on its own. Caveat that has to stay attached: this is the best of ~1152 configurations searched on the same data, and at that many draws roughly 6 configs reach p<0.005 by chance. p=0.005 is not a discovery here, it is a reason to keep testing this one."
+  }
+ },
+ "leveredLeader": {
+  "same config at riskPct 0.10": {
+   "finalBalance": 1421133.39,
+   "maxDrawdownPct": 94.0
+  },
+  "reading": "Not a better strategy, the same one levered 20x. A 94% drawdown means $1000 was worth about $60 at the low. Reported because the owner asked for the highest number; the drawdown is reported with it because the number is meaningless without it."
  }
 }

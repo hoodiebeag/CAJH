@@ -29,3 +29,12 @@ test("rows carry bars and start, so a late-starting pair is visible not buried",
 test("benchmarkLine states the starting balance so a ratio cannot be misread", () => {
   assert.match(benchmarkLine(benchmarks(WINDOW)), /from \$1000/);
 });
+
+test("buy-and-hold carries its drawdown, so a lower-drawdown strategy can be seen as one", () => {
+  // Without this column, "beat buy-and-hold" and "beat it while holding through a 52% hole" read
+  // the same. BTC's window drawdown is 52.06%; the campaign's best gated config sits near 12%.
+  const b = benchmarks(WINDOW);
+  assert.ok(b.btcMaxDrawdownPct > 50 && b.btcMaxDrawdownPct < 55, `BTC drawdown moved: ${b.btcMaxDrawdownPct}`);
+  assert.ok(b.rows.every((r) => r.maxDrawdownPct >= 0 && r.maxDrawdownPct <= 100));
+  assert.match(benchmarkLine(b), /drawdown/);
+});
