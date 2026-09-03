@@ -40,6 +40,17 @@ test("exits run to the end of the data, not to the end of the decision window", 
   assert.ok(full.meanR > short.meanR, "amputating open positions can only cost a trend follower");
 });
 
+test("the chosen configuration reports every axis that was fitted, not a hardcoded subset", () => {
+  // A hardcoded list once reported a refit of eight axes as though only five had been fitted, so
+  // whether the entry mode and filters moved between quarters -- the whole question that run
+  // existed to answer -- was invisible in its output.
+  const grid = { trendMa: [150], minStopPct: [0.03], beTriggerR: [2.5], maxHold: [100],
+                 volTarget: [0.05], entryMode: ["breakout", "bos"] };
+  const r = walkForward({ testFrom: "2025-07-01", testTo: "2025-09-30", grid });
+  const step = r.steps.find((s) => !s.skipped);
+  assert.deepEqual(Object.keys(step.chose).sort(), Object.keys(grid).sort());
+});
+
 test("the grid and the fixed structure are declared, so what was NOT refit is visible", () => {
   // FIXED carries choices made on the full sample -- the filters, the fill delay, the entry mode.
   // They are held constant here rather than refit, which is a real leak and is stated as one.

@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T00:05:00Z",
- "phase": "walk-forward variants; FINDINGS.md updated",
+ "updatedAt": "2026-09-04T00:20:00Z",
+ "phase": "refit-everything walk-forward done -- it improves the result",
  "runsTested": 2206,
  "base": {
   "trendGate": false,
@@ -277,7 +277,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "The refit-everything walk-forward is running (entry mode, fill delay and filters refitted per quarter rather than held at in-sample values, 576 configs x 9 quarters). If the result survives that, it is worth much more than it is now. After that the honest frontier is EQUITIES -- the market the owner named as the actual target -- which this container has no data for.",
+ "nextUp": "EQUITIES. Every remaining question about this crypto result is a variation on one already answered, and the owner named equities as the actual target. This container has no equities data; getting some is the next real step. Failing that, the useful crypto work left is refitting the structural frame too -- trendGate on/off and tpR -- so that NOTHING in the walk-forward is held at an in-sample value.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -498,6 +498,27 @@
     "dd": 6.34
    },
    "reading": "This is the caveat that matters most. The whole out-of-sample result is three quarters out of nine -- 2024Q1, 2024Q4 and 2025Q3. The other six are negative. Restricted to 2025 the walk-forward is positive ONLY because of 2025Q3; four of its five quarters lose money. A book running this would have spent most of its time losing and made everything back in three quarters. That is the trade-level tail dependence showing up at the quarter level, and it is what trend following is -- but it means nobody should read $1974.68 as a steady climb."
+  },
+  "refitEverything": {
+   "what": "Entry mode, fill delay and filters refitted every quarter alongside the numeric parameters, instead of held at in-sample values. 576 configs x 9 quarters.",
+   "result": {
+    "trades": 158,
+    "meanR": 1.0044,
+    "finalBalance": 2249.27,
+    "maxDrawdownPct": 14.75
+   },
+   "vsRestricted": "Better than the $1974.68 of the version that held those three constant. Removing the leak did not cost anything -- it helped.",
+   "whatItChose": {
+    "entryDelayBars 1": "ALL NINE quarters, on training data alone. The one-bar fill delay was not an in-sample spike; an independent search picks it every time.",
+    "trendMa 150": "all nine",
+    "minStopPct 0.03": "all nine",
+    "volTarget 0.05": "eight of nine",
+    "entryMode breakout": "eight of nine (anticipate once, in 2024Q2, which lost)",
+    "beTriggerR 3": "seven of nine",
+    "filters null": "SEVEN OF NINE. A training-only search mostly DECLINES the filters, which confirms what the in-sample sweeps only hinted: they are noise, not signal."
+   },
+   "stillFixed": "What remains held at in-sample values is the structural frame, and it is not nothing: long-only, trendGate on in 'ma' mode, tpR 100, maxStopPct 0.20, alignMode none, lockBreakeven on, beLockR 0.2, volClamp 3. The trend gate in particular was chosen in-sample and is the single change that created this result.",
+   "quarterlyShape": "Four of nine positive: 2024Q1 +2.84R, 2024Q3 +0.22R, 2024Q4 +3.53R, 2025Q3 +1.11R. The other five negative. Same concentration as every other cut of this result."
   }
  },
  "bugsFound": [
@@ -507,6 +528,13 @@
    "cause": "each quarter's run was truncated at the quarter end, amputating every position still open when the quarter closed. With 50-to-200-bar holds that is most of them, and the amputated part is the tail that carries a trend follower's return.",
    "caught": "by checking the same configurations held FIXED over the identical window, which scored +0.74R to +1.85R. A -0.42R result next to a +1.85R result for the same trades is not a finding, it is a bug.",
    "fix": "exits now run to the end of the data; only ENTRY dates are confined to the decision window. Letting a trade run its course after entry is not lookahead -- its exit rule was fixed when it was entered. Pinned by a test."
+  },
+  {
+   "where": "walkforward.mjs step reporting",
+   "symptom": "a nine-quarter refit of eight axes printed as though only five had been fitted",
+   "cause": "`chose` was a hardcoded list of five keys rather than derived from the grid",
+   "impact": "whether the entry mode and filters moved between quarters -- the entire question that run existed to answer -- was invisible in its own output",
+   "fix": "chose is now derived from Object.keys(grid); pinned by a test"
   }
  ]
 }

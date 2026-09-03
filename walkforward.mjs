@@ -107,10 +107,13 @@ export function walkForward({
     const { trades: all } = runConfig(chosen.config, { from: trainFrom, to: dataEnd });
     const trades = all.filter((t) => t.entryTime >= from && t.entryTime <= to);
     for (const t of trades) oosTrades.push({ ...t, quarter: q.from, volTarget: chosen.config.volTarget ?? null });
+    // `chose` is derived from the grid's own keys, never a hardcoded list. A hardcoded list once
+    // reported a nine-quarter refit of eight axes as though only five had been fitted, so there
+    // was no way to see whether the entry mode and the filters had moved between quarters -- which
+    // was the entire question that run existed to answer.
     const step = {
       ...q,
-      chose: { trendMa: chosen.config.trendMa, minStopPct: chosen.config.minStopPct,
-               beTriggerR: chosen.config.beTriggerR, maxHold: chosen.config.maxHold, volTarget: chosen.config.volTarget },
+      chose: Object.fromEntries(Object.keys(grid).map((k) => [k, chosen.config[k]])),
       trainBalance: chosen.finalBalance, trainTrades: chosen.trades, oosTrades: trades.length,
       oosMeanR: trades.length ? +(trades.reduce((s, t) => s + t.netR, 0) / trades.length).toFixed(4) : null,
     };
