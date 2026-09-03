@@ -352,8 +352,8 @@
     "message": "cajh: queue empty again (17/17 done). Crypto price-structure closed by directive, C0-C3 resolved; C1/C3 need your IBKR entitlement answers to proceed. No legitimate new item to queue."
    },
    "persistent-pull-blocker": {
-    "lastSentAt": "2026-09-02T21:01:20.522Z",
-    "message": "cajh: pull still blocked by uncommitted ROADMAP.md/VERDICTS.md/universe.txt changes not made by the loop. Needs your look (not touched since last flag on 8/19).",
+    "lastSentAt": "2026-09-03T05:01:59.310Z",
+    "message": "cajh: pull still blocked (foreign ROADMAP.md/VERDICTS.md/universe.txt edits, uncommitted since ~8/19). Also 3 local state commits now unpushed (origin diverged 2 commits). Needs your look.",
     "deliveryResult": "PushNotification tool call returned not-sent (terminal active / redundant per tool policy) - not a Remote Control delivery confirmation, see notification_policy.known_gap."
    },
    "new-pass-verdict": {
@@ -406,14 +406,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-20T04:09:23.368Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "HOLDING-PERIOD-COST-AMORTIZATION-MAP closed",
-   "detail": "Mapped net R vs realized holding period for breakout/anticipate holdout baseline. anticipate net-positive only in longest bucket (49-100h, +0.446R, 10.8% of trades); breakout never net-positive at any holding period. Additive barsHeld telemetry in backtest.js excursions, no exit logic changed. Sanity-checked against COST-COMPONENT-ATTRIBUTION pooled baseline (exact match). Diagnostic only, no parameter recommended.",
-   "commit": "c3038ba",
-   "tests": "493/493 pass"
-  },
   {
    "ts": "2026-08-20T05:09:37.060Z",
    "agent": "scheduled-loop",
@@ -1204,6 +1196,14 @@
    "action": "push-rejected-remote-diverged",
    "detail": "After committing the ledger entry above (local commit 37d772b, .agent_state.json only), git push was rejected: origin/main had advanced by 2 commits (e5a866b, 2f563c8) not present locally, diverging from the same base (37c6160) my local branch also built on. git fetch confirmed the divergence is real, not a fetch-staleness artifact. Read both incoming commits: e5a866b (from a different session/machine, session_01BoxFiG8iVMnsB1Kf1nEhxU) fixes a genuine Windows bug in c1-c3-entitlement-probe.mjs's direct-run guard (import.meta.url vs backslash argv[1]) and also touches .agent_state.json (2 lines) -- the same file my local commits touch, so a straightforward fast-forward push is not possible. 2f563c8 adds a new AGENT_PROTOCOL.md section ('A blocked firing must leave a countable trace', added 2026-09-03) requiring exactly the kind of ledger entry this firing already independently wrote, plus an explicit rule against self-created ALLOW_PROTECTED_EDIT markers or reselecting a different item when blocked -- this firing did neither. Also learned from e5a866b's message that VERDICTS-TOURNAMENT-CITATION-GAP-FIX's own work_queue text was amended to warn future firings not to start it blind while the dirty tree is unreviewed, confirming a human decision is still the intended unblock path, not automation. Did not attempt to resolve the divergence: no rebase (working tree still carries the same ROADMAP.md/VERDICTS.md/universe.txt unstaged content that failed the original pull, and git rebase requires a clean tree, same failure mode expected), no merge, no force-push, no stash, no reset of anything -- including the local 37d772b commit itself, which is left in place unpushed rather than discarded, since it is real work (this firing's own ledger/notification recording) and reversing it would just recreate the same recording work for whichever firing eventually resolves the tree. Sent one PushNotification about the push rejection specifically (distinct content from the dirty-tree notification already sent this firing) -- result 'Mobile push not sent (Remote Control inactive)', recorded below. Net state at exit: 1 unpushed local commit (37d772b) sitting on top of the same divergence point origin/main also advanced from; next firing (or a human) must resolve the ROADMAP.md/VERDICTS.md/universe.txt dirty tree before either machine's queued .agent_state.json commits can sync. No code work attempted, control/work_queue untouched.",
    "commit": "37d772b (local, unpushed)",
+   "tests": null
+  },
+  {
+   "ts": "2026-09-03T05:01:59.317Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "blocked-exit",
+   "detail": "STEP 0.3: git pull --rebase failed (unstaged changes: ROADMAP.md, VERDICTS.md modified; universe.txt untracked - none created this run, persisting since ~8/19 per prior firings). git fetch shows local ahead 3 / behind 2 vs origin/main (the 3 ahead are prior firings state-only commits about this same blocker; push previously rejected per commit 655b9eb). Per HYGIENE never touched the foreign changes. persistent-pull-blocker notification was 8h stale (>6h dedup window) so re-sent (terminal-redundant per tool, recorded). Exiting without doing work-queue item per protocol.",
+   "commit": null,
    "tests": null
   }
  ],
