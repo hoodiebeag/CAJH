@@ -380,6 +380,12 @@ async function main() {
 
   console.log(JSON.stringify(result, null, 2));
   console.log(`\nC1: ${result.gate.c1.verdict}\nC3: ${result.gate.c3.verdict}\nrun: ${file}`);
+  // Printed because a run's ledger entries were destroyed by an uncommitted-then-reset working
+  // tree on 2026-09-03. The append is only as durable as the next git command.
+  console.error(
+    "\nCOMMIT research-registry/ledger.jsonl NOW. This run appended to it, and an uncommitted\n" +
+    "entry is destroyed by git reset --hard or git checkout -- like any other change.",
+  );
 }
 
 /**

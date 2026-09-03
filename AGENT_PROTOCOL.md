@@ -195,6 +195,16 @@ is empty and `fresh` is false. Note that `.agent_state.json`'s `blackboard.seale
 still describes the pool as reserved and is stale; where the two disagree, the ledger and this
 section are correct. That contradiction is precisely why the ledger exists.
 
+**An appended entry is not durable until it is committed.** The ledger is a tracked file in the
+working tree, so `git reset --hard` and `git checkout --` destroy uncommitted entries like any
+other change — which is exactly what happened on 2026-09-03, taking two runs' entries with it.
+"Append-only" is a property of how the file is *written*, not a promise that git will keep
+something you never committed. So: commit `research-registry/ledger.jsonl` in the same commit as
+the work that produced it, and never run a hard reset or checkout while it is dirty. If entries
+are lost anyway, re-file them with `linkRun` marked explicitly as a reconstruction, with the
+real run time and the reason — never silently, and never with the re-filing date passed off as
+when the run happened.
+
 **Nothing in the ledger is ever deleted or edited.** `verifyLedger()` recomputes the chain and
 names the index at which it breaks, so a removed or altered historical entry is detectable rather
 than merely discouraged.
