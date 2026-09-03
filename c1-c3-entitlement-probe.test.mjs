@@ -109,7 +109,7 @@ test("a series that resolves but carries too little history does not count", () 
 test("too few FX pairs with enough bars is UNAVAILABLE even when the rate series are all fine", () => {
   const g = evaluateGate({ ...PASSING, c3: { ...PASSING.c3, pairs: okPairs(2) } });
   assert.equal(g.c3.verdict, "UNAVAILABLE");
-  assert.ok(g.c3.reasons.some((r) => /2 of 4 pairs/.test(r)));
+  assert.ok(g.c3.reasons.some((r) => /2 of 2 pairs/.test(r)));
 });
 
 test("short FX histories do not count toward the pair requirement", () => {
@@ -159,4 +159,12 @@ test("the guard matches a Windows backslash argv, which the naive string form si
 test("the guard is false when nothing was passed, so importing the module runs nothing", () => {
   assert.equal(isDirectRun("file:///x.mjs", undefined), false);
   assert.equal(isDirectRun("file:///x.mjs", ""), false);
+});
+
+test("an unattempted FX leg says so rather than reporting zero of four", () => {
+  // The real 2026-09-03 run: no gateway, so no pair request was ever made. "0 of 4 pairs
+  // returned >= 1000 bars" read like four empty responses. It must not.
+  const g = evaluateGate({ ...PASSING, ibkr: { connected: false, error: "ECONNREFUSED" }, c3: { ...PASSING.c3, pairs: [] } });
+  assert.ok(g.c3.reasons.some((r) => /not attempted/.test(r)));
+  assert.ok(!g.c3.reasons.some((r) => /^0 of \d+ pairs returned/.test(r)));
 });

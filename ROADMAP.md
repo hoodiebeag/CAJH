@@ -4370,3 +4370,69 @@ option (a) cannot be executed honestly, so the lean and the feasibility point th
 deliberately not 3-vs-3 or 5-vs-1-by-convenience: it falls out of whether each study scored a
 pre-registered gate on a holdout, which is the project's own existing line between a study and an
 infra check.
+
+
+## 2026-09-03 — C1-C3-ENTITLEMENT-PROBE-RUN, first execution: C3's non-USD rate series are CONFIRMED REACHABLE; both mechanisms still BLOCKED on IB Gateway
+
+First real run of `scripts/c1-c3-entitlement-probe.mjs`, on the gateway machine, by the human.
+Pre-registered in `research-registry/ledger.jsonl` as `C1-C3-ENTITLEMENT-PROBE` before any output
+existed; no threshold was changed after seeing the result. Run record:
+`research-runs/2026-09-03T09-59-57-420Z-c1-c3-entitlement-probe.json`.
+
+**Verdicts as the gate returned them: C1 BLOCKED, C3 BLOCKED.** Neither is UNAVAILABLE — nothing
+was tested and found wanting. `connect ECONNREFUSED 127.0.0.1:4002`: IB Gateway was not listening
+on the paper port when the probe ran, so no option chain, no implied-volatility history, and no
+IDEALPRO bar was ever requested.
+
+### What DID resolve — `C3-FX-CARRY-DATA-GATE`'s Part B open item, closed
+
+That gate (2026-08-29) named six non-USD short-rate series from FRED's OECD-MEI convention
+(`IR3TIB01<ISO2>M156N`) and marked every one **UNVERIFIED**, explicitly refusing to claim they
+existed without a fetch. All six now fetch, via the same free, key-less CSV endpoint already proven
+for the USD series:
+
+| Currency | Series | Observations | First | Last |
+|---|---|---|---|---|
+| USD (control) | `FEDFUNDS` | 866 | 1954-07-01 | 2026-08-01 |
+| EUR | `IR3TIB01EZM156N` | 385 | 1994-01-01 | 2026-01-01 |
+| GBP | `IR3TIB01GBM156N` | 829 | 1957-01-01 | 2026-01-01 |
+| JPY | `IR3TIB01JPM156N` | 290 | 2002-04-01 | 2026-05-01 |
+| AUD | `IR3TIB01AUM156N` | 702 | 1968-01-01 | 2026-06-01 |
+| CAD | `IR3TIB01CAM156N` | 846 | 1956-01-01 | 2026-06-01 |
+| CHF | `IR3TIB01CHM156N` | 324 | 1999-07-01 | 2026-06-01 |
+
+The `FEDFUNDS` control resolved, so a non-resolving series would have meant a missing series
+rather than an unreachable FRED — the distinction the gate was built to preserve. It did not end
+up mattering: nothing failed.
+
+**Every series is complete on its own span.** Observation counts equal the inclusive month count
+between first and last for all seven (e.g. GBP 1957-01 → 2026-01 is 829 months and returns 829
+observations; CHF 1999-07 → 2026-06 is 324 and returns 324). These are monthly series with no
+interior gaps, which is a stronger result than mere existence and was worth checking rather than
+assuming.
+
+**One caveat that is not a detail: publication lag is uneven.** EUR and GBP both stop at
+2026-01-01, roughly seven months behind AUD/CAD/CHF (2026-06) and the USD control (2026-08). A
+carry signal is a *differential*, so the usable history of any pair is bounded by its staler leg —
+EUR/USD and GBP/USD are effectively current only to 2026-01 on this source. That is fine for a
+historical study and disqualifying for a live signal, and any future C3 work must state which it
+is building rather than quietly using the longer leg's end date.
+
+### What this does and does not license
+
+`AVAILABLE` was never reached for either mechanism, and the probe's own output says what the word
+would have meant: *"the data exists and a study could be built. It is not a result about
+returns."* Nothing here is evidence about FX carry or the volatility risk premium. The
+sequencing rule is unchanged — C1 and C3 remain gated, and resolving a data question does not
+start a study. Any C3 work still needs its own separate pre-registration.
+
+`SEALED_SYMBOLS` untouched. No order placed, no account or position data read, no file under
+`brokers/` modified. The probe connected on client id 77, not the bot's 0.
+
+### Correction made to the probe itself
+
+The C3 reason list read `"0 of 4 pairs returned >= 1000 bars"` when no pair request had been made
+at all — four empty responses and four requests never sent are different facts, and the line
+stated the wrong one. It now reports `"FX pairs not attempted"` when the list is empty, with a
+regression test built from this exact run. A reason line that overstates what was tested is the
+same defect as a verdict that overstates what was found.

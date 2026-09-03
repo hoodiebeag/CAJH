@@ -137,7 +137,12 @@ export function evaluateGate(probe, gate = GATE) {
   const fxOk = (probe.c3?.pairs ?? []).filter((p) => (p.bars ?? 0) >= gate.c3.minFxBars);
   const control = probe.c3?.control;
   const nonUsdOk = (probe.c3?.series ?? []).filter((s) => s.ok && (s.observations ?? 0) >= gate.c3.minSeriesObservations);
-  c3Reasons.push(`${fxOk.length} of ${gate.c3.pairs.length} pairs returned >= ${gate.c3.minFxBars} bars (need ${gate.c3.minPairsWithBars})`);
+  // Say "not attempted" rather than "0 of 4", which reads like four requests that came back
+  // empty when in fact none was ever made. A reason line that overstates what was tested is the
+  // same defect as a verdict that overstates what was found.
+  c3Reasons.push((probe.c3?.pairs ?? []).length === 0
+    ? `FX pairs not attempted (need ${gate.c3.minPairsWithBars} of ${gate.c3.pairs.length} at >= ${gate.c3.minFxBars} bars)`
+    : `${fxOk.length} of ${(probe.c3?.pairs ?? []).length} pairs returned >= ${gate.c3.minFxBars} bars (need ${gate.c3.minPairsWithBars})`);
   c3Reasons.push(`${nonUsdOk.length} non-USD series resolved with >= ${gate.c3.minSeriesObservations} observations (need ${gate.c3.minNonUsdSeries})`);
   if (probe.ibkr?.connected !== true) {
     c3 = "BLOCKED";
