@@ -110,9 +110,21 @@ The first study in this project that was not a directional prediction. It failed
 result and the reason are worth keeping.
 
 **Measured.** 100 non-overlapping weekly windows per underlying, 502 daily bars each, aligned by
-date with zero unmatched on either side. SPY: implied 15.41 against realised 17.06. QQQ: 20.68
-against 22.20. A premium of **-1.65 and -1.52 vol points** — the wrong sign — with both intervals
-including zero.
+date with zero unmatched on either side. Variance premium **-1.65 and -1.52 vol points** — the
+wrong sign — with both intervals including zero.
+
+**Corrected 2026-09-03, and the correction matters.** This section first said "implied sat BELOW
+realised". In the ordinary sense that is **false**. Those figures (SPY 15.41 vs 17.06) are
+root-mean-square, the variance-space quantity a variance swap pays on. The plain arithmetic
+averages of the same series run the other way: implied 15.03 against realised 13.25, so **implied
+exceeded realised by 1.8 vol points in the typical week.**
+
+Both are true, and the gap between them is the entire story. `E[RV²]` is dominated by a handful of
+high-volatility weeks, so the variance premium goes negative while the ordinary average stays
+positive. **That is precisely the short-variance payoff:** you collect a little in most weeks and
+give it back with interest in a few. The negative figure is the economically correct one for a
+variance swap; the phrase "IV below RV" was not. Both readings are now reported side by side so
+the next reader cannot take one for the other.
 
 **This is not a data artifact.** The levels are normal for both names, QQQ correctly sits above
 SPY on both legs, the alignment matched 502 of 502, and the window count matched the prediction
@@ -135,13 +147,25 @@ vol points, so this window is genuinely distinguishable from a +2-point premium 
 informative. It does **not** establish that the premium is absent generally: two years is a single
 regime and the literature measures this across decades.
 
-**One unresolved question, and it is factual rather than exploratory.** IBKR's
-`OPTION_IMPLIED_VOLATILITY` series has an undocumented tenor — plausibly around 30 days. If so,
-this compared a roughly 30-day implied volatility against 5-day realised volatility, which are
-different quantities, and short-horizon realised vol spikes far above longer-dated implied during
-stress. That could produce exactly this sign. Establishing what tenor the series represents is a
-data-semantics question worth answering before any further variance work; it is not a licence to
-re-run until the answer changes.
+**The tenor question, answered 2026-09-03 — one half cleanly, one half not.**
+
+IBKR's `HISTORICAL_VOLATILITY` is a **30-day trailing window**, identified decisively: on both SPY
+and QQQ the mean-absolute-difference and correlation criteria agree on h=30, with correlations of
+0.977 and 0.967 against our own 30-day realised series.
+
+`OPTION_IMPLIED_VOLATILITY` is **not identified**, and the numbers say why rather than leaving it
+to guesswork. Its fit surface is flat — mean absolute difference varies by only 0.007 across
+h=10 to h=63, against a winner that beat its runner-up by 0.005 on a 0.014 base in the historical
+case. The two criteria disagree (SPY: 21 by difference, 5 by correlation; QQQ: 30 by difference,
+5 by correlation). **This is a limitation of the method, not a property of the data:** historical
+volatility is a deterministic function of past prices, so matching it pins a window exactly;
+implied volatility is a *forecast*, and forward realised volatility is noisy, so no horizon
+tracks it closely. The method was always going to identify one and not the other.
+
+The strongest available inference is that IBKR quotes both on the same convention, which would
+make the implied series ~30 days. That is an inference, not a measurement, and is recorded as one.
+Either way **C1's 5-day comparison was almost certainly a horizon mismatch.** The correct response
+is one re-specified study, pre-registered at the matched horizon before it runs — not a sweep.
 
 ## Check power before building, not after running
 

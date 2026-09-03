@@ -190,9 +190,18 @@ export function scoreUnderlying(symbol, ivCloses, priceCloses, { h = GATE.horizo
   // that came from rather than leaving it to be inferred. The mean stays the gated statistic
   // because a position earns the mean: winning most weeks and giving it back in a few is negative
   // expectancy, not a strategy, and re-gating on the median would turn that into a false pass.
+  const obsMeanIv = obs.reduce((a, o) => a + o.iv, 0) / obs.length;
+  const obsMeanRv = obs.reduce((a, o) => a + o.rv, 0) / obs.length;
   const sorted = [...vrp].sort((a, b) => a - b);
   const q = (p) => sorted[Math.min(sorted.length - 1, Math.floor(p * (sorted.length - 1)))];
   const diagnostics = {
+    // Both readings of the same series, because reporting only one misleads. sqrt(E[x^2]) is the
+    // variance-space figure a variance swap pays on; E[x] is the ordinary average people mean when
+    // they say "implied vs realised". On a right-skewed realised distribution these differ by
+    // several vol points, and on 2026-09-03 they disagreed on the SIGN of the premium.
+    meanIvArithmetic: obsMeanIv,
+    meanRvArithmetic: obsMeanRv,
+    arithmeticGapVolPoints: obsMeanIv - obsMeanRv,
     medianVrpVariance: q(0.5),
     fractionPositive: vrp.filter((v) => v > 0).length / vrp.length,
     worstWindow: sorted[0],
