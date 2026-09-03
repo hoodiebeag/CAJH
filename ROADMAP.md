@@ -4663,3 +4663,57 @@ require their own pre-registration under the standing rules before a single numb
 
 `SEALED_SYMBOLS` untouched. No order placed, no account or position data read, nothing under
 `brokers/` modified. **No GATE threshold was changed at any point across six runs.**
+
+## 2026-09-03 — VERDICTS-TOURNAMENT-CITATION-GAP-FIX: verifying the human's already-merged pass, and fixing the 2 placeholders it missed
+
+BOOKKEEPING/VERIFICATION, not new research — D1 does not apply. This work_queue item's own prior
+note (corrected 2026-09-03) established that the substantive citation edit was already made and
+committed by the human directly (`0a0ad35`, "dirty clear"), now merged to `main`, and that what
+remained was verification plus a scope-figure correction, not redoing the pass. This item did
+exactly that.
+
+**Citations verified (26/26 resolve).** Extracted all 24 `(see TOURNAMENT_ROADMAP.md: <title>)`
+strings the merged commit added to `VERDICTS.md` and confirmed each title string is a verbatim
+substring of current `TOURNAMENT_ROADMAP.md` — 24/24 found, 0 missing (script-checked, not
+eyeballed). The remaining 2 of the 26 rows (`T4-PORTFOLIO-MOMENTUM`, `T4-COVERAGE-FIX`) already
+carried an in-cell citation predating this pass ("see TOURNAMENT_ROADMAP.md Track 4 RESULT..." /
+"...T4-COVERAGE-FIX rerun..."); both section titles confirmed present in `TOURNAMENT_ROADMAP.md`
+too. 26/26 verified.
+
+**Protected-column check.** Diffed the merged commit's `VERDICTS.md` hunk (28 removed / 28 added
+lines, i.e. 28 rows touched) cell-by-cell: 0 changes to any Verdict, Deciding-metric, or Holdout-n
+column. Only the Hypothesis and Commit columns moved, matching the task's own scope restriction.
+
+**The "4 commit-field placeholders" scope figure was wrong, as the item's own note warned — now
+actually fixed (2/4 were never the right rows).** The merged commit's write-up claimed to fix `H11`,
+`PWR3`, `PWR4`, `T4-COVERAGE-FIX`. Checked each row's own Commit cell directly: `H11` -> `e511b73`
+and `T4-COVERAGE-FIX` -> `9a34c82` were genuinely fixed. `PWR3` and `PWR4` were misidentified —
+those two rows' own Commit cells already held real hashes before this pass ever started (`9837597`,
+`d304419`); the actual placeholders were sitting in the two *other* rows that cite PWR3/PWR4 by
+name in their Verdict text: `Low-vol B4`'s Commit cell still read literally `(PWR3 commit)`, and
+`Classifier P5`'s still read `(PWR4 commit)`. Fixed both here, using the same already-verified
+hashes (`git show --no-patch` confirms `9837597` = "research: PWR3 — low-vol/low-beta B4
+whole-symbol holdout, both KILLED", `d304419` = "research(PWR4): classifier sealed evidence —
+significant AUC, fails economic gate") — no new hash derived, no Verdict/Deciding-metric/Holdout-n
+cell touched, same citation-only discipline as the merged pass. `VERDICTS.md` diff for this item:
+2 lines changed (the two Commit cells only).
+
+**The real remaining placeholder count, reported as this item's own note asked, not left at "4."**
+Script-counted every data row's Commit cell in current `VERDICTS.md` (64 rows with a commit-like
+cell): 21 now hold a resolvable hash (19 pre-existing + the 2 fixed here), 10 legitimately read
+`(this commit)` (a deliberate self-reference for rows written in the same commit as their own
+verdict — not a defect, not in scope for this item), and **33 rows still carry an unresolved
+`(<NAME> commit)` placeholder** (down from 35 before this item's 2 fixes). This is a real backlog,
+not a citation problem — the fix requires locating each named study's actual introducing commit,
+which this item did not attempt (out of scope: this item is the citation-gap fix, not a general
+commit-hash reconciliation sweep). Left as a finding for whoever next touches `VERDICTS.md` at
+scale, same disposition the original audit gave the citation gap itself before this item existed.
+
+**Scope held.** No `UNSOURCED` row (`MR1`, `DCA-MARTINGALE`, `DCA-ANTIMARTINGALE`, `GRID-SIM`,
+`PAIRS-COINTEGRATION-STATARB`, `CROSS-SECTIONAL-NONPRICE-RANK`) touched — that remains
+`UNSOURCED-STUDY-RECORD-POLICY`'s decision, already recorded 2026-09-03, not this item's. No
+`Verdict`/`Deciding-metric`/`Holdout-n` cell touched anywhere in this item's own edit or the merged
+one it verified. `backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/`bot.js`/`trader.js`/
+`scanner.js` untouched.
+
+`npm.cmd test`: 675/675 green.
