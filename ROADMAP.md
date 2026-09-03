@@ -4283,3 +4283,90 @@ All five REPRODUCES — every compared field lands within the stated precision (
 **Engineering note.** New `scripts/headline-figure-reproducibility-spotcheck.mjs` only (additive, read-only, cache-only, no network egress; spawns the five cited scripts as subprocesses, never imports or modifies them). No test file added, matching this project's established convention for read-only diagnostic scripts (no production code changed). `backtest.js`/`strategy.js`/`tournament.mjs`/`monitor.js`/`bot.js`/`trader.js`/`scanner.js` untouched; grep-confirmed against the actual staged diff before commit that no protected trading-safety identifier appears in it. `npm.cmd test`: 659/659 green.
 
 **Aside, out of this item's scope — noted, not fixed here.** While reading `scripts/c1-c3-entitlement-probe.mjs` to confirm it was correctly excluded from this item's universe, its `if (import.meta.url === \`file://${process.argv[1]}\`)` direct-execution guard was checked against this machine's actual `node` behavior: on Windows, `process.argv[1]` is backslash-path (`C:\...`) while `import.meta.url` is a forward-slash `file:///C:/...` URL, so the string comparison is always false and `main()` never runs when the script is invoked directly (confirmed with a throwaway `.mjs` reproducing the exact guard). This item's own new script therefore calls `main()` unconditionally at module scope instead (matching all five scripts it re-runs, none of which use this guard). `C1-C3-ENTITLEMENT-PROBE-RUN` — the pending item that actually needs to run `c1-c3-entitlement-probe.mjs` on this machine — will hit this directly; flagging it here rather than silently working around it in that item's own script.
+
+
+## 2026-09-03 — UNSOURCED-STUDY-RECORD-POLICY: five of six rows fully traceable, one cites a commit that predates this repository's own root
+
+`VERDICTS-ROW-WRITEUP-RECONCILIATION` (2026-09-02) found six `VERDICTS.md` rows with no dated
+`ROADMAP.md`/`ROADMAP_ARCHIVE.md` section behind them. This item traces each row's figures to a
+real commit, characterises what closing the gap could look like, and **chooses nothing** — the
+decision is the human's. No `VERDICTS.md` row was edited and no roadmap section was written for
+any of the six.
+
+Read-only throughout: `git show`/`git log` only, no script re-run, no cache touched, no egress.
+
+### Traceability — five of six resolve cleanly
+
+| Row | Cited | Resolves? | Figures reproduce in the commit? |
+|---|---|---|---|
+| `DCA-MARTINGALE` | `adaef56` | yes — touches `dca.mjs`, `dca.test.mjs` | yes, verbatim: "avgR/unit-capital -0.2313", "57 intervals", "ruin" |
+| `DCA-ANTIMARTINGALE` | `80ce307` | yes — touches `dca.mjs` | yes, verbatim: "-0.1289", "57 intervals", "ruin=true" |
+| `GRID-SIM` | `5af61dc` | yes — adds `grid.mjs`, `grid.test.mjs` | yes, verbatim: "-25.23% vs -9.87%", "-34.11% vs -54.96%", "27/28" |
+| `PAIRS-COINTEGRATION-STATARB` | *placeholder* `(PAIRS-COINTEGRATION-STATARB commit)` | **resolved to `9e0f437`** — adds `pairs-cointegration.mjs` + tests, edits `VERDICTS.md` | yes: "0/105 survive", "best raw p=0.0050 corrects to q=0.1741" |
+| `CROSS-SECTIONAL-NONPRICE-RANK` | *placeholder* `(CROSS-SECTIONAL-NONPRICE-RANK commit)` | **resolved to `0583013`** — adds `cross-sectional-nonprice-rank.mjs` + tests, edits `VERDICTS.md` | yes: "meanIC=-0.0395, p=0.1249", "q=0.2498", "24/24", "106 rebalance dates" |
+| `MR1` | `0bfc60c` | **NO — unreachable** | cannot check; see below |
+
+Two of the six carried *placeholder* commit fields, which `VERDICTS-ROW-WRITEUP-RECONCILIATION`
+did not list among the four it noted (`H11`, `PWR3`, `PWR4`, `T4-COVERAGE-FIX`). Both are now
+resolved above and are mechanical to fill in; that is a separate edit this item does not make.
+
+### `MR1`'s citation is unresolvable, and the reason is structural rather than an error
+
+`git rev-parse 0bfc60c` fails: "unknown revision". It is not a typo for a reachable commit and it
+is not present under `--all`. The cause is visible in the history itself — `a473725` (2026-08-05,
+"executor: Q2 — funding.mjs…") is this repository's **root commit**: zero parents, 97 files,
+17,323 insertions in one go, and it is the oldest commit `git log --all --reverse` returns out of
+525 total. `rsi-reversion-study.mjs` and `rsi-reversion-study.test.mjs` arrive *in that root
+commit's own tree*, already written.
+
+So `MR1`'s work was done before this repository's history begins, and `0bfc60c` is a real hash
+from a history that no longer exists here. The row's own claim ("Implemented, not promoted", "8/8
+tests green") is consistent with what the root tree contains, but the commit it points at cannot
+be produced, and no amount of archaeology inside this repo will produce it. **Stated as a limit,
+not resolved:** whether that pre-root history exists anywhere else is not answerable from the
+repository, and this item does not guess.
+
+### The three options, with implications
+
+**(a) Write a dated roadmap section for each of the six.** Bounded and mechanical for five of
+them — each has a commit message carrying its own figures, gate and reasoning, so roughly a
+paragraph each reconstructed from primary text rather than memory. It does *not* work for `MR1`:
+its section would have to be reconstructed from a row and a file tree, with no commit narrative
+behind it, which is exactly the kind of confident reconstruction this project's own record keeps
+catching. Implication: five clean, one that would either be visibly thinner than the rest or
+would quietly invent the missing reasoning.
+
+**(b) Adopt a convention that infra/tooling-scale items are canonically recorded by their
+`VERDICTS.md` row, stated durably (e.g. `AGENT_PROTOCOL.md`).** Cheapest, and honest about what
+these rows are — but it only fits rows that really are infra checks. Applied to the three that
+ran real sealed backtests it would retire a documentation standard those studies actually met in
+their commit messages, which is a downgrade dressed as a convention. Implication: the option's
+value depends entirely on the per-row split below, not on the count of six.
+
+**(c) Leave it as an acknowledged gap.** Costs nothing and loses nothing that is currently
+traceable, since five of six now resolve to a real commit whose message carries the figures. The
+gap it preserves is discoverability — a reader who does not know to run `git show` sees a row with
+no narrative. Implication: the two placeholder commit fields would remain, and those are worth
+filling regardless of which option is chosen.
+
+### Per-row lean, using each study's own scope
+
+**Closer to (a) — genuine studies.** `DCA-MARTINGALE`, `DCA-ANTIMARTINGALE` and `GRID-SIM` each
+ran a sealed 70/30 holdout over the full watchlist with a pre-registered two-clause gate scored
+explicitly, and each reports real trade/interval counts (57, 57, 27 of 28 symbols). These read as
+studies that happened to be written up in a commit message instead of a roadmap section.
+`PAIRS-COINTEGRATION-STATARB` and `CROSS-SECTIONAL-NONPRICE-RANK` are the strongest cases of all:
+both pre-registered a correction family before screening, both joined
+`MULTIPLE_COMPARISONS_AUDIT.md`'s formal-NHST family, and both recomputed family-wide BH-FDR in
+the same commit. A study carried in the formal-NHST family with no dated section is the sharpest
+version of this gap.
+
+**Closer to (b) — infra-scale.** `MR1` alone. Its own row text says "Implemented, not promoted"
+with "8/8 tests green" as the deciding metric and an em-dash in the holdout-n column — it records
+that code exists and is tested, not that a hypothesis was scored. It is also the one row for which
+option (a) cannot be executed honestly, so the lean and the feasibility point the same way.
+
+**No option is chosen here and no file was edited besides this one.** The split above is
+deliberately not 3-vs-3 or 5-vs-1-by-convenience: it falls out of whether each study scored a
+pre-registered gate on a holdout, which is the project's own existing line between a study and an
+infra check.
