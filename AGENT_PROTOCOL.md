@@ -80,6 +80,27 @@ rather than clobbering entries another agent added while you worked.
 9. **Write `.agent_state.json` last**, after the code change is saved and committed, so
    a crash mid-run never advertises work that does not exist.
 
+## A blocked firing must leave a countable trace (added 2026-09-03)
+
+Hard rule 4 is right that an unreviewed foreign change means BLOCKED-name-the-file-and-stop.
+What it does not say is that the *second* such firing must be visible too, and that gap is real:
+on 2026-09-02 a firing found `ROADMAP.md`/`VERDICTS.md` dirty, sent one notification, and
+stopped. The notification map deduplicates by design, so every later blocked firing sends
+nothing and touches nothing. From outside, a loop blocked for one firing and a loop blocked for
+twelve look identical — and twelve firings have been burned on one blocked item before.
+
+**So: on any firing that ends without doing work because of an external block — a dirty tree you
+do not own, an unreachable endpoint, a hook refusal you must not override — append one ledger
+entry recording it, even when the notification is deduplicated.** Include what blocked it and
+the count of consecutive blocked firings on the same cause. The ledger is the cheap, honest
+place for this: it is already append-only, already trimmed to 100, and already exempt from the
+protected-logic hook, so recording a block costs one entry and no risk.
+
+**Do not respond to a block by working around it.** Not by cleaning a tree you do not own (rule
+4), not by reselecting a different item to look productive, and not by creating the
+`.git/ALLOW_PROTECTED_EDIT` marker — that is a human authorization and an unattended firing
+never grants itself one. Recording the block accurately IS the work that firing had to do.
+
 ## Closed research programs — binding, check before proposing any study (added 2026-08-29)
 
 Two human decision records close whole classes of work. They live in `.agent_state.json`'s
