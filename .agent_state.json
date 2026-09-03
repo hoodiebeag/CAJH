@@ -4,9 +4,9 @@
   "status": "idle",
   "target_file": null,
   "objective": null,
-  "notes": "HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK done (commit b5c12c0, pushed). Pre-registered (registry.mjs, id HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK) a fixed sample of 5 headline figures -- one per distinct study family, restricted to cache-only/no-egress scripts, chosen in ROADMAP.md chronological order (not cherry-picked for reproducibility), C1/C3 gate scripts excluded as needing live IBKR/FRED. Re-ran each cited script UNMODIFIED as a subprocess against current cache: EQUITIES-BREAKOUT-SIGNIFICANCE, EQUITIES-MADIP-OUT-OF-SAMPLE (DJTA-20), BOS-SHORT-EQUITIES-BASELINE, VOL-CONTRACTION-SAMPLE-EXTENSION (AXIS C), DATE-CLUSTERED-RESAMPLING-DJTA20 (date-clustered CI). All 5 REPRODUCES at stated precision, 0 DRIFTS, 0 CANNOT-RUN -- no recorded figure touched (none needed correcting). New scripts/headline-figure-reproducibility-spotcheck.mjs only, additive/read-only/cache-only; no frozen path touched. Aside noted in ROADMAP.md, not fixed: c1-c3-entitlement-probe.mjs's import.meta.url direct-execution guard is always false on this Windows machine (backslash vs forward-slash path string comparison), so main() never runs on direct invocation -- relevant for whoever picks up C1-C3-ENTITLEMENT-PROBE-RUN next. npm.cmd test: 659/659 green. Queue still has 4 pending items (VERDICTS-TOURNAMENT-CITATION-GAP-FIX, UNSOURCED-STUDY-RECORD-POLICY, C1-C3-ENTITLEMENT-PROBE-RUN, PIPELINE-ADOPTION-PILOT) -- one per firing, per HYGIENE, so this firing stops here.",
+  "notes": "VERDICTS-TOURNAMENT-CITATION-GAP-FIX done (commit 5a76fdf, pushed). The substantive citation edit was already made and committed directly by the human (0a0ad35, \"dirty clear\") before this firing, arriving via git pull --rebase in STEP 0.3 -- this firing verified rather than redid it. Verified: all 24 new (see TOURNAMENT_ROADMAP.md: <title>) citations resolve to real sections (script-checked, 24/24), the 2 already-citing rows (T4-PORTFOLIO-MOMENTUM, T4-COVERAGE-FIX) resolve too, and the merged VERDICTS.md diff (28 rows) touches 0 Verdict/Deciding-metric/Holdout-n cells. Found and fixed a real defect in the merged pass: its \"4 commit-field placeholders fixed\" claim only genuinely fixed 2 (H11, T4-COVERAGE-FIX) -- PWR3/PWR4 were misidentified as their own rows (already correct) instead of the two rows that cite them by name, Low-vol B4 and Classifier P5, which still read literal \"(PWR3 commit)\"/\"(PWR4 commit)\". Fixed both with the already-known, git-show-verified hashes (9837597, d304419). Script-counted the true remaining backlog rather than letting \"4\" stand: 33 of 64 commit-bearing rows still carry an unresolved placeholder (down from 35), 21 resolve, 10 are legitimate self-referential \"(this commit)\" cells. Recorded in ROADMAP.md 2026-09-03. Queued VERDICTS-COMMIT-HASH-PLACEHOLDER-RECONCILIATION (STEP 5 restock) to close that backlog as its own dedicated item, same reasoning WORK-QUEUE-RETENTION-PASS-2 used for scale edits. npm.cmd test: 675/675 green. Queue has 2 pending items (VERDICTS-COMMIT-HASH-PLACEHOLDER-RECONCILIATION, PIPELINE-ADOPTION-PILOT) -- one per firing, per HYGIENE, so this firing stops here.",
   "updated_by": "cajh-loop-check-scheduled",
-  "updated_at": "2026-09-02T16:12:11.486Z"
+  "updated_at": "2026-09-03T11:06:09.457Z"
  },
  "blackboard": {
   "repo_purpose": "Long-only spot crypto trading bot (Kraken) + an honest research pipeline. Live trading is OFF by default (LIVE_TRADING=true to enable) and must stay off: the strategy measures net-negative.",
@@ -269,7 +269,7 @@
    },
    {
     "id": "VERDICTS-TOURNAMENT-CITATION-GAP-FIX",
-    "state": "pending",
+    "state": "done",
     "owner": "executor",
     "file": "VERDICTS.md rows only; no figure, verdict, or holdout-n changes -- citation pointers added",
     "depends_on": [],
@@ -306,6 +306,15 @@
     "task": "Re-score ONE already-closed study through the new pipeline modules as a shakedown, choosing the one with the best-documented trade population (EQUITIES-MADIP-OUT-OF-SAMPLE's 300 DJIA-30 trades is the natural pick, since DATE-CLUSTERED-RESAMPLING-DJTA20 already published its clustered figures). Rebuild its trades as canonical evallib.makeTradeRecord records, check them with validateTradePopulation, recompute the interval with inference.clusteredBootstrapCI, and run the whole thing through promotion.promotionGate. The point is to find where the new layer disagrees with the study's own published numbers, or where the gate blocks for want of an input the study never recorded - both are findings about the pipeline, not about the family. Report every disagreement and every blocked condition with its reason string.",
     "done_when": "One study re-scored end to end; every disagreement between the pipeline's figures and the study's published ones enumerated with both numbers; every BLOCKED condition listed with the input it wanted; a dated ROADMAP.md section written. Report the gate verdict as-is even if it is BLOCKED on most conditions - that is the expected outcome for a study that predates the gate and is the useful finding.",
     "note": "This does NOT revise the study's verdict. promotion.mjs is explicitly not retroactive: VERDICTS.md and ROADMAP.md rows stay exactly as written. This item produces a report about the pipeline only. Adjacent to HEADLINE-FIGURE-REPRODUCIBILITY-SPOTCHECK but not the same work - that item re-runs existing scripts unmodified across families; this one runs one study's population through the new modules. Neither closes the other."
+   },
+   {
+    "id": "VERDICTS-COMMIT-HASH-PLACEHOLDER-RECONCILIATION",
+    "state": "pending",
+    "owner": "executor",
+    "file": "VERDICTS.md rows only -- Commit column, no Verdict/Deciding-metric/Holdout-n changes",
+    "depends_on": [],
+    "task": "VERDICTS-TOURNAMENT-CITATION-GAP-FIX (2026-09-03) found that VERDICTS.md carries far more unresolved commit-field placeholders than the \"4\" figure a prior pass reported: script-counting every data row with a commit-like last cell (64 rows) turned up 21 resolvable hashes, 10 legitimate self-referential \"(this commit)\" cells (rows written in the same commit as their own verdict -- not a defect, leave these alone), and 33 rows still reading a literal \"(<NAME> commit)\" placeholder with no real hash filled in. Full list of the 33 is in ROADMAP.md 2026-09-03 VERDICTS-TOURNAMENT-CITATION-GAP-FIX section. For each, locate the commit that actually introduced that row/study (git log -p --follow -S \"<the row ID or a distinctive quoted figure>\" -- VERDICTS.md, or git log --all --oneline -- <the study's script file>), verify with git show --no-patch that the hash resolves and its subject/date is consistent with the row, then replace the placeholder text with the real short hash. Do not guess a hash from memory or pattern-match a similarly-named commit without checking git show first (T1-ZEROCOST/PHASE3/PHASE4 style suffixes are non-obvious). If a row's true commit genuinely cannot be found (same MR1-shaped problem as UNSOURCED-STUDY-RECORD-POLICY -- pre-root history, or code-only commit with no markdown trace), report it as unresolvable with the same reasoning standard MR1 used rather than leaving a stale placeholder silently.",
+    "done_when": "Every one of the 33 rows named in ROADMAP.md 2026-09-03 either carries a git-show-verified real short hash, or is explicitly reported as unresolvable with a stated reason (same standard as MR1 in UNSOURCED-STUDY-RECORD-POLICY). No Verdict/Deciding-metric/Holdout-n cell touched on any row. The 10 legitimate \"(this commit)\" rows left untouched. A dated ROADMAP.md section records the final count (resolved vs unresolvable). npm.cmd test green."
    }
   ],
   "strategy_router": "strategy-registry.mjs decides HOW cajh trades, never whether. selectStrategy({asset,regime,timeframe}) ALWAYS returns a strategy; confidence is expressed as POSITION SIZE (validated 1.0x / relative 0.5x / uncovered 0.25x), so weak evidence shrinks exposure instead of blocking a trade. No PASS exists yet, so nothing sizes above 0.5x and expectedEdge reads negative - tests assert both, so a future edit claiming a positive edge without new sealed evidence FAILS the suite rather than quietly trading on it. Adding a PASS entry requires a genuine sealed verdict plus the D3 human gate.",
@@ -406,14 +415,6 @@
   "frozen_paths_note": "The frozen_paths list below is HISTORICAL - it no longer gates anything directly. Since 2026-08-07 (AGENT_PROTOCOL.md 'Full control' section, commit 83da9da+), cajh-loop-check can edit any file including these without an allow_live_edit authorization step. What IS still mechanically enforced, and is narrower and different from this file list, is scripts/check-protected-logic.cjs via .git/hooks/pre-commit - it scans every staged diff (any file, not scoped to this list) for specific protected identifiers (the LIVE_TRADING check, the halt/resume state machine, the order-validation chain) and refuses the commit unless a human-created override marker is present. Read AGENT_PROTOCOL.md's 'Full control' section before assuming this list means anything operationally."
  },
  "ledger": [
-  {
-   "ts": "2026-08-20T19:03:49.000Z",
-   "agent": "cajh-loop-check-scheduled",
-   "action": "no-op firing - queue re-confirmed empty",
-   "detail": "Verified work_queue still 45/45 done, SELF_AWARENESS_SPEC Phases 1-2 (C1/C2/C3) already closed in prior commits, ROADMAP thesis-closed statement still current. No pending item, no legitimate restock material (respecting no-invented-busywork rule). empty-queue notification skipped (deduped, sent 15:18:08Z same day, 3h45m prior). No code changes. npm.cmd test 494/494 green. Ledger trim skipped again this firing (would reproduce known hook-collision on oldest entry historical text) - now 102 entries.",
-   "commit": "",
-   "tests": "494/494 pass"
-  },
   {
    "ts": "2026-08-20T20:02:26.000Z",
    "agent": "cajh-loop-check-scheduled",
@@ -1201,6 +1202,14 @@
    "agent": "cajh-loop-keeper-5h",
    "action": "UNSOURCED-STUDY-RECORD-POLICY done",
    "detail": "Read-only git archaeology, chosen because it needs neither egress nor the candle cache and so could run from the cloud session while the loop was blocked. 5 of 6 rows trace to a real commit whose message carries the row's figures verbatim. Two of those (PAIRS-COINTEGRATION-STATARB, CROSS-SECTIONAL-NONPRICE-RANK) carried placeholder commit fields not among the four VERDICTS-ROW-WRITEUP-RECONCILIATION listed; resolved to 9e0f437 and 0583013. MR1's cited 0bfc60c is unreachable and the reason is structural: a473725 is this repo's root commit (zero parents, 97 files, 17323 insertions, oldest of 525) and rsi-reversion-study.mjs already exists in its tree, so MR1 predates the history this repository retains. Options (a)/(b)/(c) characterized with implications; per-row lean stated (five closer to a, MR1 alone closer to b, split drawn on whether a pre-registered gate was scored on a holdout). No option chosen, no VERDICTS.md row edited, no roadmap section written for any of the six. ROADMAP.md only."
+  },
+  {
+   "ts": "2026-09-03T11:05:55.146Z",
+   "agent": "cajh-loop-check-scheduled",
+   "action": "VERDICTS-TOURNAMENT-CITATION-GAP-FIX verified + 2 placeholders fixed",
+   "detail": "Verified the human-authored, already-merged citation-gap pass (0a0ad35): all 24 new TOURNAMENT_ROADMAP.md citations resolve, plus the 2 rows with pre-existing in-cell citations; diffed the merged VERDICTS.md hunk cell-by-cell, confirmed 0 Verdict/Deciding-metric/Holdout-n changes. Found the \"4 commit placeholders fixed\" claim was half wrong -- PWR3/PWR4 rows themselves already had real hashes; the actual placeholders were in Low-vol B4 (\"(PWR3 commit)\") and Classifier P5 (\"(PWR4 commit)\"), which cite them by name. Fixed both with the already-known, git-show-verified hashes (9837597, d304419). Script-counted the real remaining backlog: 33 rows (not \"4\") still carry an unresolved commit placeholder; reported in ROADMAP.md, not left uncorrected. Queued VERDICTS-COMMIT-HASH-PLACEHOLDER-RECONCILIATION to close that backlog as its own item. work_queue item marked done.",
+   "commit": "5a76fdf",
+   "tests": "675/675 green"
   }
  ],
  "automation": {
