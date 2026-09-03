@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-03T22:00:00Z",
- "phase": "sweep19 done; cross-sectional selection built and swept",
+ "updatedAt": "2026-09-03T22:10:00Z",
+ "phase": "robustness pass re-run on the current leader",
  "runsTested": 1822,
  "base": {
   "trendGate": false,
@@ -242,7 +242,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Re-run the robustness pass (leave-one-pair-out, trim-top-winners, per-year) on the CURRENT leader -- the recorded numbers are for the pre-sweep16 config. Then: a multi-timeframe series so alignMode and the higher-TF bias are testable at all (they are structurally dead in the single-TF runs done so far), and volatility-targeted position sizing, which is the remaining literature idea and is the only one that changes the balance without changing which trades are taken.",
+ "nextUp": "A multi-timeframe series, so alignMode and the higher-TF bias are testable at all -- they are structurally dead in every single-TF run done so far, which means an entire dimension of the strategy has never been exercised. Then volatility-targeted position sizing, the remaining literature idea, and the only one that changes the balance without changing which trades are taken.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -302,52 +302,60 @@
   "reading": "Not a better strategy, the same one levered 20x. A 94% drawdown means $1000 was worth about $60 at the low. Reported because the owner asked for the highest number; the drawdown is reported with it because the number is meaningless without it."
  },
  "concentration": {
-  "topPairShare": {
-   "ZECUSD": "34.9% of all R on 2 trades",
-   "XRPUSD": "16.3% on 10",
-   "INJUSD": "11.0% on 5"
+  "runner": "robustness.mjs (node robustness.mjs), pinned by robustness.test.mjs",
+  "config": "the current leader",
+  "all": {
+   "trades": 143,
+   "meanR": 2.2728,
+   "final": 4175.64,
+   "dd": 13.54
   },
-  "topTradeShare": {
-   "top5": "84.5% of all R",
-   "top10": "110.9%"
-  },
-  "winRate": "40.4%",
-  "medianNetR": -1.1088,
-  "distinctDays": "156 trades on 103 calendar days (1.51x clustering)",
   "leaveOnePairOut": {
-   "worst": "without ZECUSD $2303.31",
-   "othersAllAbove": 2810
+   "worst": "without ZECUSD $2808.42",
+   "next": [
+    "without SOLUSD $3367.72",
+    "without XRPUSD $3427.12"
+   ]
   },
   "trimTopWinners": {
-   "drop1": 2290.53,
-   "drop2": 1804.07,
-   "drop3": 1539.88,
-   "drop5": 1216.89,
-   "drop10": 851.71
+   "drop1": 2792.85,
+   "drop2": 2199.71,
+   "drop3": 1740.39,
+   "drop5": 1356.36,
+   "drop10": 913.39,
+   "drop20": 642.59
   },
   "perYearStandalone": {
    "2023": {
-    "trades": 31,
-    "meanR": 3.5945,
-    "final": 1686.88
+    "trades": 27,
+    "meanR": 5.1832,
+    "final": 1908.94
    },
    "2024": {
-    "trades": 69,
-    "meanR": 1.5669,
-    "final": 1641.19
+    "trades": 67,
+    "meanR": 1.8107,
+    "final": 1747.12
    },
    "2025": {
-    "trades": 55,
-    "meanR": 1.1151,
-    "final": 1236.94
+    "trades": 48,
+    "meanR": 1.3278,
+    "final": 1251.94
    }
   },
   "fullHistoryPairsOnly": {
    "pairs": 16,
-   "trades": 132,
-   "final": 2225.69
+   "trades": 122,
+   "meanR": 1.7973,
+   "final": 2712.34
   },
-  "reading": "A positive-skew trend-following payoff: 40% win rate, median trade -1.11R, and all the profit in a fat right tail. Dropping the 10 best of 156 trades turns +1.80R into -0.21R. That fragility is what trend following IS, not a bug -- but it means the mean is an unstable statistic here and the p=0.005 rests on a few trades. The reassuring half: positive in every year standalone, positive on the 16 full-history pairs alone, and survives dropping any single pair."
+  "shape": {
+   "winRatePct": 39.2,
+   "medianNetR": -1.1114,
+   "top5SharePct": 79.7,
+   "distinctDays": 98,
+   "clusteringFactor": 1.46
+  },
+  "reading": "Same shape as the earlier config, better on every margin. Positive in all three full years standalone. Survives losing any single pair (worst $2808 without ZEC, up from $2303). Survives restriction to the 16 full-history pairs at $2712, up from $2226. Still right-tailed: top 5 of 143 trades are 79.7% of all R, median trade -1.11R, win rate 39.2%, and dropping the ten best turns the mean negative. That is what trend following is; it is recorded so the mean is never read as a stable statistic. 143 trades fall on 98 distinct days, so the effective sample is smaller than the nominal one by 1.46x."
  },
  "literatureSearched": {
   "date": "2026-09-03",
