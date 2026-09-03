@@ -101,7 +101,47 @@ them:
 | Macro regime conditioning (C2) | rho −0.0980, q=0.1338, does not survive |
 | Maker-fill cost reduction | run; does not rescue a zero gross edge |
 | On-chain flow gates | data-availability gate fails |
+| Variance risk premium (C1) | **FAIL** on 2026-09-03. Over 2024-09 to 2026-09, IV sat BELOW realised vol on both SPY (15.41 vs 17.06) and QQQ (20.68 vs 22.20) — a negative premium of about -1.6 vol points, interval including zero |
 | FX carry (C3) | **not answerable on available data** — detecting a documented 2-5%/yr premium needs 24-147 years of monthly observations; 5 exist. Not built rather than run underpowered |
+
+## The variance risk premium, tested 2026-09-03 — FAIL, and read carefully
+
+The first study in this project that was not a directional prediction. It failed, and both the
+result and the reason are worth keeping.
+
+**Measured.** 100 non-overlapping weekly windows per underlying, 502 daily bars each, aligned by
+date with zero unmatched on either side. SPY: implied 15.41 against realised 17.06. QQQ: 20.68
+against 22.20. A premium of **-1.65 and -1.52 vol points** — the wrong sign — with both intervals
+including zero.
+
+**This is not a data artifact.** The levels are normal for both names, QQQ correctly sits above
+SPY on both legs, the alignment matched 502 of 502, and the window count matched the prediction
+made before the run. The estimator's residual bias was measured beforehand at **+0.12 vol points**,
+which runs the *opposite* way: if anything the true reading is slightly more negative.
+
+**Over this window, variance was under-priced, not over-priced.** Selling it would have lost.
+
+**What was deliberately not done.** Realised variance is right-skewed: short volatility earns a
+little most weeks and loses a lot in a few, so the median premium here may well be positive while
+the mean is negative, and re-gating on the median would probably have turned this into a PASS.
+That would be wrong on the merits and not merely procedurally — **a position earns the mean.**
+Winning ninety weeks and giving it back in ten is negative expectancy, not a strategy. The mean was
+pre-registered, the mean is the economically correct statistic, and the FAIL stands. Per-window
+diagnostics were added afterwards so a future run can *show* the distribution, and a test asserts
+they cannot change a verdict.
+
+**What this does and does not establish.** The minimum detectable effect at this sample was 1.12
+vol points, so this window is genuinely distinguishable from a +2-point premium — that much is
+informative. It does **not** establish that the premium is absent generally: two years is a single
+regime and the literature measures this across decades.
+
+**One unresolved question, and it is factual rather than exploratory.** IBKR's
+`OPTION_IMPLIED_VOLATILITY` series has an undocumented tenor — plausibly around 30 days. If so,
+this compared a roughly 30-day implied volatility against 5-day realised volatility, which are
+different quantities, and short-horizon realised vol spikes far above longer-dated implied during
+stress. That could produce exactly this sign. Establishing what tenor the series represents is a
+data-semantics question worth answering before any further variance work; it is not a licence to
+re-run until the answer changes.
 
 ## Check power before building, not after running
 

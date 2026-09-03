@@ -185,8 +185,25 @@ export function scoreUnderlying(symbol, ivCloses, priceCloses, { h = GATE.horizo
   const mean = vrp.reduce((a, b) => a + b, 0) / vrp.length;
   const meanIvVar = obs.reduce((a, o) => a + o.ivVar, 0) / obs.length;
   const meanRvVar = obs.reduce((a, o) => a + o.rvVar, 0) / obs.length;
+  // DIAGNOSTICS ONLY -- no part of the gate reads these, and none of them can change a verdict.
+  // Added after the 2026-09-03 run returned a negative premium, so a future run can show WHERE
+  // that came from rather than leaving it to be inferred. The mean stays the gated statistic
+  // because a position earns the mean: winning most weeks and giving it back in a few is negative
+  // expectancy, not a strategy, and re-gating on the median would turn that into a false pass.
+  const sorted = [...vrp].sort((a, b) => a - b);
+  const q = (p) => sorted[Math.min(sorted.length - 1, Math.floor(p * (sorted.length - 1)))];
+  const diagnostics = {
+    medianVrpVariance: q(0.5),
+    fractionPositive: vrp.filter((v) => v > 0).length / vrp.length,
+    worstWindow: sorted[0],
+    bestWindow: sorted[sorted.length - 1],
+    // If a handful of windows dominate, the premium is being decided by tail events rather than
+    // by a steady edge -- the short-volatility payoff shape, and worth seeing explicitly.
+    shareOfTotalFromWorst5: sorted.slice(0, 5).reduce((a, b) => a + b, 0) / (mean * vrp.length || 1),
+  };
   return {
     symbol, h, windows: vrp.length,
+    diagnostics,
     meanVrpVariance: mean,
     // Derived for readability only: the difference of the root-mean variances. Not the mean of a
     // per-window vol difference, which would carry the small-sample bias back in.

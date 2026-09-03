@@ -174,3 +174,20 @@ test("residual bias on a zero-premium series stays well under the effect being h
   assert.ok(Math.abs(mean) < 0.003,
     `residual bias ${(mean * 100).toFixed(2)} vol pts should be far below the 1.08 the variance fix removed`);
 });
+
+// ---------- diagnostics must never touch the verdict ----------
+
+test("diagnostics are reported but cannot change a gate outcome", () => {
+  // Guards the exact temptation the 2026-09-03 run created: a negative mean with a positive
+  // median. The gate reads the mean. If this ever fails, someone has re-gated on the median.
+  const { ivs, prices } = synthetic({ n: 2600, sigma: 0.18, premium: 0, seed: 9 });
+  const r = scoreUnderlying("SPY", ivs, prices, { h: 5 });
+  assert.ok(r.diagnostics, "diagnostics should be present");
+  assert.ok(typeof r.diagnostics.medianVrpVariance === "number");
+  assert.ok(r.diagnostics.fractionPositive >= 0 && r.diagnostics.fractionPositive <= 1);
+
+  const withPositiveMedian = { ...r, meanVrpVariance: -0.001, excludesZero: false,
+    diagnostics: { ...r.diagnostics, medianVrpVariance: +0.05, fractionPositive: 0.9 } };
+  assert.equal(evaluate([withPositiveMedian, withPositiveMedian]).verdict, "FAIL",
+    "a positive median and 90% positive windows must NOT rescue a negative mean");
+});
