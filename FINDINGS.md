@@ -101,6 +101,28 @@ them:
 | Macro regime conditioning (C2) | rho −0.0980, q=0.1338, does not survive |
 | Maker-fill cost reduction | run; does not rescue a zero gross edge |
 | On-chain flow gates | data-availability gate fails |
+| FX carry (C3) | **not answerable on available data** — detecting a documented 2-5%/yr premium needs 24-147 years of monthly observations; 5 exist. Not built rather than run underpowered |
+
+## Check power before building, not after running
+
+Two decisions on 2026-09-03 turned on arithmetic done before any data was touched, and they went
+opposite ways.
+
+**The variance-risk-premium horizon** was set at 5 trading days because that yields 99
+non-overlapping windows and a 1.1-1.7 vol-point minimum detectable effect, against the 2.4-3.6
+points that 21-day windows would require. The premium the literature documents is 1-3 points, so
+one horizon can see it and the other cannot.
+
+**FX carry was abandoned** by the same calculation. Five years of monthly data can detect a
+premium of roughly 9-14%/yr; the documented premium is 2-5%/yr. Detecting 3%/yr would need 42 to
+94 years, and even twenty years of history only reaches 5.4%/yr. **It was not built.** A study
+that cannot detect its own effect returns a null whatever the market is doing, and that null then
+sits in the record being cited as evidence.
+
+`power.mjs` does this arithmetic and both decisions are pinned as tests in `power.test.mjs`, so
+the reasoning is reproducible rather than remembered. Use `effectiveN`, never the nominal count —
+overlapping windows, same-day trades and correlated instruments all inflate it, which is the error
+that turned ma_dip's 300 trades into 104 independent days.
 
 ## Constraints that bound any future work
 
