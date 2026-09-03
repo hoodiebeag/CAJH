@@ -4596,3 +4596,70 @@ be recorded as one.
 
 `SEALED_SYMBOLS` untouched. No order placed, no account or position data read, nothing under
 `brokers/` modified, no GATE threshold changed.
+
+
+## 2026-09-03 — C1-C3-ENTITLEMENT-PROBE-RUN 6: both gates answered. C1 AVAILABLE, C3 AVAILABLE — and every earlier failure was this probe, not the account
+
+Run record `research-runs/2026-09-03T10-43-05-224Z-c1-c3-entitlement-probe.json`, ledger entry
+committed at `17d56eb`. First run in which **no leg reported an error**: `chainError: null`,
+`ivError: null`, and `error: null` on every FX pair.
+
+| Leg | Result |
+|---|---|
+| SPY option chain | conId 756733, 34 expiries × 491 strikes, out to 2028-12 |
+| QQQ option chain | conId 320227571, 33 expiries × 530 strikes |
+| SPY / QQQ implied-volatility history | **502 daily bars each** — from zero across four prior runs |
+| IDEALPRO FX bars | EURUSD / GBPUSD / USDJPY / AUDUSD, 1297 daily MIDPOINT each, clean |
+| Non-USD short-rate series | six of six, complete on their spans, FEDFUNDS control resolving |
+
+Both `C1-VRP-DATA-AVAILABILITY-GATE` (2026-08-29) and `C3-FX-CARRY-DATA-GATE` (2026-08-29) closed
+"not a pass, not a fail" with only their account-side halves open. **Both halves are now answered,
+in the affirmative.**
+
+### The 502-vs-500 margin is not a close-run empirical result, and must not be quoted as one
+
+The pre-registered threshold was 500 daily IV bars; the observed count is 502. That is a two-bar
+margin, and stating it without context would misrepresent it in both directions.
+
+The request asked for `"2 Y"` of daily bars. Two years is roughly 504 trading days, so a *complete*
+response to that request lands within a couple of bars of 502 by construction — the threshold and
+the request duration were both chosen on 2026-09-02 to mean "about two trading years", from the
+same reasoning, before any data existed. **What this leg actually tested is whether an IV history
+returns at all, and it does.** The margin is an artifact of matching the duration to the
+threshold, not evidence that the account sits two bars above a cliff. A five-year request would
+have returned proportionally more.
+
+Stated the other way: had the threshold been set after seeing the data, 500-against-502 would be
+exactly the kind of tuned line this project's own discipline exists to prevent. It was not. It was
+fixed in the registry before run 1, and it has not moved through six runs — including the four
+where it was failing.
+
+### Final tally on why this took six runs
+
+Every failure before this one was a defect in the probe, not a property of the account. Recorded
+plainly because the temptation, at run 2 and again at run 4, was to write "your account lacks
+options data" and move on:
+
+| # | Defect | Symptom it produced |
+|---|---|---|
+| 1 | `import.meta.url` guard false on Windows | script exited 0 having run nothing |
+| 2 | `reqSecDefOptParams` passed conId `0` | zero expiries — read as "no chain entitlement" |
+| 3 | waited on `historicalDataEnd`; the sentinel is inside `historicalData` | every FX request "timed out" holding all 1297 bars |
+| 4 | `dedupeExpiries` carried `strike: null` | IV request unfillable against any account |
+| 5 | IV requested on a single option contract — and on one expiring that day | 0 IV bars, four runs running |
+| 6 | error handler ignored `isNonFatalError` and mismatched ids | every failure reported as bare `"timeout"`, cause invisible |
+| 7 | one inconclusive flag per underlying, not per leg | clean chain + failed IV scored UNAVAILABLE |
+
+Two verdicts were published as `UNAVAILABLE` along the way and both were retracted rather than
+recorded. Had either stood, the permanent record would now assert that this account cannot supply
+options data — and it plainly can.
+
+### What this does and does not authorize
+
+The probe's own output carries the sentence: *"AVAILABLE means the data exists and a study could
+be built. It is not a result about returns."* Nothing here is evidence about the variance risk
+premium or FX carry. No study is started, no hypothesis is staged, and both C1 and C3 still
+require their own pre-registration under the standing rules before a single number is computed.
+
+`SEALED_SYMBOLS` untouched. No order placed, no account or position data read, nothing under
+`brokers/` modified. **No GATE threshold was changed at any point across six runs.**
