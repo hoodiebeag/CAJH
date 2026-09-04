@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T07:10:00Z",
- "phase": "EQUITIES TESTED. The transfer result is the universe, not the strategy.",
+ "updatedAt": "2026-09-04T07:40:00Z",
+ "phase": "the owner's acceptance criterion, scored",
  "runsTested": 2446,
  "base": {
   "trendGate": false,
@@ -310,7 +310,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Do NOT sweep equities on this bundle. The null says entry timing carries nothing detectable here, so a parameter search would fit the universe's upward drift and report it as an edge -- the exact mistake the crypto campaign spent 2,446 configurations learning to detect. What would make equities answerable: a survivorship-free universe including delisted names, and ideally a bundle chosen by a rule (all S&P 500 members as of 2023-01-01) rather than by hand.",
+ "nextUp": "The acceptance criterion is now enforced rather than remembered: gate-run.mjs scores a live configuration end to end and prints the verdict. Nothing should be called a winner on win rate alone again. What would actually move this: a survivorship-free equities universe chosen by rule rather than by hand, which is a paid data source (Norgate, Sharadar, CRSP).",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -870,5 +870,42 @@
    "whyTheDollarsMislead": "A random-entry ACCOUNT computed as 1000*(1+0.01*0.5751)^252 lands near $4,242, which invites the reading that the strategy's $15,873 beat it. It does not: that formula is a crude geometric approximation with no volatility targeting and no path ordering, so it is not like-for-like. The rigorous comparison is mean R per trade, and there the two are the same number."
   },
   "selectionBiasConfirmed": "This was flagged as a caveat before the run and the null turned it into the explanation. The symbol list was 30 currently-listed large caps chosen by me \u2014 NVDA at $15,676 buy-and-hold is in it and the companies that failed are not. Survivorship-free equities data (Norgate, Sharadar, CRSP) is the only way to test this properly and it is a paid source."
+ },
+ "acceptanceCriterion": {
+  "asStated": "~10 trades a month, win rate at or above 40%, wins large enough to offset the losses.",
+  "met": "Yes, on every count, by the current equities candidate: 5.7 trades/month, 40.5% win rate, 2.92R average win against a 1.01R average loss, expectancy +0.5814R.",
+  "andAlsoMetBy": "A RANDOM ENTRY using the same exits: 42.8% win rate -- HIGHER than the strategy -- with a 2.67 payoff and +0.5589R expectancy. That is the whole problem with the criterion as an acceptance test.",
+  "whyTheShapeIsFree": "A wide stop with no reachable take-profit and a bounded hold caps the loss near 1R and lets winners run past 3R. A ~40% win rate at a ~2.7 payoff is therefore a property of the EXIT geometry, not the entry, and it comes free with any long entry in a rising market. Breakeven at a 2.89:1 payoff is a 25.7% win rate, so 40% clears it with room -- and so does the coin flip's 42.8%.",
+  "whatFrequencyCosts": {
+   "perTradeSdOfR": 2.75,
+   "detectionAt10PerMonth": {
+    "1.00R": "0.7 years",
+    "0.50R": "2.9 years",
+    "0.25R": "11.4 years",
+    "0.15R": "31.7 years"
+   },
+   "reading": "Low frequency does not reduce risk, it buys noise. Ten trades a month needs about three years to confirm a half-R edge and over a decade for a quarter-R one, before any allowance for same-day clustering."
+  },
+  "gateVerdict": {
+   "runner": "gate-run.mjs",
+   "verdict": "FAIL",
+   "passed": [
+    "positive_net_expectancy",
+    "win_rate_margin",
+    "interval_excludes_zero",
+    "survives_multiplicity"
+   ],
+   "failed": {
+    "sample_sufficient": "effective n 175 against 882 required to detect a quarter-R edge",
+    "beats_matched_null": "excess 0.0064R, p=0.47413"
+   },
+   "blocked": [
+    "pre_registration",
+    "beats_baseline_controls",
+    "survivable",
+    "out_of_sample"
+   ],
+   "reading": "Four conditions green including the owner's own criterion. It fails on the two that decide whether the result is real."
+  }
  }
 }
