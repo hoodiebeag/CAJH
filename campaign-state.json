@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T23:13:36.589Z",
+  "updatedAt": "2026-09-04T23:25:26.401Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2861,5 +2861,69 @@
       "correctedReading": "Not a level shift. The equities cross-section produced returns in the first ten months of the sample and essentially NOTHING across the following twenty -- every factor collapses to zero or below after slice 1, and idioVol runs 28 to 12 to 2. Decay and regime still cannot be distinguished at this sample size, but either way the recent state is 'no edge', which is exactly what the out-of-sample numbers said independently. The earlier 'slice 3 beats slice 2' reading was PARA holding slices 2 and 3 up.",
       "cryptoUnchanged": "Byte-identical rows, confirming the screen touches nothing in candle-bundle."
     }
+  },
+  "equitiesAfterTheScreen": {
+    "batteryOnTheScreenedUniverse": {
+      "familySize": 14,
+      "bhThreshold": 0.01429,
+      "nullDraws": 3000,
+      "floor": "3.33e-4",
+      "survivors": [
+        "trendQuality",
+        "idioVol",
+        "lowVol",
+        "momentum"
+      ],
+      "rows": {
+        "trendQuality": {
+          "final": 1386.06,
+          "cagrPct": 13.4,
+          "maxDrawdownPct": 22.77,
+          "up": "22/31",
+          "p": "3.33e-4"
+        },
+        "idioVol": {
+          "final": 1590.29,
+          "cagrPct": 19.5,
+          "maxDrawdownPct": 15.69,
+          "up": "21/31",
+          "p": "3.33e-4"
+        },
+        "lowVol": {
+          "final": 1325.63,
+          "cagrPct": 11.4,
+          "maxDrawdownPct": 27.86,
+          "up": "19/31",
+          "p": "1.67e-3"
+        },
+        "momentum": {
+          "final": 1253.59,
+          "cagrPct": 9.1,
+          "maxDrawdownPct": 17.82,
+          "up": "17/31",
+          "p": "6.33e-3"
+        }
+      },
+      "note": "nearHigh flips from a floor-level survivor to -4.8% and fails outright. Four survive instead of six, at roughly half the return and noticeably worse drawdowns -- 15.69% to 27.86% where the contaminated run showed 8.87% to 14.81%."
+    },
+    "disjointHalvesREDONE": {
+      "myFirstReadWasAnOverRead": "The first screened halves run used ONE split and showed nothing passing both halves, and I nearly reported that as 'no factor replicates'. That is one draw. Reading a single sample as a fact is the same class of error I was in the middle of correcting, so it got five independent splits instead.",
+      "fiveIndependentSplits": {
+        "momentum": "0/5",
+        "idioVol": "2/5",
+        "trendQuality": "2/5",
+        "lowVol": "0/5"
+      },
+      "whichHalfPassesIsRANDOM": "Not a case of one half always carrying the result. Split 2 gives momentum 0.003/0.170; split 4 gives 0.877/0.002. Typically one half detects the signal and the other does not, and which one varies.",
+      "reading": "Two independent halves both clearing p<0.05 by chance is 0.05^2 = 0.0025, so 2 of 5 is far above chance and idioVol and trendQuality do carry real signal. But 2 of 5 is also far below what a strong effect would produce. The honest statement is that the equities edge is real and too WEAK for a 63-name half to detect reliably -- and the ordering matches the full-universe battery exactly: trendQuality and idioVol strongest, momentum and lowVol weakest."
+    },
+    "whereTheHalfAEdgeCOMESFrom": {
+      "mostShortedInHalfA": "CHPT 31/32, LCID 22/32, PLUG 19/32, ENPH 18/32 -- the EV, solar and hydrogen complex.",
+      "mostShortedInHalfB": "SEDG 18/32, MRNA 16/32, XRAY 16/32, LULU 14/32 -- no common theme.",
+      "isCHPTAnotherPARA": "NO, checked directly. A scan of every symbol's worst single-day move found nothing above 2.77x (MRNA on trial data), so the bundle IS split-adjusted and there are no unadjusted split discontinuities. CHPT's 59x decline is a genuine split-adjusted collapse. The screen keeps it correctly.",
+      "butItIsSTILLConcentration": "Half A's edge is largely one thematic short -- the clean-energy collapse of 2023-2026 -- expressed through four correlated names. That is a real trade and it is not a cross-sectional factor. It is also exactly why the effect does not travel to a half that does not contain those names."
+    },
+    "theCOMPLETEPicture": "On clean data the equities cross-section shows a real but weak in-sample effect (four signals survive BH at 9-20% CAGR with 16-28% drawdowns), concentrated in one thematic short that worked in 2024, undetectable in half the universe half the time, and worth nothing out of sample (-2.6% to +4.0% CAGR, Sharpe <= 0.26 over the last twenty months). That is not a strategy. It is a description of what happened to clean-energy stocks in 2024.",
+    "whatIsLEFTOfTheCampaign": "One asset class with a genuine, stress-observed, out-of-sample edge -- crypto momentum at 51.0% and Sharpe 1.93 -- which the account cannot short and therefore cannot trade. And one asset class that can be traded and has no edge. Carry remains untested and blocked on data."
   }
 }
