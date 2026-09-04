@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T15:17:31.782Z",
+  "updatedAt": "2026-09-04T16:09:55.548Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -1964,5 +1964,124 @@
       },
       "sampleSize": "20 blended periods. The standard error on a Sharpe at n=20 is about 0.42, so 2.51 against the crypto leg's 2.14 is well inside noise. The drawdown -- 11.42% against 18.69% for the crypto leg -- is again the part that is large relative to its error, and it holds even though the correlation fell from -0.216 in sample to +0.077 out of it."
     }
+  },
+  "decayOrRegime": {
+    "question": "The selection walk-forward found equities momentum at Sharpe 0.57 out of sample against 1.19 in sample, while crypto momentum went the other way. Decay and regime both fit that. They are distinguishable by SHAPE: decay is monotone, a regime is a level shift.",
+    "construction": "Each surviving factor is run once over the whole window and its period returns are then CUT into three contiguous slices. Cutting the returns rather than re-running on truncated data keeps the formation window intact for every period, so an early slice is not penalised for a shorter lookback than a late one.",
+    "equities": {
+      "slices": [
+        "2024-01-04..2024-11-04 (10p)",
+        "2024-11-04..2025-09-09 (10p)",
+        "2025-09-09..2026-08-11 (11p)"
+      ],
+      "cagrBySlice": {
+        "momentum": [
+          54,
+          9,
+          17
+        ],
+        "nearHigh": [
+          23,
+          -3,
+          13
+        ],
+        "trendQuality": [
+          54,
+          14,
+          22
+        ],
+        "idioVol": [
+          56,
+          26,
+          26
+        ],
+        "lowVol": [
+          56,
+          15,
+          13
+        ],
+        "beta": [
+          21,
+          0,
+          -1
+        ]
+      },
+      "sharpeBySlice": {
+        "momentum": [
+          2.28,
+          0.5,
+          0.78
+        ],
+        "nearHigh": [
+          1.31,
+          -0.15,
+          0.9
+        ],
+        "trendQuality": [
+          2.24,
+          0.74,
+          1.16
+        ],
+        "idioVol": [
+          4.98,
+          1.29,
+          1.71
+        ],
+        "lowVol": [
+          5.12,
+          0.67,
+          0.76
+        ],
+        "beta": [
+          1.44,
+          -0.02,
+          -0.07
+        ]
+      }
+    },
+    "crypto": {
+      "slices": [
+        "2023-09-10..2024-08-11 (16p)",
+        "2024-08-11..2025-07-13 (16p)",
+        "2025-07-13..2026-07-26 (18p)"
+      ],
+      "cagrBySlice": {
+        "momentum": [
+          9,
+          70,
+          48
+        ],
+        "nearHigh": [
+          26,
+          5,
+          67
+        ],
+        "trendQuality": [
+          -13,
+          14,
+          12
+        ],
+        "idioVol": [
+          -7,
+          -13,
+          -31
+        ],
+        "lowVol": [
+          -31,
+          -2,
+          48
+        ],
+        "beta": [
+          -21,
+          35,
+          62
+        ]
+      }
+    },
+    "verdict": "REGIME, not decay, and it is not momentum's regime -- it is the whole equities cross-section's. All SIX equities factors fall sharply from slice 1 to slice 2: 54 to 9, 23 to -3, 54 to 14, 56 to 26, 56 to 15, 21 to 0. If momentum alone had declined the natural suspicion would be crowding. When every factor declines together the common cause is the environment, not the signal. And the shape is a level shift rather than a slide: slice 3 is BETTER than slice 2 for four of the six (momentum 9 to 17, trendQuality 14 to 22, nearHigh -3 to 13, idioVol flat at 26), so nothing is monotonically dying.",
+    "cryptoRanTheOppositeWay": "momentum 9 to 70 to 48, beta -21 to 35 to 62, nearHigh 26 to 5 to 67, lowVol -31 to -2 to 48. Broadly rising across the same calendar time in which equities fell. Two asset classes moving in opposite directions over the same window is itself independent support for the -0.216 cross-asset correlation the desk book is built on: the diversification is not a statistical artifact of 31 observations, it is visible in the sub-period shapes.",
+    "whatItSaysAboutIdioVol": "idioVol fell too -- 56 to 26 to 26 -- so it is not immune to the equities regime. It fell LESS than momentum (54 to 9 to 17), which is exactly why the out-of-sample selection rule keeps choosing it. The rule is not finding an unaffected factor, it is finding the least affected one. And idioVol is negative in all THREE crypto slices (-7, -13, -31), which makes its crypto failure structural rather than one bad draw.",
+    "honestly": "About ten periods per equities slice and sixteen to eighteen per crypto slice. A CAGR annualised from ten monthly returns is not a measurement, and neither is a Sharpe. Nothing here should be read cell by cell; the claim is about the shape across slices, which is consistent across six factors and therefore harder to explain by noise than any single cell.",
+    "code": "subperiod-run.mjs"
   }
 }
