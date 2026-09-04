@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T19:13:44.569Z",
+  "updatedAt": "2026-09-04T19:21:10.554Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2454,7 +2454,7 @@
         "final": 2013.26,
         "cagrPct": 27.6,
         "maxDrawdownPct": 69.04,
-        "vsBasket": "basket $418.51 at -26.1% CAGR",
+        "vsBasket": "basket $1094.38 at 3.2% CAGR, 75.32% drawdown",
         "pAgainstRandomSelection": 0.002,
         "trades": "35, 1/mo, win 54.3%, payoff 2.73"
       },
@@ -2467,7 +2467,7 @@
         "final": 1718.13,
         "cagrPct": 23.1,
         "maxDrawdownPct": 27.49,
-        "vsBasket": "basket $1162.32 at 6.0% CAGR",
+        "vsBasket": "basket $1174.97 at 6.4% CAGR, 22.72% drawdown",
         "pAgainstRandomSelection": 0.008,
         "trades": "102, 3.3/mo, win 54.9%, payoff 1.8"
       },
@@ -2477,8 +2477,8 @@
         "maxDrawdownPct": 13.55
       }
     },
-    "theRankingSTILLWORKSLongOnly": "Both universes beat their random-selection null and both crush the equal-weight basket. Crypto long-only turns $1000 into $2013 while holding everything turns it into $418 -- ranking is worth 54 points of CAGR there. The SIGNAL is not the problem.",
-    "theDRAWDOWNIs": "Crypto long-only draws down 69.04%. That is the market's own 60.77% plus a selection effect, and it is what shorting was converting into 22.73%. A 69% drawdown is not a tradable book for a real account whatever its CAGR.",
+    "theRankingSTILLWORKSLongOnly": "Both universes beat their random-selection null (p=0.0020 and p=0.0080) and both beat the equal-weight basket. Crypto long-only returns 27.6% against the basket's 3.2%, so ranking is worth about 25 points of CAGR -- not the 54 points the wrong basket implied. The signal is not the problem; the claim is just smaller than first published.",
+    "theDRAWDOWNIs": "Crypto long-only draws down 69.04%. The basket's own drawdown is 75.32%, so ranking barely improves it -- the book is riding the market's entire fall. Shorting was converting that into 22.73%. A 69% drawdown is not a tradable book for a real account whatever its CAGR.",
     "theBlendDoesNOTRescueIt": {
       "correlation": 0.154,
       "note": "Positive, and it had to be: both legs are now long market beta, so the -0.234 that made the spread blend work has no reason to survive.",
@@ -2506,6 +2506,64 @@
     },
     "theBOTTOMLINE": "The desk's result depends on being able to short, and the crypto venue in this project's record cannot. What is actually tradable, if equity shorting is available and crypto shorting is not, is the EQUITIES long-short alone: 25.0% CAGR at a 13.55% drawdown, Sharpe 1.19. That is a real result and it is roughly half the blended desk's Sharpe. The cross-asset diversification that produced 2.54 is unavailable at this venue.",
     "whatShouldHappenNext": "Verify the account's current short and margin capability directly rather than trusting an archived finding. If crypto shorting can be obtained -- a different venue, a futures account, or margin -- the blended desk is back on the table and it is worth the setup. If it cannot, the honest scope of this campaign's result is the equities long-short, and every crypto figure is research.",
-    "code": "longonly-run.mjs"
+    "code": "longonly-run.mjs",
+    "BASKET_FIGURES_CORRECTED": "The basket rows first published here were WRONG and they flattered the result. They came from runRotation with topK set to every symbol, which requires all symbols to be eligible at once and so silently skips every rebalance until the last-listed name has 252 bars of history -- comparing the book against a basket measured over a shorter, later window. Corrected by building the basket from the price grid directly: an equal-weight average of whatever traded on each bar, put on the book's own rebalance calendar. Crypto's basket is $1094.38 at 3.2% CAGR with a 75.32% drawdown, NOT $418.51 at -26.1%. Equities' is $1174.97 at 6.4%, not $1162.32 at 6.0%."
+  },
+  "regimeOverlayFAILS": {
+    "question": "If the venue cannot short, the only remaining lever against a 69% drawdown is being OUT of the market rather than short it. One pre-specified rule from the time-series momentum literature (Moskowitz, Ooi and Pedersen 2012): hold the cross-sectional top-K only while the universe's own equal-weight basket is above its 200-bar moving average, otherwise cash. 200 bars is the conventional choice, not a swept one.",
+    "adjacency": "This is close to territory this project has already closed -- thousands of entry-timing configurations found no edge. The claim tested is narrower and different: not 'when should I buy this asset' but 'should the portfolio be invested at all'. Reported either way.",
+    "crypto": {
+      "investedPeriods": "19 of 50",
+      "long-only always invested": {
+        "final": 2045.99,
+        "cagrPct": 28.3,
+        "maxDrawdownPct": 69.04,
+        "up": "21/50"
+      },
+      "long-only + overlay": {
+        "final": 1191,
+        "cagrPct": 6.3,
+        "maxDrawdownPct": 43.59,
+        "up": "7/50"
+      },
+      "basket": {
+        "final": 1094.38,
+        "cagrPct": 3.2,
+        "maxDrawdownPct": 75.32
+      },
+      "basket + overlay": {
+        "final": 1030.9,
+        "cagrPct": 1.1,
+        "maxDrawdownPct": 56.58
+      }
+    },
+    "equities": {
+      "investedPeriods": "25 of 31",
+      "long-only always invested": {
+        "final": 1606.07,
+        "cagrPct": 20,
+        "maxDrawdownPct": 27.49,
+        "up": "19/31"
+      },
+      "long-only + overlay": {
+        "final": 1218,
+        "cagrPct": 7.9,
+        "maxDrawdownPct": 24.18,
+        "up": "14/31"
+      },
+      "basket": {
+        "final": 1174.97,
+        "cagrPct": 6.4,
+        "maxDrawdownPct": 22.72
+      },
+      "basket + overlay": {
+        "final": 1013.13,
+        "cagrPct": 0.5,
+        "maxDrawdownPct": 17.67
+      }
+    },
+    "verdict": "FAILS, and not marginally. On crypto it gives up 78% of the return -- 28.3% to 6.3% -- to remove 37% of the drawdown, and what is left is still a 43.59% drawdown, still untradeable. On equities it gives up 60% of the return for a 12% drawdown reduction. In both cases the trade is far worse than one-for-one, and the overlay is also charged nothing for the cash it holds, so the real comparison is slightly worse still.",
+    "conclusion": "The long-only crypto book cannot be rescued by a market-regime overlay. Combined with the blend failing (+0.154 correlation, both legs long beta) and the naive beta hedge failing, three separate attempts to make the crypto sleeve work without shorting have now failed. The honest conclusion is that this result requires the ability to short, and at a venue that cannot, the tradable scope is the equities long-short alone.",
+    "code": "regime-overlay-run.mjs"
   }
 }

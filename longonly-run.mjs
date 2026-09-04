@@ -14,6 +14,8 @@ import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { runRotation, randomSelectionNull, selectionP, spread, perYear, anchoredDrawdown } from "./xsmom.mjs";
 import { ledger, summarise } from "./trades.mjs";
 import { alignReturns, correlation, bookStats, blend, blendDrawdownPct } from "./portfolio.mjs";
+import { buildGrid } from "./multifactor.mjs";
+import { basketReturns } from "./factors.mjs";
 
 const DRAWS = Number(process.argv[2] ?? 500);
 const sec = d => Date.parse(d + "T00:00:00Z") / 1000;
@@ -37,11 +39,26 @@ for (const [label, root, topK, slip] of [
   const ls = spread(series, opts, { borrow: 0.05 });
   const ppy = perYear(long.rebalanceLog) ?? 12;
 
-  // The basket: hold the whole universe equally, rebalanced on the same calendar, same slippage
-  // on nothing since nothing turns over.
+  // The basket must NOT come from runRotation with topK = every symbol: that requires all symbols
+  // to be eligible at once, so it silently skips every rebalance until the last-listed name has
+  // 252 bars of history, and it produced a basket over a shorter window than the book it was being
+  // compared against. Built from the price grid instead -- an equal-weight average of whatever
+  // traded on each bar, which is what "hold everything" means -- and put on the BOOK's calendar.
   const all = Object.keys(series);
-  const basket = runRotation({ ...opts, series, topK: all.length, slipPct: slip,
-                               select: () => all });
+  const { symbols: gsyms, times: gtimes, grid } = buildGrid(series);
+  const bRets = basketReturns(grid, gsyms, gtimes).map(r => r ?? 0);
+  const idxOf = new Map(gtimes.map((t, i) => [t, i]));
+  const basketBars = long.times.map(t => bRets[idxOf.get(t)] ?? 0);
+  const basketPeriods = long.periodReturns.map((_, m) => {
+    const lo = long.rebalanceLog[m].at, hi = long.rebalanceLog[m + 1]?.at ?? Infinity;
+    let sum = 0;
+    for (let k = 0; k < long.times.length; k++) if (long.times[k] > lo && long.times[k] <= hi) sum += basketBars[k];
+    return sum;
+  });
+  let bbal = 1000;
+  for (const r of basketPeriods) bbal *= Math.exp(r);
+  const basket = { finalBalance: bbal, periodReturns: basketPeriods, barReturns: basketBars,
+                   times: long.times, rebalanceLog: long.rebalanceLog };
 
   const nul = randomSelectionNull({ ...opts, series }, { draws: DRAWS });
   const p = selectionP(nul, long.finalBalance);
