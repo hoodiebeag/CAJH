@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T17:23:13.832Z",
+  "updatedAt": "2026-09-04T17:27:14.958Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -1405,7 +1405,69 @@
         "idioVolIsTheOneRealSPLIT": "idioVol passes equities BH at the floor and passes BOTH disjoint halves at the floor, so it is not a few names. It fails crypto outright at p=0.539 with a -21.6% CAGR. That is a genuine asset-class-specific factor rather than a spurious one, and it is the best equities number in the battery. It should be traded as an equities factor or not at all.",
         "whatTheHalvesTestCulledThatBHDidNot": "lowVol and beta both survive BH on both universes and both FAIL the disjoint-halves split (lowVol 0.0950 in half A, beta 0.1899). Splitting one universe in two is a sharper instrument here than multiplicity correction, because it attacks a different failure -- concentration in a few names rather than the look-elsewhere effect."
       }
-    }
+    },
+    "sizeAndLiquidityAdded": {
+      "why": "The battery had twelve signals and none of them was size or liquidity -- a gap in the DESIGN, not a result. The illiquidity premium is also the first signal here whose mechanism differs from the rest: compensation for bearing illiquidity, not price continuation.",
+      "construction": "illiquidity is Amihud -- mean |log return| per dollar traded over 252 bars. smallSize is -log(mean dollar volume); market capitalisation is not in these bundles. Both pre-specified from the literature. The whole family was re-corrected at fourteen rather than grandfathering the old twelve, since adding signals shifts every BH critical value.",
+      "result": "BOTH FAIL, on both universes, decisively.",
+      "equities": {
+        "illiquidity": {
+          "final": 455.43,
+          "cagrPct": -26.1,
+          "up": "6/31",
+          "p": 1
+        },
+        "smallSize": {
+          "final": 552.52,
+          "cagrPct": -20.4,
+          "up": "4/31",
+          "p": 1
+        },
+        "halves": "illiquidity p 0.979 / 0.9995, smallSize p 0.930 / 1.0000 -- failing independently in both disjoint halves, not marginally."
+      },
+      "crypto": {
+        "illiquidity": {
+          "final": 586.44,
+          "cagrPct": -16.9,
+          "up": "13/50",
+          "p": 0.265
+        },
+        "smallSize": {
+          "final": 492.53,
+          "cagrPct": -21.8,
+          "up": "16/50",
+          "p": 0.554
+        }
+      },
+      "survivorsUnchanged": "Adding two signals moved the BH threshold from 0.025 to 0.02143 and changed neither universe's survivor set. Equities: momentum, lowVol, nearHigh, trendQuality, idioVol, beta. Crypto: momentum, nearHigh, trendQuality, beta, lowVol, volumeTrend.",
+      "whyTheyFailedInEQUITIES": "They are anti-momentum here, and the correlation matrix says so directly: illiquidity correlates -0.64 with momentum, -0.72 with nearHigh and -0.79 with trendQuality. Over 2023-2026 the liquid mega-caps WERE the momentum winners, so ranking long the illiquid end is close to shorting momentum.",
+      "thisIsNOTArefutationOfTheSizePremium": "There are no small caps in the S&P 500. Ranking 128 large caps by dollar volume ranks liquidity WITHIN mega-cap land, not size across the market, and the documented premium is a claim about small firms against large ones. That claim is not testable on this data at all. The same limitation is milder but real in crypto: all 28 pairs are liquid enough to be listed on Kraken. The honest statement is that these PROXIES fail on this data, not that the premia do not exist."
+    },
+    "correlationStructureMeasured": {
+      "why": "Discipline note 2 has said 'always correlate before counting' since the six-survivors-are-two-factors finding, and it was being done by hand. correlations-run.mjs now measures it on the signals' BOOK returns -- two signals can rank differently and still trade almost the same names -- and single-link clusters at |r| >= 0.7.",
+      "equities": {
+        "independentGroups": 7,
+        "fromSignals": 14,
+        "clusters": [
+          "momentum, nearHigh, trendQuality, illiquidity, smallSize -- the last two joined by ANTI-correlation (-0.72 to -0.79), so they are the same test with the sign reversed, not additional evidence",
+          "lowVol, highVol, idioVol, beta -- the low-risk cluster, internally 0.82 to 1.00"
+        ],
+        "alone": [
+          "reversal1m",
+          "reversal1w",
+          "acceleration",
+          "lowSkew",
+          "volumeTrend"
+        ]
+      },
+      "crypto": {
+        "independentGroups": 10,
+        "fromSignals": 14
+      },
+      "THE_DEFECT_THIS_EXPOSED": "lowVol and highVol correlate EXACTLY -1.00, on both universes, because highVol is literally trailingVol and lowVol is -trailingVol. They are one signal and its negation: identical ranking reversed, so one spread is the exact negative of the other. The battery has been reporting a family size of 12, and now 14, when at most 13 distinct tests were ever run. The direction is safe -- an inflated family size makes every BH critical value SMALLER and the correction more conservative, so no false positive was created by it -- but it was a misstatement, and 'family size 14' should be read alongside '7 independent groups' rather than instead of it.",
+      "whyBothAreKept": "The low-volatility anomaly and the volatility premium are both documented framings and removing one would be choosing which literature to believe. They stay, and the redundancy is stated rather than hidden."
+    },
+    "drawdownsInThisRunAreHIGHER": "Every drawdown in the fourteen-signal battery is larger than in the twelve-signal one -- momentum 14.57% against 10.11%, idioVol 12.41% against 8.87%. The books did not change. testSignal now uses the shared per-bar anchoredDrawdown where it previously marked at period ends, which is the same understatement this project has now made four separate times. These are the honest figures and the earlier battery drawdowns should not be quoted."
   },
   "crossAssetPortfolio": {
     "question": "The directive was to apply the strategy to every asset class and decide what works best for each. That has two readings and only one of them works.",
