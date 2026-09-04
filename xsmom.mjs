@@ -164,3 +164,71 @@ export function selectionP(nullResult, observedFinal) {
   const beat = nullResult.finals.filter((f) => f >= observedFinal).length;
   return (beat + 1) / (nullResult.finals.length + 1);
 }
+
+/**
+ * The dollar-neutral spread between the two legs, as a return series and a curve.
+ *
+ * Kept here rather than recomputed at each call site because the earlier ad-hoc versions differed
+ * in whether borrow was charged on half the book or all of it. It is half: the short leg is half
+ * the capital.
+ */
+export function spread(series, opts = {}, { borrow = 0 } = {}) {
+  const top = runRotation({ ...opts, series, pick: "top" });
+  const bot = runRotation({ ...opts, series, pick: "bottom" });
+  const n = Math.min(top.periodReturns.length, bot.periodReturns.length);
+  const returns = [];
+  let bal = 1000, peak = 1000, maxDD = 0;
+  for (let i = 0; i < n; i++) {
+    const r = 0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i] - 0.5 * borrow / 12;
+    returns.push(r);
+    bal *= Math.exp(r);
+    peak = Math.max(peak, bal);
+    maxDD = Math.max(maxDD, (peak - bal) / peak);
+  }
+  const years = n / 12;
+  return {
+    returns, periods: n,
+    finalBalance: +bal.toFixed(2),
+    cagrPct: years > 0 ? +(((bal / 1000) ** (1 / years) - 1) * 100).toFixed(2) : null,
+    maxDrawdownPct: +(100 * maxDD).toFixed(2),
+    upPeriods: returns.filter((r) => r > 0).length,
+    top, bot,
+  };
+}
+
+/**
+ * The null the SPREAD needs, which is not the null the long leg needs.
+ *
+ * Draw 2*topK symbols uniformly, split them arbitrarily into a "long" half and a "short" half,
+ * and run the same dollar-neutral book. That asks the only question worth asking of a spread: does
+ * RANKING the two sides beat splitting the same names at random?
+ */
+export function randomSpreadNull(series, opts = {}, { draws = 200, seed = 20260904, borrow = 0 } = {}) {
+  const random = seededRng(seed);
+  const finals = [];
+  const topK = opts.topK ?? 10;
+  for (let d = 0; d < draws; d++) {
+    const pickHalf = (half) => (eligible) => {
+      const pool = [...eligible];
+      for (let j = pool.length - 1; j > 0; j--) {
+        const k = Math.floor(random() * (j + 1));
+        [pool[j], pool[k]] = [pool[k], pool[j]];
+      }
+      return half === "a" ? pool.slice(0, topK) : pool.slice(topK, 2 * topK);
+    };
+    const a = runRotation({ ...opts, series, select: pickHalf("a") });
+    const b = runRotation({ ...opts, series, select: pickHalf("b") });
+    const n = Math.min(a.periodReturns.length, b.periodReturns.length);
+    let bal = 1000;
+    for (let i = 0; i < n; i++) bal *= Math.exp(0.5 * a.periodReturns[i] - 0.5 * b.periodReturns[i] - 0.5 * borrow / 12);
+    finals.push(+bal.toFixed(2));
+  }
+  finals.sort((x, y) => x - y);
+  return {
+    draws, finals,
+    mean: +(finals.reduce((x, y) => x + y, 0) / finals.length).toFixed(2),
+    median: +finals[Math.floor(finals.length / 2)].toFixed(2),
+    p05: +finals[Math.floor(0.05 * finals.length)].toFixed(2),
+    p95: +finals[Math.floor(0.95 * finals.length)].toFixed(2),
+  };
+}

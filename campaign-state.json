@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T12:30:00Z",
- "phase": "WALK-FORWARD SURVIVED. First result in the project to clear every attack.",
+ "updatedAt": "2026-09-04T13:05:00Z",
+ "phase": "gate run on the spread: 7 PASS, 2 FAIL, 1 permanently BLOCKED",
  "runsTested": 2446,
  "base": {
   "trendGate": false,
@@ -310,7 +310,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "The data-side work is done and the limitation is now sample length, which more analysis cannot fix. The honest next steps are: run gate-run.mjs on the spread; then either paper-trade it forward under the D1->D2 path in SELF_AWARENESS_SPEC.md, or extend the history with a longer equities bundle (2015 onward) to get more independent periods. Do NOT sweep xsmom parameters.",
+ "nextUp": "Two things only, and neither is more backtesting. (1) Pre-register the FORWARD test -- that is the honest use of the registry now, since the in-sample hypothesis cannot be pre-registered after the fact. (2) Paper-trade under D1->D2. The binding limitation is 31 in-sample and 20 out-of-sample periods in one regime, and only elapsed time or a longer history fixes it.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -1166,6 +1166,68 @@
    "Short availability is modelled as a flat borrow rate. In practice parts of the bottom decile are hard to borrow or unborrowable, and that is lumpy rather than uniform.",
    "Yahoo serves no delisted history, so the bundles contain no failures. For a LONG-SHORT this understates rather than flatters -- the failures would have paid the short leg -- but it is still a gap.",
    "The three universes overlap in period and partly in symbols; their p-values must not be combined."
-  ]
+  ],
+  "spreadNull": {
+   "construction": "Draw 2*topK symbols uniformly, split them arbitrarily into a long half and a short half, run the same dollar-neutral book. Asks the only question worth asking of a spread: does RANKING the two sides beat splitting the same names at random?",
+   "result": {
+    "spread": 1947.5,
+    "nullMedian": 944.11,
+    "nullP05": 744.67,
+    "nullP95": 1166.0,
+    "p": 0.005
+   },
+   "reading": "The spread sits entirely outside the null distribution -- above its 95th percentile. The cleanest null result the project has produced."
+  },
+  "gateVerdict": {
+   "runner": "xsmom-gate.mjs",
+   "verdict": "FAIL",
+   "unitCaveat": "promotion.mjs was written for per-trade R-multiples and a rotation has no stop and therefore no R. Monthly spread log returns are used instead, one per rebalance, and every threshold is read in those units.",
+   "passed": [
+    "positive_net_expectancy",
+    "win_rate_margin (58.1% against a 37.7% breakeven)",
+    "interval_excludes_zero",
+    "survives_multiplicity",
+    "beats_matched_null (p=0.0050)",
+    "survivable (10.09% against a 25% ceiling)",
+    "out_of_sample (holds at 0.0251 monthly)"
+   ],
+   "failed": {
+    "sample_sufficient": "effective n 31 against 32 required -- short by one period",
+    "beats_baseline_controls": "mean monthly 0.02150 against SPY's 0.02251. ON RAW RETURN, SPY BEATS THE SPREAD over the full window."
+   },
+   "blockedPermanently": "pre_registration. Registering a hypothesis after seeing its result is not pre-registration; BLOCKED here is correct and must not be filled in retrospectively.",
+   "theHonestReading": "Seven conditions pass including the two hardest -- the matched null and out-of-sample replication. The baseline failure is real and is the thing to understand: this is a RISK-ADJUSTED improvement, not a raw-return one. Return per unit of drawdown is 2.92 against SPY's 0.89, but unlevered the spread returns less than simply owning the index over this window."
+  },
+  "riskMatchedComparison": {
+   "why": "A market-neutral book at a 10% drawdown is not comparable to an index at 21% until the risk is matched. Financing charged at 6% annualised on the borrowed portion.",
+   "table": {
+    "1.0x": {
+     "final": 1947,
+     "cagr": 29.4,
+     "dd": 10.1,
+     "vsSPY": "below"
+    },
+    "1.5x": {
+     "final": 2515,
+     "cagr": 42.9,
+     "dd": 15.0,
+     "vsSPY": "beats"
+    },
+    "2.0x": {
+     "final": 3248,
+     "cagr": 57.8,
+     "dd": 20.1,
+     "vsSPY": "beats",
+     "note": "risk-matched to SPY"
+    },
+    "2.5x": {
+     "final": 4195,
+     "cagr": 74.2,
+     "dd": 24.9,
+     "vsSPY": "beats"
+    }
+   },
+   "whatThisDoesNotSay": "Leverage is a separate decision with its own failure modes -- margin calls, financing that moves against you, and gap risk that a monthly rebalance cannot react to. The risk-matched number answers the gate's raw-return objection; it does not make 2x a recommendation. And it multiplies the momentum-crash exposure, which is the strategy's known failure mode and is absent from this sample."
+  }
  }
 }
