@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T10:20:00Z",
- "phase": "awaiting the S&P bundle; reconstruction reworked after Wikipedia dropped its change log",
+ "updatedAt": "2026-09-04T11:00:00Z",
+ "phase": "ANSWERED. The registered hypothesis is refuted with the sign reversed.",
  "runsTested": 2446,
  "base": {
   "trendGate": false,
@@ -310,7 +310,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Awaiting sp500.tar.gz. On arrival: install under its OWN root, read manifest.json FIRST and report departedRecovered and missingPct BEFORE any result -- if few of the failed companies resolved, the test is compromised and that must be said before a number is seen, not after. Then name the cost model and run gate-run.mjs on the UNCHANGED crypto-fitted leader. Do not sweep it; the registered gate is about excess over a matched null on a configuration nobody re-fitted.",
+ "nextUp": "Nothing. Entry timing shows no detectable edge in crypto or equities and the one hypothesis that pointed anywhere is refuted with the sign reversed. Further sweeping would be fitting noise.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -951,6 +951,49 @@
     "out_of_sample"
    ],
    "reading": "Four conditions green including the owner's own criterion. It fails on the two that decide whether the result is real."
+  }
+ },
+ "THE_ANSWER": {
+  "question": "Does the trend-gated breakout entry carry an edge over a matched random entry?",
+  "answer": "No, in either asset class, and the last remaining hypothesis is refuted rather than merely unproven.",
+  "crypto": "29 pairs, 2,446 configurations. Best out-of-sample $2,588 at 11.0% drawdown against BTC's $4,106 at 52%.",
+  "equities30": "Excess +0.0064R, p=0.4741. The $15,873 was the universe: a coin flip with the same exits earned 0.5751R against 0.5814R.",
+  "equities128": {
+   "trades": 1181,
+   "strategy": 0.3451,
+   "random": 0.3268,
+   "excess": 0.0183,
+   "p": 0.3932,
+   "mde": 0.218,
+   "subgroups": {
+    "90 winners": {
+     "excess": 0.0473,
+     "p": 0.2909
+    },
+    "38 losers": {
+     "excess": -0.1175,
+     "p": 0.8225
+    },
+    "worst 20": {
+     "excess": -0.2752,
+     "p": 0.961
+    },
+    "worst 10": {
+     "excess": -0.365,
+     "p": 0.954
+    }
+   },
+   "reading": "The registered prediction was that the strategy adds value by declining to hold falling names. It does the opposite: WORSE than random on the losers, monotonically worse the weaker the name. The +0.3646R laggard excess on the 30-symbol bundle was noise and reversed sign on four times the sample."
+  },
+  "prereg": "EQUITIES-LAGGARD-EXCESS-2026-09 linked at ledger seq 16, verdict FAIL. Ledger verifies at 17 entries.",
+  "whatIsNotInDoubt": "The payoff geometry works and is free: ~40% win rate at a ~2.9 payoff, positive expectancy, confidence interval excluding zero. The owner's acceptance criterion is met in full. A coin flip meets it too, which is why it cannot be the acceptance test."
+ },
+ "dataLimits": {
+  "sp500Bundle": {
+   "whatArrived": "129 symbols from the hand-assembled list, no manifest -- the simple script was run, not the Wikipedia reconstruction. SBNY dropped as a reused ticker (515 bars from 2024-08-15; the bank failed 2023-03). 128 used.",
+   "yahooDropsDelistedNames": "The decisive data finding, contradicting an assertion made earlier in this session: Yahoo serves essentially no delisted history. Of ten delisted names attempted -- SIVB, FRC, PACW, DISH, CTLT, PXD, MRO, WBA, CMA, IPG -- zero usable series were obtained. The free route cannot produce a survivorship-free universe; the membership reconstruction is free, the prices are not.",
+   "whyTheResultStillStands": "38 symbols lost money buy-and-hold (30%, against 7% in the first bundle) including CHPT -97%, LCID -92%, SEDG -88%, ENPH -86%. The hypothesis had ample population to show itself in and showed the opposite.",
+   "rawPriceArtifacts": "Unadjusted prices carry split discontinuities: MRNA +177% in a day, CHPT +75% on the final bar. auto_adjust=False preserves stop distances at that cost -- a tradeoff not stated when the advice was given."
   }
  }
 }
