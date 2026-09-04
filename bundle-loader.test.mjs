@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import os from "os";
-import { availablePairs, availableTimeframes, loadBundleCandles, resampleBundleCandles } from "./bundle-loader.mjs";
+import { availablePairs, availableTimeframes, loadBundleCandles, resampleBundleCandles, marketProxy } from "./bundle-loader.mjs";
 
 test("the bundle resolves from the module, not the working directory", () => {
   // The hazard this closes: a sweep script run from /tmp saw an empty universe, logged zero-trade
@@ -46,4 +46,27 @@ test("resampling the real bundle produces a coherent weekly series", () => {
   const weekly = resampleBundleCandles(daily, 10080);
   assert.ok(weekly.length > 150 && weekly.length < daily.length / 6);
   for (const b of weekly) assert.ok(b.high >= b.low && b.high >= b.close && b.low <= b.close, JSON.stringify(b));
+});
+
+test("marketProxy takes the first candidate present, as a convention not a judgement", () => {
+  assert.equal(marketProxy(["ADAUSD", "SPY", "XBTUSD"]), "XBTUSD", "crypto first in the ordered list");
+  assert.equal(marketProxy(["ADAUSD", "SPY", "QQQ"]), "SPY");
+  assert.equal(marketProxy(["QQQ", "AAPL"]), "QQQ");
+});
+
+test("marketProxy accepts an object universe as well as a list", () => {
+  assert.equal(marketProxy({ AAPL: [], SPY: [] }), "SPY");
+});
+
+test("marketProxy throws rather than guessing, and names what it looked for", () => {
+  // The failure this closes: on an equities bundle three call sites looked for XBTUSD, found
+  // nothing, and went quiet. Eight silently-ignored parameters into this campaign, quiet is worse
+  // than loud.
+  assert.throws(() => marketProxy(["AAPL", "MSFT"]), /no market proxy in this universe/);
+  assert.throws(() => marketProxy(["AAPL", "MSFT"]), /XBTUSD, SPY/);
+});
+
+test("an explicit override wins, and one that is absent is an error not a fallback", () => {
+  assert.equal(marketProxy(["AAPL", "SPY"], "AAPL"), "AAPL");
+  assert.throws(() => marketProxy(["AAPL", "SPY"], "TSLA"), /is not in this universe/);
 });

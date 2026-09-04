@@ -106,3 +106,35 @@ export function resampleBundleCandles(candles, spanMinutes) {
   }
   return [...out.values()].sort((a, b) => a.time - b.time);
 }
+
+/**
+ * The symbol that stands for "the market" in this universe.
+ *
+ * Three places assumed XBTUSD: the benchmark's headline row, the btcRegime filter's series, and
+ * the robustness runner's copy of it. On an equities bundle every one of them would have looked
+ * for a symbol that is not there. Two would have gone quiet -- the benchmark reporting "n/a" and
+ * the filter refusing to compile -- and the campaign has now been caught eight times by a
+ * parameter that went quiet instead of failing. So this resolves the proxy explicitly and throws
+ * when it cannot, naming what it looked for.
+ *
+ * CANDIDATES is ordered, not scored: the first one present wins. It is not a guess about which
+ * symbol is the better proxy, it is a convention, and `override` (or CANDLE_MARKET_PROXY) exists
+ * for every case where the convention is wrong.
+ */
+export const MARKET_PROXY_CANDIDATES = ["XBTUSD", "SPY", "VOO", "IVV", "^GSPC", "QQQ"];
+
+export function marketProxy(universe, override = process.env.CANDLE_MARKET_PROXY || null) {
+  const symbols = Array.isArray(universe) ? universe : Object.keys(universe ?? {});
+  if (override) {
+    if (!symbols.includes(override)) {
+      throw new Error(`bundle-loader: market proxy "${override}" is not in this universe (${symbols.length} symbols)`);
+    }
+    return override;
+  }
+  const found = MARKET_PROXY_CANDIDATES.find((s) => symbols.includes(s));
+  if (!found) {
+    throw new Error(`bundle-loader: no market proxy in this universe — looked for ${MARKET_PROXY_CANDIDATES.join(", ")}. `
+      + `Set CANDLE_MARKET_PROXY to the symbol that stands for the market here.`);
+  }
+  return found;
+}

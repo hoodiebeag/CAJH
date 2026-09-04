@@ -20,7 +20,7 @@
  */
 
 import { slice } from "./campaign.mjs";
-import { availablePairs } from "./bundle-loader.mjs";
+import { availablePairs, marketProxy } from "./bundle-loader.mjs";
 
 /** $1000 into a pair at its first bar in the window, out at its last. No fee, no timing. */
 export function buyAndHold(pair, { minutes = 1440, from, to, startingBalance = 1000 } = {}) {
@@ -54,7 +54,7 @@ export function buyAndHold(pair, { minutes = 1440, from, to, startingBalance = 1
  * and BTC on its own. `minBars` matches runConfig's own floor so the benchmark universe is the
  * same universe the strategy traded.
  */
-export function benchmarks({ minutes = 1440, from, to, startingBalance = 1000, minBars = 120, pairs = null } = {}) {
+export function benchmarks({ minutes = 1440, from, to, startingBalance = 1000, minBars = 120, pairs = null, proxy = null } = {}) {
   const rows = [];
   for (const pair of pairs ?? availablePairs(minutes)) {
     const row = buyAndHold(pair, { minutes, from, to, startingBalance });
@@ -62,18 +62,22 @@ export function benchmarks({ minutes = 1440, from, to, startingBalance = 1000, m
   }
   rows.sort((a, b) => b.finalBalance - a.finalBalance);
   const basket = rows.length ? +(rows.reduce((s, r) => s + r.finalBalance, 0) / rows.length).toFixed(2) : null;
-  const btc = rows.find((r) => r.pair === "XBTUSD") ?? null;
+  // The market proxy, resolved rather than assumed. On an equities bundle "XBTUSD" is not there
+  // and this row would have silently read "n/a" next to every leaderboard.
+  const proxySymbol = rows.length ? marketProxy(rows.map((r) => r.pair), proxy) : null;
+  const proxyRow = proxySymbol ? rows.find((r) => r.pair === proxySymbol) ?? null : null;
   return {
     rows, basket,
-    btc: btc ? btc.finalBalance : null,
-    btcMaxDrawdownPct: btc ? btc.maxDrawdownPct : null,
+    proxySymbol,
+    proxy: proxyRow ? proxyRow.finalBalance : null,
+    proxyMaxDrawdownPct: proxyRow ? proxyRow.maxDrawdownPct : null,
     pairsUsed: rows.length, startingBalance,
   };
 }
 
 /** One line, for printing under any leaderboard. */
 export function benchmarkLine(b) {
-  const dd = b.btcMaxDrawdownPct === null ? "" : ` at a ${b.btcMaxDrawdownPct}% drawdown`;
-  return `benchmark, same window, no strategy: BTC $${b.btc ?? "n/a"}${dd}, `
-    + `equal-weight basket of ${b.pairsUsed} pairs $${b.basket ?? "n/a"} (from $${b.startingBalance})`;
+  const dd = b.proxyMaxDrawdownPct === null ? "" : ` at a ${b.proxyMaxDrawdownPct}% drawdown`;
+  return `benchmark, same window, no strategy: ${b.proxySymbol ?? "proxy"} $${b.proxy ?? "n/a"}${dd}, `
+    + `equal-weight basket of ${b.pairsUsed} symbols $${b.basket ?? "n/a"} (from $${b.startingBalance})`;
 }

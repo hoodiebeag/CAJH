@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T05:05:00Z",
- "phase": "short exit path built; the short side loses with the same engine as the long side",
+ "updatedAt": "2026-09-04T05:20:00Z",
+ "phase": "equities prep: the market proxy is no longer hardcoded to BTC",
  "runsTested": 2446,
  "base": {
   "trendGate": false,
@@ -310,7 +310,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "EQUITIES. The short path is built and tested, the format spec has been given to the owner (candle-bundle/1440/<SYMBOL>.csv, six columns, unix seconds), and nothing else in the crypto data will move the number. When a bundle arrives: run benchmark.mjs and robustness.mjs first to see what buy-and-hold and the existing leader do there, then walkforward.mjs with an eight-point grid -- the corrected ladder's optimum -- and only then start sweeping.",
+ "nextUp": "Waiting on the equities bundle. The short exit path is built and mirrored, the market proxy is generalised, and the run order is recorded. Nothing else in the crypto data will move the number.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -778,5 +778,21 @@
   "engineNowComplete": "trailR, trailStartR, partialAtR, partialFrac, trailingTpPct, lockBreakeven and exitOnSwingHigh are all mirrored for shorts. Only two ENTRY-side conditions remain long-only and they are genuinely unwritten rather than untested: requireHigherLow (a rising sequence of swing lows) and minRoomR (clear air above entry, measured by a nearestResAbove with no nearestSupportBelow counterpart).",
   "verdictUpgraded": "Previously recorded as 'shorts do not rescue this, but shorts do not work is NOT established' because the short side was being judged with a worse exit engine. It is now judged with the same one and the answer does not move: the short side loses on this data. The handicap was not the explanation.",
   "whyItStillMattered": "The engine capability is the deliverable. The owner wants the short path for EQUITIES, where a two-sided book is the normal construction rather than an afterthought."
+ },
+ "equitiesReadiness": {
+  "formatGivenToOwner": "candle-bundle/1440/<SYMBOL>.csv, header time,open,high,low,close,volume, time in unix seconds, oldest row first. bundle-loader.mjs reads it unchanged.",
+  "whatWasHardcoded": "Three call sites assumed XBTUSD was the market: benchmark.mjs's headline row, campaign.mjs's btcRegime series, and robustness.mjs's copy of it. On an equities bundle the benchmark would have printed 'BTC $n/a' next to every leaderboard and the btcRegime filter would have refused to compile with a message about BTC. Two of the three would have gone quiet, which is how the other eight silent no-ops in this campaign got as far as they did.",
+  "fix": "bundle-loader.marketProxy resolves it from the universe against an ordered candidate list -- XBTUSD, SPY, VOO, IVV, ^GSPC, QQQ -- honours an explicit override or CANDLE_MARKET_PROXY, and THROWS when it cannot resolve, naming what it looked for. benchmarks() now returns proxySymbol/proxy/proxyMaxDrawdownPct instead of btc/btcMaxDrawdownPct, because a field called 'btc' on an equities run is a lie even when the number is right.",
+  "stillToDoWhenDataArrives": [
+   "a cost model for equities -- Kraken taker rates are wrong and must not be reused silently",
+   "declare survivorship bias unless the bundle demonstrably includes delisted names",
+   "the btcRegime filter should probably be renamed marketRegime once it is used on a second asset class"
+  ],
+  "runOrder": [
+   "benchmark.mjs on that universe",
+   "robustness.mjs with the crypto-fitted leader untouched (the honest transfer test)",
+   "walkforward.mjs with an EIGHT-point grid (the corrected ladder's optimum)",
+   "only then sweep, and stop early"
+  ]
  }
 }

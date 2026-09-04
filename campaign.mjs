@@ -26,7 +26,7 @@
 
 import fs from "fs";
 import { backtestMultiTF } from "./backtest.js";
-import { loadBundleCandles, availablePairs, resampleBundleCandles } from "./bundle-loader.mjs";
+import { loadBundleCandles, availablePairs, resampleBundleCandles, marketProxy } from "./bundle-loader.mjs";
 import { simulateEquity, leaderboard } from "./equity.mjs";
 import { FEE_RATE, SLIPPAGE_PCT } from "./strategy.js";
 import { buildEntryGate, sharpeRankTable, atr as atrSeries } from "./filters.mjs";
@@ -59,7 +59,11 @@ export function runConfig(config, { minutes = 1440, from = SPLIT.trainStart, to 
   // `config.filters` is a serialisable spec so it can live in the log; the closure it compiles to
   // is built per pair here and never leaves the run. BTC is loaded once because btcRegime needs a
   // market-wide series that no single pair's chart contains.
-  const btcCandles = config.filters?.btcRegime ? slice("XBTUSD", minutes, from, to) : null;
+  // Resolved from the universe, not hardcoded: on an equities bundle "XBTUSD" does not exist and
+  // buildEntryGate would have refused to compile with a message about BTC.
+  const btcCandles = config.filters?.btcRegime
+    ? slice(marketProxy(universe, config.marketProxy ?? null), minutes, from, to)
+    : null;
   // The cross-sectional rank is a property of the whole universe at a moment, so it is built once
   // and shared. Building it inside each pair's gate would rank all 29 pairs once per pair.
   const series = {};

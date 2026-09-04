@@ -20,7 +20,7 @@
 
 import { backtestMultiTF } from "./backtest.js";
 import { slice, SPLIT } from "./campaign.mjs";
-import { availablePairs } from "./bundle-loader.mjs";
+import { availablePairs, marketProxy } from "./bundle-loader.mjs";
 import { buildEntryGate, sharpeRankTable, atr } from "./filters.mjs";
 import { simulateEquity } from "./equity.mjs";
 import { FEE_RATE, SLIPPAGE_PCT } from "./strategy.js";
@@ -64,7 +64,9 @@ export function collect(config, { minutes = 1440, from = SPLIT.trainStart, to = 
     const candles = slice(pair, minutes, from, to);
     if (candles.length >= 120) series[pair] = candles;
   }
-  const btcCandles = config.filters?.btcRegime ? series.XBTUSD ?? null : null;
+  const btcCandles = config.filters?.btcRegime
+    ? series[marketProxy(series, config.marketProxy ?? null)]
+    : null;
   const sharpeRanks = config.filters?.crossSection
     ? sharpeRankTable(series, { lookback: config.filters.crossSection.lookback ?? 60 })
     : null;

@@ -219,7 +219,7 @@ function main() {
   });
   const b = benchmarks({ from: r.window.testFrom, to: r.window.testTo });
   console.log(`\nchained out-of-sample: ${r.trades} trades, mean ${r.meanR}R, $${r.finalBalance}, maxDD ${r.maxDrawdownPct}%`);
-  console.log(`same window, no strategy: BTC $${b.btc} at ${b.btcMaxDrawdownPct}% DD, equal-weight basket $${b.basket}`);
+  console.log(`same window, no strategy: ${b.proxySymbol} $${b.proxy} at ${b.proxyMaxDrawdownPct}% DD, equal-weight basket $${b.basket}`);
   console.log(`(${Math.round((Date.now() - t0) / 1000)}s)`);
 }
 
