@@ -5,9 +5,9 @@ import { report, summarise, LEADER } from "./robustness.mjs";
 const R = report();
 
 test("the leader reproduces exactly -- a silent change to the engine or the bundle fails here", () => {
-  assert.equal(R.all.trades, 134);
-  assert.equal(R.all.finalBalance, 5160.44);
-  assert.equal(R.all.maxDrawdownPct, 8.96);
+  assert.equal(R.all.trades, 192);
+  assert.equal(R.all.finalBalance, 16749.27);
+  assert.equal(R.all.maxDrawdownPct, 25.1);
 });
 
 test("it is positive in every full year standalone, not one good year", () => {
@@ -17,7 +17,7 @@ test("it is positive in every full year standalone, not one good year", () => {
 });
 
 test("it survives losing any single pair", () => {
-  assert.ok(R.leaveOnePairOut[0].finalBalance > 2500,
+  assert.ok(R.leaveOnePairOut[0].finalBalance > 8000,
     `worst case is ${R.leaveOnePairOut[0].without} at $${R.leaveOnePairOut[0].finalBalance}`);
 });
 
@@ -30,12 +30,13 @@ test("it survives restricting to the pairs with full history", () => {
 test("the payoff is right-tailed, and the test records how far -- it does not pretend otherwise", () => {
   // This is not a pass/fail on the strategy: a trend follower is supposed to look like this. It
   // exists so nobody reads the mean as a stable statistic. Dropping ten of 143 trades flips it.
-  assert.ok(R.shape.top5SharePct > 70, `top 5 carry ${R.shape.top5SharePct}%`);
+  assert.ok(R.shape.top5SharePct > 50, `top 5 carry ${R.shape.top5SharePct}%`);
   assert.ok(R.shape.winRatePct < 50);
   assert.ok(R.shape.medianNetR < 0, "the median trade is a loss; the tail carries everything");
   const dropTen = R.trimTopWinners.find((x) => x.dropped === 10);
-  assert.ok(dropTen.meanR < 0, "dropping the ten best trades turns the mean negative");
-  assert.ok(dropTen.finalBalance > 1000, "though it now still finishes above starting capital");
+  assert.ok(dropTen.meanR > 0, "this is the first leader where dropping the ten best keeps a positive mean");
+  const dropTwenty = R.trimTopWinners.find((x) => x.dropped === 20);
+  assert.ok(dropTwenty.meanR < 0, "twenty still flips it -- the tail dependence is reduced, not gone");
 });
 
 test("trade counts are inflated by same-day clustering, and the factor is reported", () => {
@@ -49,23 +50,26 @@ test("summarise reports the starting balance for an empty trade list rather than
 
 test("the pinned LEADER is the configuration the campaign state names", () => {
   assert.equal(LEADER.entryMode, "breakout");
-  assert.equal(LEADER.trendMa, 200);
-  assert.equal(LEADER.beTriggerR, 2.5);
+  assert.equal(LEADER.trendMa, 150);
+  assert.equal(LEADER.beTriggerR, 3);
   assert.equal(LEADER.volTarget, 0.05);
   assert.equal(LEADER.entryDelayBars, 1);
-  assert.equal(LEADER.maxConcurrent, 3);
 });
 
-test("capping concurrency beats the unlimited book on return AND drawdown AND peak risk", () => {
-  // The unlimited book peaked at 19 simultaneous longs -- 9.5% of the account at risk at once in a
-  // near-one-factor market. Three positions at 1% is 3% peak risk and does better on both axes,
-  // because the nineteen were largely the same bet nineteen times.
-  const unlimited = report({ ...LEADER, maxConcurrent: null, riskPct: 0.005 });
-  assert.ok(R.all.finalBalance > unlimited.all.finalBalance,
-    `${R.all.finalBalance} vs ${unlimited.all.finalBalance}`);
-  assert.ok(R.all.maxDrawdownPct < unlimited.all.maxDrawdownPct,
-    `${R.all.maxDrawdownPct}% vs ${unlimited.all.maxDrawdownPct}%`);
-  assert.ok(LEADER.maxConcurrent * LEADER.riskPct < 19 * 0.005, "and it commits less capital at the peak");
+test("the leader carries nothing the walk-forward declined", () => {
+  // The two components the in-sample search liked and a training-only search did not: the filters
+  // (declined in 7 of 9 quarters) and the concurrency cap (never selected under either objective).
+  assert.equal(LEADER.filters, null);
+  assert.equal(LEADER.maxConcurrent, null);
+});
+
+test("the edge decays across the sample, and the test says so rather than averaging it away", () => {
+  // 2023 +2.92R, 2024 +2.01R, 2025 +0.21R. The headline balance is earned mostly in the first two
+  // years. Anyone reading $16,749 without this is reading a number that stopped growing.
+  const y = Object.fromEntries(R.perYear.map((x) => [x.year, x.meanR]));
+  assert.ok(y[2023] > y[2024], `${y[2023]} vs ${y[2024]}`);
+  assert.ok(y[2024] > y[2025], `${y[2024]} vs ${y[2025]}`);
+  assert.ok(y[2025] < 0.5, `2025 is nearly flat at ${y[2025]}R and that must stay visible`);
 });
 
 test("a one-bar fill delay wins on every margin, not just the headline balance", () => {
@@ -84,11 +88,13 @@ test("two bars of delay collapses it -- the improvement is a discontinuity, not 
   assert.ok(twoBars.all.finalBalance < R.all.finalBalance / 1.8, `two-bar delay gave $${twoBars.all.finalBalance}`);
 });
 
-test("volatility targeting improves the leader on BOTH balance and drawdown", () => {
-  // The comparison that justifies it is risk-matched (see equity.mjs riskMatchedRiskPct): at the
-  // same mean deployed risk, sizing inversely to volatility beats flat sizing. Here it is simply
-  // run at the same riskPct, where it deploys slightly LESS risk and still wins on both axes.
+test("volatility targeting pays for itself on this leader, but no longer for free", () => {
+  // On the earlier, concurrency-capped leader it improved balance AND drawdown. On this one it
+  // buys +30% of balance for +0.8 points of drawdown ($16,749 at 25.10% against $12,851 at
+  // 24.27%). Worth having, and the earlier "better on both axes" claim does not survive the
+  // change of configuration -- so the test asserts what is true now, not what was true then.
   const flat = report({ ...LEADER, volTarget: null });
-  assert.ok(R.all.finalBalance > flat.all.finalBalance, `${R.all.finalBalance} vs ${flat.all.finalBalance}`);
-  assert.ok(R.all.maxDrawdownPct < flat.all.maxDrawdownPct, `${R.all.maxDrawdownPct} vs ${flat.all.maxDrawdownPct}`);
+  assert.ok(R.all.finalBalance > flat.all.finalBalance * 1.2, `${R.all.finalBalance} vs ${flat.all.finalBalance}`);
+  const mar = (r) => r.all.finalBalance / r.all.maxDrawdownPct;
+  assert.ok(mar(R) > mar(flat), "and it wins per unit of drawdown, which is the comparison that matters");
 });

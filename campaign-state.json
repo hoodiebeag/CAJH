@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T01:50:00Z",
- "phase": "structural walk-forward done; the trend gate is not an in-sample artifact",
+ "updatedAt": "2026-09-04T02:05:00Z",
+ "phase": "leader replaced by the walk-forward-endorsed configuration",
  "runsTested": 2227,
  "base": {
   "trendGate": false,
@@ -228,39 +228,37 @@
   }
  ],
  "leader": {
+  "name": "walk-forward-endorsed",
   "entryMode": "breakout",
+  "alignMode": "none",
   "trendGate": true,
   "trendGateMode": "ma",
-  "trendMa": 200,
+  "trendMa": 150,
+  "tpR": 100,
+  "maxHold": 50,
   "minStopPct": 0.03,
   "maxStopPct": 0.2,
-  "tpR": 100,
-  "maxHold": 100,
   "entryDelayBars": 1,
   "lockBreakeven": true,
-  "beTriggerR": 2.5,
+  "beTriggerR": 3,
   "beLockR": 0.2,
-  "filters": {
-   "crossSection": {
-    "lookback": 120,
-    "topN": 20
-   },
-   "atrPctBand": {
-    "period": 14,
-    "min": 0.03,
-    "max": 1
-   }
-  },
-  "riskPct": 0.01,
+  "filters": null,
   "volTarget": 0.05,
   "volClamp": 3,
-  "maxConcurrent": 3,
-  "trades": 134,
-  "meanR": 2.5735,
-  "finalBalance": 5160.44,
-  "maxDrawdownPct": 8.96,
-  "peakCapitalAtRisk": "3% (3 positions x 1%)",
-  "vsBenchmark": "BTC buy-and-hold $4105.94 at 52.06% DD."
+  "riskPct": 0.01,
+  "maxConcurrent": null,
+  "trades": 192,
+  "meanR": 1.5053,
+  "finalBalance": 16749.27,
+  "maxDrawdownPct": 25.1,
+  "why": "Every component was chosen by a training-only search in 8 or 9 quarters out of 9, and nothing the walk-forward declined is in it. It is also simply better in sample than the config the in-sample search preferred: $16,749.27 against $5,160.44, with better robustness margins. The cost is drawdown, 25.1% against 8.96% -- still half of BTC's 52.06%.",
+  "differsFromSearchBest": {
+   "filters": "none (declined 7/9)",
+   "maxConcurrent": "none (never selected)",
+   "trendMa": "150 not 200 (9/9)",
+   "beTriggerR": "3 not 2.5 (9/9)",
+   "maxHold": "50 not 100 (7/9)"
+  }
  },
  "benchmark": {
   "btcBuyAndHold": 4105.94,
@@ -284,7 +282,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "EQUITIES. Every remaining question about this crypto result is a variation on one already answered, and the owner named equities as the actual target. This container has no equities data; getting some is the next real step. Failing that, the useful crypto work left is refitting the structural frame too -- trendGate on/off and tpR -- so that NOTHING in the walk-forward is held at an in-sample value.",
+ "nextUp": "The decay is now the most important open question: is 2025's flatness the strategy dying, or a quiet year for crypto trend? Compare 2025's realised trend strength against 2023-24 before concluding either. Beyond that, EQUITIES remain blocked on data the container cannot fetch.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -345,53 +343,58 @@
  },
  "concentration": {
   "all": {
-   "trades": 134,
-   "meanR": 2.5735,
-   "final": 5160.44,
-   "dd": 8.96
+   "trades": 192,
+   "meanR": 1.5053,
+   "final": 16749.27,
+   "dd": 25.1
   },
   "leaveOnePairOut": {
-   "worst": "without XBTUSD $2880.29",
+   "worst": "without DOGEUSD $9953.38",
    "next": [
-    "without ZECUSD $3136.39",
-    "without SOLUSD $3496.86"
+    "without XRPUSD $11716.12",
+    "without SOLUSD $12066.30"
    ]
   },
   "trimTopWinners": {
-   "drop1": 3352.97,
-   "drop3": 2268.98,
-   "drop5": 1679.41,
-   "drop10": 1322.27,
-   "drop20": 737.13
+   "drop1": 13243.37,
+   "drop3": 7237.19,
+   "drop5": 4593.84,
+   "drop10": 2056.64,
+   "drop20": 826.18
   },
   "perYearStandalone": {
    "2023": {
-    "trades": 26,
-    "meanR": 5.5694
+    "trades": 43,
+    "meanR": 2.9243
    },
    "2024": {
-    "trades": 65,
-    "meanR": 1.9912
+    "trades": 76,
+    "meanR": 2.011
    },
    "2025": {
-    "trades": 42,
-    "meanR": 1.681
+    "trades": 69,
+    "meanR": 0.2058
+   },
+   "2026": {
+    "trades": 4,
+    "meanR": -0.9431
    }
   },
   "fullHistoryPairsOnly": {
    "pairs": 16,
-   "trades": 114,
-   "meanR": 2.0895,
-   "final": 3291.49
+   "trades": 156,
+   "meanR": 1.5741,
+   "final": 13263.46
   },
   "shape": {
-   "winRatePct": 40.3,
-   "medianNetR": -1.1061,
-   "top5SharePct": 77.6,
-   "distinctDays": 94,
-   "clusteringFactor": 1.43
+   "winRatePct": 38.5,
+   "medianNetR": -1.1074,
+   "top5SharePct": 54.8,
+   "distinctDays": 120,
+   "clusteringFactor": 1.6
   },
-  "reading": "Every margin improved or held. Dropping the ten best trades now finishes at $1322, above starting capital. Positive in all three years standalone. The right tail still carries it: top 5 of 134 trades are 77.6% of all R."
+  "reading": "Materially less fragile than every earlier leader. Top 5 of 192 trades carry 54.8% of all R, down from 77.6%, and dropping the ten best still leaves a POSITIVE mean (+0.29R, $2056.64) -- the first configuration in the campaign where that is true. Dropping twenty still flips it, so the tail dependence is reduced, not gone.",
+  "theRealCaveat": "THE EDGE DECAYS. 2023 +2.92R, 2024 +2.01R, 2025 +0.21R, 2026 -0.94R. The headline balance is earned almost entirely in the first two years and 2025 is flat. A test asserts this ordering so it cannot be averaged away. Anyone quoting $16,749 without it is quoting a number that stopped growing."
  },
  "literatureSearched": {
   "date": "2026-09-03",
@@ -543,6 +546,27 @@
    },
    "reading": "This is the strongest evidence in the campaign. A search that has never seen the quarter it is judged on converges on the same structure nine times out of nine -- INCLUDING on whether to apply the trend gate at all, which was the one choice most obviously made with hindsight. The gate is not an in-sample artifact.",
    "stillFixed": "long-only, entryMode breakout, entryDelayBars 1, filters null, alignMode none (inert), maxStopPct 0.20, lockBreakeven, beLockR 0.2, volClamp 3. The first three were each chosen independently in 8/9 or 9/9 quarters by the previous refit, so holding them is now a recorded observation rather than an assumption."
+  },
+  "fittingObjective": {
+   "why": "The walk-forward's fit function maximised final balance and nothing else. Given a choice between an unlimited book and one capped at three positions it took unlimited in all nine quarters, because more concurrent bets is more balance in-sample -- it never saw that unlimited got there through a 24% drawdown while the cap took 9%. The campaign's leader had been picked on drawdown TOO, so the walk-forward was being asked to validate a choice made on a criterion it did not share.",
+   "fix": "walkforward.mjs now takes objective 'balance' or 'mar' (balance per unit of drawdown). Both are reported.",
+   "result": {
+    "balance": {
+     "trades": 149,
+     "meanR": 1.0957,
+     "final": 2281.86,
+     "dd": 13.39,
+     "chose": "unlimited @1% in all nine quarters"
+    },
+    "mar": {
+     "trades": 146,
+     "meanR": 1.1496,
+     "final": 2320.47,
+     "dd": 13.39,
+     "chose": "maxConcurrent 2 @0.5% for four quarters, then unlimited @1% for five"
+    }
+   },
+   "conclusion": "The concurrency cap is NOT validated out of sample under either objective. Its large in-sample gain was hindsight."
   }
  },
  "bugsFound": [

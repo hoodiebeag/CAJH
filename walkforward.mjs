@@ -60,8 +60,32 @@ export function quarters(start, end) {
   return out;
 }
 
+/**
+ * What "best" means during fitting. This is not a detail -- it decides what the walk-forward is
+ * able to validate at all.
+ *
+ * "balance" maximises the final balance and nothing else. It was the original objective and it has
+ * a blind spot: given a choice between an unlimited book and one capped at three positions, it
+ * takes unlimited every time, because more concurrent bets is more balance in-sample. It never
+ * sees that the unlimited book got there through a 24% drawdown while the capped one took 9%.
+ *
+ * "mar" maximises balance per unit of drawdown -- a crude MAR ratio. A configuration that doubles
+ * the account through a hole twice as deep scores the same, which is the comparison a person
+ * actually makes.
+ *
+ * The campaign's own leader was picked on drawdown as well as balance, so scoring it with
+ * "balance" asks the walk-forward to validate a choice made on a criterion it does not share.
+ * Running both and reporting both is the honest version.
+ */
+export const OBJECTIVES = {
+  balance: (eq) => eq.finalBalance,
+  mar: (eq) => (eq.maxDrawdownPct > 0 ? eq.finalBalance / eq.maxDrawdownPct : eq.finalBalance),
+};
+
 /** The configuration this search would have chosen knowing only bars before `until`. */
-export function fit(trainFrom, until, { grid = GRID, fixed = FIXED } = {}) {
+export function fit(trainFrom, until, { grid = GRID, fixed = FIXED, objective = "balance" } = {}) {
+  const score = OBJECTIVES[objective];
+  if (!score) throw new Error(`fit: unknown objective "${objective}" (known: ${Object.keys(OBJECTIVES).join(", ")})`);
   let best = null;
   for (const point of expand(grid)) {
     const config = { ...fixed, ...point };
@@ -72,7 +96,10 @@ export function fit(trainFrom, until, { grid = GRID, fixed = FIXED } = {}) {
       volTarget: config.volTarget ?? null, volClamp: config.volClamp ?? 3,
       maxConcurrent: config.maxConcurrent ?? null,
     });
-    if (!best || eq.finalBalance > best.finalBalance) best = { config, finalBalance: eq.finalBalance, trades: trades.length };
+    const value = score(eq);
+    if (!best || value > best.value) {
+      best = { config, value, finalBalance: eq.finalBalance, maxDrawdownPct: eq.maxDrawdownPct, trades: trades.length };
+    }
   }
   return best;
 }
@@ -82,11 +109,12 @@ export function walkForward({
   // Where the DATA ends, as distinct from where the last decision window ends. Exits run to here.
   dataEnd = "2026-03-31",
   grid = GRID, fixed = FIXED, startingBalance = 1000, riskPct = 0.005, onQuarter = null,
+  objective = "balance",
 } = {}) {
   const steps = [];
   const oosTrades = [];
   for (const q of quarters(testFrom, testTo)) {
-    const chosen = fit(trainFrom, addDays(q.from, -1), { grid, fixed });
+    const chosen = fit(trainFrom, addDays(q.from, -1), { grid, fixed, objective });
     if (!chosen) { steps.push({ ...q, skipped: "no configuration had enough training trades" }); continue; }
     // Two boundaries that are easy to conflate and must not be.
     //
@@ -142,6 +170,7 @@ export function walkForward({
     ? simulateEquity(weighted, { riskPct, startingBalance, maxConcurrent: chainMaxConcurrent })
     : null;
   return {
+    objective,
     steps, trades: oosTrades.length,
     finalBalance: eq ? +eq.finalBalance.toFixed(2) : startingBalance,
     maxDrawdownPct: eq ? +eq.maxDrawdownPct.toFixed(2) : 0,

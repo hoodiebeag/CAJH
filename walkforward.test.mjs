@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { quarters, fit, walkForward, FIXED, GRID } from "./walkforward.mjs";
+import { quarters, fit, walkForward, FIXED, GRID, OBJECTIVES } from "./walkforward.mjs";
 
 test("quarters cover the window and stop at its end", () => {
   const qs = quarters("2024-01-01", "2026-03-31");
@@ -58,4 +58,23 @@ test("the grid and the fixed structure are declared, so what was NOT refit is vi
   assert.equal(FIXED.entryDelayBars, 1);
   assert.ok(FIXED.filters, "the filters were selected in-sample and are not refit");
   assert.ok(Object.keys(GRID).length >= 4);
+});
+
+test("the fitting objective changes what the walk-forward can validate", () => {
+  // "balance" takes an unlimited book over a capped one every time, because more concurrent bets
+  // is more balance in-sample -- it never sees that the unlimited book got there through a much
+  // deeper hole. The campaign's leader was picked on drawdown too, so scoring it with "balance"
+  // asks the walk-forward to validate a choice made on a criterion it does not share.
+  const grid = { maxConcurrent: [null, 3], riskPct: [0.01], trendMa: [150], minStopPct: [0.03],
+                 beTriggerR: [3], maxHold: [50], volTarget: [0.05] };
+  const byBalance = fit("2023-01-01", "2024-12-31", { grid, objective: "balance" });
+  const byMar = fit("2023-01-01", "2024-12-31", { grid, objective: "mar" });
+  assert.ok(byBalance.finalBalance >= byMar.finalBalance, "balance must win on balance");
+  assert.ok(byMar.finalBalance / byMar.maxDrawdownPct >= byBalance.finalBalance / byBalance.maxDrawdownPct,
+    "and mar must win on balance per unit of drawdown");
+});
+
+test("an unknown objective is refused rather than silently defaulting", () => {
+  assert.throws(() => fit("2023-01-01", "2023-12-31", { grid: { trendMa: [150] }, objective: "sharpe" }),
+    /unknown objective/);
 });

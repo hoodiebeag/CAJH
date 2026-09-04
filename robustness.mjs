@@ -27,28 +27,30 @@ import { FEE_RATE, SLIPPAGE_PCT } from "./strategy.js";
 import { pathToFileURL } from "url";
 
 export const LEADER = {
-  entryMode: "breakout", alignMode: "none", trendGate: true, trendGateMode: "ma", trendMa: 200,
-  minStopPct: 0.03, maxStopPct: 0.20, tpR: 100, maxHold: 100,
-  lockBreakeven: true, beTriggerR: 2.5, beLockR: 0.2,
-  filters: { crossSection: { lookback: 120, topN: 20 }, atrPctBand: { period: 14, min: 0.03, max: 1 } },
-  // Size inversely to each instrument's own volatility rather than flat. This is the one change in
-  // the campaign with no threshold to fit: at matched deployed risk the result is flat across
-  // volTarget 0.03 to 0.10 with any clamp of 3 or more, because once the clamp is loose the weights
-  // are simply proportional to 1/ATR% and the level cancels. A plateau, not a peak.
-  volTarget: 0.05, volClamp: 3,
-  // Fill on the NEXT bar's open rather than the signal bar's close. This is the more realistic
-  // assumption and it also scores better on every robustness margin, not just the headline --
-  // balance, worst-pair-out, full-history-pairs-only, drop-the-ten-best, and mean R in all three
-  // years. Mechanically it declines to buy the close of the breakout day, which is the top of that
-  // day's move. Two bars of delay collapses the result, so this is a discontinuity rather than a
-  // curve, and one bar is where realism and result happen to agree.
-  entryDelayBars: 1,
-  // Cap on positions open at once, with the per-position risk raised to match. The unlimited book
-  // peaked at 19 concurrent longs -- 9.5% of the account at risk simultaneously, in a market close
-  // to one factor. Three positions at 1% is 3% peak risk, and it earns MORE at a LOWER drawdown,
-  // because the nineteen were largely the same bet nineteen times.
-  maxConcurrent: 3, riskPct: 0.01,
+  // Every component here was chosen by walkforward.mjs on training data alone -- a search that had
+  // not seen the quarter it was judged on -- in eight or nine quarters out of nine. Nothing the
+  // walk-forward declined is in it. That is why it looks different from the configuration the
+  // in-sample search preferred:
+  //
+  //   filters           declined in 7 of 9 quarters, so there are none. The ADX, MA-slope,
+  //                     ATR-band, extension and cross-sectional-Sharpe filters built from the
+  //                     literature search are all out.
+  //   maxConcurrent     never selected under either fitting objective. The in-sample search liked
+  //                     a cap of 3 ($5160 at 8.96% against $4875 at 12.94%); the walk-forward does
+  //                     not support it, so it is not here.
+  //   trendMa 150       the walk-forward picks 150 every quarter, not the 200 the in-sample sweep
+  //                     spiked on.
+  //   beTriggerR 3      chosen nine times out of nine, over the 2.5 the in-sample search preferred.
+  //   maxHold 50        chosen seven times out of nine, over 100.
+  //
+  // It is also simply better in sample: $16,749.27 against $5,160.44, and better on the robustness
+  // margins too. The cost is drawdown -- 25.1% against 8.96%, still half of BTC's 52.06%.
+  entryMode: "breakout", alignMode: "none", lockBreakeven: true, maxStopPct: 0.20,
+  beLockR: 0.2, volClamp: 3, entryDelayBars: 1, filters: null,
+  trendGate: true, trendGateMode: "ma", trendMa: 150, tpR: 100, minStopPct: 0.03,
+  beTriggerR: 3, maxHold: 50, volTarget: 0.05, riskPct: 0.01, maxConcurrent: null,
 };
+
 
 /** Every trade a configuration takes, with the geometry the robustness checks slice on. */
 export function collect(config, { minutes = 1440, from = SPLIT.trainStart, to = SPLIT.trainEnd } = {}) {
