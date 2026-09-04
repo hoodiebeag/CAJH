@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T07:40:00Z",
- "phase": "the owner's acceptance criterion, scored",
+ "updatedAt": "2026-09-04T08:25:00Z",
+ "phase": "laggard subgroup diagnostic; hypothesis pre-registered",
  "runsTested": 2446,
  "base": {
   "trendGate": false,
@@ -310,7 +310,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "The acceptance criterion is now enforced rather than remembered: gate-run.mjs scores a live configuration end to end and prints the verdict. Nothing should be called a winner on win rate alone again. What would actually move this: a survivorship-free equities universe chosen by rule rather than by hand, which is a paid data source (Norgate, Sharadar, CRSP).",
+ "nextUp": "A survivorship-free universe is now the ONE experiment that would move this, and the prediction it tests is registered with a falsifiable gate. Until then there is nothing worth sweeping: the payoff geometry is solved and free, entry timing shows no detectable excess on a universe of survivors, and the only signal pointing anywhere is post-hoc and underpowered.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -869,7 +869,44 @@
    "reading": "$15,873 is the UNIVERSE, not the strategy. A random entry on the same 30 symbols with the same stop distances, target, hold and cost earns 0.5751R against the strategy's 0.5814R. The excess is 0.0064R at p=0.47 -- a coin flip. It fails the harder gated-bar version too. Thirty of today's mega caps and sector ETFs over 2023-2026 make money almost however you enter them; the equal-weight basket alone returns $2,646.",
    "whyTheDollarsMislead": "A random-entry ACCOUNT computed as 1000*(1+0.01*0.5751)^252 lands near $4,242, which invites the reading that the strategy's $15,873 beat it. It does not: that formula is a crude geometric approximation with no volatility targeting and no path ordering, so it is not like-for-like. The rigorous comparison is mean R per trade, and there the two are the same number."
   },
-  "selectionBiasConfirmed": "This was flagged as a caveat before the run and the null turned it into the explanation. The symbol list was 30 currently-listed large caps chosen by me \u2014 NVDA at $15,676 buy-and-hold is in it and the companies that failed are not. Survivorship-free equities data (Norgate, Sharadar, CRSP) is the only way to test this properly and it is a paid source."
+  "selectionBiasConfirmed": "This was flagged as a caveat before the run and the null turned it into the explanation. The symbol list was 30 currently-listed large caps chosen by me \u2014 NVDA at $15,676 buy-and-hold is in it and the companies that failed are not. Survivorship-free equities data (Norgate, Sharadar, CRSP) is the only way to test this properly and it is a paid source.",
+  "subgroupDiagnostic": {
+   "whyItIsWorthRunning": "The matched-geometry null draws from the same symbols in the same proportions, so it already controls for the universe being a basket of winners. That conclusion -- no detectable edge -- stands on its own and survivorship does not undermine it. What survivorship DOES remove is the thing a trend gate is for: the chance to avoid a name that falls and keeps falling.",
+   "table": {
+    "all 30": {
+     "trades": 252,
+     "strategy": 0.5814,
+     "random": 0.5751,
+     "excess": 0.0064,
+     "p": 0.4741,
+     "mde": 0.486
+    },
+    "best 10 by buy-and-hold": {
+     "trades": 116,
+     "strategy": 0.7442,
+     "random": 0.8292,
+     "excess": -0.0851,
+     "p": 0.6001,
+     "mde": 0.78
+    },
+    "worst 10 by buy-and-hold": {
+     "trades": 56,
+     "strategy": 0.3871,
+     "random": 0.0225,
+     "excess": 0.3646,
+     "p": 0.0767,
+     "mde": 0.696
+    }
+   },
+   "reading": "Directionally consistent: on names that only rose, the strategy is WORSE than random -- its stop-outs are pure drag. On the laggards, random entry earns almost nothing (+0.0225R) and the strategy earns +0.3871R.",
+   "whyItIsNotAFinding": [
+    "p=0.0767 is not significant",
+    "the excess of 0.3646R is BELOW the 0.696R this test could detect at 80% power",
+    "the split is POST-HOC -- subgroups defined by an outcome only knowable at the end, so it is not tradeable as stated",
+    "two subgroups tested, so even the nominal p carries a multiplicity cost"
+   ],
+   "prereg": "EQUITIES-LAGGARD-EXCESS-2026-09, registry ledger seq 15, registered before any survivorship-free data exists so the prediction cannot be reshaped once it does."
+  }
  },
  "acceptanceCriterion": {
   "asStated": "~10 trades a month, win rate at or above 40%, wins large enough to offset the losses.",
