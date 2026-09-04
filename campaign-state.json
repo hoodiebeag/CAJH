@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T12:05:00Z",
- "phase": "LONG-SHORT cross-sectional momentum: strongest result in the project, and the least fragile",
+ "updatedAt": "2026-09-04T12:30:00Z",
+ "phase": "WALK-FORWARD SURVIVED. First result in the project to clear every attack.",
  "runsTested": 2446,
  "base": {
   "trendGate": false,
@@ -310,7 +310,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Remaining attacks on the long-short: (1) WALK-FORWARD refitting topK and lookback on training data only -- the one every earlier result lost about 40% to; (2) gate-run.mjs; (3) replicate the SPREAD on crypto and equities-30, since only the long-only leg has been checked there. Do NOT sweep parameters: 252/21/21/decile is the canonical 1993 construction and that is the result's main defence against best-of-N.",
+ "nextUp": "The data-side work is done and the limitation is now sample length, which more analysis cannot fix. The honest next steps are: run gate-run.mjs on the spread; then either paper-trade it forward under the D1->D2 path in SELF_AWARENESS_SPEC.md, or extend the history with a longer equities bundle (2015 onward) to get more independent periods. Do NOT sweep xsmom parameters.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -1096,7 +1096,76 @@
     },
     "reading": "At realistic borrow (2-10%) the spread holds 26-31% CAGR at ~10% drawdown against SPY's ~20% at 21%. It only degrades to index-like at 30%+ borrow, which is exceptional rather than typical."
    },
-   "survivorshipNowFavoursTheResult": "A reversal worth stating: for the long-only entry work, missing delisted names INFLATED results. For a long-short, they DEFLATE it. SIVB and FRC went to zero and would have sat in the bottom decile paying the short leg. Their absence from this bundle makes the spread an understatement."
-  }
+   "survivorshipNowFavoursTheResult": "A reversal worth stating: for the long-only entry work, missing delisted names INFLATED results. For a long-short, they DEFLATE it. SIVB and FRC went to zero and would have sat in the bottom decile paying the short leg. Their absence from this bundle makes the spread an understatement.",
+   "4_walkForward": {
+    "construction": "Parameters (lookback, topK) refit each quarter from a six-point grid using only bars that closed before that quarter. Skip and rebalance held at the canonical 21/21 -- refitting those would turn a literature-specified strategy into a search result.",
+    "result": {
+     "borrow0": {
+      "final": 1722.18,
+      "cagrPct": 38.56,
+      "dd": 10.18,
+      "up": "14/20"
+     },
+     "borrow5pct": {
+      "final": 1651.89,
+      "cagrPct": 35.14,
+      "dd": 10.36,
+      "up": "14/20"
+     }
+    },
+    "parameterStability": "252/5 chosen in ALL SEVEN quarters. The canonical lookback every time.",
+    "sameWindowBenchmark": {
+     "window": "2025-01-01..2026-08-11 (1.61y)",
+     "walkForwardSpread@5%": {
+      "final": 1651.89,
+      "cagr": 35.1,
+      "dd": 10.4
+     },
+     "SPY": {
+      "final": 1314.77,
+      "cagr": 18.6
+     },
+     "equalWeight128": {
+      "final": 1302.74,
+      "cagr": 17.9
+     }
+    },
+    "reading": "Every earlier result in this project lost about 40% of its apparent edge to a walk-forward and one lost all of it. This one lost nothing: 35.1% CAGR out of sample at a 10.4% drawdown against SPY's 18.6% over the identical window, with perfectly stable parameter selection."
+   }
+  },
+  "spreadReplication": {
+   "crypto-29": {
+    "top": 2430.28,
+    "bottom": 213.25,
+    "spread": 3375.88,
+    "spreadDD": 9.0,
+    "at5pctBorrow": 3041.92,
+    "up": "33/50"
+   },
+   "sp500-128": {
+    "top": 1743.35,
+    "bottom": 336.69,
+    "spread": 2077.42,
+    "spreadDD": 9.91,
+    "at5pctBorrow": 1947.5,
+    "up": "18/31"
+   },
+   "equity-30": {
+    "top": 2261.86,
+    "bottom": 1515.91,
+    "spread": 1265.94,
+    "spreadDD": 16.1,
+    "at5pctBorrow": 1186.76,
+    "up": "18/31"
+   },
+   "reading": "Two strong, one weak, and the weak one is explained rather than anomalous: the 30-name bundle is all winners -- only 7% of it lost money -- so its bottom decile still ROSE and the short leg had nothing to work with. The spread needs dispersion and delivers where dispersion exists. Crypto is the striking case: a 67%-drawdown long strategy becomes a 9%-drawdown spread with a higher balance."
+  },
+  "whatRemainsUnproven": [
+   "20 out-of-sample monthly periods, 1.61 years, one market regime. That is the binding limitation and no amount of further analysis on this data fixes it.",
+   "No live or paper trading. Nothing here has met a real spread or a real borrow desk.",
+   "Short availability is modelled as a flat borrow rate. In practice parts of the bottom decile are hard to borrow or unborrowable, and that is lumpy rather than uniform.",
+   "Yahoo serves no delisted history, so the bundles contain no failures. For a LONG-SHORT this understates rather than flatters -- the failures would have paid the short leg -- but it is still a gap.",
+   "The three universes overlap in period and partly in symbols; their p-values must not be combined."
+  ]
  }
 }
