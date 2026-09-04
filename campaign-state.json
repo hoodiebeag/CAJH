@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T14:00:00Z",
- "phase": "three variations tested (all worse), and a drawdown-measurement error corrected",
+ "updatedAt": "2026-09-04T15:15:00Z",
+ "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
  "runsTested": 2446,
  "base": {
   "trendGate": false,
@@ -310,7 +310,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "The winner survives three attempted improvements and a measurement correction. Remaining untested cells of the edge space, in order of expected value: (1) CARRY -- crypto funding rates are free from exchange APIs and carry is the second-most documented factor after momentum; (2) CROSS-ASSET -- rank crypto and equities in ONE universe, which no test here has done; (3) SHORT-HORIZON REVERSAL -- the 126-bar failures hint at it and it is the opposite sign to momentum, so it may combine rather than compete.",
+ "nextUp": "Untested cells remaining: CARRY (crypto funding rates, free from exchange APIs, the second-most documented factor and a genuinely different mechanism); CROSS-ASSET RANKING (crypto and equities in ONE universe, never done); and the equities-only factors need a third universe to decide whether they are asset-class-specific or simply spurious.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -1268,5 +1268,69 @@
    "combinations": "All seven combinations underperform the baseline on both universes.",
    "reading": "A clean negative and worth as much as the positive. The canonical 1993 construction beat all three of my improvements on both universes. That is evidence the original is not a lucky parameterisation -- deviations from it in three independent directions all cost money."
   }
+ },
+ "factorBattery": {
+  "why": "'Test everything' and 'report an honest result' are in tension and the tension is arithmetic. Twelve signals at p<0.05 produce 0.6 false positives by expectation. Every signal is scored against the same null with the same machinery and corrected together with Benjamini-Hochberg.",
+  "signals": "momentum, reversal1m, reversal1w, lowVol, highVol, nearHigh, trendQuality, acceleration, lowSkew, volumeTrend, idioVol, beta -- each a documented anomaly, so the battery is a replication attempt rather than a fishing expedition.",
+  "equities128": {
+   "survivors": [
+    "momentum",
+    "lowVol",
+    "nearHigh",
+    "trendQuality",
+    "idioVol",
+    "beta"
+   ],
+   "best": "idioVol $2487.86, CAGR 42.31%, DD 8.86%",
+   "note": "five signals hit p=0.0050, the floor with 200 draws"
+  },
+  "crypto29": {
+   "survivors": [
+    "momentum",
+    "nearHigh",
+    "volumeTrend",
+    "beta"
+   ],
+   "best": "momentum $3041.92, CAGR 30.6%, DD 9.99%"
+  },
+  "correlationFinding": "The six equities survivors are TWO factors, not six. A momentum cluster (momentum, nearHigh, trendQuality) correlates 0.78-0.91 internally; a low-risk cluster (lowVol, idioVol, beta) correlates 0.79-0.87 internally; and momentum against lowVol is only 0.22. BH assumes independence and these are strongly positively dependent, so 'six survivors of twelve' overstates what was found.",
+  "crossAssetVerdict": {
+   "replicatesOnBoth": [
+    "momentum (p=0.005 both)",
+    "nearHigh (p=0.005 both, but r=0.83 with momentum -- the same factor)",
+    "beta (p=0.020 equities, 0.010 crypto, weak and with a 40.5% crypto drawdown)"
+   ],
+   "equitiesOnly": [
+    "idioVol -- the BEST equities factor at 42.31% CAGR, collapses to -9.02% on crypto at p=0.83",
+    "lowVol (p=0.16 crypto)",
+    "trendQuality (p=0.31 crypto)"
+   ],
+   "cryptoOnly": [
+    "volumeTrend (p=0.010 crypto, -5.19% on equities)"
+   ],
+   "reading": "This is what the battery was for. Six equities survivors reduce to essentially ONE robust factor -- momentum, with nearHigh as its correlated proxy -- once a second asset class is required. The low-risk cluster that produced the best equities numbers does not survive the crossing, which is exactly the failure mode a single-universe battery would have reported as a discovery."
+  },
+  "combination": {
+   "momentum alone": {
+    "final": 1947.5,
+    "cagr": 29.4,
+    "dd": 10.09,
+    "sharpe": 1.35
+   },
+   "idioVol alone": {
+    "final": 2487.86,
+    "cagr": 42.3,
+    "dd": 8.86,
+    "sharpe": 2.31
+   },
+   "50/50": {
+    "final": 2201.16,
+    "cagr": 35.7,
+    "dd": 7.47,
+    "sharpe": 2.14
+   },
+   "note": "Combining lowers drawdown below either leg (7.47%) because the two are only 0.22 correlated. But idioVol is equities-only, so this combination is not available cross-asset."
+  },
+  "caveatOnSharpe": "Sharpe 2.31 on 31 monthly observations has a standard error near 0.34. These are not precise numbers."
  }
 }
