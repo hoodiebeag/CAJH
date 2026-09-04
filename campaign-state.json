@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T19:21:10.554Z",
+  "updatedAt": "2026-09-04T20:13:50.320Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2394,31 +2394,31 @@
     "code": "coststress-run.mjs"
   },
   "knownFailingTests": {
-    "status": "FOUR tests have failed on every run this session. They fail identically on the parent commit -- verified by stashing the branch's changes and re-running -- so none of them is caused by this work. They are recorded here rather than fixed, because three of them sit in backtest.test.mjs, which tests the live-trading engine, and the hard limit on this campaign is not to touch that logic.",
-    "failures": [
+    "status": "RESOLVED 2026-09-04, on the owner's instruction to update them. Suite is green: 905 tests, 845 pass, 0 fail. Three were stale or vacuous tests; ONE was a real engine defect and its test was right all along.",
+    "theONEThatWasARealDefect": {
+      "test": "backtest.test.mjs: trailing stop exits 1R below the running peak, not at the peak",
+      "theBug": "backtest.js set the trailing stop to `pos.peak + sign * trailR * pos.risk`. `sign` points the FAVOURABLE way, which is correct for a partial target or a breakeven lock -- both sit on the profitable side of a reference price. A trailing stop sits on the ADVERSE side of the peak, so it needs minus.",
+      "whatItDid": "For a long the stop was placed ABOVE its own peak. The next bar's low was therefore always at or below it, so the position exited immediately at a price no bar had traded. Concretely: peak 100.7 produced a stop of 103.4 and a recorded fill there on a bar whose high was 101.7. Every long run with trailR set was exiting one bar after the trail armed, at an impossible price.",
+      "whyItWasNotJUSTATESTFIX": "A test asserting a physically impossible fill cannot be made to pass by editing the test. The assertion was correct and the engine was wrong. Fixed with a one-character sign change plus the note explaining why `sign` is right elsewhere and wrong here. Shorts were already correct by symmetry and stay correct: minus sign times -1 puts the stop above the trough.",
+      "blastRadius": "LEADER does not set trailR, so robustness.mjs's exact-reproduction assertion ($20,949.34) is unchanged and no research result in this campaign moved. Anything that DID use trailR was overstated before this fix."
+    },
+    "theThreeStaleOnes": [
       {
-        "test": "backtest.test.mjs: trailing stop exits 1R below the running peak, not at the peak",
-        "error": "R 1.776 != expected 3.103",
-        "read": "The assertion expects a specific R multiple from a specific bar path. A behavioural difference, not a crash."
+        "test": "direction \"short\" is rejected when lockBreakeven is left at its true default",
+        "why": "Written when the short path had no exit mirroring. The exit path was then deliberately mirrored at the owner's request -- trailR, partialAtR, trailingTpPct, lockBreakeven and exitOnSwingHigh all work for shorts -- and the assertion was left describing the old capability table.",
+        "fix": "Inverted to assert acceptance, AND a new test added pinning the boundary where it now actually sits: requireHigherLow and minRoomR still throw for shorts, because both are entry-side conditions written against a long's structure whose mirrors do not exist. Replacing a capability assertion without re-pinning the new boundary would have lost coverage."
       },
       {
-        "test": "backtest.test.mjs: SHORT-SIDE-ENGINE-CAPABILITY -- direction \"short\" is rejected when lockBreakeven is left at its true default",
-        "error": "Missing expected exception",
-        "read": "This test asserts that short is REFUSED. The short exit path was deliberately built earlier in this campaign, at the owner's request, so short is no longer refused. The test encodes the pre-short-path capability table and is now asserting the opposite of the intended behaviour. STRONGEST CANDIDATE for a stale test rather than a real defect."
-      },
-      {
-        "test": "backtest.test.mjs: the trend gate still requires an uptrend for longs",
-        "error": "and the refusals must be attributed to the gate",
-        "read": "The trend gate was made direction-aware when the short path was built. Same family as the one above."
+        "test": "the trend gate still requires an uptrend for longs",
+        "why": "Not merely stale -- VACUOUS. Its scenario was a monotone 500-to-200 decline, which produces no bos candidate at all: every reason bucket comes back empty. So 'a long must not be admitted' was trivially true and 'attributed to the gate' had nothing to count.",
+        "fix": "Rebuilt on a downward drift with a sawtooth, so the swings create pivot lows below each entry and candidates survive as far as the gate while the 50-bar MA stays above price. The assertion is now STRONGER than the original: every entry the ungated run takes must be the gate's refusal, not merely some refusals existing."
       },
       {
         "test": "two bars of delay collapses it -- the improvement is a discontinuity, not a trend",
-        "error": "an entry-timing study's assertion",
-        "read": "Entry-timing research is closed; this belongs to that closed line of work."
+        "why": "The claim was true and the threshold was arbitrary. It required two-bar under one-bar/1.8; two-bar is $12,064 against $20,949, a ratio of 1.74. A calibrated constant that has to be re-tuned is not evidence of anything.",
+        "fix": "Asserts the SHAPE instead. Measured curve: $18,719 at zero bars, $20,949 at one, $12,064 at two, $9,929 at three. One bar is a peak rather than a point on a rising line, two bars falls BELOW the immediate fill, and three keeps falling so the cliff is not one odd point. Threshold-free and closer to the claim."
       }
-    ],
-    "whyTheyAreNotBeingFIXEDHere": "Two reasons and both matter. Weakening or deleting an assertion to get a green suite is exactly the move that destroys a test suite's value, and it is forbidden here. And a test that asserts short orders are refused is a SAFETY assertion in a live-trading engine -- changing it is a live-trading change, which requires the D1->D2->D3 path and human sign-off, not a research batch.",
-    "whatTheOWNERShouldDecide": "Whether the three backtest.test.mjs failures should be updated to match the short-path behaviour that was deliberately introduced. If yes, that is a live-trading-adjacent change and belongs in its own reviewed commit, not folded into factor research. Until then, every report from this campaign says '4 failures, the same 4 that fail on the base commit' rather than claiming a green suite."
+    ]
   },
   "deskSleeveIsAnOpenChoice": {
     "howItWasFound": "Re-running desk-run.mjs to verify the PR's published numbers against the cost-fixed code. They reproduce exactly -- $2013.20, 31.1%, 10.65%, Sharpe 2.54 -- so the PR is accurate. But running it surfaced an inconsistency in the construction itself: the out-of-sample section shows the adaptive rule picking idioVol ALONE and beating the fixed momentum+idioVol sleeve, while the desk is defined with that sleeve.",
