@@ -139,3 +139,34 @@ test("perYear refuses to guess from too little, or from no elapsed time", () => 
   assert.equal(perYear([{ at: 0 }]), null);
   assert.equal(perYear([{ at: 5 }, { at: 5 }]), null);   // zero span, not an infinite rate
 });
+
+test("the SHORT leg's turnover is charged, not credited", () => {
+  // Two symbols that swap rank every period, so both legs turn over fully at every rebalance and
+  // the cost is unmissable. The bug this pins: a short leg's return enters the spread with a minus
+  // sign, so a cost buried inside it arrives as a credit and the two legs' costs nearly cancel.
+  const n = 400;
+  const zig = (phase) => Array.from({ length: n }, (_, i) => {
+    const t = Math.floor(i / 21) % 2 === phase ? 1 : -1;
+    return { time: i * 86400, open: 100, high: 100, low: 100, close: 100 * Math.exp(0.002 * t * i), volume: 1 };
+  });
+  const series = { A: zig(0), B: zig(1) };
+  const opts = { lookbackBars: 252, skipBars: 21, rebalanceBars: 21, topK: 1 };
+  const free = spread(series, { ...opts, slipPct: 0 }, { borrow: 0 });
+  const costly = spread(series, { ...opts, slipPct: 0.01 }, { borrow: 0 });
+  assert.ok(costly.finalBalance < free.finalBalance,
+    "charging slippage must reduce the result, not leave it unchanged");
+  // Both legs turn over, so the drag is roughly 2 * 2 * slip per period, not ~0.
+  const drag = Math.log(free.finalBalance / costly.finalBalance) / free.periods;
+  assert.ok(drag > 0.02, `expected roughly 4% a period of cost drag, got ${(100 * drag).toFixed(2)}%`);
+});
+
+test("periodCosts is the cost alone, and is zero when slippage is zero", () => {
+  const n = 400;
+  const sym = (rate) => Array.from({ length: n }, (_, i) => ({
+    time: i * 86400, open: 100, high: 100, low: 100, close: 100 * Math.exp(rate * i), volume: 1 }));
+  const r = runRotation({ series: { A: sym(0.001), B: sym(0.0005), C: sym(0.0002) },
+    lookbackBars: 252, skipBars: 21, rebalanceBars: 21, topK: 1, slipPct: 0 });
+  assert.ok(r.periodCosts.length > 0);
+  assert.ok(r.periodCosts.every((c) => c === 0), "no slippage means no cost");
+  assert.equal(r.periodCosts.length, r.periodReturns.length, "one cost per period return");
+});

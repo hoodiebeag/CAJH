@@ -161,7 +161,12 @@ export function testSignal(name, series, {
   const returns = [];
   // Borrow is annual; divide by this universe's own rebalances per year, not by an assumed 12.
   const ppy = perYear(top.rebalanceLog) ?? 12;
-  for (let i = 0; i < n; i++) returns.push(0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i] - 0.5 * borrow / ppy);
+  // The short leg's turnover cost enters with a minus sign and would otherwise be a credit; see
+  // the note in xsmom.mjs spread().
+  for (let i = 0; i < n; i++) {
+    returns.push(0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i]
+                 + (bot.periodCosts[i] ?? 0) - 0.5 * borrow / ppy);
+  }
   let bal = 1000, peak = 1000, maxDD = 0;
   for (const r of returns) { bal *= Math.exp(r); peak = Math.max(peak, bal); maxDD = Math.max(maxDD, (peak - bal) / peak); }
 

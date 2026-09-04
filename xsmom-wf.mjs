@@ -46,7 +46,11 @@ export function fit(series, until, { grid = GRID, slipPct = 0.0005, borrow = 0 }
       // Borrow is annual; the universe's own rebalance calendar sets how often it is charged.
       const ppy = perYear(top.rebalanceLog) ?? 12;
       let logSum = 0;
-      for (let i = 0; i < n; i++) logSum += 0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i] - 0.5 * borrow / ppy;
+      // The short leg's turnover cost would arrive as a credit; see xsmom.mjs spread().
+      for (let i = 0; i < n; i++) {
+        logSum += 0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i]
+                  + (bot.periodCosts[i] ?? 0) - 0.5 * borrow / ppy;
+      }
       if (!best || logSum > best.logSum) best = { lookbackBars, topK, logSum, periods: n };
     }
   }
@@ -91,7 +95,8 @@ export function walkForward(series, {
       for (const i of idx) {
         const a = top.periodReturns[i - 1], b = bot.periodReturns[i - 1];
         if (a === undefined || b === undefined) continue;
-        const r = 0.5 * a - 0.5 * b - 0.5 * borrow / (perYear(top.rebalanceLog) ?? 12);
+        const r = 0.5 * a - 0.5 * b + (bot.periodCosts[i - 1] ?? 0)
+                  - 0.5 * borrow / (perYear(top.rebalanceLog) ?? 12);
         qr += r; allReturns.push(r); total++; if (r > 0) up++;
         bal *= Math.exp(r);
         count++;

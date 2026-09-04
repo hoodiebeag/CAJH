@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T14:29:10.210Z",
+  "updatedAt": "2026-09-04T14:34:03.261Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -1368,82 +1368,82 @@
       "construction": "Rank inside each class separately at the canonical 252/21/21, run each long-short spread, then combine the two BOOKS. The faster book (crypto, 17.39 rebalances a year) is compounded into the slower book's clock (equities, 11.92) so every period is used exactly once.",
       "alignedPeriods": 31,
       "cryptoPeriodsUsed": "45 of 50",
-      "correlation": -0.235,
+      "correlation": -0.216,
       "correlationReading": "Genuinely negative, not merely uncorrelated. That is what makes the drawdown reduction below real rather than arithmetic. It is also 31 observations, where the standard error on a correlation is about 0.18 -- so -0.235 is barely one standard error from zero and should be read as 'no positive dependence', not as reliable hedging.",
       "books": {
         "crypto spread, all 50 periods": {
-          "final": 3130,
-          "cagrPct": 48.7,
+          "final": 2623.26,
+          "cagrPct": 39.9,
           "maxDrawdownPct": 22.73,
-          "sharpe": 1.79,
-          "up": "31/50"
+          "sharpe": 1.5,
+          "up": "30/50"
         },
         "equities spread, all 31 periods": {
-          "final": 1797.43,
-          "cagrPct": 25.3,
-          "maxDrawdownPct": 13.53,
-          "sharpe": 1.21,
+          "final": 1785.63,
+          "cagrPct": 25,
+          "maxDrawdownPct": 13.55,
+          "sharpe": 1.19,
           "up": "19/31"
         },
         "crypto, overlap only": {
-          "final": 2483.02,
-          "cagrPct": 42.2,
-          "maxDrawdownPct": 28.63,
-          "sharpe": 1.73,
+          "final": 2148.94,
+          "cagrPct": 34.5,
+          "maxDrawdownPct": 31.26,
+          "sharpe": 1.45,
           "up": "20/31"
         },
         "equities, overlap only": {
-          "final": 1797.43,
-          "cagrPct": 25.5,
-          "maxDrawdownPct": 13.53,
-          "sharpe": 1.21,
+          "final": 1785.63,
+          "cagrPct": 25.2,
+          "maxDrawdownPct": 13.55,
+          "sharpe": 1.2,
           "up": "19/31"
         },
         "25/75": {
-          "final": 1993.41,
-          "cagrPct": 30.6,
-          "maxDrawdownPct": 11.12,
-          "sharpe": 1.94,
+          "final": 1912.33,
+          "cagrPct": 28.5,
+          "maxDrawdownPct": 11.27,
+          "sharpe": 1.81,
           "up": "22/31"
         },
         "35/65": {
-          "final": 2068.59,
-          "cagrPct": 32.5,
-          "maxDrawdownPct": 10.27,
-          "sharpe": 2.24,
+          "final": 1957.16,
+          "cagrPct": 29.7,
+          "maxDrawdownPct": 10.34,
+          "sharpe": 2.04,
           "up": "21/31"
         },
         "50/50": {
-          "final": 2176.76,
-          "cagrPct": 35.1,
-          "maxDrawdownPct": 12.87,
-          "sharpe": 2.48,
-          "up": "22/31"
-        },
-        "65/35": {
-          "final": 2278.31,
-          "cagrPct": 37.5,
-          "maxDrawdownPct": 15.56,
-          "sharpe": 2.38,
+          "final": 2017.37,
+          "cagrPct": 31.2,
+          "maxDrawdownPct": 12.88,
+          "sharpe": 2.2,
           "up": "20/31"
         },
+        "65/35": {
+          "final": 2068.48,
+          "cagrPct": 32.5,
+          "maxDrawdownPct": 15.56,
+          "sharpe": 2.07,
+          "up": "19/31"
+        },
         "75/25": {
-          "final": 2341.76,
-          "cagrPct": 39,
-          "maxDrawdownPct": 17.31,
-          "sharpe": 2.2,
-          "up": "21/31"
+          "final": 2097.17,
+          "cagrPct": 33.2,
+          "maxDrawdownPct": 18.74,
+          "sharpe": 1.9,
+          "up": "19/31"
         },
         "inverse-vol, causal": {
-          "final": 2108.84,
-          "cagrPct": 33.5,
-          "maxDrawdownPct": 12.56,
-          "sharpe": 2.27,
-          "up": "22/31"
+          "final": 1945.71,
+          "cagrPct": 29.4,
+          "maxDrawdownPct": 12.36,
+          "sharpe": 1.99,
+          "up": "20/31"
         }
       },
-      "theHeadline": "Not the sweep peak -- a five-point sweep picking its own winner in sample is the trap this campaign keeps falling into. The result is the inverse-vol row, whose weight comes from volatility realised STRICTLY BEFORE each period with a six-period 50/50 warmup and nothing fitted. It returns 33.5% CAGR at a 12.56% drawdown and Sharpe 2.27, against 48.7% at 22.73% (Sharpe 1.79) for crypto alone and 25.3% at 13.53% (Sharpe 1.21) for equities alone. It beats BOTH legs on Sharpe and has a lower drawdown than EITHER. That is the whole case: not a bigger number, a better-shaped one.",
-      "drawdownIsWhereTheDiversificationShows": "Every blend from 25/75 to 50/50 lands between 10.27% and 12.87% -- below the equities leg's 13.53% and roughly half the crypto leg's 22.73%. Returns interpolate between the legs; risk does not. That asymmetry is diversification, and it is the only part of this result that is large relative to its error bars."
+      "theHeadline": "Unchanged in shape by the cost fix, smaller in size. The causal inverse-vol blend returns 29.4% CAGR at a 12.36% drawdown, Sharpe 1.99, against 39.9% at 22.73% (Sharpe 1.50) for crypto alone and 25.0% at 13.55% (Sharpe 1.19) for equities alone. It beats BOTH legs on Sharpe and has a lower drawdown than EITHER, and its weight comes from volatility realised strictly before each period with nothing fitted. The sweep peak is not the result.",
+      "drawdownIsWhereTheDiversificationShows": "Every blend from 25/75 to 50/50 lands between 10.34% and 12.88% -- below the equities leg's 13.55% and roughly half the crypto leg's 22.73%. Returns interpolate between the legs; risk does not. That asymmetry is the diversification, and it is the only part of this result large relative to its error bars."
     },
     "arithmeticCorrectionMade": "A fourth, smaller one, found before the three above: the first pass combined the books as a weighted sum of LOG returns, which is no portfolio's return. A book rebalanced to fixed weights earns log(w*e^a + (1-w)*e^b), and by Jensen the weighted sum of logs is strictly smaller. Both forcing constraints are asserted in portfolio.test.mjs: at w=1 it must reproduce book A exactly, and +10%/-10% at 50/50 must be exactly flat.",
     "whatThisIsNot": [
@@ -1453,7 +1453,7 @@
       "Reproducible from the first commit of this section. Three of its numbers were wrong; only the direction of the finding survived."
     ],
     "code": "portfolio.mjs (alignReturns aggregating, correlation, bookStats, blend, blendDrawdownPct) with portfolio.test.mjs, 9 tests; xsmom.mjs perYear with 3 tests; portfolio-run.mjs reproduces the table.",
-    "CORRECTED": "2026-09-04. The table first recorded here was wrong in three independent ways, all found within an hour of committing it. The finding survives; none of its numbers did. See threeErrors below.",
+    "CORRECTED": "2026-09-04, twice. Four errors in total: the three in threeErrors, plus the short-leg cost credit in shortLegCostCredit, which was not specific to this study but corrupted every long-short level in the campaign. The finding has survived all four. None of its original numbers did.",
     "threeErrors": {
       "1_calendar": {
         "what": "spread(), randomSpreadNull(), testSignal() and walkForward() all divided an annual borrow rate by 12 and annualised CAGR on n/12, and walked per-bar borrow on 252 bars a year.",
@@ -1549,5 +1549,15 @@
       "More asset classes. The two books already sum to 7.8 a month, so a third and fourth class reach the target without touching either rule -- and that is the only route on this list that does not trade edge for volume."
     ],
     "code": "trades.mjs (ledger, summarise) with trades.test.mjs, 7 tests; trades-run.mjs reproduces the table. runRotation's rebalance log now records closes for names being dropped as well as held, or every exit would be unpriced."
+  },
+  "shortLegCostCredit": {
+    "found": "2026-09-04, by running two implementations of the same book against each other -- xsmom's spread() against multifactor's runBook(). They disagreed by 21% on crypto and 2% on equities. The ratio of those two numbers is the ratio of their slippage assumptions, which is what named the culprit.",
+    "theBug": "Each leg's period return already carries its own turnover cost. The spread takes 0.5*top - 0.5*bot, so the SHORT leg's cost enters with a minus sign and arrives as a CREDIT: the short book was being paid to trade. Both legs turn over at almost exactly the same rate here (0.248 against 0.235 on crypto), so the two costs very nearly cancelled.",
+    "howBigItWas": "On crypto at 0.8% slippage, spread() charged 0.5% over fifty rebalances where the honest figure is roughly 20%. Turning slippage from 0 to 0.008 moved the final balance by $18 on $3381 -- a book paying real Kraken taker fees was showing essentially zero cost, and nothing in the numbers looked wrong.",
+    "whereItWas": "xsmom.mjs spread() and randomSpreadNull(), factors.mjs testSignal(), xsmom-wf.mjs fit() and walkForward(). Every long-short dollar figure this campaign has produced was inflated by it.",
+    "theFix": "runRotation now returns periodCosts alongside periodReturns -- the cost separated from the return -- and every spread adds the short leg's cost back twice: once to undo the credit, once to charge it. Pinned by a test using two symbols that swap rank every period so both legs turn over fully; it asserts the drag exceeds 2% a period and FAILS on the un-fixed code (mutation-checked).",
+    "effectOnSIGNIFICANCE": "Small, and in the safe direction. The null carries the same bug, and a random split turns over close to 100% against a ranked book's 25%, so the null received the LARGER spurious credit. Every p-value reported before this fix was therefore conservative, not flattering.",
+    "effectOnLEVELS": "Large. The crypto spread falls from $3130 at 48.7% CAGR to $2623 at 39.9%, and its Sharpe from 1.79 to 1.50.",
+    "crossCheckNowAgrees": "After the fix the two implementations differ by 5.96% on crypto and 1.32% on equities, and at zero slippage the crypto gap is 5.97% -- so the entire residual is the different warmup (252 bars against 273), which changes the rebalance dates and the holdings. The cost handling matches. Per-bar drawdowns agree to 22.63% and 22.63%, 13.34% and 13.34%."
   }
 }

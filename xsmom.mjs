@@ -77,6 +77,7 @@ export function runRotation({
   let held = [];
   const curve = [], rebalances = [];
   let periodReturns = [];
+  const periodCosts = [];
   // Per-BAR returns, aligned to `times`. A spread built from monthly period returns cannot see
   // intra-month lows and understated this book's drawdown by 44% -- 10.09% reported against a real
   // 14.57%. Any drawdown must be computed from these.
@@ -113,7 +114,8 @@ export function runRotation({
     // Turnover cost: only the names actually swapped pay, on both the sale and the purchase.
     const keep = chosen.filter((s) => held.includes(s)).length;
     const turnover = held.length ? (chosen.length - keep) / chosen.length : 1;
-    balance *= 1 - 2 * slipPct * turnover;
+    const costMult = 1 - 2 * slipPct * turnover;
+    balance *= costMult;
 
     // Closes are recorded here so a trade ledger can be derived without a second copy of the
     // shared-calendar grid logic -- the place where a duplicate would silently diverge. Names being
@@ -121,7 +123,13 @@ export function runRotation({
     const priced = [...new Set([...chosen, ...held])];
     rebalances.push({ at: times[i], chosen, turnover: +turnover.toFixed(3),
                       closes: Object.fromEntries(priced.map((s) => [s, grid[s][i]])) });
-    if (curve.length) periodReturns.push(Math.log(balance / curve[curve.length - 1].balance));
+    if (curve.length) {
+      periodReturns.push(Math.log(balance / curve[curve.length - 1].balance));
+      // The period's cost, separated from its return. A SHORT leg's return enters a spread with a
+      // minus sign, so a cost buried inside that return arrives as a CREDIT -- the short book gets
+      // paid for trading. Keeping it separate is the only way spread() can charge both legs.
+      periodCosts.push(Math.log(costMult));
+    }
     held = chosen;
     curve.push({ at: times[i], balance });
   }
@@ -136,7 +144,7 @@ export function runRotation({
     rebalances: rebalances.length,
     avgTurnover: rebalances.length ? +(rebalances.reduce((a, r) => a + r.turnover, 0) / rebalances.length).toFixed(3) : 0,
     years: +years.toFixed(2),
-    curve, rebalanceLog: rebalances, periodReturns,
+    curve, rebalanceLog: rebalances, periodReturns, periodCosts,
   };
 }
 
@@ -210,7 +218,16 @@ export function spread(series, opts = {}, { borrow = 0 } = {}) {
   // ANNUAL rate, so it is divided by this universe's own rebalances per year, not by 12.
   const ppy = perYear(top.rebalanceLog) ?? 12;
   const returns = [];
-  for (let i = 0; i < n; i++) returns.push(0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i] - 0.5 * borrow / ppy);
+  for (let i = 0; i < n; i++) {
+    // Each leg's period return already carries its own turnover cost. The short leg enters with a
+    // MINUS sign, so that cost arrives as a credit -- the short book being paid to trade. Both legs
+    // turn over at almost the same rate here (0.248 against 0.235 on crypto), so the two costs very
+    // nearly cancelled and a 0.8% slippage assumption was charging about 0.5% over fifty
+    // rebalances instead of roughly 20%. Add the short leg's cost back twice: once to undo the
+    // credit, once to charge it. Caught by disagreeing with multifactor.mjs's runBook.
+    returns.push(0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i]
+                 + (bot.periodCosts[i] ?? 0) - 0.5 * borrow / ppy);
+  }
 
   // BALANCE comes from the monthly path, because that is where turnover and slippage are charged
   // -- taking it from the per-bar path silently dropped those costs and inflated the result by 9%.
@@ -278,7 +295,11 @@ export function randomSpreadNull(series, opts = {}, { draws = 200, seed = 202609
     const n = Math.min(a.periodReturns.length, b.periodReturns.length);
     const ppy = perYear(a.rebalanceLog) ?? 12;
     let bal = 1000;
-    for (let i = 0; i < n; i++) bal *= Math.exp(0.5 * a.periodReturns[i] - 0.5 * b.periodReturns[i] - 0.5 * borrow / ppy);
+    // Same short-leg cost credit as in spread(); see the note there.
+    for (let i = 0; i < n; i++) {
+      bal *= Math.exp(0.5 * a.periodReturns[i] - 0.5 * b.periodReturns[i]
+                      + (b.periodCosts[i] ?? 0) - 0.5 * borrow / ppy);
+    }
     finals.push(+bal.toFixed(2));
   }
   finals.sort((x, y) => x - y);
