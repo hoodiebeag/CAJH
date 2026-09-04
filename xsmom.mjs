@@ -77,6 +77,10 @@ export function runRotation({
   let held = [];
   const curve = [], rebalances = [];
   let periodReturns = [];
+  // Per-BAR returns, aligned to `times`. A spread built from monthly period returns cannot see
+  // intra-month lows and understated this book's drawdown by 44% -- 10.09% reported against a real
+  // 14.57%. Any drawdown must be computed from these.
+  const barReturns = new Array(times.length).fill(0);
 
   for (let i = lookbackBars; i < times.length; i++) {
     // Mark the book to market on every bar, so the drawdown is a real path and not a rebalance
@@ -87,6 +91,7 @@ export function runRotation({
         const a = grid[s][i - 1], b = grid[s][i];
         if (a > 0 && b > 0) r += Math.log(b / a) / held.length;
       }
+      barReturns[i] = r;
       balance *= Math.exp(r);
       if (balance > peak) peak = balance;
       maxDD = Math.max(maxDD, (peak - balance) / peak);
@@ -122,6 +127,7 @@ export function runRotation({
     totalReturnPct: +((balance / startingBalance - 1) * 100).toFixed(2),
     cagrPct: years > 0 ? +(((balance / startingBalance) ** (1 / years) - 1) * 100).toFixed(2) : null,
     maxDrawdownPct: +(maxDD * 100).toFixed(2),
+    barReturns, times,
     rebalances: rebalances.length,
     avgTurnover: rebalances.length ? +(rebalances.reduce((a, r) => a + r.turnover, 0) / rebalances.length).toFixed(3) : 0,
     years: +years.toFixed(2),
@@ -176,14 +182,36 @@ export function spread(series, opts = {}, { borrow = 0 } = {}) {
   const top = runRotation({ ...opts, series, pick: "top" });
   const bot = runRotation({ ...opts, series, pick: "bottom" });
   const n = Math.min(top.periodReturns.length, bot.periodReturns.length);
+
+  // Monthly returns, for the gate and the null, which reason per rebalance.
   const returns = [];
-  let bal = 1000, peak = 1000, maxDD = 0;
-  for (let i = 0; i < n; i++) {
-    const r = 0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i] - 0.5 * borrow / 12;
-    returns.push(r);
-    bal *= Math.exp(r);
-    peak = Math.max(peak, bal);
-    maxDD = Math.max(maxDD, (peak - bal) / peak);
+  for (let i = 0; i < n; i++) returns.push(0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i] - 0.5 * borrow / 12);
+
+  // BALANCE comes from the monthly path, because that is where turnover and slippage are charged
+  // -- taking it from the per-bar path silently dropped those costs and inflated the result by 9%.
+  let bal = 1000;
+  for (const r of returns) bal *= Math.exp(r);
+
+  // DRAWDOWN comes from a per-bar walk anchored to those monthly balances. Measuring it monthly
+  // never saw an intra-month low and understated this book's risk by 44% -- 10.09% against a real
+  // 14.55%. Both paths end at the same balance; only the path between them differs.
+  let peak = 1000, maxDD = 0, anchor = 1000;
+  const perBarBorrow = 0.5 * borrow / 252;
+  for (let m = 0; m < n; m++) {
+    const lo = top.rebalanceLog[m]?.at, hi = top.rebalanceLog[m + 1]?.at;
+    let sub = anchor;
+    if (lo && hi) {
+      for (let k = 0; k < top.times.length; k++) {
+        const t = top.times[k];
+        if (t <= lo || t > hi) continue;
+        sub *= Math.exp(0.5 * top.barReturns[k] - 0.5 * bot.barReturns[k] - perBarBorrow);
+        peak = Math.max(peak, sub);
+        maxDD = Math.max(maxDD, (peak - sub) / peak);
+      }
+    }
+    anchor *= Math.exp(returns[m]);          // re-anchor on the costed monthly balance
+    peak = Math.max(peak, anchor);
+    maxDD = Math.max(maxDD, (peak - anchor) / peak);
   }
   const years = n / 12;
   return {

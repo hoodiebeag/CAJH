@@ -87,8 +87,23 @@ export function walkForward(series, {
         if (a === undefined || b === undefined) continue;
         const r = 0.5 * a - 0.5 * b - 0.5 * borrow / 12;
         qr += r; allReturns.push(r); total++; if (r > 0) up++;
-        bal *= Math.exp(r); peak = Math.max(peak, bal); maxDD = Math.max(maxDD, (peak - bal) / peak);
+        bal *= Math.exp(r);
         count++;
+        // Drawdown is NOT taken from these monthly points. Marking a spread monthly missed every
+        // intra-month low and understated the in-sample drawdown by 44%. The per-bar path below
+        // is walked separately for exactly that reason.
+        const lo = top.rebalanceLog[i - 1]?.at, hi = top.rebalanceLog[i]?.at;
+        if (lo && hi) {
+          let sub = bal / Math.exp(r);
+          for (let k = 0; k < top.times.length; k++) {
+            const t = top.times[k];
+            if (t <= lo || t > hi) continue;
+            sub *= Math.exp(0.5 * top.barReturns[k] - 0.5 * bot.barReturns[k] - 0.5 * borrow / 252);
+            peak = Math.max(peak, sub);
+            maxDD = Math.max(maxDD, (peak - sub) / peak);
+          }
+        }
+        peak = Math.max(peak, bal); maxDD = Math.max(maxDD, (peak - bal) / peak);
       }
       steps.push({ quarter: from, chose: { lookbackBars: chosen.lookbackBars, topK: chosen.topK },
                    periods: count, quarterLogReturn: +qr.toFixed(4) });

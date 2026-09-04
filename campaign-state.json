@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T13:05:00Z",
- "phase": "gate run on the spread: 7 PASS, 2 FAIL, 1 permanently BLOCKED",
+ "updatedAt": "2026-09-04T14:00:00Z",
+ "phase": "three variations tested (all worse), and a drawdown-measurement error corrected",
  "runsTested": 2446,
  "base": {
   "trendGate": false,
@@ -310,7 +310,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Two things only, and neither is more backtesting. (1) Pre-register the FORWARD test -- that is the honest use of the registry now, since the in-sample hypothesis cannot be pre-registered after the fact. (2) Paper-trade under D1->D2. The binding limitation is 31 in-sample and 20 out-of-sample periods in one regime, and only elapsed time or a longer history fixes it.",
+ "nextUp": "The winner survives three attempted improvements and a measurement correction. Remaining untested cells of the edge space, in order of expected value: (1) CARRY -- crypto funding rates are free from exchange APIs and carry is the second-most documented factor after momentum; (2) CROSS-ASSET -- rank crypto and equities in ONE universe, which no test here has done; (3) SHORT-HORIZON REVERSAL -- the 126-bar failures hint at it and it is the opposite sign to momentum, so it may combine rather than compete.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -1228,6 +1228,45 @@
     }
    },
    "whatThisDoesNotSay": "Leverage is a separate decision with its own failure modes -- margin calls, financing that moves against you, and gap risk that a monthly rebalance cannot react to. The risk-matched number answers the gate's raw-return objection; it does not make 2x a recommendation. And it multiplies the momentum-crash exposure, which is the strategy's known failure mode and is absent from this sample."
+  },
+  "CORRECTION_drawdown": {
+   "what": "Every spread drawdown reported before 2026-09-04T14:00 was understated by about 44%.",
+   "cause": "spread() combined MONTHLY period returns, so the drawdown was sampled only at rebalance points and never saw an intra-month low.",
+   "corrected": {
+    "inSample": {
+     "was": 10.09,
+     "is": 14.55
+    },
+    "walkForward@5%": {
+     "was": 10.36,
+     "is": 14.11
+    },
+    "walkForward@0%": {
+     "was": 10.18,
+     "is": 13.89
+    }
+   },
+   "caughtBy": "multifactor.runBook, an independent implementation that marks every bar, disagreeing with spread() on the same configuration.",
+   "secondErrorDuringTheFix": "The first fix took the BALANCE from the per-bar path too, which silently dropped turnover and slippage (charged at rebalances) and inflated the result 9%, from $1947.50 to $2130.88. Balance now comes from the costed monthly path and drawdown from a per-bar walk anchored to it.",
+   "nowCrossChecked": "spread() and runBook agree within $5.49 and 0.02 drawdown points on the same configuration.",
+   "whatItChanges": "The claim 'half of SPY's drawdown' was wrong. 14.55% against SPY's ~21% is better, not half. The gate's survivable condition still passes at 14.55 against a 25 ceiling. Nothing else in the verdict moves."
+  },
+  "threeVariations": {
+   "designedTo": "occupy DIFFERENT cells of the edge space so they can fail independently, rather than re-parameterise the winner",
+   "V1_timeSeriesFilter": {
+    "cell": "whether to be in at all",
+    "result": "WORSE everywhere. sp500 $882 (CAGR -4.8%) against baseline $1942; crypto $1617 against $2834."
+   },
+   "V2_multiHorizon": {
+    "cell": "what signal",
+    "result": "WORSE. sp500 $1409, crypto $1342. Averaging ranks across 21/63/126/252 dilutes rather than confirms."
+   },
+   "V3_volScaled": {
+    "cell": "how much",
+    "result": "WORSE on return, much better on drawdown: sp500 $1309 at 6.56% DD, crypto $1394 at 9.1%. But risk-adjusted it still loses -- 1.68 return-per-drawdown against the baseline's 2.01."
+   },
+   "combinations": "All seven combinations underperform the baseline on both universes.",
+   "reading": "A clean negative and worth as much as the positive. The canonical 1993 construction beat all three of my improvements on both universes. That is evidence the original is not a lucky parameterisation -- deviations from it in three independent directions all cost money."
   }
  }
 }

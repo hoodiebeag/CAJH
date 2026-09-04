@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { formationReturn, runRotation, randomSelectionNull, selectionP } from "./xsmom.mjs";
+import { formationReturn, runRotation, randomSelectionNull, selectionP, spread } from "./xsmom.mjs";
 
 const DAY = 86400;
 /** A symbol whose close follows `fn(i)`. */
@@ -93,4 +93,27 @@ test("pick:bottom holds the weakest, the mirror of pick:top", () => {
   assert.deepEqual([...new Set(top.rebalanceLog.flatMap((x) => x.chosen))], ["HOT"]);
   assert.deepEqual([...new Set(bottom.rebalanceLog.flatMap((x) => x.chosen))], ["COLD"]);
   assert.ok(top.finalBalance > bottom.finalBalance, "the legs must diverge if ranking means anything");
+});
+
+test("spread drawdown is marked every bar, not only at rebalances", () => {
+  // The error this closes: combining monthly period returns never saw an intra-month low and
+  // understated the book's drawdown by 44% -- 10.09% reported against a real 14.57%.
+  // Here a symbol dives mid-month and fully recovers by the next rebalance. A monthly-only
+  // drawdown reports nothing at all.
+  const n = 400;
+  const dive = sym(n, (i) => (i === 330 ? 40 : 100 * Math.exp(0.001 * i)));
+  const calm = sym(n, (i) => 100 * Math.exp(0.0005 * i));
+  const others = Object.fromEntries(
+    Array.from({ length: 6 }, (_, k) => [`O${k}`, sym(n, (i) => 100 * Math.exp((0.0002 + k * 0.0001) * i))]));
+  const s = spread({ DIVE: dive, CALM: calm, ...others },
+    { lookbackBars: 252, skipBars: 21, rebalanceBars: 21, topK: 2, slipPct: 0 });
+  assert.ok(s.maxDrawdownPct > 1, `an intra-month dive must appear in the drawdown, got ${s.maxDrawdownPct}%`);
+});
+
+test("runRotation exposes per-bar returns aligned to its calendar", () => {
+  const r = runRotation({ series: { A: sym(400, (i) => 100 * Math.exp(0.001 * i)),
+                                    B: sym(400, (i) => 100 * Math.exp(0.0005 * i)) },
+    lookbackBars: 252, skipBars: 21, rebalanceBars: 21, topK: 1, slipPct: 0 });
+  assert.equal(r.barReturns.length, r.times.length, "one return per calendar bar");
+  assert.ok(r.barReturns.some((x) => x !== 0), "a held book must produce non-zero bar returns");
 });
