@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T17:18:52.907Z",
+  "updatedAt": "2026-09-04T17:23:13.832Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2274,5 +2274,32 @@
     "pStaysAt0002Throughout": "At every rung, in both universes. That is not the book being robust -- it is the NULL paying the same costs. p answers 'does ranking still beat not ranking at this cost', which stays true even where the book loses money. The CAGR column is the one that answers tradability. Recorded because reading the p column here would be a mistake.",
     "theCaveatThatMatters": "Slippage is modelled as a fixed percentage of notional. Real slippage on size is nonlinear and worst in exactly the volatile conditions a momentum book wants to trade -- so the crypto margin is wide but not as wide as 4.7% suggests if the book is ever run at size in thin alts. The equities margin at roughly 80x any plausible retail cost is safe by any reading.",
     "code": "coststress-run.mjs"
+  },
+  "knownFailingTests": {
+    "status": "FOUR tests have failed on every run this session. They fail identically on the parent commit -- verified by stashing the branch's changes and re-running -- so none of them is caused by this work. They are recorded here rather than fixed, because three of them sit in backtest.test.mjs, which tests the live-trading engine, and the hard limit on this campaign is not to touch that logic.",
+    "failures": [
+      {
+        "test": "backtest.test.mjs: trailing stop exits 1R below the running peak, not at the peak",
+        "error": "R 1.776 != expected 3.103",
+        "read": "The assertion expects a specific R multiple from a specific bar path. A behavioural difference, not a crash."
+      },
+      {
+        "test": "backtest.test.mjs: SHORT-SIDE-ENGINE-CAPABILITY -- direction \"short\" is rejected when lockBreakeven is left at its true default",
+        "error": "Missing expected exception",
+        "read": "This test asserts that short is REFUSED. The short exit path was deliberately built earlier in this campaign, at the owner's request, so short is no longer refused. The test encodes the pre-short-path capability table and is now asserting the opposite of the intended behaviour. STRONGEST CANDIDATE for a stale test rather than a real defect."
+      },
+      {
+        "test": "backtest.test.mjs: the trend gate still requires an uptrend for longs",
+        "error": "and the refusals must be attributed to the gate",
+        "read": "The trend gate was made direction-aware when the short path was built. Same family as the one above."
+      },
+      {
+        "test": "two bars of delay collapses it -- the improvement is a discontinuity, not a trend",
+        "error": "an entry-timing study's assertion",
+        "read": "Entry-timing research is closed; this belongs to that closed line of work."
+      }
+    ],
+    "whyTheyAreNotBeingFIXEDHere": "Two reasons and both matter. Weakening or deleting an assertion to get a green suite is exactly the move that destroys a test suite's value, and it is forbidden here. And a test that asserts short orders are refused is a SAFETY assertion in a live-trading engine -- changing it is a live-trading change, which requires the D1->D2->D3 path and human sign-off, not a research batch.",
+    "whatTheOWNERShouldDecide": "Whether the three backtest.test.mjs failures should be updated to match the short-path behaviour that was deliberately introduced. If yes, that is a live-trading-adjacent change and belongs in its own reviewed commit, not folded into factor research. Until then, every report from this campaign says '4 failures, the same 4 that fail on the base commit' rather than claiming a green suite."
   }
 }
