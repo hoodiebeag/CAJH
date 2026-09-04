@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T16:12:58.713Z",
+  "updatedAt": "2026-09-04T17:06:56.082Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2114,6 +2114,68 @@
     },
     "honestly": "19 up and 12 down equities periods. Betas estimated from 12 observations have very wide errors and the -0.51 / +0.49 split should be read as a shape worth watching, not a measured coefficient. The claim being made is that the full-sample beta conceals a direction-dependent one, which is visible in both universes' numbers and is qualitatively opposite between them.",
     "whatItMeansForTheDesk": "The desk's crypto sleeve has been stress-observed and its equities sleeve has not. The 20-month out-of-sample window contained no equities bear market at all. Any statement about the desk's drawdown in a real equity bear market is extrapolation, and should be labelled as such rather than inferred from a 10.65% in-sample figure.",
-    "code": "crash-run.mjs"
+    "code": "crash-run.mjs",
+    "whichLegCarriesIt": {
+      "equities": {
+        "longLeg": {
+          "upBeta": 1.16,
+          "downBeta": 1.49
+        },
+        "shortLeg": {
+          "upBeta": 2.17,
+          "downBeta": 0.51
+        }
+      },
+      "crypto": {
+        "longLeg": {
+          "upBeta": 1.19,
+          "downBeta": 1.13
+        },
+        "shortLeg": {
+          "upBeta": 1.11,
+          "downBeta": 1.18
+        }
+      },
+      "reading": "The equities asymmetry is almost entirely the SHORT leg, and it is the textbook crash mechanism isolated and quantified. Past losers run at beta 2.17 when the market rises and 0.51 when it falls -- they rip in rallies and barely fall in declines -- while the long leg is a comparatively flat 1.16 / 1.49. The book is short that leg, so a rally costs 2.17 against the long leg's 1.16, and a decline loses 1.49 against only 0.51 recovered. Both extremes hurt, and the short leg swings fourfold between states against the long leg's 1.3-fold. Crypto shows nothing of the kind: 1.19/1.13 long and 1.11/1.18 short, symmetric and near-identical between legs, which is why its spread has no directional beta at all."
+    },
+    "theStandardFixWasTriedAndFAILED": {
+      "what": "Dollar-neutral is not beta-neutral. The obvious fix is to size the short leg at beta_long / beta_short so the book's NET beta is zero. One pre-specified variant: both betas estimated on the trailing 12 periods only, never including the period being sized, clamped to [0.5, 1.5].",
+      "equities": {
+        "dollar-neutral": {
+          "final": 1785.63,
+          "cagrPct": 25,
+          "sharpe": 1.19,
+          "upBeta": -0.51,
+          "downBeta": 0.49
+        },
+        "beta-hedged short": {
+          "final": 1599.12,
+          "cagrPct": 19.8,
+          "sharpe": 0.9,
+          "upBeta": -0.88,
+          "downBeta": 0.78
+        }
+      },
+      "crypto": {
+        "dollar-neutral": {
+          "final": 2623.26,
+          "cagrPct": 39.9,
+          "sharpe": 1.5,
+          "upBeta": 0.04,
+          "downBeta": -0.01
+        },
+        "beta-hedged short": {
+          "final": 2138.46,
+          "cagrPct": 30.3,
+          "sharpe": 1.1,
+          "upBeta": -0.09,
+          "downBeta": 0.06
+        }
+      },
+      "verdict": "It fails on both universes and on every metric, and -- the informative part -- it makes the CONCAVITY WORSE rather than better. Equities up-beta goes from -0.51 to -0.88 and down-beta from 0.49 to 0.78. On crypto it manufactures a concavity that was not there.",
+      "whyItFails": "Because the thing that makes the book concave is precisely that the short leg's beta is STATE-DEPENDENT: 2.17 in up markets, 0.51 in down ones. A trailing estimate averages over both states and so is wrong for whichever state actually arrives, systematically. Sizing on it adds noise in the exact dimension the hedge was meant to remove. A trailing average is the wrong instrument for a quantity that switches.",
+      "whatThisDoesNotClaim": "That the exposure cannot be hedged. One variant, one lookback of 12 periods, one clamp. What it does establish is that the naive version -- the one anybody would reach for first -- is worse than doing nothing, decisively and in the same direction on both universes.",
+      "code": "betahedge-run.mjs"
+    }
   }
 }

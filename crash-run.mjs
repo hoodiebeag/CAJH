@@ -89,6 +89,16 @@ for (const [label, root, topK, slip] of [
     `spread mean ${(100 * mean(down.map(i => s.returns[i]))).toFixed(2)}%`);
   console.log(`  full-sample beta ${(ols(mkt.slice(0, n), s.returns.slice(0, n))?.beta ?? NaN).toFixed(2)}`);
 
+  // WHICH LEG carries the asymmetry. The classic crash mechanism is specific: past losers are
+  // high-beta, so the SHORT leg rips when the market rebounds. If the concavity lives in the long
+  // leg instead, it is a different problem with a different fix.
+  const legBeta = (leg, idx) => ols(idx.map(i => mkt[i]), idx.map(i => leg.periodReturns[i]))?.beta;
+  console.log(`  long leg   beta  up ${(legBeta(s.top, up) ?? NaN).toFixed(2).padStart(6)}   ` +
+    `down ${(legBeta(s.top, down) ?? NaN).toFixed(2).padStart(6)}`);
+  console.log(`  short leg  beta  up ${(legBeta(s.bot, up) ?? NaN).toFixed(2).padStart(6)}   ` +
+    `down ${(legBeta(s.bot, down) ?? NaN).toFixed(2).padStart(6)}   ` +
+    `(the book is SHORT this leg, so a high beta here hurts a rally)`);
+
   // The rebound test: periods that BEGIN with the market already deep in a drawdown.
   const deepest = Math.max(...ddAtStart);
   for (const thr of [0.10, 0.20, 0.30]) {
