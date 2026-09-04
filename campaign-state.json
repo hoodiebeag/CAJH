@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T14:34:03.261Z",
+  "updatedAt": "2026-09-04T14:40:30.608Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -1333,8 +1333,6 @@
       "note": "Combining lowers drawdown below either leg (7.47%) because the two are only 0.22 correlated. But idioVol is equities-only, so this combination is not available cross-asset."
     },
     "caveatOnSharpe": "Sharpe 2.31 on 31 monthly observations has a standard error near 0.34. These are not precise numbers.",
-    "CALENDAR_BUG_AFFECTS_THE_CRYPTO_ROWS": "2026-09-04. Every crypto number in this section was produced by testSignal under the calendar bug described in crossAssetPortfolio.threeErrors.1: CAGR annualised on n/12 when crypto rebalances 17.39 times a year, and borrow charged 12 times a year instead of 17.39. Check the arithmetic on the headline: $3041.92 at '30.6% CAGR' implies 4.17 years, which is n/12; the sample is 2.87 years, so the true figure is about 47%. The final balances are also slightly understated by the over-charged borrow. The drawdowns are period-end marks and understate the real per-bar figure. The EQUITIES rows are unaffected -- 252/21 is 12, so the constant was right for them. Re-running at 3000 null draws with the fix; do not cite the crypto rows until that lands.",
-    "nullDrawFloorBeingRaised": "The 200-draw floor of p=0.0050 that five equities signals sat on is being replaced by a 3000-draw run (floor 0.00033). The null does not depend on the signal, so it is computed once and shared across the family -- which also makes explicit that every p-value in the family is read off the SAME null sample and is dependent by construction, not merely correlated through the data.",
     "disjointHalvesAdjudication": {
       "why": "The cross-asset crossing could not adjudicate idioVol, lowVol and trendQuality: they pass on sp500-128 and fail on crypto, and there is no third asset class to break the tie. This does not need one. Split the 128 equities into two disjoint halves and rank INSIDE each. A cross-sectional factor is a claim about RELATIVE ranking and must appear in both halves; a result carried by a handful of names appears in the half holding them and vanishes from the other.",
       "construction": "Deterministic shuffle fixed before any result was seen, 64 + 64, topK 5 a side, 2000 null draws per half so the p floor is 0.0005 rather than the 0.0050 that five signals had been sitting on.",
@@ -1354,6 +1352,59 @@
       "theNumberThatShouldWorry": "Half A returns $1490.73 for idioVol and half B returns $3757.73. Same signal, same period, same construction, 2.5x apart on an ARBITRARY split of one universe. Every dollar figure in this campaign should be read against that spread: the sign and the significance replicate, the magnitude is close to meaningless at this sample size.",
       "whatItDoesNotSettle": "The two halves share a period, a market and a macro regime, so they are not independent draws. Surviving the split rules out the few-names explanation. It does not touch the one-regime explanation, which remains the largest unaddressed risk in every result here.",
       "code": "factors-halves-run.mjs"
+    },
+    "rerunAt3000Draws": {
+      "why": "At 200 draws the smallest p a signal can report is 1/201 = 0.0050 and five equities signals sat exactly there, which says 'not resolved', not 'p = 0.005'. Re-run at 3000 draws (floor 3.33e-4) on the calendar-fixed and cost-fixed code. The null does not depend on the signal, so it is computed once and shared across the family -- which also makes explicit that all twelve p-values are read off the SAME null sample and are dependent by construction.",
+      "stillAtTheFloor": "Five equities signals and four crypto signals report 3.33e-4, which is again the floor. They never once lost to 3000 random draws. The honest statement is p < 3.3e-4, not p = 3.3e-4; more draws would only push the bound down.",
+      "equities128": {
+        "survivors": [
+          "momentum",
+          "lowVol",
+          "nearHigh",
+          "trendQuality",
+          "idioVol",
+          "beta"
+        ],
+        "best": "idioVol $2478.82, CAGR 41.8%, DD 8.87%",
+        "note": "beta scrapes in at p=1.47e-2 against a BH critical of 0.025."
+      },
+      "crypto28": {
+        "survivors": [
+          "momentum",
+          "nearHigh",
+          "trendQuality",
+          "beta",
+          "lowVol",
+          "volumeTrend"
+        ],
+        "best": "momentum $2455.30, CAGR 36.7%, DD 9.65%",
+        "whatTheCostFixDidHere": "The crypto null median fell from $932.54 to $508.58 once the short leg was charged. A random split turns over close to 100% of the book every rebalance against a ranked book's 25%, so the null was the larger beneficiary of the credit. Correcting it made the crypto signals look MORE significant, not less -- six survivors where the buggy run gave three. This is the concrete case of the general point: every p-value published before the cost fix was conservative."
+      },
+      "threeFiltersInSequence": {
+        "filter1_BH_on_equities": [
+          "momentum",
+          "lowVol",
+          "nearHigh",
+          "trendQuality",
+          "idioVol",
+          "beta"
+        ],
+        "filter2_alsoBH_on_crypto": [
+          "momentum",
+          "nearHigh",
+          "trendQuality",
+          "beta",
+          "lowVol"
+        ],
+        "filter3_alsoBothDisjointHalves": [
+          "momentum",
+          "nearHigh",
+          "trendQuality"
+        ],
+        "andThenCorrelation": "Those three correlate 0.78 to 0.91 with each other. They are ONE factor with three names. Twelve documented anomalies, three independent screens, and what is left standing is cross-sectional momentum -- which is what the literature says, and is the outcome a battery should produce when it is working rather than fishing.",
+        "idioVolIsTheOneRealSPLIT": "idioVol passes equities BH at the floor and passes BOTH disjoint halves at the floor, so it is not a few names. It fails crypto outright at p=0.539 with a -21.6% CAGR. That is a genuine asset-class-specific factor rather than a spurious one, and it is the best equities number in the battery. It should be traded as an equities factor or not at all.",
+        "whatTheHalvesTestCulledThatBHDidNot": "lowVol and beta both survive BH on both universes and both FAIL the disjoint-halves split (lowVol 0.0950 in half A, beta 0.1899). Splitting one universe in two is a sharper instrument here than multiplicity correction, because it attacks a different failure -- concentration in a few names rather than the look-elsewhere effect."
+      }
     }
   },
   "crossAssetPortfolio": {
