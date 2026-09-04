@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T14:52:18.405Z",
+  "updatedAt": "2026-09-04T14:53:46.162Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -1801,5 +1801,70 @@
       "Survivorship-free. Yahoo serves no delisted history. For a long-short that understates rather than flatters."
     ],
     "code": "desk-run.mjs"
+  },
+  "dispersionRegime": {
+    "question": "'Pick and choose our strategy rather than strictly trading one variation.' A ranking can only pay if the things ranked actually differ. When cross-sectional dispersion is low every name moves together, the top and bottom deciles are the same trade, and the spread earns nothing while still paying turnover. Does dispersion measured BEFORE a period predict whether that period pays?",
+    "construction": "Standard deviation ACROSS symbols of their trailing 63-bar returns, read at the rebalance, deciding the NEXT period. The threshold is the EXPANDING median of everything seen so far, so no decision uses a number it could not have known. The in-sample median is printed beside it, labelled as the cheat, to show what a fixed threshold would have flattered.",
+    "results": {
+      "crypto": {
+        "always on": {
+          "final": 2623.26,
+          "cagrPct": 39.9,
+          "maxDrawdownPct": 22.73,
+          "sharpe": 1.5
+        },
+        "gate on high dispersion": {
+          "final": 1975,
+          "cagrPct": 26.7,
+          "maxDrawdownPct": 22.73,
+          "sharpe": 1.73,
+          "periodsOn": 23
+        },
+        "inverse gate, low only": {
+          "final": 1328.23,
+          "cagrPct": 10.4,
+          "maxDrawdownPct": 9.61,
+          "sharpe": 1.41,
+          "periodsOn": 27
+        },
+        "sized by disp/median": {
+          "final": 3088.79,
+          "cagrPct": 48,
+          "maxDrawdownPct": 23.74,
+          "sharpe": 1.53
+        }
+      },
+      "equities": {
+        "always on": {
+          "final": 1785.63,
+          "cagrPct": 25,
+          "maxDrawdownPct": 13.55,
+          "sharpe": 1.19
+        },
+        "gate on high dispersion": {
+          "final": 1483.85,
+          "cagrPct": 16.4,
+          "maxDrawdownPct": 13.55,
+          "sharpe": 1.61,
+          "periodsOn": 15
+        },
+        "inverse gate, low only": {
+          "final": 1203.37,
+          "cagrPct": 7.4,
+          "maxDrawdownPct": 8.87,
+          "sharpe": 0.76,
+          "periodsOn": 16
+        },
+        "sized by disp/median": {
+          "final": 1724.02,
+          "cagrPct": 23.3,
+          "maxDrawdownPct": 15.52,
+          "sharpe": 1.18
+        }
+      }
+    },
+    "verdict": "NEGATIVE, and worth writing down as such. Dispersion genuinely sorts: the high half returns about three times the low half in crypto (+97.5% against +32.8% cumulative) and roughly three times in equities. But no usable form of that beat the baseline on both universes. The GATE loses money in both -- $1975 against $2623 and $1484 against $1786 -- because the low-dispersion half is still POSITIVE and skipping it forgoes real return. It raises Sharpe (1.73 against 1.50, 1.61 against 1.19) and does NOT lower drawdown at all, both staying at exactly the baseline: the worst drawdown falls inside a high-dispersion period the gate holds through. SIZING helps crypto by 18% and hurts equities by 3%. One of two is what noise looks like.",
+    "whyItIsRecordedAnyway": "Because the sorting is real and the trading rule is not, and those two facts are easy to confuse. A signal that separates good periods from less-good periods still needs the bad periods to be BAD before turning them off pays. Here they are merely less good, so the gate is a way of holding cash at a 33% cumulative opportunity cost in exchange for a Sharpe that 31 to 50 observations cannot resolve.",
+    "code": "dispersion-run.mjs"
   }
 }
