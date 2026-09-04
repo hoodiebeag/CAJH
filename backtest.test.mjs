@@ -830,10 +830,13 @@ test("the trend gate is inverted for shorts -- an uninverted gate is worse than 
   const series = [{ label: "1440", mins: 1440, candles }];
   const gated = backtestMultiTF({ series }, { ...opts, trendGate: true });
   const ungated = backtestMultiTF({ series }, { ...opts, trendGate: false });
+  // Counted on entries TAKEN rather than trades closed: the entry lands late enough in the series
+  // that its hold runs past the last bar, so it never closes and would not appear in `trades`.
   // In a pure downtrend the inverted gate blocks nothing, so gated and ungated agree. An
-  // uninverted gate would have blocked every entry in exactly this market.
-  assert.equal(gated.trades, ungated.trades, "a downtrend must not be gated out of shorting");
-  assert.ok(gated.trades > 0, "the scenario has to produce short entries for the test to mean anything");
+  // uninverted gate would have blocked this entry in exactly the market a short wants.
+  assert.ok(gated.reasons.taken > 0, "the scenario has to produce a short entry for the test to mean anything");
+  assert.equal(gated.reasons.taken, ungated.reasons.taken, "a downtrend must not be gated out of shorting");
+  assert.ok(!gated.reasons.trendGate, "and nothing may be refused by the gate here");
 });
 
 test("the trend gate still requires an uptrend for longs", () => {
@@ -843,8 +846,9 @@ test("the trend gate still requires an uptrend for longs", () => {
   const series = [{ label: "1440", mins: 1440, candles: falling }];
   const opts = { entryMode: "bos", alignMode: "none", trendGateMode: "ma", trendMa: 50,
                  minStopPct: 0, maxStopPct: 1, entryTf: "1440" };
-  assert.equal(backtestMultiTF({ series }, { ...opts, trendGate: true }).trades, 0,
-    "a long must not be admitted into a downtrend");
+  const gated = backtestMultiTF({ series }, { ...opts, trendGate: true });
+  assert.ok(!gated.reasons.taken, "a long must not be admitted into a downtrend");
+  assert.ok(gated.reasons.trendGate > 0, "and the refusals must be attributed to the gate");
 });
 
 test("entryGate is honoured by every entry mode, not just two of them", () => {
@@ -866,4 +870,38 @@ test("entryGate is honoured by every entry mode, not just two of them", () => {
     assert.equal(shut.trades, 0, `${entryMode}: a gate that refuses everything must produce no trades`);
     if (open.trades > 0) assert.ok(shut.reasons.externalGate > 0, `${entryMode}: refusals must be tallied`);
   }
+});
+
+test("an option a mode ignores throws when it would have restricted something", () => {
+  // Eight silently-ignored parameters have been found in this engine, each producing a block of
+  // byte-identical rows that read as a swept axis. The ignoring is now declared and enforced.
+  const series = [{ label: "1440", mins: 1440, candles: [] }];
+  const cases = [
+    ["alignMode", "notbear", "none", "breakout"],
+    ["chopFilter", true, false, "breakout"],
+    ["requireHigherLow", true, false, "anticipate"],
+    ["minRoomR", 2, 0, "breakout"],
+  ];
+  for (const [option, set, dflt, entryMode] of cases) {
+    assert.throws(() => backtestMultiTF({ series }, { entryMode, [option]: set }),
+      new RegExp(`"${option}" is only implemented`), `${entryMode} must reject ${option}`);
+    assert.doesNotThrow(() => backtestMultiTF({ series }, { entryMode, [option]: dflt }),
+      `${entryMode} must accept ${option} at a value that restricts nothing`);
+  }
+});
+
+test("a permissive value is never rejected, because ignoring it drops no claim", () => {
+  // alignMode "none" asks for no alignment, which is exactly what a mode ignoring alignment
+  // delivers. The whole campaign passes it to breakout; rejecting that would be noise, not safety.
+  const series = [{ label: "1440", mins: 1440, candles: [] }];
+  for (const entryMode of ["breakout", "ma_dip", "rsi", "fib_pullback", "vol_contraction"]) {
+    assert.doesNotThrow(() => backtestMultiTF({ series }, { entryMode, alignMode: "none" }));
+    assert.doesNotThrow(() => backtestMultiTF({ series }, { entryMode, alignMode: "all" }), "the signature default too");
+  }
+});
+
+test("the modes that do honour an option still accept it", () => {
+  const series = [{ label: "1440", mins: 1440, candles: [] }];
+  assert.doesNotThrow(() => backtestMultiTF({ series }, { entryMode: "bos", alignMode: "none", minRoomR: 2, requireHigherLow: true, chopFilter: true }));
+  assert.doesNotThrow(() => backtestMultiTF({ series }, { entryMode: "anticipate", alignMode: "notbear", chopFilter: true }));
 });

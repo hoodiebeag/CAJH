@@ -177,6 +177,35 @@ export function backtestMultiTF({ series } = {}, {
   if (direction !== "long" && direction !== "short") {
     throw new Error(`backtestMultiTF: unknown direction "${direction}" (must be "long" or "short")`);
   }
+  // Which options each entry mode actually honours.
+  //
+  // Eight parameters have now been found that backtestMultiTF accepted and silently ignored --
+  // stopMode outside "anticipate", alignMode outside "bos"/"anticipate", the swing window for
+  // breakout, trailStartR below trailR, entryGate in the bos branch, and chopFilter,
+  // requireHigherLow and minRoomR for breakout. Every one produced a block of byte-identical rows
+  // that read as a swept axis and was nothing of the kind, and every one was caught by hand after
+  // the results were already recorded.
+  //
+  // So the ignoring is now declared and enforced. A mode absent from a list below ignores that
+  // option, and passing a RESTRICTIVE value to a mode that ignores it throws.
+  //
+  // `alwaysOk` is what saves this from being useless. An option only makes a claim when it would
+  // have restricted something: alignMode "none" asks for no alignment, which is precisely what a
+  // mode ignoring alignment delivers, so it drops nothing and must not throw. The signature
+  // default is likewise accepted everywhere, because a caller that omitted the option meant
+  // nothing by it and cannot be distinguished from one that passed the default explicitly.
+  const IGNORED_BY_MODE = [
+    { option: "alignMode",        value: alignMode,        alwaysOk: ["all", "none"], honouredBy: ["bos", "anticipate"] },
+    { option: "chopFilter",       value: chopFilter,       alwaysOk: [false],         honouredBy: ["bos", "anticipate"] },
+    { option: "requireHigherLow", value: requireHigherLow, alwaysOk: [false],         honouredBy: ["bos"] },
+    { option: "minRoomR",         value: minRoomR,         alwaysOk: [0],             honouredBy: ["bos"] },
+  ];
+  for (const { option, value, alwaysOk, honouredBy } of IGNORED_BY_MODE) {
+    if (!alwaysOk.includes(value) && !honouredBy.includes(entryMode)) {
+      throw new Error(`backtestMultiTF: "${option}" is only implemented for entryMode ${honouredBy.map((m) => `"${m}"`).join(" and ")}, not "${entryMode}" — it would be silently ignored and the run would be logged under a setting it never applied`);
+    }
+  }
+
   if (stopMode === "atr" && entryMode !== "anticipate") {
     throw new Error(`backtestMultiTF: stopMode "atr" is only implemented for entryMode "anticipate", not "${entryMode}" — it would be silently ignored and the run would be logged under a stop it never used`);
   }

@@ -9,9 +9,9 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T03:25:00Z",
- "phase": "btcRegime endorsed 9/9 and adopted; entryGate bug found in the bos branch",
- "runsTested": 2326,
+ "updatedAt": "2026-09-04T04:00:00Z",
+ "phase": "grid size measured as a variable; the capability table closes the silent-no-op class",
+ "runsTested": 2374,
  "base": {
   "trendGate": false,
   "alignMode": "none",
@@ -237,6 +237,12 @@
    "axis": "short side with a direction-aware trend gate",
    "configs": 72,
    "result": "The gate is now inverted for shorts in backtest.js, and it helps -- $816.25 against $633.27 ungated -- but every one of 72 configurations still loses over the full period."
+  },
+  {
+   "phase": "sweep28",
+   "axis": "never-offered components, screened for inertness",
+   "configs": 48,
+   "result": "chopFilter, requireHigherLow and minRoomR are ALL inert for breakout -- flagged automatically by sweep.mjs's inertAxes. Only trendGateMode and exitOnSwingHigh bind. Three more silent no-ops, bringing the total found to eight."
   }
  ],
  "leader": {
@@ -298,7 +304,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Offer the walk-forward the components it has never actually seen, rather than assuming absence means rejection -- btcRegime was declined only because it was never in the grid. Candidates: trendGateMode structure, chopFilter, requireHigherLow, minRoomR, exitOnSwingHigh, and combinations of btcRegime with the other filters. Beyond that: equities (blocked on data) and the short exit path (a deliberate engine build).",
+ "nextUp": "The parameter space is exhausted and the methodology is now the interesting part. What is left: (1) EQUITIES, blocked on data the container cannot fetch; (2) the short exit path, a deliberate engine build; (3) nothing else here will move the number -- 2,374 configurations in, every axis that binds has been swept and the last three sweeps have each found a bug rather than an improvement.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -593,6 +599,27 @@
    "chose": "btcRegime 50 in nine quarters of nine under the balance objective, eight of nine under mar",
    "progression": "$1974.68 (numbers only) -> $2249.27 (+ entry mode, delay, filters) -> $2300.28 (+ structural frame) -> $2588.43 (+ btcRegime offered). Every step improved it.",
    "lessonRecorded": "The filters were reported as 'declined in 7 of 9 quarters'. That was true of the filters the grid CONTAINED. btcRegime alone was never in it. A component absent from a grid is not a component the search rejected, and the write-up did not distinguish those."
+  },
+  "gridSizeIsAVariable": {
+   "what": "The same walk-forward, same fixed frame, offered a LARGER honest grid: six filter combinations instead of one, plus trendGateMode, exitOnSwingHigh, maxHold and three trendMa values.",
+   "result": {
+    "balance": {
+     "trades": 167,
+     "meanR": 1.0815,
+     "final": 2387.26,
+     "dd": 13.46
+    },
+    "mar": {
+     "trades": 161,
+     "meanR": 0.8821,
+     "final": 1947.78,
+     "dd": 12.44
+    }
+   },
+   "against": "The small grid (btcRegime only, two maxHold values) gave $2588.43 at 10.96%.",
+   "finding": "A BIGGER HONEST GRID IS A WORSE GRID. Every choice was still made on training data alone -- no leak was introduced -- and the out-of-sample result fell by 8% under the balance objective and 25% under the risk-adjusted one. More options to choose from is more opportunity to fit the training window's noise.",
+   "theTell": "Under the mar objective the filter choice is unstable across quarters -- crossSection, maxExtension, crossSection, adx, btc-only, btc-only, btc-only, crossSection, crossSection. Compare the small grid, which chose btcRegime 50 nine times out of nine. Stability of choice is the diagnostic, and it is available BEFORE looking at the out-of-sample number.",
+   "consequenceForTheLeader": "The leader stays on the small-grid configuration. The larger grid did not endorse anything; it demonstrated that offering more choices costs accuracy."
   }
  },
  "bugsFound": [
@@ -621,6 +648,12 @@
    "symptom": "would have admitted shorts only into rising markets",
    "cause": "'BTC above its own average' is a market-wide uptrend, applied unchanged to both directions -- the same bug class as backtest.js's trend gate",
    "fix": "direction-aware, with a test covering both directions against both a rising and a falling BTC"
+  },
+  {
+   "where": "backtest.js, systemic",
+   "symptom": "eight parameters accepted and silently ignored, each producing byte-identical rows that read as a swept axis",
+   "list": "stopMode outside anticipate; alignMode outside bos/anticipate; the swing window for breakout; trailStartR below trailR; entryGate in the bos branch; chopFilter, requireHigherLow and minRoomR for breakout",
+   "fix": "A capability table now declares which entry modes honour alignMode, chopFilter, requireHigherLow and minRoomR, and passing a RESTRICTIVE value to a mode that ignores it throws. Permissive values never throw -- alignMode 'none' asks for no alignment, which is exactly what an ignoring mode delivers, so it drops no claim and the whole campaign passes it. The signature default is accepted everywhere too, because omission and an explicit default cannot be told apart."
   }
  ],
  "concurrency": {
