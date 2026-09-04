@@ -287,3 +287,109 @@ payoff geometry.
 Runners: `robustness.mjs`, `walkforward.mjs`, `entrynull-run.mjs`, `benchmark.mjs`. Every
 configuration ever scored is in `campaign-log.jsonl`; the state and the caveats are in
 `campaign-state.json`.
+
+
+---
+
+# Addendum 2, 2026-09-04: cross-sectional momentum, and the blind spot that hid it
+
+The addendum above closed the entry-timing question and it stands. This one records why that was
+the wrong question, and what answering the right one produced.
+
+## The blind spot
+
+Every null in this project draws random entries **from the same symbols in the same proportions
+the strategy traded them**. That design holds symbol selection constant so it can isolate timing —
+and it is therefore blind *by construction* to an edge that lives in **which** asset you hold
+rather than **when** you buy it.
+
+Cross-sectional momentum lives precisely there. It is among the most replicated results in
+finance: Jegadeesh and Titman (1993), still present in their own 2023 follow-up, with time-series
+momentum showing post-crisis Sharpe ratios comparable to pre-2008.
+
+So "no edge" was a sound conclusion from sound experiments asked of too narrow a question. That is
+the single most useful lesson in this document: **a null that controls a variable away can never
+find an edge in it**, and the discipline that makes a test honest is the same discipline that can
+make it useless.
+
+## The rule
+
+Rank every symbol by its return over the last 252 bars, skipping the most recent 21. Hold the top
+decile long and the bottom decile short, equally weighted, dollar-neutral. Rebalance every 21 bars.
+No stop, no target, no entry trigger.
+
+Those parameters are the canonical 1993 construction. **They were not selected by a sweep**, which
+is what separates this from the 2,446 configurations that preceded it.
+
+## What it did
+
+| | balance | CAGR | max drawdown |
+|---|---|---|---|
+| long-only top decile | $1,743 | 23.2% | 29.7% |
+| bottom decile | $337 | −33.6% | 68.4% |
+| **dollar-neutral spread**, 5% borrow | **$1,948** | **29.4%** | **10.1%** |
+| SPY, same window | $2,009 | — | ~21% |
+
+Out of sample, parameters refit quarterly on training data only, 2025-01 to 2026-08:
+
+| | balance | CAGR | max drawdown |
+|---|---|---|---|
+| **walk-forward spread**, 5% borrow | **$1,652** | **35.1%** | **10.4%** |
+| SPY | $1,315 | 18.6% | — |
+| equal-weight all 128 | $1,303 | 17.9% | — |
+
+`252/5` was chosen in all seven quarters. Every earlier result in this project lost roughly 40% of
+its apparent edge to a walk-forward; this one lost nothing.
+
+## The gate
+
+`xsmom-gate.mjs`, seven conditions passing:
+
+```
+PASS  positive_net_expectancy  0.0215 monthly
+PASS  win_rate_margin          58.1% against a 37.7% breakeven
+PASS  interval_excludes_zero   [0.0005, 0.0418]
+PASS  survives_multiplicity
+PASS  beats_matched_null       p = 0.0050
+PASS  survivable               10.09% against a 25% ceiling
+PASS  out_of_sample            0.0251 monthly
+FAIL  sample_sufficient        31 periods against 32 required
+FAIL  beats_baseline_controls  0.02150 against SPY's 0.02251
+BLOCKED pre_registration       permanently, and correctly
+```
+
+The null is the one a spread needs: draw the same number of names at random, split them
+arbitrarily into a long and a short half, run the same book. The spread lands outside that null's
+entire range — median $944, 95th percentile $1,166, spread $1,948.
+
+## The two failures, which matter more than the seven passes
+
+**On raw return, SPY beats the spread.** 0.02150 monthly against 0.02251. What the spread wins is
+return per unit of drawdown, 2.92 against 0.89. Those are different claims. Risk-matched at 2.0x
+with 6% financing the spread returns $3,248 at a 20.1% drawdown against SPY's $2,009 at 21% — which
+answers the comparison and is not a recommendation, because leverage multiplies exposure to the
+failure mode below.
+
+**Thirty-one periods against thirty-two required.** Short by one. No further analysis of this data
+fixes that; only elapsed time does.
+
+## The failure mode this sample cannot show
+
+Momentum's documented way of dying is not decay — it is a violent reversal after a market bottom,
+when the beaten-down names in the short leg rebound hardest. The sample here, 2023-01 to 2026-09,
+contains no crash-and-rebound. **The strategy has never been tested against the event that
+historically breaks it**, and the 10% drawdown is therefore the least trustworthy number above.
+
+## What is registered
+
+`XSMOM-FORWARD-2026-09`, ledger seq 17. Frozen configuration, frozen 128-symbol universe, at least
+32 forward periods from 2026-09-03. Three conditions, all required: mean monthly return above zero,
+beats the random-split null at p < 0.05, drawdown at or below 25%. A momentum-crash clause requires
+any 20%-decline-and-recovery sub-period to be reported separately and in full whatever it shows.
+
+The in-sample hypothesis is **not** registrable — it was formed after seeing the result, and the
+gate reports `pre_registration` as BLOCKED for exactly that reason. That block is correct and must
+never be filled in retrospectively.
+
+Runners: `xsmom.mjs`, `xsmom-wf.mjs`, `xsmom-gate.mjs`. Universes in `candle-bundle/`,
+`equity-bundle/`, `sp500-bundle/`, deliberately separate roots.
