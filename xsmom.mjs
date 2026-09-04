@@ -44,6 +44,10 @@ export function formationReturn(closes, i, lookbackBars, skipBars) {
 export function runRotation({
   series, lookbackBars = 252, skipBars = 21, rebalanceBars = 21, topK = 10,
   slipPct = 0.0005, startingBalance = 1000, select = null,
+  // "top" holds the strongest by formation return, "bottom" the weakest. The bottom leg is not a
+  // curiosity: if the ranking carries information, the two legs must diverge, and their SPREAD is
+  // the part that does not depend on the market going up.
+  pick = "top",
 } = {}) {
   const symbols = Object.keys(series);
   if (!symbols.length) throw new Error("xsmom: no symbols");
@@ -96,13 +100,10 @@ export function runRotation({
     });
     if (eligible.length < topK) continue;
 
-    const chosen = select
-      ? select(eligible, i)
-      : eligible
-          .map((s) => [s, formationReturn(grid[s], i, lookbackBars, skipBars)])
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, topK)
-          .map(([s]) => s);
+    const ranked = eligible
+      .map((s) => [s, formationReturn(grid[s], i, lookbackBars, skipBars)])
+      .sort((a, b) => (pick === "bottom" ? a[1] - b[1] : b[1] - a[1]));
+    const chosen = select ? select(eligible, i) : ranked.slice(0, topK).map(([s]) => s);
 
     // Turnover cost: only the names actually swapped pay, on both the sale and the purchase.
     const keep = chosen.filter((s) => held.includes(s)).length;

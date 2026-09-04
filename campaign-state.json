@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T11:40:00Z",
- "phase": "CROSS-SECTIONAL MOMENTUM: the first effect in this project to beat its own null on three universes",
+ "updatedAt": "2026-09-04T12:05:00Z",
+ "phase": "LONG-SHORT cross-sectional momentum: strongest result in the project, and the least fragile",
  "runsTested": 2446,
  "base": {
   "trendGate": false,
@@ -310,7 +310,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Attack the cross-sectional result rather than extend it. In order: (1) a walk-forward that refits topK and lookback on training data only; (2) run it through gate-run.mjs; (3) check whether the edge is concentrated in a few rebalances the way every earlier result was; (4) test whether long-short (top decile minus bottom) removes the market beta that currently makes it close to a wash against SPY.",
+ "nextUp": "Remaining attacks on the long-short: (1) WALK-FORWARD refitting topK and lookback on training data only -- the one every earlier result lost about 40% to; (2) gate-run.mjs; (3) replicate the SPREAD on crypto and equities-30, since only the long-only leg has been checked there. Do NOT sweep parameters: 252/21/21/decile is the canonical 1993 construction and that is the result's main defence against best-of-N.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -1037,6 +1037,66 @@
    "Only 2.66 years of rotation after the 252-bar warmup: roughly 32 rebalances.",
    "No walk-forward yet, and no promotion-gate run."
   ],
-  "correctnessChecks": "xsmom.test.mjs, 7 tests, including one that fails on look-ahead: a symbol that only rises AFTER the rebalance must not be selected. Ranking is by DATE across a shared calendar, not by bar index, so symbols starting on different dates are never compared out of period."
+  "correctnessChecks": "xsmom.test.mjs, 7 tests, including one that fails on look-ahead: a symbol that only rises AFTER the rebalance must not be selected. Ranking is by DATE across a shared calendar, not by bar index, so symbols starting on different dates are never compared out of period.",
+  "attacks": {
+   "1_concentration_LONG_ONLY": {
+    "result": "BAD. 31 monthly periods; the best 3 produce 96.8% of the total return, the best single month 43%. 61% of months positive. Same fragility as every earlier finding.",
+    "verdict": "the long-only rotation is a tail-dependent result like everything before it"
+   },
+   "3_longShort": {
+    "topDecile": {
+     "final": 1743.35,
+     "cagrPct": 23.23,
+     "dd": 29.65
+    },
+    "bottomDecile": {
+     "final": 336.69,
+     "cagrPct": -33.57,
+     "dd": 68.35
+    },
+    "spread": {
+     "final": 2077.42,
+     "cagrPct": 32.7,
+     "dd": 9.91,
+     "positiveMonths": "18/31",
+     "best3MonthsShare": "44.5%"
+    },
+    "reading": "The ranking genuinely separates: the bottom decile loses a third a year. The dollar-neutral spread beats SPY ($1649) at HALF its drawdown -- 9.91% against ~21% -- and concentration falls from 96.8% to 44.5%. This is the first result in the project that is simultaneously better AND less fragile."
+   },
+   "3b_borrowStress": {
+    "0%": {
+     "final": 2077.42,
+     "cagr": 32.7,
+     "dd": 9.9
+    },
+    "5%": {
+     "final": 1947.5,
+     "cagr": 29.4,
+     "dd": 10.1
+    },
+    "10%": {
+     "final": 1825.69,
+     "cagr": 26.2,
+     "dd": 10.4
+    },
+    "20%": {
+     "final": 1604.47,
+     "cagr": 20.1,
+     "dd": 12.3
+    },
+    "30%": {
+     "final": 1410.05,
+     "cagr": 14.2,
+     "dd": 14.4
+    },
+    "50%": {
+     "final": 1089.04,
+     "cagr": 3.4,
+     "dd": 22.7
+    },
+    "reading": "At realistic borrow (2-10%) the spread holds 26-31% CAGR at ~10% drawdown against SPY's ~20% at 21%. It only degrades to index-like at 30%+ borrow, which is exceptional rather than typical."
+   },
+   "survivorshipNowFavoursTheResult": "A reversal worth stating: for the long-only entry work, missing delisted names INFLATED results. For a long-short, they DEFLATE it. SIVB and FRC went to zero and would have sat in the bottom decile paying the short leg. Their absence from this bundle makes the spread an understatement."
+  }
  }
 }

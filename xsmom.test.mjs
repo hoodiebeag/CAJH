@@ -83,3 +83,14 @@ test("drawdown is measured on every bar, not only at rebalances", () => {
     lookbackBars: 252, skipBars: 21, rebalanceBars: 21, topK: 2, slipPct: 0 });
   assert.ok(r.maxDrawdownPct > 5, `mid-period crash must show in the drawdown, got ${r.maxDrawdownPct}%`);
 });
+
+test("pick:bottom holds the weakest, the mirror of pick:top", () => {
+  const rising = (k) => sym(400, (i) => 100 * Math.exp(k * i));
+  const series = { HOT: rising(0.003), MID: rising(0.001), COLD: rising(-0.002) };
+  const base = { series, lookbackBars: 252, skipBars: 21, rebalanceBars: 21, topK: 1, slipPct: 0 };
+  const top = runRotation({ ...base, pick: "top" });
+  const bottom = runRotation({ ...base, pick: "bottom" });
+  assert.deepEqual([...new Set(top.rebalanceLog.flatMap((x) => x.chosen))], ["HOT"]);
+  assert.deepEqual([...new Set(bottom.rebalanceLog.flatMap((x) => x.chosen))], ["COLD"]);
+  assert.ok(top.finalBalance > bottom.finalBalance, "the legs must diverge if ranking means anything");
+});
