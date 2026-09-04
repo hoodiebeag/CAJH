@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T09:30:00Z",
- "phase": "survivorship-free universe is buildable for free; script shipped, awaiting the bundle",
+ "updatedAt": "2026-09-04T10:20:00Z",
+ "phase": "awaiting the S&P bundle; reconstruction reworked after Wikipedia dropped its change log",
  "runsTested": 2446,
  "base": {
   "trendGate": false,
@@ -310,7 +310,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Awaiting sp500.tar.gz. On arrival: install under its OWN root (sp500-bundle/), read manifest.json FIRST and report missingPct before any result, name the cost model explicitly, then run gate-run.mjs on the unchanged crypto-fitted leader. Do NOT sweep it -- the registered gate is about the excess over a matched null on an unchanged configuration, and fitting the new universe first would destroy exactly what it tests.",
+ "nextUp": "Awaiting sp500.tar.gz. On arrival: install under its OWN root, read manifest.json FIRST and report departedRecovered and missingPct BEFORE any result -- if few of the failed companies resolved, the test is compromised and that must be said before a number is seen, not after. Then name the cost model and run gate-run.mjs on the UNCHANGED crypto-fitted leader. Do not sweep it; the registered gate is about excess over a matched null on a configuration nobody re-fitted.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -908,11 +908,12 @@
    "prereg": "EQUITIES-LAGGARD-EXCESS-2026-09, registry ledger seq 15, registered before any survivorship-free data exists so the prediction cannot be reshaped once it does."
   },
   "survivorshipFreeRoute": {
-   "correction": "Recorded as a correction because it was stated the other way an hour earlier: a survivorship-free universe was called a paid product (Norgate, Sharadar, CRSP). It is not. S&P 500 membership changes are public, so the index as it stood on a past date can be reconstructed -- take today's members, walk the change log backwards, discard everything added since the date and restore everything removed.",
-   "script": "tools/sp500-pointintime.py, runs in one Colab cell in about five minutes.",
-   "whatItContains": "Roughly 500 symbols as of 2023-01-01 including the ~60 since deleted -- SVB and First Republic collapsed in 2023, Bed Bath & Beyond went bankrupt. Those are the cases a trend gate exists to avoid and the first bundle had none of them.",
-   "residualBiasIsMeasured": "manifest.json records every ticker Yahoo would not serve and the percentage of the reconstructed list it represents. Wikipedia's change table is not a guaranteed-complete corporate-actions record and Yahoo's delisted coverage is partial, so some survivorship remains. A few percent is noise; a large fraction means the bundle is still biased and the result must be reported as such rather than quietly used.",
-   "testsPrereg": "EQUITIES-LAGGARD-EXCESS-2026-09 (ledger seq 15). The gate is unchanged and was written before this route existed."
+   "correction": "Recorded because it was stated the other way earlier: a survivorship-free universe was called a paid product. Partly wrong. The bulk of the reconstruction is free and mechanical; only the departed names are.",
+   "script": "tools/sp500-pointintime.py, one Colab cell.",
+   "whatWorks": "Wikipedia's constituents table carries a Date-added column, so every current member that JOINED after 2023-01-01 is removed by rule -- roughly sixty companies that entered the index because they did well. No judgement involved.",
+   "whatDoesNot": "The 'Selected changes' table that listed REMOVALS is gone from that page. Verified 2026-09-04: it returns two tables and the second is a navbox. So the departed names are hand-supplied from recall, the list is incomplete, and its incompleteness is the residual survivorship bias. The manifest reports how many resolved, which bounds what got in but not what was never listed.",
+   "standing": "Better than a hand-picked basket of winners, worse than a vendor point-in-time file. Results must be labelled that way and not called survivorship-free.",
+   "debugHistory": "Three scripts failed before this one and the useful lesson is about diagnosis, not Wikipedia: v1 and v2 used a `!pip` cell magic that is a SyntaxError when the file is run rather than pasted, so nothing executed and nothing printed -- a silent failure indistinguishable from several other causes. v3 removed the magic and printed a checkpoint per step, which located the real fault in one run."
   }
  },
  "acceptanceCriterion": {

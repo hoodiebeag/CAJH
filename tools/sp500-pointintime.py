@@ -1,88 +1,118 @@
 """
-sp500-pointintime.py -- build a survivorship-free S&P 500 bundle, for free, from a Colab cell.
+sp500-pointintime.py -- reconstruct an S&P 500 universe as of a past date, for free, from Colab.
 
-WHY THIS EXISTS. The first equities bundle was thirty symbols chosen by hand, and the
-matched-geometry null showed its $15,873 was the universe rather than the strategy: a random entry
-with the same exits earned 0.5751R against 0.5814R, p=0.47. The obvious fix was point-in-time index
-data, which is normally sold (Norgate, Sharadar, CRSP). It does not have to be. The S&P 500's
-membership changes are public, so the index as it stood on a past date can be RECONSTRUCTED:
-take today's members, then walk the change log backwards, discarding everything added since the
-date and restoring everything removed.
+WHY. The first equities bundle was thirty symbols chosen by hand, and the matched-geometry null
+showed its $15,873 was the universe rather than the strategy: a random entry with the same exits
+earned 0.5751R against 0.5814R, p=0.47. Split by outcome, the strategy was WORSE than random on
+the ten best performers and better on the ten worst. That is the registered hypothesis
+EQUITIES-LAGGARD-EXCESS-2026-09: the value is in declining to hold falling names, and a universe
+of survivors cannot test it because it contains almost nothing that fell.
 
-WHAT THAT BUYS. The reconstructed list contains the companies that failed -- SVB and First Republic
-in 2023, Bed Bath & Beyond, and roughly sixty others deleted since -- which is exactly the
-population a trend gate exists to avoid and exactly what a hand-picked list of today's winners
-cannot contain. It is the universe that tests EQUITIES-LAGGARD-EXCESS-2026-09.
+WHAT THIS PRODUCES, and the honest split between its two halves.
 
-WHAT IT DOES NOT BUY, stated because a free substitute should not be sold as the paid thing.
-Wikipedia's change table is not a guaranteed-complete corporate-actions record, and Yahoo does not
-serve history for every delisted ticker. Both leave residual survivorship. So the script MEASURES
-the residue: manifest.json records every symbol that could not be downloaded and the percentage it
-represents. A few percent is noise; a large fraction means the bundle is still biased and the
-result should be reported as such rather than quietly used.
+  MECHANICAL, and trustworthy. Wikipedia's constituents table carries a "Date added" column, so
+  every current member that JOINED after the as-of date can be removed by rule. That strips out
+  the sixty-odd companies which entered the index because they did well -- a large part of the
+  bias -- with no judgement involved.
 
-Prices are RAW, auto_adjust=False. Adjustment rewrites historical price levels and therefore
+  SUPPLIED, and weak. The names that LEFT the index are not recoverable from that page: it used
+  to carry a "Selected changes" table and no longer does (checked 2026-09-04, the page returns
+  two tables and the second is a navbox). So DEPARTED is written out by hand. It is incomplete,
+  and its incompleteness IS the residual survivorship bias. The manifest reports how many of them
+  resolved, which bounds what got in; it cannot bound what was never listed.
+
+So this is better than a hand-picked basket of winners and worse than a vendor's point-in-time
+file. Results from it must be labelled that way rather than called survivorship-free.
+
+Prices are raw, auto_adjust=False. Adjustment rewrites historical price levels and therefore
 historical stop distances, and stop distance is the variable this whole project turns on.
+
+Every step prints [0]..[7]; a run that stops names the step it stopped on.
 """
 
-# Paste into one Colab cell (hosted runtime) and run. ~5 minutes.
-!pip -q install yfinance
-import pandas as pd, yfinance as yf, os, tarfile, json, datetime
+# Paste into a Colab cell. Prints [0]..[7]; send the last line if it stops.
+import sys, subprocess
+def step(n, what): print(f"[{n}] {what}", flush=True)
+step(0, f"python {sys.version.split()[0]} starting")
+try: import yfinance
+except ImportError:
+    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "yfinance"], check=True)
+import pandas as pd, yfinance as yf, requests, io, os, tarfile, json, datetime
+step(1, f"imports ok — pandas {pd.__version__}, yfinance {yf.__version__}")
 
 AS_OF = "2023-01-01"
 
-# 1. Current members + the change log, straight from Wikipedia.
-tables = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
-current = set(tables[0]["Symbol"].astype(str).str.strip())
-chg = tables[1].copy()
-chg.columns = ["_".join(str(x) for x in c) if isinstance(c, tuple) else str(c) for c in chg.columns]
-date_col  = [c for c in chg.columns if "Date"    in c][0]
-added_col = [c for c in chg.columns if "Added"   in c and "Ticker" in c][0]
-rmvd_col  = [c for c in chg.columns if "Removed" in c and "Ticker" in c][0]
-chg[date_col] = pd.to_datetime(chg[date_col], errors="coerce")
-chg = chg.dropna(subset=[date_col]).sort_values(date_col, ascending=False)
+# --- Half one, MECHANICAL: current members, minus everything added after AS_OF. ----------------
+# The page's "Selected changes" table is gone, but the constituents table carries "Date added",
+# which is all that is needed to strip out names that were not members on AS_OF.
+resp = requests.get("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
+                    headers={"User-Agent": "Mozilla/5.0 (research script)"}, timeout=30)
+resp.raise_for_status()
+tbl = pd.read_html(io.StringIO(resp.text))[0]
+step(2, f"{len(tbl)} current constituents fetched")
 
-# 2. Rewind to AS_OF: undo each change newest-first.
-members = set(current)
-for _, r in chg[chg[date_col] >= AS_OF].iterrows():
-    a, d = str(r[added_col]).strip(), str(r[rmvd_col]).strip()
-    if a and a.lower() != "nan": members.discard(a)   # added after AS_OF -> was not a member
-    if d and d.lower() != "nan": members.add(d)       # removed after AS_OF -> was a member
-members = sorted(s.replace(".", "-") for s in members if s and s.lower() != "nan")
-print(f"S&P 500 membership reconstructed as of {AS_OF}: {len(members)} symbols")
-print(f"  of which no longer in the index today: {len([m for m in members if m not in current])}")
+tbl["added"] = pd.to_datetime(tbl["Date added"], errors="coerce")
+# A missing date means a long-standing member: keep it. Only a date AFTER AS_OF disqualifies.
+held_on_asof = tbl[~(tbl["added"] >= AS_OF)]["Symbol"].astype(str).str.strip().tolist()
+dropped = len(tbl) - len(held_on_asof)
+step(3, f"{len(held_on_asof)} were members on {AS_OF}; dropped {dropped} added since")
 
-# 3. Download. Track what Yahoo will not serve -- that is the residual bias, and it gets measured.
+# --- Half two, SUPPLIED: names that have LEFT the index since AS_OF. ---------------------------
+# These cannot be recovered from the page any more, so they are listed explicitly. This list is
+# assembled from recall, is certainly incomplete, and its incompleteness IS the residual
+# survivorship bias — which is why the manifest reports how many of them resolved.
+DEPARTED = """SIVB SBNY FRC ATVI DISH LUMN AAP PXD MRO CTLT HES ILMN ETSY BIO CZR
+              SEDG VFC WHR ZION PARA WBA XRAY QRVO MKTX FMC CE BEN IVZ AMTM DXC
+              NCLH ALK RE PEAK SEE""".split()
+step(4, f"{len(DEPARTED)} departed names to attempt")
+
+SYMS = sorted(set([s.replace(".", "-") for s in held_on_asof] + DEPARTED))
+step(4, f"{len(SYMS)} symbols total to download")
+
+# --- Download ----------------------------------------------------------------------------------
 os.makedirs("candle-bundle/1440", exist_ok=True)
 got, missing = [], []
-for i in range(0, len(members), 50):
-    batch = members[i:i+50]
-    data = yf.download(batch, start=AS_OF, auto_adjust=False, progress=False,
-                       group_by="ticker", threads=True)
+for i in range(0, len(SYMS), 40):
+    batch = SYMS[i:i+40]
+    try:
+        data = yf.download(batch, start=AS_OF, auto_adjust=False, progress=False,
+                           group_by="ticker", threads=True)
+    except Exception as e:
+        print(f"    batch {i} failed: {e}", flush=True); missing += batch; continue
     for s in batch:
         try:
-            df = data[s].dropna(subset=["Open","High","Low","Close"])
+            df = data[s] if isinstance(data.columns, pd.MultiIndex) else data
+            df = df.dropna(subset=["Open","High","Low","Close"])
         except Exception:
             missing.append(s); continue
-        if len(df) < 120:
-            missing.append(s); continue
+        if len(df) < 120: missing.append(s); continue
         out = df[["Open","High","Low","Close","Volume"]].copy()
         out.columns = ["open","high","low","close","volume"]
         out.insert(0, "time", df.index.astype("int64") // 10**9)
         out.to_csv(f"candle-bundle/1440/{s}.csv", index=False)
         got.append(s)
-    print(f"  {i+len(batch)}/{len(members)}  kept {len(got)}  missing {len(missing)}")
+    print(f"    {min(i+40,len(SYMS))}/{len(SYMS)}  kept {len(got)}  missing {len(missing)}", flush=True)
 
-# 4. The manifest is part of the deliverable: it is what makes the bias measurable.
+departed_got = [s for s in DEPARTED if s in got]
 manifest = {
-    "asOf": AS_OF, "rule": "S&P 500 membership on AS_OF, reconstructed from Wikipedia's change log",
-    "reconstructedCount": len(members), "downloaded": len(got),
-    "missing": missing, "missingPct": round(100*len(missing)/len(members), 1),
-    "noLongerInIndexToday": sorted(m for m in members if m not in current),
-    "builtAt": datetime.datetime.utcnow().isoformat() + "Z",
+  "asOf": AS_OF,
+  "rule": "current S&P 500 minus everything added after AS_OF (mechanical, from Wikipedia's "
+          "Date-added column), plus a hand-supplied list of names that have since departed",
+  "mechanicalMembers": len(held_on_asof), "droppedAsAddedLater": dropped,
+  "departedAttempted": len(DEPARTED), "departedRecovered": len(departed_got),
+  "departedRecoveredList": departed_got,
+  "downloaded": len(got), "missing": missing,
+  "missingPct": round(100*len(missing)/max(len(SYMS),1), 1),
+  "caveat": "The departed list is from recall and is incomplete; that incompleteness is the "
+            "residual survivorship bias and is NOT measured by this script.",
+  "builtAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
 }
 json.dump(manifest, open("candle-bundle/manifest.json","w"), indent=1)
-print(f"\nmissing {len(missing)}/{len(members)} ({manifest['missingPct']}%) — send this number, it bounds the residual bias")
-
+step(6, f"DONE — kept {len(got)}, of which {len(departed_got)}/{len(DEPARTED)} are departed names; "
+        f"missing {len(missing)} ({manifest['missingPct']}%)")
 with tarfile.open("sp500.tar.gz","w:gz") as t: t.add("candle-bundle")
-from google.colab import files; files.download("sp500.tar.gz")
+step(7, "wrote sp500.tar.gz")
+try:
+    from google.colab import files; files.download("sp500.tar.gz")
+except Exception as e:
+    print(f"    auto-download unavailable ({e}) — grab sp500.tar.gz from the file browser", flush=True)
