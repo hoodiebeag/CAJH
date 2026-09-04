@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T14:47:23.692Z",
+  "updatedAt": "2026-09-04T14:52:18.405Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -1678,7 +1678,52 @@
       }
     },
     "cryptoReading": "Flat. Every rung returns 31-42% at p<=0.002 with a drawdown between 21.9% and 23.7%, across a twelvefold range of turnover, while paying 0.8% slippage a side. That is the opposite of the usual finding, where cost eats a fast rebalance -- and flatness across a parameter is stronger evidence the effect is real than any single rung's number. The practical consequence: crypto trade count can be raised roughly fourfold, from 2 a month to about 8, without visible damage to the edge. The variation from $2194 to $2737 across rungs is the noise floor, not a signal about which rung is best.",
-    "code": "frequency-run.mjs, which takes its trade counts from the real ledger rather than a bars-per-year formula -- that assumption has already been wrong once here."
+    "code": "frequency-run.mjs, which takes its trade counts from the real ledger rather than a bars-per-year formula -- that assumption has already been wrong once here.",
+    "equities": {
+      "5 bars": {
+        "periods": 133,
+        "final": 1513.4,
+        "cagrPct": 16.9,
+        "maxDrawdownPct": 15.19,
+        "up": "68/133",
+        "p": 0.001
+      },
+      "10 bars": {
+        "periods": 66,
+        "final": 1578.85,
+        "cagrPct": 18.9,
+        "maxDrawdownPct": 13.62,
+        "up": "36/66",
+        "p": 0.001
+      },
+      "21 bars": {
+        "periods": 31,
+        "final": 1785.63,
+        "cagrPct": 25,
+        "maxDrawdownPct": 13.55,
+        "up": "19/31",
+        "p": 0.001
+      },
+      "42 bars": {
+        "periods": 15,
+        "final": 1815.43,
+        "cagrPct": 26.7,
+        "maxDrawdownPct": 12.95,
+        "up": "9/15",
+        "p": 0.001
+      },
+      "63 bars": {
+        "periods": 10,
+        "final": 1711.62,
+        "cagrPct": 23.8,
+        "maxDrawdownPct": 12.81,
+        "up": "7/10",
+        "p": 0.001
+      }
+    },
+    "theAsymmetry": "The two asset classes answer this question differently and the difference is the interesting part. Crypto is FLAT: 31-42% across a twelvefold turnover range with no direction. Equities SLOPE: 16.9% at five bars rising monotonically to 26.7% at forty-two, then easing to 23.8% at sixty-three. Every rung of both is significant at p=0.0010 -- frequency never destroys the edge, it only trades some of it away in equities. Drawdown is flat in both (21.9-23.7% crypto, 12.8-15.2% equities), so the slope is a return effect, not a risk effect.",
+    "whatThatMeansForTradeCount": "Crypto can be rebalanced four times as often for four times the trades at no measurable cost -- the cheapest volume available anywhere in this project, and notable because crypto is the expensive book to trade. Equities cannot: going from 21 bars to 5 raises turnover fourfold and costs about a third of the return. So if more trades are wanted, take them in crypto. The canonical 21 bars remains the pre-registered choice for both.",
+    "aCaveatOnTheRungs": "The 63-bar rung has 10 periods and the 42-bar rung 15. Their CAGRs rest on too few observations to separate from each other or from 21 bars. The claim being made is about the absence of a cliff, not about which rung wins."
   },
   "theDesk": {
     "what": "'Apply these strategies to every asset class and decide what works best for each. Eventually we will pick and choose our strategy rather than strictly trading one variation.' This is that book.",
