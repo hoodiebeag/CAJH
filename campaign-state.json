@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T17:06:56.082Z",
+  "updatedAt": "2026-09-04T17:18:52.907Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2177,5 +2177,102 @@
       "whatThisDoesNotClaim": "That the exposure cannot be hedged. One variant, one lookback of 12 periods, one clamp. What it does establish is that the naive version -- the one anybody would reach for first -- is worse than doing nothing, decisively and in the same direction on both universes.",
       "code": "betahedge-run.mjs"
     }
+  },
+  "costStressOnTheBook": {
+    "why": "Every number in this campaign assumes 0.8% slippage a side in crypto and 5bp in equities. Those are the Kraken taker fee and a retail equity commission -- assumptions, not fills. This asks the one question that decides tradability: at what execution cost does the edge die? A stress, not a sweep. The rule is fixed at 252/21/21 and only the cost moves.",
+    "crypto": {
+      "0.20%": {
+        "costPerRebalancePct": 0.1,
+        "final": 3007.15,
+        "cagrPct": 46.7,
+        "maxDrawdownPct": 22.57,
+        "expectancyPct": 15.22
+      },
+      "0.80% (assumed)": {
+        "costPerRebalancePct": 0.39,
+        "final": 2623.26,
+        "cagrPct": 39.9,
+        "maxDrawdownPct": 22.73,
+        "expectancyPct": 14.02
+      },
+      "1.50%": {
+        "costPerRebalancePct": 0.72,
+        "final": 2234.9,
+        "cagrPct": 32.3,
+        "maxDrawdownPct": 22.91,
+        "expectancyPct": 12.62
+      },
+      "2.50%": {
+        "costPerRebalancePct": 1.21,
+        "final": 1774.7,
+        "cagrPct": 22.1,
+        "maxDrawdownPct": 23.17,
+        "expectancyPct": 10.62
+      },
+      "4.00%": {
+        "costPerRebalancePct": 1.93,
+        "final": 1251.09,
+        "cagrPct": 8.1,
+        "maxDrawdownPct": 26.6,
+        "expectancyPct": 7.62
+      },
+      "6.00%": {
+        "costPerRebalancePct": 2.9,
+        "final": 779.27,
+        "cagrPct": -8.3,
+        "maxDrawdownPct": 37.71,
+        "expectancyPct": 3.62
+      },
+      "breakeven": "between 4.00% and 6.00% a side, so roughly 4.7% -- about SIX TIMES the assumed Kraken taker fee."
+    },
+    "equities": {
+      "0.05% (assumed)": {
+        "costPerRebalancePct": 0.03,
+        "final": 1785.63,
+        "cagrPct": 25,
+        "maxDrawdownPct": 13.55,
+        "expectancyPct": 4.52
+      },
+      "0.20%": {
+        "costPerRebalancePct": 0.11,
+        "final": 1745.66,
+        "cagrPct": 23.9,
+        "maxDrawdownPct": 13.65,
+        "expectancyPct": 4.22
+      },
+      "0.50%": {
+        "costPerRebalancePct": 0.27,
+        "final": 1668.28,
+        "cagrPct": 21.8,
+        "maxDrawdownPct": 13.85,
+        "expectancyPct": 3.62
+      },
+      "1.00%": {
+        "costPerRebalancePct": 0.53,
+        "final": 1546.59,
+        "cagrPct": 18.3,
+        "maxDrawdownPct": 14.17,
+        "expectancyPct": 2.62
+      },
+      "2.00%": {
+        "costPerRebalancePct": 1.07,
+        "final": 1328.33,
+        "cagrPct": 11.5,
+        "maxDrawdownPct": 16.43,
+        "expectancyPct": 0.62
+      },
+      "4.00%": {
+        "costPerRebalancePct": 2.14,
+        "final": 977.27,
+        "cagrPct": -0.9,
+        "maxDrawdownPct": 31.2,
+        "expectancyPct": -3.38
+      },
+      "breakeven": "just under 4.00% a side, roughly EIGHTY TIMES the assumed 5bp."
+    },
+    "whyTheMarginIsSoWide": "Turnover, not generosity. Both legs replace about a quarter of their names per rebalance, so at the assumed rates the book pays 0.39% a rebalance in crypto and 0.03% in equities against gross period returns near 2%. A monthly-rebalanced decile book is simply not a cost-sensitive construction -- which is also why the frequency ladder found crypto flat from 5 bars to 63.",
+    "pStaysAt0002Throughout": "At every rung, in both universes. That is not the book being robust -- it is the NULL paying the same costs. p answers 'does ranking still beat not ranking at this cost', which stays true even where the book loses money. The CAGR column is the one that answers tradability. Recorded because reading the p column here would be a mistake.",
+    "theCaveatThatMatters": "Slippage is modelled as a fixed percentage of notional. Real slippage on size is nonlinear and worst in exactly the volatile conditions a momentum book wants to trade -- so the crypto margin is wide but not as wide as 4.7% suggests if the book is ever run at size in thin alts. The equities margin at roughly 80x any plausible retail cost is safe by any reading.",
+    "code": "coststress-run.mjs"
   }
 }
