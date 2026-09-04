@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T18:16:30.260Z",
+  "updatedAt": "2026-09-04T19:13:44.569Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2445,5 +2445,67 @@
     "whyThisIsNotJustSELECTINGTHEWINNER": "Because the out-of-sample rule, which never saw the test window, picked idioVol alone independently. The case is 'a rule that could not see the data chose it, and it also does better in sample', not 'it did better in sample'. Those are different claims and only the first is worth anything.",
     "theARGUMENTFORKEEPINGTHESLEEVEANYWAY": "Robustness, not performance. idioVol is ONE factor, it fails outright on crypto at p=0.539, and it fell with everything else in the equities regime shift (56 to 26 to 26). A sleeve holding only idioVol has nothing left if idioVol stops working, whereas momentum is the one factor that replicated across both asset classes and both disjoint halves. Paying 2.8 points of CAGR and 0.07 of Sharpe for that insurance is a defensible trade and it is a JUDGMENT, not a measurement.",
     "status": "OPEN. Both constructions stay in desk-run.mjs and both numbers are published. The choice is the owner's, and it is a choice between a better backtest and a more robust story rather than between a right and a wrong answer."
+  },
+  "THE_SHORTING_CONSTRAINT": {
+    "whatTheRecordSays": "docs/archive/VERDICTS_DETAIL.md, established by FUNDING-CARRY-DECAY-CHECK and restated as a hard constraint in the pairs-cointegration study: 'this Kraken account has no short/margin access, so any surviving pair would be research-only on this venue regardless of outcome'.",
+    "whyItMattersNow": "EVERY crypto number in this campaign is a long-short spread. The constraint has been sitting in the archive while the desk book was built on top of it. It should be re-verified against the live account before anyone acts on it -- venue capabilities change -- but taken at face value it means the crypto sleeve is research-only on the venue actually available.",
+    "longOnlyIsWhatTheVENUEALLOWS": {
+      "crypto, full window": {
+        "final": 2013.26,
+        "cagrPct": 27.6,
+        "maxDrawdownPct": 69.04,
+        "vsBasket": "basket $418.51 at -26.1% CAGR",
+        "pAgainstRandomSelection": 0.002,
+        "trades": "35, 1/mo, win 54.3%, payoff 2.73"
+      },
+      "crypto, long-short for comparison": {
+        "final": 2623.26,
+        "cagrPct": 39.9,
+        "maxDrawdownPct": 22.73
+      },
+      "equities, full window": {
+        "final": 1718.13,
+        "cagrPct": 23.1,
+        "maxDrawdownPct": 27.49,
+        "vsBasket": "basket $1162.32 at 6.0% CAGR",
+        "pAgainstRandomSelection": 0.008,
+        "trades": "102, 3.3/mo, win 54.9%, payoff 1.8"
+      },
+      "equities, long-short for comparison": {
+        "final": 1785.63,
+        "cagrPct": 25,
+        "maxDrawdownPct": 13.55
+      }
+    },
+    "theRankingSTILLWORKSLongOnly": "Both universes beat their random-selection null and both crush the equal-weight basket. Crypto long-only turns $1000 into $2013 while holding everything turns it into $418 -- ranking is worth 54 points of CAGR there. The SIGNAL is not the problem.",
+    "theDRAWDOWNIs": "Crypto long-only draws down 69.04%. That is the market's own 60.77% plus a selection effect, and it is what shorting was converting into 22.73%. A 69% drawdown is not a tradable book for a real account whatever its CAGR.",
+    "theBlendDoesNOTRescueIt": {
+      "correlation": 0.154,
+      "note": "Positive, and it had to be: both legs are now long market beta, so the -0.234 that made the spread blend work has no reason to survive.",
+      "crypto long-only, overlap": {
+        "cagrPct": -11.4,
+        "maxDrawdownPct": 72.2,
+        "sharpe": -0.14
+      },
+      "equities long-only, overlap": {
+        "cagrPct": 20,
+        "maxDrawdownPct": 27.47,
+        "sharpe": 0.64
+      },
+      "50/50": {
+        "cagrPct": 12.5,
+        "maxDrawdownPct": 50.79,
+        "sharpe": 0.25
+      },
+      "inverse-vol": {
+        "cagrPct": 12.6,
+        "maxDrawdownPct": 35.6,
+        "sharpe": 0.35
+      },
+      "reading": "The long-only desk returns 12.6% at a 35.60% drawdown with Sharpe 0.35, against the long-short desk's 31.1% at 10.65% and 2.54. And adding long-only crypto ACTIVELY HURTS: equities long-only alone is 20.0% at 27.47% and Sharpe 0.64, better than the blend on every axis. Note also that crypto long-only LOSES money over the 31-period overlap window (-11.4%) while making 27.6% over its own full 50-period window -- the same book, a later start date, and the sign flips. That is how fragile a long-only crypto book is to its window."
+    },
+    "theBOTTOMLINE": "The desk's result depends on being able to short, and the crypto venue in this project's record cannot. What is actually tradable, if equity shorting is available and crypto shorting is not, is the EQUITIES long-short alone: 25.0% CAGR at a 13.55% drawdown, Sharpe 1.19. That is a real result and it is roughly half the blended desk's Sharpe. The cross-asset diversification that produced 2.54 is unavailable at this venue.",
+    "whatShouldHappenNext": "Verify the account's current short and margin capability directly rather than trusting an archived finding. If crypto shorting can be obtained -- a different venue, a futures account, or margin -- the blended desk is back on the table and it is worth the setup. If it cannot, the honest scope of this campaign's result is the equities long-short, and every crypto figure is research.",
+    "code": "longonly-run.mjs"
   }
 }
