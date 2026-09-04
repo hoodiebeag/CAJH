@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T05:20:00Z",
- "phase": "equities prep: the market proxy is no longer hardcoded to BTC",
+ "updatedAt": "2026-09-04T05:35:00Z",
+ "phase": "equities prep: cost models named; still waiting on the bundle",
  "runsTested": 2446,
  "base": {
   "trendGate": false,
@@ -310,7 +310,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Waiting on the equities bundle. The short exit path is built and mirrored, the market proxy is generalised, and the run order is recorded. Nothing else in the crypto data will move the number.",
+ "nextUp": "Waiting on the equities bundle -- checked this tick, candle-bundle/1440 still holds the 29 crypto pairs only. Prep is done: short exit path built and mirrored, market proxy resolved from the universe, cost models named and refusing to guess. Nothing else in the crypto data will move the number.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -784,15 +784,21 @@
   "whatWasHardcoded": "Three call sites assumed XBTUSD was the market: benchmark.mjs's headline row, campaign.mjs's btcRegime series, and robustness.mjs's copy of it. On an equities bundle the benchmark would have printed 'BTC $n/a' next to every leaderboard and the btcRegime filter would have refused to compile with a message about BTC. Two of the three would have gone quiet, which is how the other eight silent no-ops in this campaign got as far as they did.",
   "fix": "bundle-loader.marketProxy resolves it from the universe against an ordered candidate list -- XBTUSD, SPY, VOO, IVV, ^GSPC, QQQ -- honours an explicit override or CANDLE_MARKET_PROXY, and THROWS when it cannot resolve, naming what it looked for. benchmarks() now returns proxySymbol/proxy/proxyMaxDrawdownPct instead of btc/btcMaxDrawdownPct, because a field called 'btc' on an equities run is a lie even when the number is right.",
   "stillToDoWhenDataArrives": [
-   "a cost model for equities -- Kraken taker rates are wrong and must not be reused silently",
    "declare survivorship bias unless the bundle demonstrably includes delisted names",
-   "the btcRegime filter should probably be renamed marketRegime once it is used on a second asset class"
+   "confirm with the owner whether prices are split/dividend adjusted -- adjustment changes historical stop distances, and stop distance is the variable this whole campaign turned on",
+   "rename btcRegime to marketRegime once it is used on a second asset class"
   ],
   "runOrder": [
    "benchmark.mjs on that universe",
    "robustness.mjs with the crypto-fitted leader untouched (the honest transfer test)",
    "walkforward.mjs with an EIGHT-point grid (the corrected ladder's optimum)",
    "only then sweep, and stop early"
-  ]
+  ],
+  "costModel": {
+   "built": "costs.mjs. Named models with sourced numbers: krakenTaker (0.008/0.0005, what every crypto result here was computed under), usEquityRetail (0/0.0005), usEquityIbkr (0.00005/0.0005), and zeroCost as a labelled diagnostic.",
+   "whyItRefusesToGuess": "A crypto universe defaults to krakenTaker so existing results stay reproducible. Anything else must be named. The failure mode of guessing is not a slightly wrong number: at a 3% stop crypto pays 0.57R a trade and US equities pay 0.033R, so equities charged Kraken rates would look like a dead strategy and crypto charged equity rates would manufacture an edge. costFor() throws on an unrecognised universe and the message says so.",
+   "identity": "costInR(model, stopPct) = 2*(feeRate+slipPct)/stopPct. Pinned by a test against the two figures the campaign turned on: 1.70R at a 1% stop, 0.11R at 15%.",
+   "verified": "The leader reproduces byte-identically after the rewiring -- 182 trades, $20,949.34, 20.77%."
+  }
  }
 }

@@ -23,7 +23,7 @@ import { slice, SPLIT } from "./campaign.mjs";
 import { availablePairs, marketProxy } from "./bundle-loader.mjs";
 import { buildEntryGate, sharpeRankTable, atr } from "./filters.mjs";
 import { simulateEquity } from "./equity.mjs";
-import { FEE_RATE, SLIPPAGE_PCT } from "./strategy.js";
+import { costFor } from "./costs.mjs";
 import { pathToFileURL } from "url";
 
 export const LEADER = {
@@ -60,6 +60,7 @@ export const LEADER = {
 /** Every trade a configuration takes, with the geometry the robustness checks slice on. */
 export function collect(config, { minutes = 1440, from = SPLIT.trainStart, to = SPLIT.trainEnd } = {}) {
   const series = {};
+  const cost = costFor(availablePairs(minutes), config.costModel ?? null);
   for (const pair of availablePairs(minutes)) {
     const candles = slice(pair, minutes, from, to);
     if (candles.length >= 120) series[pair] = candles;
@@ -77,7 +78,7 @@ export function collect(config, { minutes = 1440, from = SPLIT.trainStart, to = 
       ? buildEntryGate(config.filters, { candles, entryMins: minutes, btcCandles, sharpeRanks, pair })
       : null;
     const r = backtestMultiTF({ series: [{ label: String(minutes), mins: minutes, candles }] },
-      { ...config, entryGate, entryTf: String(minutes), feeRate: FEE_RATE, slipPct: SLIPPAGE_PCT });
+      { ...config, entryGate, entryTf: String(minutes), feeRate: cost.feeRate, slipPct: cost.slipPct });
     const a = atr(candles, config.atrPeriod ?? 14);
     const atrByTime = new Map();
     for (let i = 0; i < candles.length; i++) {

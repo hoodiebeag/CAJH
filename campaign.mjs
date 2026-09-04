@@ -30,6 +30,7 @@ import { loadBundleCandles, availablePairs, resampleBundleCandles, marketProxy }
 import { simulateEquity, leaderboard } from "./equity.mjs";
 import { FEE_RATE, SLIPPAGE_PCT } from "./strategy.js";
 import { buildEntryGate, sharpeRankTable, atr as atrSeries } from "./filters.mjs";
+import { costFor } from "./costs.mjs";
 
 export const SPLIT = Object.freeze({
   // Full period, per the owner's 2026-09-03 direction. Kept as named fields so a later session
@@ -54,6 +55,12 @@ export function slice(pair, minutes, from, to) {
 /** One configuration over the whole universe -> trades with entry times, ready for the simulator. */
 export function runConfig(config, { minutes = 1440, from = SPLIT.trainStart, to = SPLIT.trainEnd, pairs = null } = {}) {
   const universe = pairs ?? availablePairs(minutes);
+  // Named rather than assumed. A crypto universe defaults to the Kraken rates every existing result
+  // was computed under; anything else must say which model it wants, because inheriting Kraken
+  // rates on equities would charge about thirty times the real cost and read as a dead strategy.
+  const cost = config.feeRate !== undefined || config.slipPct !== undefined
+    ? { name: "explicit", feeRate: config.feeRate ?? FEE_RATE, slipPct: config.slipPct ?? SLIPPAGE_PCT }
+    : costFor(universe, config.costModel ?? null);
   const trades = [];
   let symbolsUsed = 0;
   // `config.filters` is a serialisable spec so it can live in the log; the closure it compiles to
@@ -89,7 +96,7 @@ export function runConfig(config, { minutes = 1440, from = SPLIT.trainStart, to 
     }
     tfSeries.sort((a, b) => a.mins - b.mins);
     const r = backtestMultiTF({ series: tfSeries },
-      { ...config, entryGate, entryTf: String(minutes), feeRate: config.feeRate ?? FEE_RATE, slipPct: config.slipPct ?? SLIPPAGE_PCT });
+      { ...config, entryGate, entryTf: String(minutes), feeRate: cost.feeRate, slipPct: cost.slipPct });
     symbolsUsed++;
     // atrPct at the entry bar, so volatility-targeted sizing has something to size against. Keyed
     // by the bar's own time rather than by position, because an excursion's entryTime is the bar
