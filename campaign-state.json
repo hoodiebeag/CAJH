@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T14:53:46.162Z",
+  "updatedAt": "2026-09-04T15:07:02.407Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -1866,5 +1866,61 @@
     "verdict": "NEGATIVE, and worth writing down as such. Dispersion genuinely sorts: the high half returns about three times the low half in crypto (+97.5% against +32.8% cumulative) and roughly three times in equities. But no usable form of that beat the baseline on both universes. The GATE loses money in both -- $1975 against $2623 and $1484 against $1786 -- because the low-dispersion half is still POSITIVE and skipping it forgoes real return. It raises Sharpe (1.73 against 1.50, 1.61 against 1.19) and does NOT lower drawdown at all, both staying at exactly the baseline: the worst drawdown falls inside a high-dispersion period the gate holds through. SIZING helps crypto by 18% and hurts equities by 3%. One of two is what noise looks like.",
     "whyItIsRecordedAnyway": "Because the sorting is real and the trading rule is not, and those two facts are easy to confuse. A signal that separates good periods from less-good periods still needs the bad periods to be BAD before turning them off pays. Here they are merely less good, so the gate is a way of holding cash at a 33% cumulative opportunity cost in exchange for a Sharpe that 31 to 50 observations cannot resolve.",
     "code": "dispersion-run.mjs"
+  },
+  "selectionWalkForward": {
+    "why": "The desk book's weakest claim was that idioVol was chosen for the equities sleeve using screens run over the WHOLE window. The screens were fixed in advance and it was never chosen by its return, which is the strongest defence available and is not the same as never having seen the test data. This removes the objection by making the choice itself out of sample.",
+    "construction": "At each quarter, rank all twelve signals by the Sharpe of their long-short spread on bars that closed BEFORE the quarter began, then trade the winner through that quarter. The series is truncated only when FITTING, never when trading -- a position's forward return is not lookahead, and truncating at the trading boundary is what once amputated open holds and produced a false negative here.",
+    "equities": {
+      "whatItPickedWithoutSeeingTheTestData": "idioVol in six of seven quarters, lowVol in the first. It found the same factor the in-sample screens found, from prior data only.",
+      "always momentum, no choice": {
+        "final": 1197.6,
+        "cagrPct": 11.3,
+        "maxDrawdownPct": 13.04,
+        "sharpe": 0.57,
+        "up": "9/20"
+      },
+      "re-select best each quarter": {
+        "final": 1450.63,
+        "cagrPct": 24.8,
+        "maxDrawdownPct": 11.53,
+        "sharpe": 1.36,
+        "up": "14/20"
+      },
+      "re-select best two": {
+        "final": 1257.33,
+        "cagrPct": 14.6,
+        "maxDrawdownPct": 12.82,
+        "sharpe": 0.84,
+        "up": "12/20"
+      },
+      "inSampleBestForReference": "idioVol at $2176.39 over the full window"
+    },
+    "crypto": {
+      "whatItPicked": "momentum in every quarter, nearHigh second in every quarter. The re-selection rule is therefore IDENTICAL to always-momentum, and its numbers are identical to the last cent.",
+      "always momentum": {
+        "final": 1941.43,
+        "cagrPct": 51,
+        "maxDrawdownPct": 13.76,
+        "sharpe": 1.93,
+        "up": "18/28"
+      },
+      "re-select best two": {
+        "final": 1968.78,
+        "cagrPct": 52.3,
+        "maxDrawdownPct": 14.05,
+        "sharpe": 1.9,
+        "up": "17/28"
+      }
+    },
+    "whatThisEstablishes": "A rule that could only see prior data picked idioVol for equities anyway, and its out-of-sample book returns 24.8% at an 11.53% drawdown and Sharpe 1.36 against always-momentum's 11.3%, 13.04% and 0.57. The 'pick and choose' framing is worth something out of sample in equities. In crypto it is worth exactly nothing and costs exactly nothing: there is one factor there and the rule finds it every quarter.",
+    "theDECAYThisAlsoExposes": "Equities momentum out of sample is much weaker than in sample -- 11.3% CAGR at Sharpe 0.57 over 2025-2026 against 25.0% and 1.19 over the full window. Crypto momentum went the other way, 51.0% at Sharpe 1.93 out of sample against 39.9% and 1.50 in sample. This is the single most important number in the batch and it would have been easy to bury: the equities leg of the desk book is leaning on a factor whose momentum component has decayed sharply in the most recent 20 months.",
+    "consistencyWithTheHalvesScreen": "The 'best two' book is WORSE than 'best one' in equities, 14.6% against 24.8%, because the second pick is almost always lowVol -- which is exactly the signal the disjoint-halves screen culled. Two independent procedures agree that lowVol is the weaker one.",
+    "honestAboutThisTestToo": [
+      "20 out-of-sample periods for equities and 28 for crypto. Small.",
+      "Two selection variants were run, top-1 and top-2, and top-1 wins in equities. That is a one-of-two choice being reported, so both are printed rather than only the winner.",
+      "The twelve signals were drawn from the literature before any result was seen, which is the part that IS genuinely pre-specified. The universe is not: sp500-128 is today's constituent list, so it carries survivorship bias -- which for a long-short understates rather than flatters.",
+      "The pipeline itself was designed while looking at 2023-2024. Only the SELECTION is out of sample, not the decision to build a cross-sectional factor battery at all."
+    ],
+    "code": "selection-wf.mjs"
   }
 }
