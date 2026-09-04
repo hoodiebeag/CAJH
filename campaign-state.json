@@ -1,1336 +1,1418 @@
 {
- "schema": "cajh-campaign/v1",
- "split": {
-  "trainStart": "2023-01-01",
-  "trainEnd": "2026-03-31",
-  "holdoutStart": null,
-  "holdoutEnd": null,
-  "sealed": false
- },
- "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
- "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T15:15:00Z",
- "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
- "runsTested": 2446,
- "base": {
-  "trendGate": false,
-  "alignMode": "none",
-  "maxStopPct": 0.2,
-  "lockBreakeven": true
- },
- "sweptAxes": [
-  {
-   "phase": "baseline",
-   "axis": "entryMode",
-   "configs": 12
+  "schema": "cajh-campaign/v1",
+  "split": {
+    "trainStart": "2023-01-01",
+    "trainEnd": "2026-03-31",
+    "holdoutStart": null,
+    "holdoutEnd": null,
+    "sealed": false
   },
-  {
-   "phase": "sweep1",
-   "axis": "minStopPct",
-   "configs": 84,
-   "grid": [
-    0,
-    0.02,
-    0.03,
-    0.05,
-    0.08,
-    0.1,
-    0.15,
-    0.2
-   ]
+  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
+  "startedAt": "2026-09-03T19:00:00Z",
+  "updatedAt": "2026-09-04T13:59:45.042Z",
+  "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
+  "runsTested": 2446,
+  "base": {
+    "trendGate": false,
+    "alignMode": "none",
+    "maxStopPct": 0.2,
+    "lockBreakeven": true
   },
-  {
-   "phase": "sweep2",
-   "axis": "tpR x minStopPct",
-   "configs": 288,
-   "grid": {
-    "tpR": [
-     1.5,
-     2,
-     3,
-     4,
-     5,
-     6,
-     8,
-     12
-    ],
-    "minStopPct": [
-     0.05,
-     0.1,
-     0.15
-    ]
-   }
-  },
-  {
-   "phase": "sweep3",
-   "axis": "tpR high range",
-   "configs": 180,
-   "grid": {
-    "tpR": [
-     12,
-     16,
-     24,
-     40,
-     100
-    ],
-    "minStopPct": [
-     0.05,
-     0.1,
-     0.15
-    ]
-   }
-  },
-  {
-   "phase": "sweep4",
-   "axis": "maxHold x tpR",
-   "configs": 168,
-   "grid": {
-    "maxHold": [
-     10,
-     25,
-     50,
-     100,
-     200,
-     400,
-     800
-    ],
-    "tpR": [
-     4,
-     100
-    ]
-   }
-  },
-  {
-   "phase": "sweep5",
-   "axis": "trailR x trailStartR",
-   "configs": 180,
-   "result": "worse everywhere; best $1482 vs $2889 untrailed. trailStartR is a no-op whenever trailStartR <= trailR, because max() keeps the original stop."
-  },
-  {
-   "phase": "sweep6",
-   "axis": "trailingTpPct",
-   "configs": 84,
-   "result": "worse everywhere; best $1298."
-  },
-  {
-   "phase": "sweep7",
-   "axis": "trendGate x mode x trendMa",
-   "configs": 120,
-   "result": "NEW LEADER. breakout + ma gate + trendMa 200: $3424.62 on 156 trades at 12.43% maxDD."
-  },
-  {
-   "phase": "sweep8",
-   "axis": "trendMa high range",
-   "configs": 72,
-   "result": "200 is an interior peak, but a sharp one: 150 $3373, 200 $3425, 250 $2282, 300 $1590."
-  },
-  {
-   "phase": "sweep9",
-   "axis": "riskPct",
-   "configs": 64,
-   "result": "pure leverage. Same 156 trades at 10% risk end at $1,421,133 with a 94% drawdown."
-  },
-  {
-   "phase": "sweep10",
-   "axis": "maxHold x minStopPct x maxStopPct, gated",
-   "configs": 216,
-   "result": "small gain. minStopPct 0.03 beats 0.05: $3543.12 on 160 trades at 13.99% DD. With the gate on, maxHold 100 now beats 200/400/800 -- the opposite of the ungated sweep4."
-  },
-  {
-   "phase": "sweep11",
-   "axis": "entry filters",
-   "configs": 96,
-   "result": "five new filters, none of them material. Best is atrPctBand min 3% at $3672.04 (+3.6%) by dropping 5 of 160 trades; btcRegime 100 is $3656.32 by dropping 17. Removing a handful of losers from a 156-trade sample moves the balance a few percent by chance, so treat these as unswept rather than as working filters."
-  },
-  {
-   "phase": "sweep12",
-   "axis": "240m timeframe",
-   "configs": 81,
-   "result": "clearly worse. Best is bos/trendMa600/minStop3%/hold300 at $1630 with a 73.72% drawdown, against the daily leader's $3672 at 13.99%. Six times the bars means six times the trades and six times the cost; the campaign's cost identity (0.017/stopPct per trade) does not care that the bars are shorter. The daily timeframe is where this works."
-  },
-  {
-   "phase": "sweep13",
-   "axis": "partialAtR x partialFrac",
-   "configs": 18,
-   "result": "banking any of a runner hurts, monotonically. Best is the smallest possible bank (25% at 12R) at $3010.25 against $3543.12 with no partial; taking 75% off at 5R gives $2107. This is the concentration finding restated as a control: the tail IS the return, so realising part of it removes the return."
-  },
-  {
-   "phase": "sweep14",
-   "axis": "stopMode atr x atrStopK",
-   "configs": 21,
-   "result": "INVALID for breakout and bos. stopMode is only implemented for entryMode anticipate, so seven atrStopK values produced seven byte-identical rows. Those 14 rows are marked invalid in the log and backtestMultiTF now throws instead of ignoring the parameter. anticipate does respond: atrStopK 3 gives $1928.99 at a 10.51% drawdown on 98 trades, still below the structural leader."
-  },
-  {
-   "phase": "sweep15",
-   "axis": "filter combinations, all 16 subsets",
-   "configs": 16,
-   "result": "atrPctBand + btcRegime is the best pair at $3760.75 (13.51% DD). Adding adx or maSlope always LOWERS the balance and always LOWERS the drawdown -- all four together give $2624.88 at 8.57% DD on 78 trades. A real risk/return trade, no free lunch."
-  },
-  {
-   "phase": "sweep16",
-   "axis": "breakeven lock on the gated leader",
-   "configs": 40,
-   "result": "arming the lock LATER helps: beTriggerR 3 with beLockR 0.2 gives $3885.34 against $3543.12 at the 2.0 default. Consistent with the tail thesis -- an early breakeven stop chokes the runners that carry the return."
-  },
-  {
-   "phase": "sweep17",
-   "axis": "swing window x breakout lookback x alignMode",
-   "configs": 80,
-   "result": "n and alignMode are BOTH no-ops for breakout. alignMode is structurally dead in a single-timeframe run (no higher TFs exist, so every mode evaluates true) -- do not sweep it again without a multi-TF series. breakoutLookback does bind; 20 is best."
-  },
-  {
-   "phase": "sweep18",
-   "axis": "beTriggerR x filters x trendMa combined",
-   "configs": 60,
-   "result": "NEW LEADER. $4077.96 on 148 trades at 13.54% DD -- level with buy-and-hold BTC ($4105.94) at roughly a quarter of its 52.06% drawdown."
-  },
-  {
-   "phase": "sweep19",
-   "axis": "crossSection lookback x topN",
-   "configs": 42,
-   "result": "Built the last idea from the literature search: rank the universe by trailing Sharpe and trade only the leaders. It does NOT help returns. Tighter selection monotonically lowers the balance and lowers the drawdown, the same risk/return dial every other filter turned out to be: topN 12 gives $3685.85 at 10.96% DD, topN 3 gives $2363.77 at 7.81%. The nominal new best, topN 20 of 29 pairs at $4175.64, filters almost nothing -- it drops 5 trades of 148 for +2.4%, which is noise at this sample size, not selection working."
-  },
-  {
-   "phase": "sweep20",
-   "axis": "higherTfs x alignMode x swing window",
-   "configs": 120,
-   "result": "Adding a higher timeframe to the breakout leader collapses it: 143 trades to 71, $4175.64 to $1289.87. The cause is not alignment -- alignMode and n were flagged INERT by the new detector, byte-identical across every value. It is that trendSrc is the HIGHEST timeframe present, so a 3-day series turns the 200-period MA gate into a 600-day lookback. Supplying a higher timeframe is not an alignment-only change."
-  },
-  {
-   "phase": "sweep21",
-   "axis": "alignMode where it is actually wired",
-   "configs": 96,
-   "result": "bos and anticipate are the only modes that consult alignMode, and only with a higher timeframe present. Swept there it genuinely binds -- anticipate on a weekly anchor gives 237 trades/$2390 at alignMode none against 162/$2539 at first -- but nothing beats the leader. Best is $3833.05 (anticipate, 3-day anchor, alignMode none, trendMa 20) at a 21.77% drawdown. 'first' and 'all' are identical with a single higher timeframe, as they must be."
-  },
-  {
-   "phase": "sweep22",
-   "axis": "volTarget x volClamp",
-   "configs": 28,
-   "result": "Raw sweep runs to $16,138 at volTarget 0.10 / clamp 5, and that number is LEVERAGE -- the universe's median trade sits at 5.55% ATR, so a 10% target scales every bet up and deploys 3.7x the risk. Risk-matched (equity.mjs riskMatchedRiskPct holds mean deployed risk at 0.5%) the real answer is $5087 against $4175.64 flat, at 13.41% drawdown against 13.54% -- and it is FLAT across volTarget 0.03-0.10 at any clamp >= 3. That plateau is the point: once the clamp is loose the weights are just proportional to 1/ATR% and the level cancels, so there is one structural decision here and no threshold to fit. First such change in the campaign."
-  },
-  {
-   "phase": "sweep23",
-   "axis": "entryDelayBars x feeBufferPct",
-   "configs": 20,
-   "result": "Filling on the NEXT bar's open instead of the signal bar's close IMPROVES the result: $4874.70 against $4595.23, and it wins on every robustness margin -- worst-pair-out $3723 vs $3480, full-history $3636 vs $3431, drop-ten-best $1125 vs $1049, and higher mean R in all three years. Mechanically it declines to buy the close of the breakout day, which is the top of that day's move. Two bars collapses to $2305, so this is a discontinuity rather than a curve. Adopted, because it is both the more realistic assumption and the better one. feeBufferPct barely matters below 0.05."
-  },
-  {
-   "phase": "sweep24",
-   "axis": "cost stress",
-   "configs": 20,
-   "result": "The strongest evidence so far that the result is not a cost-model artifact. At 3x the modelled fee (2.4% vs 0.8%) AND 40x the modelled slippage (2% vs 0.05%) the strategy still ends at $2580.11, above the $1419.93 equal-weight basket. At 2x fees and 10x slippage it is $3458.78. It degrades smoothly and stays positive across the whole grid."
-  },
-  {
-   "phase": "sweep25",
-   "axis": "maxConcurrent x riskPct",
-   "configs": 21,
-   "result": "Capping simultaneous positions at 3 and raising per-position risk to 1% gives $5160.44 at an 8.96% drawdown, against the unlimited book's $4874.70 at 12.94%. More return, less drawdown, and LESS capital at risk at the peak: 3 x 1% = 3% against 19 x 0.5% = 9.5%. The nineteen concurrent longs were largely the same bet nineteen times."
-  },
-  {
-   "phase": "sweep26",
-   "axis": "short side, as currently supported",
-   "configs": 27,
-   "result": "Every one of 27 configurations loses. Best $993.06 at a 49.48% drawdown. Run without a trend gate, because the 'ma' gate as written asks whether price is ABOVE its average -- the wrong condition for a short."
-  },
-  {
-   "phase": "sweep27",
-   "axis": "short side with a direction-aware trend gate",
-   "configs": 72,
-   "result": "The gate is now inverted for shorts in backtest.js, and it helps -- $816.25 against $633.27 ungated -- but every one of 72 configurations still loses over the full period."
-  },
-  {
-   "phase": "sweep28",
-   "axis": "never-offered components, screened for inertness",
-   "configs": 48,
-   "result": "chopFilter, requireHigherLow and minRoomR are ALL inert for breakout -- flagged automatically by sweep.mjs's inertAxes. Only trendGateMode and exitOnSwingHigh bind. Three more silent no-ops, bringing the total found to eight."
-  },
-  {
-   "phase": "sweep29",
-   "axis": "short side with the full exit engine",
-   "configs": 72,
-   "result": "Still loses in all 72 configurations. Best $816.25, a 18.4% loss, at a 49.38% drawdown -- identical to the best result before the exit engine was built. And lockBreakeven FALSE tops the table: the breakeven lock, which is worth a great deal on the long side, does nothing for the short side here."
-  }
- ],
- "leader": {
-  "name": "walk-forward-endorsed",
-  "entryMode": "breakout",
-  "alignMode": "none",
-  "trendGate": true,
-  "trendGateMode": "ma",
-  "trendMa": 150,
-  "tpR": 100,
-  "maxHold": 50,
-  "minStopPct": 0.03,
-  "maxStopPct": 0.2,
-  "entryDelayBars": 1,
-  "lockBreakeven": true,
-  "beTriggerR": 3,
-  "beLockR": 0.2,
-  "filters": {
-   "btcRegime": {
-    "period": 50
-   }
-  },
-  "volTarget": 0.05,
-  "volClamp": 3,
-  "riskPct": 0.01,
-  "maxConcurrent": null,
-  "trades": 182,
-  "meanR": 1.7617,
-  "finalBalance": 20949.34,
-  "maxDrawdownPct": 20.77,
-  "why": "Every component chosen by a training-only search. btcRegime 50 is the newest: it had never actually been OFFERED to the walk-forward -- the filter grid held only null, atrPctBand and atrPctBand+crossSection -- and once offered it was chosen in nine quarters of nine, taking the out-of-sample result from $2300.28 at 13.39% to $2588.43 at 10.96%. Better on both axes in sample too, and it is the only change that has moved 2025.",
-  "differsFromSearchBest": {
-   "filters": "none (declined 7/9)",
-   "maxConcurrent": "none (never selected)",
-   "trendMa": "150 not 200 (9/9)",
-   "beTriggerR": "3 not 2.5 (9/9)",
-   "maxHold": "50 not 100 (7/9)"
-  }
- },
- "benchmark": {
-  "btcBuyAndHold": 4105.94,
-  "btcMaxDrawdownPct": 52.06,
-  "equalWeightBasket": 1419.93,
-  "solBuyAndHold": 8311,
-  "startingBalance": 1000
- },
- "readThisFirst": "breakout + a 200-day MA trend gate is the first config to beat its own random-entry null by a detectable margin (p=0.005, excess 1.55R vs an MDE of 1.34R), and it does it at a 12.43% drawdown against BTC's 52.06%. It is still the best of 1152 in-sample configurations, so treat it as the thing to attack next, not as a finding. Everything before it -- long tpR, long maxHold -- was buying exposure in a rising market.",
- "unsweptAxes": [
-  "maxStopPct",
-  "beTriggerR",
-  "beLockR",
-  "partialAtR/partialFrac",
-  "stopMode atr + atrStopK",
-  "chopFilter",
-  "alignMode",
-  "n (swing window)",
-  "minRoomR",
-  "240-minute timeframe",
-  "universe selection",
-  "new filters not yet in backtest.js"
- ],
- "nextUp": "Untested cells remaining: CARRY (crypto funding rates, free from exchange APIs, the second-most documented factor and a genuinely different mechanism); CROSS-ASSET RANKING (crypto and equities in ONE universe, never done); and the equities-only factors need a third universe to decide whether they are asset-class-specific or simply spurious.",
- "randomEntryNull": {
-  "runner": "entrynull-run.mjs",
-  "bos 5% tpR100 hold100": {
-   "observedMeanR": 0.4576,
-   "nullMeanR": 0.3604,
-   "excessR": 0.0973,
-   "p": 0.3273,
-   "mdeR": 0.7665,
-   "nullBalance": 2971.85
-  },
-  "breakout 5% tpR100 hold400": {
-   "observedMeanR": 0.9807,
-   "nullMeanR": 0.3966,
-   "excessR": 0.5842,
-   "p": 0.1329,
-   "mdeR": 1.4401,
-   "nullBalance": 1790.36
-  },
-  "breakout 5% tpR4 hold100": {
-   "observedMeanR": -0.0299,
-   "nullMeanR": -0.1324,
-   "excessR": 0.1025,
-   "p": 0.1239,
-   "mdeR": 0.2478,
-   "nullBalance": 749.73
-  },
-  "reading": "The leader's entry rule is worth 0.0973R against a coin flip with identical geometry, and a random-entry account ends ABOVE it. No config's excess reaches what this test could detect, so the honest statement is not 'no edge' but 'no edge large enough to see through the noise a 100R target creates'.",
-  "breakout + ma200 gate (the leader)": {
-   "observedMeanR": 1.8006,
-   "trades": 156,
-   "vs random entry on any bar": {
-    "nullMeanR": 0.3803,
-    "excessR": 1.4202,
-    "p": 0.0075,
-    "z": 3.06,
-    "mdeR": 1.3001,
-    "detectable": true,
-    "nullBalance": 1344.99
-   },
-   "vs random entry restricted to gated bars": {
-    "nullMeanR": 0.2474,
-    "excessR": 1.5532,
-    "p": 0.005,
-    "z": 3.25,
-    "mdeR": 1.3407,
-    "detectable": true,
-    "nullBalance": 1212.7
-   },
-   "reading": "The first configuration in this campaign whose excess over a matched-geometry random entry exceeds what the test can detect. It survives the harder version too: restricting the random entries to bars the 200-MA gate allows makes the excess LARGER, so the gate is not doing the work on its own. Caveat that has to stay attached: this is the best of ~1152 configurations searched on the same data, and at that many draws roughly 6 configs reach p<0.005 by chance. p=0.005 is not a discovery here, it is a reason to keep testing this one."
-  }
- },
- "leveredLeader": {
-  "same config at riskPct 0.10": {
-   "finalBalance": 1421133.39,
-   "maxDrawdownPct": 94.0
-  },
-  "reading": "Not a better strategy, the same one levered 20x. A 94% drawdown means $1000 was worth about $60 at the low. Reported because the owner asked for the highest number; the drawdown is reported with it because the number is meaningless without it."
- },
- "concentration": {
-  "all": {
-   "trades": 182,
-   "meanR": 1.7617,
-   "final": 20949.34,
-   "dd": 20.77
-  },
-  "leaveOnePairOut": {
-   "worst": "without DOGEUSD $12449.30",
-   "next": [
-    "without ZECUSD $13715.39",
-    "without XRPUSD $14413.02"
-   ]
-  },
-  "trimTopWinners": {
-   "drop1": 13715.39,
-   "drop3": 7495.14,
-   "drop5": 4757.57,
-   "drop10": 2209.23,
-   "drop20": 887.48
-  },
-  "perYearStandalone": {
-   "2023": {
-    "trades": 40,
-    "meanR": 3.139
-   },
-   "2024": {
-    "trades": 75,
-    "meanR": 2.053
-   },
-   "2025": {
-    "trades": 62,
-    "meanR": 0.7431
-   },
-   "2026": {
-    "trades": 5,
-    "meanR": -0.9957
-   }
-  },
-  "fullHistoryPairsOnly": {
-   "pairs": 16,
-   "trades": 150,
-   "meanR": 1.6584,
-   "final": 13581.16
-  },
-  "shape": {
-   "winRatePct": 40.1,
-   "medianNetR": -1.1061,
-   "top5SharePct": 57.4,
-   "distinctDays": 111,
-   "clusteringFactor": 1.64
-  },
-  "reading": "2025 lifts from +0.21R to +0.74R -- the only change in the campaign that has moved the worst year. The decay is reduced, not cured: 3.14 -> 2.05 -> 0.74 is still a decline, and 2026's five trades are negative."
- },
- "literatureSearched": {
-  "date": "2026-09-03",
-  "implemented": [
-   "maSlope (MA rising, not just price above it)",
-   "adx (trend strength)",
-   "maxExtension (ATR units above the MA)",
-   "atrPctBand (volatility regime)",
-   "btcRegime (BTC above its own MA as a market-wide state)"
-  ],
-  "notYetBuilt": [
-   "rolling-Sharpe cross-sectional pair selection",
-   "asymmetric long/short allocation",
-   "volatility-targeted position sizing"
-  ],
-  "sources": [
-   "arxiv 2602.11708 AdaptiveTrend",
-   "pyquantlab regime-filtered trend",
-   "quantmonitor SMA+ATR regime rules"
-  ]
- },
- "riskReturnDial": {
-  "note": "Every filter built so far trades return for drawdown rather than adding return.",
-  "examples": {
-   "no filters": {
-    "final": 3934.79,
-    "dd": 13.54
-   },
-   "atrPctBand": {
-    "final": 4077.96,
-    "dd": 13.54
-   },
-   "crossSection topN12": {
-    "final": 3685.85,
-    "dd": 10.96
-   },
-   "crossSection topN3": {
-    "final": 2363.77,
-    "dd": 7.81
-   },
-   "all four of adx+btc+slope+atr": {
-    "final": 2624.88,
-    "dd": 8.57
-   }
-  }
- },
- "silentNoOpsFound": {
-  "why": "A parameter the engine accepts and ignores produces byte-identical rows that read as a swept axis. Four found so far.",
-  "found": {
-   "stopMode": "only implemented for entryMode anticipate; now throws",
-   "alignMode": "only consulted by bos and anticipate, and only with a higher timeframe present; now documented in backtest.js",
-   "n (swing window)": "inert for breakout, which uses a lookback window rather than pivots",
-   "trailStartR": "inert whenever trailStartR <= trailR, because max() keeps the original stop"
-  },
-  "guard": "sweep.mjs's inertAxes() now names any axis whose values never changed a balance, printed above every table."
- },
- "costStress": {
-  "3x fee + 40x slip": 2580.11,
-  "2x fee + 10x slip": 3458.78,
-  "1.5x fee + 4x slip": 4003.34,
-  "as modelled": 4874.7,
-  "note": "Run at the pre-delay leader; the shape is what matters, not the level."
- },
- "walkForward": {
-  "runner": "walkforward.mjs (node walkforward.mjs, ~2 min), pinned by walkforward.test.mjs",
-  "construction": "Each quarter of 2024-01-01..2026-03-31 is scored by parameters fitted only on bars that closed before it began. Nine quarters chained into one curve.",
-  "result": {
-   "trades": 135,
-   "meanR": 1.1448,
-   "finalBalance": 1974.68,
-   "maxDrawdownPct": 13.02
-  },
-  "sameWindowNoStrategy": {
-   "btc": 1544.1,
-   "btcMaxDrawdownPct": 52.06,
-   "equalWeightBasket": 779.28
-  },
-  "inSampleComparison": {
-   "sameWindowFittedOnAllData": {
-    "meanR": 1.8522,
-    "finalBalance": 2381.2
-   },
-   "reading": "+1.85R in-sample against +1.14R out-of-sample over the identical window. That gap is the size of the hindsight, measured rather than guessed: roughly 40% of the apparent edge was the search seeing the answer."
-  },
-  "parameterStability": "trendMa 150 and minStopPct 0.03 and volTarget 0.05 chosen in ALL NINE quarters; beTriggerR 2.5 in seven of nine. The search is not chasing noise. Note it never picks the full-sample leader's trendMa 200.",
-  "quarterlyShape": "Four of nine quarters positive. The return is concentrated in 2024Q1 (+2.84R), 2024Q4 (+1.73R) and 2025Q3 (+2.90R) -- the same fat-tail dependence as the in-sample result.",
-  "leaksStillPresent": "This is NOT a clean holdout and must not be quoted as one. The grid was designed after seeing full-sample results; the universe was chosen after seeing all of it; and walkforward.mjs's FIXED block holds the entry mode, the filters, and the one-bar fill delay constant at values selected in-sample rather than refitting them. Refitting those too would be the stronger test and has not been run.",
-  "laterStarts": {
-   "from 2025-01-01": {
-    "trades": 61,
-    "meanR": 0.9752,
-    "final": 1127.19,
-    "dd": 9.9,
-    "quarters": {
-     "25Q1": -1.1466,
-     "25Q2": -0.8352,
-     "25Q3": 2.9004,
-     "25Q4": -0.8006,
-     "26Q1": -0.7557
+  "sweptAxes": [
+    {
+      "phase": "baseline",
+      "axis": "entryMode",
+      "configs": 12
+    },
+    {
+      "phase": "sweep1",
+      "axis": "minStopPct",
+      "configs": 84,
+      "grid": [
+        0,
+        0.02,
+        0.03,
+        0.05,
+        0.08,
+        0.1,
+        0.15,
+        0.2
+      ]
+    },
+    {
+      "phase": "sweep2",
+      "axis": "tpR x minStopPct",
+      "configs": 288,
+      "grid": {
+        "tpR": [
+          1.5,
+          2,
+          3,
+          4,
+          5,
+          6,
+          8,
+          12
+        ],
+        "minStopPct": [
+          0.05,
+          0.1,
+          0.15
+        ]
+      }
+    },
+    {
+      "phase": "sweep3",
+      "axis": "tpR high range",
+      "configs": 180,
+      "grid": {
+        "tpR": [
+          12,
+          16,
+          24,
+          40,
+          100
+        ],
+        "minStopPct": [
+          0.05,
+          0.1,
+          0.15
+        ]
+      }
+    },
+    {
+      "phase": "sweep4",
+      "axis": "maxHold x tpR",
+      "configs": 168,
+      "grid": {
+        "maxHold": [
+          10,
+          25,
+          50,
+          100,
+          200,
+          400,
+          800
+        ],
+        "tpR": [
+          4,
+          100
+        ]
+      }
+    },
+    {
+      "phase": "sweep5",
+      "axis": "trailR x trailStartR",
+      "configs": 180,
+      "result": "worse everywhere; best $1482 vs $2889 untrailed. trailStartR is a no-op whenever trailStartR <= trailR, because max() keeps the original stop."
+    },
+    {
+      "phase": "sweep6",
+      "axis": "trailingTpPct",
+      "configs": 84,
+      "result": "worse everywhere; best $1298."
+    },
+    {
+      "phase": "sweep7",
+      "axis": "trendGate x mode x trendMa",
+      "configs": 120,
+      "result": "NEW LEADER. breakout + ma gate + trendMa 200: $3424.62 on 156 trades at 12.43% maxDD."
+    },
+    {
+      "phase": "sweep8",
+      "axis": "trendMa high range",
+      "configs": 72,
+      "result": "200 is an interior peak, but a sharp one: 150 $3373, 200 $3425, 250 $2282, 300 $1590."
+    },
+    {
+      "phase": "sweep9",
+      "axis": "riskPct",
+      "configs": 64,
+      "result": "pure leverage. Same 156 trades at 10% risk end at $1,421,133 with a 94% drawdown."
+    },
+    {
+      "phase": "sweep10",
+      "axis": "maxHold x minStopPct x maxStopPct, gated",
+      "configs": 216,
+      "result": "small gain. minStopPct 0.03 beats 0.05: $3543.12 on 160 trades at 13.99% DD. With the gate on, maxHold 100 now beats 200/400/800 -- the opposite of the ungated sweep4."
+    },
+    {
+      "phase": "sweep11",
+      "axis": "entry filters",
+      "configs": 96,
+      "result": "five new filters, none of them material. Best is atrPctBand min 3% at $3672.04 (+3.6%) by dropping 5 of 160 trades; btcRegime 100 is $3656.32 by dropping 17. Removing a handful of losers from a 156-trade sample moves the balance a few percent by chance, so treat these as unswept rather than as working filters."
+    },
+    {
+      "phase": "sweep12",
+      "axis": "240m timeframe",
+      "configs": 81,
+      "result": "clearly worse. Best is bos/trendMa600/minStop3%/hold300 at $1630 with a 73.72% drawdown, against the daily leader's $3672 at 13.99%. Six times the bars means six times the trades and six times the cost; the campaign's cost identity (0.017/stopPct per trade) does not care that the bars are shorter. The daily timeframe is where this works."
+    },
+    {
+      "phase": "sweep13",
+      "axis": "partialAtR x partialFrac",
+      "configs": 18,
+      "result": "banking any of a runner hurts, monotonically. Best is the smallest possible bank (25% at 12R) at $3010.25 against $3543.12 with no partial; taking 75% off at 5R gives $2107. This is the concentration finding restated as a control: the tail IS the return, so realising part of it removes the return."
+    },
+    {
+      "phase": "sweep14",
+      "axis": "stopMode atr x atrStopK",
+      "configs": 21,
+      "result": "INVALID for breakout and bos. stopMode is only implemented for entryMode anticipate, so seven atrStopK values produced seven byte-identical rows. Those 14 rows are marked invalid in the log and backtestMultiTF now throws instead of ignoring the parameter. anticipate does respond: atrStopK 3 gives $1928.99 at a 10.51% drawdown on 98 trades, still below the structural leader."
+    },
+    {
+      "phase": "sweep15",
+      "axis": "filter combinations, all 16 subsets",
+      "configs": 16,
+      "result": "atrPctBand + btcRegime is the best pair at $3760.75 (13.51% DD). Adding adx or maSlope always LOWERS the balance and always LOWERS the drawdown -- all four together give $2624.88 at 8.57% DD on 78 trades. A real risk/return trade, no free lunch."
+    },
+    {
+      "phase": "sweep16",
+      "axis": "breakeven lock on the gated leader",
+      "configs": 40,
+      "result": "arming the lock LATER helps: beTriggerR 3 with beLockR 0.2 gives $3885.34 against $3543.12 at the 2.0 default. Consistent with the tail thesis -- an early breakeven stop chokes the runners that carry the return."
+    },
+    {
+      "phase": "sweep17",
+      "axis": "swing window x breakout lookback x alignMode",
+      "configs": 80,
+      "result": "n and alignMode are BOTH no-ops for breakout. alignMode is structurally dead in a single-timeframe run (no higher TFs exist, so every mode evaluates true) -- do not sweep it again without a multi-TF series. breakoutLookback does bind; 20 is best."
+    },
+    {
+      "phase": "sweep18",
+      "axis": "beTriggerR x filters x trendMa combined",
+      "configs": 60,
+      "result": "NEW LEADER. $4077.96 on 148 trades at 13.54% DD -- level with buy-and-hold BTC ($4105.94) at roughly a quarter of its 52.06% drawdown."
+    },
+    {
+      "phase": "sweep19",
+      "axis": "crossSection lookback x topN",
+      "configs": 42,
+      "result": "Built the last idea from the literature search: rank the universe by trailing Sharpe and trade only the leaders. It does NOT help returns. Tighter selection monotonically lowers the balance and lowers the drawdown, the same risk/return dial every other filter turned out to be: topN 12 gives $3685.85 at 10.96% DD, topN 3 gives $2363.77 at 7.81%. The nominal new best, topN 20 of 29 pairs at $4175.64, filters almost nothing -- it drops 5 trades of 148 for +2.4%, which is noise at this sample size, not selection working."
+    },
+    {
+      "phase": "sweep20",
+      "axis": "higherTfs x alignMode x swing window",
+      "configs": 120,
+      "result": "Adding a higher timeframe to the breakout leader collapses it: 143 trades to 71, $4175.64 to $1289.87. The cause is not alignment -- alignMode and n were flagged INERT by the new detector, byte-identical across every value. It is that trendSrc is the HIGHEST timeframe present, so a 3-day series turns the 200-period MA gate into a 600-day lookback. Supplying a higher timeframe is not an alignment-only change."
+    },
+    {
+      "phase": "sweep21",
+      "axis": "alignMode where it is actually wired",
+      "configs": 96,
+      "result": "bos and anticipate are the only modes that consult alignMode, and only with a higher timeframe present. Swept there it genuinely binds -- anticipate on a weekly anchor gives 237 trades/$2390 at alignMode none against 162/$2539 at first -- but nothing beats the leader. Best is $3833.05 (anticipate, 3-day anchor, alignMode none, trendMa 20) at a 21.77% drawdown. 'first' and 'all' are identical with a single higher timeframe, as they must be."
+    },
+    {
+      "phase": "sweep22",
+      "axis": "volTarget x volClamp",
+      "configs": 28,
+      "result": "Raw sweep runs to $16,138 at volTarget 0.10 / clamp 5, and that number is LEVERAGE -- the universe's median trade sits at 5.55% ATR, so a 10% target scales every bet up and deploys 3.7x the risk. Risk-matched (equity.mjs riskMatchedRiskPct holds mean deployed risk at 0.5%) the real answer is $5087 against $4175.64 flat, at 13.41% drawdown against 13.54% -- and it is FLAT across volTarget 0.03-0.10 at any clamp >= 3. That plateau is the point: once the clamp is loose the weights are just proportional to 1/ATR% and the level cancels, so there is one structural decision here and no threshold to fit. First such change in the campaign."
+    },
+    {
+      "phase": "sweep23",
+      "axis": "entryDelayBars x feeBufferPct",
+      "configs": 20,
+      "result": "Filling on the NEXT bar's open instead of the signal bar's close IMPROVES the result: $4874.70 against $4595.23, and it wins on every robustness margin -- worst-pair-out $3723 vs $3480, full-history $3636 vs $3431, drop-ten-best $1125 vs $1049, and higher mean R in all three years. Mechanically it declines to buy the close of the breakout day, which is the top of that day's move. Two bars collapses to $2305, so this is a discontinuity rather than a curve. Adopted, because it is both the more realistic assumption and the better one. feeBufferPct barely matters below 0.05."
+    },
+    {
+      "phase": "sweep24",
+      "axis": "cost stress",
+      "configs": 20,
+      "result": "The strongest evidence so far that the result is not a cost-model artifact. At 3x the modelled fee (2.4% vs 0.8%) AND 40x the modelled slippage (2% vs 0.05%) the strategy still ends at $2580.11, above the $1419.93 equal-weight basket. At 2x fees and 10x slippage it is $3458.78. It degrades smoothly and stays positive across the whole grid."
+    },
+    {
+      "phase": "sweep25",
+      "axis": "maxConcurrent x riskPct",
+      "configs": 21,
+      "result": "Capping simultaneous positions at 3 and raising per-position risk to 1% gives $5160.44 at an 8.96% drawdown, against the unlimited book's $4874.70 at 12.94%. More return, less drawdown, and LESS capital at risk at the peak: 3 x 1% = 3% against 19 x 0.5% = 9.5%. The nineteen concurrent longs were largely the same bet nineteen times."
+    },
+    {
+      "phase": "sweep26",
+      "axis": "short side, as currently supported",
+      "configs": 27,
+      "result": "Every one of 27 configurations loses. Best $993.06 at a 49.48% drawdown. Run without a trend gate, because the 'ma' gate as written asks whether price is ABOVE its average -- the wrong condition for a short."
+    },
+    {
+      "phase": "sweep27",
+      "axis": "short side with a direction-aware trend gate",
+      "configs": 72,
+      "result": "The gate is now inverted for shorts in backtest.js, and it helps -- $816.25 against $633.27 ungated -- but every one of 72 configurations still loses over the full period."
+    },
+    {
+      "phase": "sweep28",
+      "axis": "never-offered components, screened for inertness",
+      "configs": 48,
+      "result": "chopFilter, requireHigherLow and minRoomR are ALL inert for breakout -- flagged automatically by sweep.mjs's inertAxes. Only trendGateMode and exitOnSwingHigh bind. Three more silent no-ops, bringing the total found to eight."
+    },
+    {
+      "phase": "sweep29",
+      "axis": "short side with the full exit engine",
+      "configs": 72,
+      "result": "Still loses in all 72 configurations. Best $816.25, a 18.4% loss, at a 49.38% drawdown -- identical to the best result before the exit engine was built. And lockBreakeven FALSE tops the table: the breakeven lock, which is worth a great deal on the long side, does nothing for the short side here."
     }
-   },
-   "from 2025-07-01": {
-    "trades": 42,
-    "meanR": 1.8462,
-    "final": 1206.97,
-    "dd": 6.34
-   },
-   "reading": "This is the caveat that matters most. The whole out-of-sample result is three quarters out of nine -- 2024Q1, 2024Q4 and 2025Q3. The other six are negative. Restricted to 2025 the walk-forward is positive ONLY because of 2025Q3; four of its five quarters lose money. A book running this would have spent most of its time losing and made everything back in three quarters. That is the trade-level tail dependence showing up at the quarter level, and it is what trend following is -- but it means nobody should read $1974.68 as a steady climb."
-  },
-  "refitEverything": {
-   "what": "Entry mode, fill delay and filters refitted every quarter alongside the numeric parameters, instead of held at in-sample values. 576 configs x 9 quarters.",
-   "result": {
-    "trades": 158,
-    "meanR": 1.0044,
-    "finalBalance": 2249.27,
-    "maxDrawdownPct": 14.75
-   },
-   "vsRestricted": "Better than the $1974.68 of the version that held those three constant. Removing the leak did not cost anything -- it helped.",
-   "whatItChose": {
-    "entryDelayBars 1": "ALL NINE quarters, on training data alone. The one-bar fill delay was not an in-sample spike; an independent search picks it every time.",
-    "trendMa 150": "all nine",
-    "minStopPct 0.03": "all nine",
-    "volTarget 0.05": "eight of nine",
-    "entryMode breakout": "eight of nine (anticipate once, in 2024Q2, which lost)",
-    "beTriggerR 3": "seven of nine",
-    "filters null": "SEVEN OF NINE. A training-only search mostly DECLINES the filters, which confirms what the in-sample sweeps only hinted: they are noise, not signal."
-   },
-   "stillFixed": "What remains held at in-sample values is the structural frame, and it is not nothing: long-only, trendGate on in 'ma' mode, tpR 100, maxStopPct 0.20, alignMode none, lockBreakeven on, beLockR 0.2, volClamp 3. The trend gate in particular was chosen in-sample and is the single change that created this result.",
-   "quarterlyShape": "Four of nine positive: 2024Q1 +2.84R, 2024Q3 +0.22R, 2024Q4 +3.53R, 2025Q3 +1.11R. The other five negative. Same concentration as every other cut of this result."
-  },
-  "structuralRefit": {
-   "what": "Refit the structural frame too -- whether to gate at all, in which mode, and the target multiple -- not just the tuned numbers. 384 configs x 9 quarters.",
-   "result": {
-    "trades": 149,
-    "meanR": 1.1036,
-    "finalBalance": 2300.28,
-    "maxDrawdownPct": 13.39
-   },
-   "vsEarlier": "Best walk-forward yet: $1974.68 (numbers only) -> $2249.27 (+ entry mode, delay, filters) -> $2300.28 (+ the structural frame). Every leak closed so far has made the result better, not worse.",
-   "whatItChose": {
-    "trendGate true": "ALL NINE quarters",
-    "trendGateMode ma": "all nine",
-    "trendMa 150": "all nine",
-    "minStopPct 0.03": "all nine",
-    "beTriggerR 3": "all nine",
-    "volTarget 0.05": "all nine",
-    "tpR 100": "eight of nine (tpR 12 once, in 2024Q2, which lost)",
-    "maxHold 50": "seven of nine"
-   },
-   "reading": "This is the strongest evidence in the campaign. A search that has never seen the quarter it is judged on converges on the same structure nine times out of nine -- INCLUDING on whether to apply the trend gate at all, which was the one choice most obviously made with hindsight. The gate is not an in-sample artifact.",
-   "stillFixed": "long-only, entryMode breakout, entryDelayBars 1, filters null, alignMode none (inert), maxStopPct 0.20, lockBreakeven, beLockR 0.2, volClamp 3. The first three were each chosen independently in 8/9 or 9/9 quarters by the previous refit, so holding them is now a recorded observation rather than an assumption."
-  },
-  "fittingObjective": {
-   "why": "The walk-forward's fit function maximised final balance and nothing else. Given a choice between an unlimited book and one capped at three positions it took unlimited in all nine quarters, because more concurrent bets is more balance in-sample -- it never saw that unlimited got there through a 24% drawdown while the cap took 9%. The campaign's leader had been picked on drawdown TOO, so the walk-forward was being asked to validate a choice made on a criterion it did not share.",
-   "fix": "walkforward.mjs now takes objective 'balance' or 'mar' (balance per unit of drawdown). Both are reported.",
-   "result": {
-    "balance": {
-     "trades": 149,
-     "meanR": 1.0957,
-     "final": 2281.86,
-     "dd": 13.39,
-     "chose": "unlimited @1% in all nine quarters"
-    },
-    "mar": {
-     "trades": 146,
-     "meanR": 1.1496,
-     "final": 2320.47,
-     "dd": 13.39,
-     "chose": "maxConcurrent 2 @0.5% for four quarters, then unlimited @1% for five"
-    }
-   },
-   "conclusion": "The concurrency cap is NOT validated out of sample under either objective. Its large in-sample gain was hindsight."
-  },
-  "btcRegimeOffered": {
-   "result": {
-    "trades": 142,
-    "meanR": 1.3737,
-    "finalBalance": 2588.43,
-    "maxDrawdownPct": 10.96
-   },
-   "chose": "btcRegime 50 in nine quarters of nine under the balance objective, eight of nine under mar",
-   "progression": "$1974.68 (numbers only) -> $2249.27 (+ entry mode, delay, filters) -> $2300.28 (+ structural frame) -> $2588.43 (+ btcRegime offered). Every step improved it.",
-   "lessonRecorded": "The filters were reported as 'declined in 7 of 9 quarters'. That was true of the filters the grid CONTAINED. btcRegime alone was never in it. A component absent from a grid is not a component the search rejected, and the write-up did not distinguish those."
-  },
-  "gridSizeIsAVariable": {
-   "ladder": "Four grid sizes, same fixed frame, same window, trendMa pinned at 150 so grid size is the only thing that varies.",
-   "table": [
-    {
-     "grid": "tiny",
-     "points": 2,
-     "stability": 1.0,
-     "oosFinal": 2281.86,
-     "oosDD": 13.39,
-     "meanR": 1.0957
-    },
-    {
-     "grid": "small",
-     "points": 8,
-     "stability": 1.0,
-     "oosFinal": 2588.43,
-     "oosDD": 10.96,
-     "meanR": 1.3737
-    },
-    {
-     "grid": "medium",
-     "points": 48,
-     "stability": 0.778,
-     "oosFinal": 2359.49,
-     "oosDD": 16.71,
-     "meanR": 1.12
-    },
-    {
-     "grid": "large",
-     "points": 192,
-     "stability": 0.963,
-     "oosFinal": 2387.26,
-     "oosDD": 13.46,
-     "meanR": 1.0815
-    }
-   ],
-   "finding": "Grid size matters and there is an INTERIOR optimum, around eight points here. Eight beats two and it beats forty-eight and one hundred and ninety-two, on balance, drawdown and mean R alike.",
-   "correction": "The previous commit claimed 'a bigger honest grid is a worse grid'. That is too strong and is withdrawn. It rested on one comparison, $2588.43 against $2387.26, which was partly confounded -- the small grid pinned trendMa at 150 while the large one swept it. With the confound removed the relationship is not monotone: 192 points beats 48, and 2 points loses to 8. The direction of the original observation survives for grids above the optimum; the general claim does not.",
-   "stabilityHypothesisRefuted": "Choice stability, computed from training runs alone, does NOT rank grids. It flags the worst one -- medium at 0.778 -- but tiny and small both score a perfect 1.000 and differ by 13% in out-of-sample balance. It is a useful warning sign and not a selection criterion, and it was proposed here as the latter.",
-   "consequenceForTheLeader": "None. The leader already comes from the eight-point grid, which the corrected ladder confirms is the best of the four."
-  }
- },
- "bugsFound": [
-  {
-   "where": "walkforward.mjs, first version",
-   "symptom": "reported -0.42R and $883.39 out of sample -- a clean negative result",
-   "cause": "each quarter's run was truncated at the quarter end, amputating every position still open when the quarter closed. With 50-to-200-bar holds that is most of them, and the amputated part is the tail that carries a trend follower's return.",
-   "caught": "by checking the same configurations held FIXED over the identical window, which scored +0.74R to +1.85R. A -0.42R result next to a +1.85R result for the same trades is not a finding, it is a bug.",
-   "fix": "exits now run to the end of the data; only ENTRY dates are confined to the decision window. Letting a trade run its course after entry is not lookahead -- its exit rule was fixed when it was entered. Pinned by a test."
-  },
-  {
-   "where": "walkforward.mjs step reporting",
-   "symptom": "a nine-quarter refit of eight axes printed as though only five had been fitted",
-   "cause": "`chose` was a hardcoded list of five keys rather than derived from the grid",
-   "impact": "whether the entry mode and filters moved between quarters -- the entire question that run existed to answer -- was invisible in its own output",
-   "fix": "chose is now derived from Object.keys(grid); pinned by a test"
-  },
-  {
-   "where": "backtest.js, the bos entry branch",
-   "symptom": "a sweep of four btcRegime periods returned four byte-identical rows for the short side",
-   "cause": "entryGate was wired into the anticipate branch and the shared dip/breakout branch but not into bos, so every filters spec was silently ignored for that entry mode",
-   "fix": "entryGate is now checked in all three branches and its refusals are tallied as reason externalGate; a test asserts a gate that refuses everything produces no trades in bos, breakout and anticipate alike"
-  },
-  {
-   "where": "filters.mjs btcRegime",
-   "symptom": "would have admitted shorts only into rising markets",
-   "cause": "'BTC above its own average' is a market-wide uptrend, applied unchanged to both directions -- the same bug class as backtest.js's trend gate",
-   "fix": "direction-aware, with a test covering both directions against both a rising and a falling BTC"
-  },
-  {
-   "where": "backtest.js, systemic",
-   "symptom": "eight parameters accepted and silently ignored, each producing byte-identical rows that read as a swept axis",
-   "list": "stopMode outside anticipate; alignMode outside bos/anticipate; the swing window for breakout; trailStartR below trailR; entryGate in the bos branch; chopFilter, requireHigherLow and minRoomR for breakout",
-   "fix": "A capability table now declares which entry modes honour alignMode, chopFilter, requireHigherLow and minRoomR, and passing a RESTRICTIVE value to a mode that ignores it throws. Permissive values never throw -- alignMode 'none' asks for no alignment, which is exactly what an ignoring mode delivers, so it drops no claim and the whole campaign passes it. The signature default is accepted everywhere too, because omission and an explicit default cannot be told apart."
-  },
-  {
-   "where": "the grid-size ladder, first run",
-   "symptom": "reported that stability does not predict performance AND that bigger grids do better -- the opposite of the previous commit",
-   "cause": "trendMa was not in the ladder's FIXED block, so the two grids that did not SWEEP it fell back to backtest.js's default of 20 instead of the endorsed 150. The ladder measured 'was trendMa fitted at all', not grid size.",
-   "caught": "the two smallest grids scoring far below every walk-forward already recorded, which no change in grid size could explain",
-   "fix": "trendMa pinned at 150 in FIXED, with a comment saying why; ladder re-run"
-  },
-  {
-   "where": "bundle-loader.loadBundleCandles",
-   "symptom": "every equities file ended with the live session's incomplete row \u2014 real timestamp and OHL, empty close",
-   "cause": "the loader only validated `time`; parseFloat(\"\") is NaN and every NaN comparison is false, so that bar would trigger neither a stop nor a target and simply be stepped over",
-   "fix": "bars with any non-finite OHLC are dropped, with a test built from the real failing shape"
-  },
-  {
-   "where": "costs.costFor and bundle-loader.marketProxy",
-   "symptom": "CANDLE_COST_MODEL was set correctly and the first equities run still died saying no cost model was named",
-   "cause": "the env fallback lived in the signature default, and a JS default parameter only fires on `undefined` \u2014 every call site passes `config.x ?? null`, so both env vars were unreachable through the harness",
-   "fix": "resolved inside the function body; tests pin the null-call-site path for both"
-  }
- ],
- "concurrency": {
-  "measured": "The unlimited book peaks at 19 simultaneous positions on 2024-12-03 and spends 26% of its time with 9 or more open. It is flat 20.4% of the time.",
-  "whyItMatters": "simulateEquity compounds trades one after another in entry order, which silently assumes the book is never long two things at once. It is. Sequential compounding cannot see correlated positions moving together, so every drawdown this campaign reported before this point is a FLOOR, not a measurement. maxConcurrent does not fix the accounting -- it constrains the book the way a real one is constrained, and declined signals are counted and reported rather than quietly dropped.",
-  "stillUnmodelled": "Positions are still compounded sequentially rather than marked to market together, so a correlated multi-position drawdown is still not directly measured."
- },
- "equitiesBlocked": {
-  "status": "Cannot be tested in this container. Outbound HTTPS to public market-data hosts is denied by the environment's network policy -- the proxy gateway answers 403 to CONNECT for stooq.com and stooq.pl, confirmed in its own status endpoint.",
-  "whatWouldUnblockIt": "Equities daily bars supplied the same way the crypto bundle was: a tar.gz of per-symbol CSVs with time,open,high,low,close,volume. bundle-loader.mjs reads that format already and nothing else would need to change.",
-  "whyItMatters": "The owner named equities as the actual target. FINDINGS.md's own equities section is a warning about this exact failure mode -- an apparent edge that turned out to be the window's payoff geometry."
- },
- "decayDiagnosis": {
-  "runner": "regime.mjs, pinned by regime.test.mjs",
-  "question": "Is the leader's decline (2023 +2.92R, 2024 +2.01R, 2025 +0.21R, 2026 -0.94R) the strategy dying or the market going quiet?",
-  "table": {
-   "2023": {
-    "efficiencyRatio": 0.1706,
-    "randomEntryMeanR": 0.7606,
-    "randomEntryWinPct": 28.4,
-    "strategyMeanR": 2.9243,
-    "excessOverRandom": 2.16
-   },
-   "2024": {
-    "efficiencyRatio": 0.149,
-    "randomEntryMeanR": 0.2474,
-    "randomEntryWinPct": 25.9,
-    "strategyMeanR": 2.011,
-    "excessOverRandom": 1.76
-   },
-   "2025": {
-    "efficiencyRatio": 0.1457,
-    "randomEntryMeanR": -0.0585,
-    "randomEntryWinPct": 23.5,
-    "strategyMeanR": 0.2058,
-    "excessOverRandom": 0.27
-   },
-   "2026": {
-    "efficiencyRatio": 0.1552,
-    "randomEntryMeanR": -0.8574,
-    "randomEntryWinPct": 17.8,
-    "strategyMeanR": -0.9431,
-    "excessOverRandom": -0.08
-   }
-  },
-  "answer": "BOTH, and that is a better answer than either alone. What a RANDOM long entry earned under the same geometry fell from +0.76R to -0.86R -- no strategy choice can explain that, the trend simply stopped being there. But the strategy's EXCESS over random fell too, from +2.16R to +0.27R to -0.08R. So the market got harder AND the edge over a coin flip shrank.",
-  "theSharpPoint": "In 2025 the strategy beat a random entry by 0.27R. The campaign's own power analysis puts the smallest excess this test can detect at roughly 1.3-1.5R. In 2025 the strategy is not distinguishable from a coin flip.",
-  "notAnArtefact": "Checked at stop widths of 4%, 6%, 10% and 15%. The level of the random-entry return moves; the year ordering never does.",
-  "sideNote": "The efficiency ratio barely moved (0.171 to 0.146, a 17% range). What collapsed was the DIRECTION of the moves, not their straightness -- 2025-26 crypto was no choppier, it just stopped going up."
- },
- "shortSide": {
-  "fullPeriod": "Loses in all 99 configurations swept. Best $816.25, a 18.4% loss, at a 49.38% drawdown.",
-  "byYear": {
-   "2023": {
-    "trades": 110,
-    "meanR": -0.4981
-   },
-   "2024": {
-    "trades": 90,
-    "meanR": 0.3442
-   },
-   "2025": {
-    "trades": 156,
-    "meanR": 0.298
-   },
-   "2026": {
-    "trades": 36,
-    "meanR": -0.5164
-   }
-  },
-  "theInterestingPart": "Shorts are POSITIVE in 2024 and 2025 -- 2025 being exactly the year the long side collapsed to +0.21R. The two sides are complementary in time.",
-  "combined": {
-   "long only": {
-    "final": 16749.27,
-    "dd": 25.1
-   },
-   "long + short at 1% each": {
-    "final": 13671.65,
-    "dd": 40.59
-   },
-   "long + short at 0.5% each": {
-    "final": 4067.23,
-    "dd": 22.68
-   },
-   "verdict": "Combining makes it worse on both axes. The short side's 2023 losses (-0.50R over 110 trades) outweigh its 2024-25 gains."
-  },
-  "theHandicapThatMattersAndIsNotResolved": "The engine implements shorts for entryMode 'bos' only and on the base stop/target/timeout path alone -- no breakeven lock, no trailing stop, no partials. The long side's result depends materially on the breakeven lock (beTriggerR 3, chosen by the walk-forward in nine quarters of nine), so the short side is being judged with a worse exit engine than the long side. The measured gap is far too large for the lock to close (-18% against +1575%), so the conclusion 'shorts do not rescue this' stands -- but 'shorts do not work' is NOT established and would need the short exit path built first.",
-  "engineChange": "backtest.js's trend gate is now direction-aware. Both gate conditions describe an uptrend; applied unchanged to a short they permitted selling only into rising markets, which is worse than no gate at all. Two tests pin both directions.",
-  "engineNowComplete": "trailR, trailStartR, partialAtR, partialFrac, trailingTpPct, lockBreakeven and exitOnSwingHigh are all mirrored for shorts. Only two ENTRY-side conditions remain long-only and they are genuinely unwritten rather than untested: requireHigherLow (a rising sequence of swing lows) and minRoomR (clear air above entry, measured by a nearestResAbove with no nearestSupportBelow counterpart).",
-  "verdictUpgraded": "Previously recorded as 'shorts do not rescue this, but shorts do not work is NOT established' because the short side was being judged with a worse exit engine. It is now judged with the same one and the answer does not move: the short side loses on this data. The handicap was not the explanation.",
-  "whyItStillMattered": "The engine capability is the deliverable. The owner wants the short path for EQUITIES, where a two-sided book is the normal construction rather than an afterthought."
- },
- "equitiesReadiness": {
-  "formatGivenToOwner": "candle-bundle/1440/<SYMBOL>.csv, header time,open,high,low,close,volume, time in unix seconds, oldest row first. bundle-loader.mjs reads it unchanged.",
-  "whatWasHardcoded": "Three call sites assumed XBTUSD was the market: benchmark.mjs's headline row, campaign.mjs's btcRegime series, and robustness.mjs's copy of it. On an equities bundle the benchmark would have printed 'BTC $n/a' next to every leaderboard and the btcRegime filter would have refused to compile with a message about BTC. Two of the three would have gone quiet, which is how the other eight silent no-ops in this campaign got as far as they did.",
-  "fix": "bundle-loader.marketProxy resolves it from the universe against an ordered candidate list -- XBTUSD, SPY, VOO, IVV, ^GSPC, QQQ -- honours an explicit override or CANDLE_MARKET_PROXY, and THROWS when it cannot resolve, naming what it looked for. benchmarks() now returns proxySymbol/proxy/proxyMaxDrawdownPct instead of btc/btcMaxDrawdownPct, because a field called 'btc' on an equities run is a lie even when the number is right.",
-  "stillToDoWhenDataArrives": [
-   "declare survivorship bias unless the bundle demonstrably includes delisted names",
-   "confirm with the owner whether prices are split/dividend adjusted -- adjustment changes historical stop distances, and stop distance is the variable this whole campaign turned on",
-   "rename btcRegime to marketRegime once it is used on a second asset class"
   ],
-  "runOrder": [
-   "benchmark.mjs on that universe",
-   "robustness.mjs with the crypto-fitted leader untouched (the honest transfer test)",
-   "walkforward.mjs with an EIGHT-point grid (the corrected ladder's optimum)",
-   "only then sweep, and stop early"
-  ],
-  "costModel": {
-   "built": "costs.mjs. Named models with sourced numbers: krakenTaker (0.008/0.0005, what every crypto result here was computed under), usEquityRetail (0/0.0005), usEquityIbkr (0.00005/0.0005), and zeroCost as a labelled diagnostic.",
-   "whyItRefusesToGuess": "A crypto universe defaults to krakenTaker so existing results stay reproducible. Anything else must be named. The failure mode of guessing is not a slightly wrong number: at a 3% stop crypto pays 0.57R a trade and US equities pay 0.033R, so equities charged Kraken rates would look like a dead strategy and crypto charged equity rates would manufacture an edge. costFor() throws on an unrecognised universe and the message says so.",
-   "identity": "costInR(model, stopPct) = 2*(feeRate+slipPct)/stopPct. Pinned by a test against the two figures the campaign turned on: 1.70R at a 1% stop, 0.11R at 15%.",
-   "verified": "The leader reproduces byte-identically after the rewiring -- 182 trades, $20,949.34, 20.77%."
-  }
- },
- "equities": {
-  "bundle": "equity-bundle/1440, 30 symbols (10 sector/index ETFs + 20 large caps), 920 daily bars each, 2023-01-03 to 2026-09-02. Raw unadjusted OHLC from yfinance via Colab. Held in a SEPARATE root from candle-bundle so the two universes can never be mixed.",
-  "costModel": "usEquityRetail \u2014 0 commission, 5bp per-leg slippage. Named explicitly; costFor() refused to run until it was.",
+  "leader": {
+    "name": "walk-forward-endorsed",
+    "entryMode": "breakout",
+    "alignMode": "none",
+    "trendGate": true,
+    "trendGateMode": "ma",
+    "trendMa": 150,
+    "tpR": 100,
+    "maxHold": 50,
+    "minStopPct": 0.03,
+    "maxStopPct": 0.2,
+    "entryDelayBars": 1,
+    "lockBreakeven": true,
+    "beTriggerR": 3,
+    "beLockR": 0.2,
+    "filters": {
+      "btcRegime": {
+        "period": 50
+      }
+    },
+    "volTarget": 0.05,
+    "volClamp": 3,
+    "riskPct": 0.01,
+    "maxConcurrent": null,
+    "trades": 182,
+    "meanR": 1.7617,
+    "finalBalance": 20949.34,
+    "maxDrawdownPct": 20.77,
+    "why": "Every component chosen by a training-only search. btcRegime 50 is the newest: it had never actually been OFFERED to the walk-forward -- the filter grid held only null, atrPctBand and atrPctBand+crossSection -- and once offered it was chosen in nine quarters of nine, taking the out-of-sample result from $2300.28 at 13.39% to $2588.43 at 10.96%. Better on both axes in sample too, and it is the only change that has moved 2025.",
+    "differsFromSearchBest": {
+      "filters": "none (declined 7/9)",
+      "maxConcurrent": "none (never selected)",
+      "trendMa": "150 not 200 (9/9)",
+      "beTriggerR": "3 not 2.5 (9/9)",
+      "maxHold": "50 not 100 (7/9)"
+    }
+  },
   "benchmark": {
-   "SPY": {
-    "final": 2009.24,
-    "dd": 21.43
-   },
-   "equalWeightBasket": 2646.32,
-   "best": "NVDA $15676.56",
-   "worst": "PFE $566.13"
+    "btcBuyAndHold": 4105.94,
+    "btcMaxDrawdownPct": 52.06,
+    "equalWeightBasket": 1419.93,
+    "solBuyAndHold": 8311,
+    "startingBalance": 1000
   },
-  "transferTest": {
-   "what": "The crypto-fitted leader, not one parameter changed, run on equities.",
-   "result": {
-    "trades": 252,
-    "meanR": 0.5814,
-    "finalBalance": 15873.0,
-    "maxDrawdownPct": 46.26
-   },
-   "perYear": {
-    "2023": 0.6421,
-    "2024": 1.0473,
-    "2025": 0.2364,
-    "2026": 0.565
-   },
-   "shape": {
-    "winRatePct": 40.5,
-    "medianNetR": -1.0144,
-    "top5SharePct": 43.5,
-    "distinctDays": 175
-   }
-  },
-  "THE_RESULT": {
-   "null": {
-    "vsAnyBar": {
-     "nullMeanR": 0.5751,
-     "observedMeanR": 0.5814,
-     "excessR": 0.0064,
-     "p": 0.47413,
-     "z": 0.04,
-     "mdeR": 0.4855,
-     "detectable": false
-    },
-    "vsGatedBars": {
-     "nullMeanR": 0.4016,
-     "excessR": 0.1798,
-     "p": 0.14321,
-     "z": 1.08,
-     "mdeR": 0.466,
-     "detectable": false
-    }
-   },
-   "reading": "$15,873 is the UNIVERSE, not the strategy. A random entry on the same 30 symbols with the same stop distances, target, hold and cost earns 0.5751R against the strategy's 0.5814R. The excess is 0.0064R at p=0.47 -- a coin flip. It fails the harder gated-bar version too. Thirty of today's mega caps and sector ETFs over 2023-2026 make money almost however you enter them; the equal-weight basket alone returns $2,646.",
-   "whyTheDollarsMislead": "A random-entry ACCOUNT computed as 1000*(1+0.01*0.5751)^252 lands near $4,242, which invites the reading that the strategy's $15,873 beat it. It does not: that formula is a crude geometric approximation with no volatility targeting and no path ordering, so it is not like-for-like. The rigorous comparison is mean R per trade, and there the two are the same number."
-  },
-  "selectionBiasConfirmed": "This was flagged as a caveat before the run and the null turned it into the explanation. The symbol list was 30 currently-listed large caps chosen by me \u2014 NVDA at $15,676 buy-and-hold is in it and the companies that failed are not. Survivorship-free equities data (Norgate, Sharadar, CRSP) is the only way to test this properly and it is a paid source.",
-  "subgroupDiagnostic": {
-   "whyItIsWorthRunning": "The matched-geometry null draws from the same symbols in the same proportions, so it already controls for the universe being a basket of winners. That conclusion -- no detectable edge -- stands on its own and survivorship does not undermine it. What survivorship DOES remove is the thing a trend gate is for: the chance to avoid a name that falls and keeps falling.",
-   "table": {
-    "all 30": {
-     "trades": 252,
-     "strategy": 0.5814,
-     "random": 0.5751,
-     "excess": 0.0064,
-     "p": 0.4741,
-     "mde": 0.486
-    },
-    "best 10 by buy-and-hold": {
-     "trades": 116,
-     "strategy": 0.7442,
-     "random": 0.8292,
-     "excess": -0.0851,
-     "p": 0.6001,
-     "mde": 0.78
-    },
-    "worst 10 by buy-and-hold": {
-     "trades": 56,
-     "strategy": 0.3871,
-     "random": 0.0225,
-     "excess": 0.3646,
-     "p": 0.0767,
-     "mde": 0.696
-    }
-   },
-   "reading": "Directionally consistent: on names that only rose, the strategy is WORSE than random -- its stop-outs are pure drag. On the laggards, random entry earns almost nothing (+0.0225R) and the strategy earns +0.3871R.",
-   "whyItIsNotAFinding": [
-    "p=0.0767 is not significant",
-    "the excess of 0.3646R is BELOW the 0.696R this test could detect at 80% power",
-    "the split is POST-HOC -- subgroups defined by an outcome only knowable at the end, so it is not tradeable as stated",
-    "two subgroups tested, so even the nominal p carries a multiplicity cost"
-   ],
-   "prereg": "EQUITIES-LAGGARD-EXCESS-2026-09, registry ledger seq 15, registered before any survivorship-free data exists so the prediction cannot be reshaped once it does."
-  },
-  "survivorshipFreeRoute": {
-   "correction": "Recorded because it was stated the other way earlier: a survivorship-free universe was called a paid product. Partly wrong. The bulk of the reconstruction is free and mechanical; only the departed names are.",
-   "script": "tools/sp500-pointintime.py, one Colab cell.",
-   "whatWorks": "Wikipedia's constituents table carries a Date-added column, so every current member that JOINED after 2023-01-01 is removed by rule -- roughly sixty companies that entered the index because they did well. No judgement involved.",
-   "whatDoesNot": "The 'Selected changes' table that listed REMOVALS is gone from that page. Verified 2026-09-04: it returns two tables and the second is a navbox. So the departed names are hand-supplied from recall, the list is incomplete, and its incompleteness is the residual survivorship bias. The manifest reports how many resolved, which bounds what got in but not what was never listed.",
-   "standing": "Better than a hand-picked basket of winners, worse than a vendor point-in-time file. Results must be labelled that way and not called survivorship-free.",
-   "debugHistory": "Three scripts failed before this one and the useful lesson is about diagnosis, not Wikipedia: v1 and v2 used a `!pip` cell magic that is a SyntaxError when the file is run rather than pasted, so nothing executed and nothing printed -- a silent failure indistinguishable from several other causes. v3 removed the magic and printed a checkpoint per step, which located the real fault in one run."
-  }
- },
- "acceptanceCriterion": {
-  "asStated": "~10 trades a month, win rate at or above 40%, wins large enough to offset the losses.",
-  "met": "Yes, on every count, by the current equities candidate: 5.7 trades/month, 40.5% win rate, 2.92R average win against a 1.01R average loss, expectancy +0.5814R.",
-  "andAlsoMetBy": "A RANDOM ENTRY using the same exits: 42.8% win rate -- HIGHER than the strategy -- with a 2.67 payoff and +0.5589R expectancy. That is the whole problem with the criterion as an acceptance test.",
-  "whyTheShapeIsFree": "A wide stop with no reachable take-profit and a bounded hold caps the loss near 1R and lets winners run past 3R. A ~40% win rate at a ~2.7 payoff is therefore a property of the EXIT geometry, not the entry, and it comes free with any long entry in a rising market. Breakeven at a 2.89:1 payoff is a 25.7% win rate, so 40% clears it with room -- and so does the coin flip's 42.8%.",
-  "whatFrequencyCosts": {
-   "perTradeSdOfR": 2.75,
-   "detectionAt10PerMonth": {
-    "1.00R": "0.7 years",
-    "0.50R": "2.9 years",
-    "0.25R": "11.4 years",
-    "0.15R": "31.7 years"
-   },
-   "reading": "Low frequency does not reduce risk, it buys noise. Ten trades a month needs about three years to confirm a half-R edge and over a decade for a quarter-R one, before any allowance for same-day clustering."
-  },
-  "gateVerdict": {
-   "runner": "gate-run.mjs",
-   "verdict": "FAIL",
-   "passed": [
-    "positive_net_expectancy",
-    "win_rate_margin",
-    "interval_excludes_zero",
-    "survives_multiplicity"
-   ],
-   "failed": {
-    "sample_sufficient": "effective n 175 against 882 required to detect a quarter-R edge",
-    "beats_matched_null": "excess 0.0064R, p=0.47413"
-   },
-   "blocked": [
-    "pre_registration",
-    "beats_baseline_controls",
-    "survivable",
-    "out_of_sample"
-   ],
-   "reading": "Four conditions green including the owner's own criterion. It fails on the two that decide whether the result is real."
-  }
- },
- "THE_ANSWER": {
-  "question": "Does the trend-gated breakout entry carry an edge over a matched random entry?",
-  "answer": "No, in either asset class, and the last remaining hypothesis is refuted rather than merely unproven.",
-  "crypto": "29 pairs, 2,446 configurations. Best out-of-sample $2,588 at 11.0% drawdown against BTC's $4,106 at 52%.",
-  "equities30": "Excess +0.0064R, p=0.4741. The $15,873 was the universe: a coin flip with the same exits earned 0.5751R against 0.5814R.",
-  "equities128": {
-   "trades": 1181,
-   "strategy": 0.3451,
-   "random": 0.3268,
-   "excess": 0.0183,
-   "p": 0.3932,
-   "mde": 0.218,
-   "subgroups": {
-    "90 winners": {
-     "excess": 0.0473,
-     "p": 0.2909
-    },
-    "38 losers": {
-     "excess": -0.1175,
-     "p": 0.8225
-    },
-    "worst 20": {
-     "excess": -0.2752,
-     "p": 0.961
-    },
-    "worst 10": {
-     "excess": -0.365,
-     "p": 0.954
-    }
-   },
-   "reading": "The registered prediction was that the strategy adds value by declining to hold falling names. It does the opposite: WORSE than random on the losers, monotonically worse the weaker the name. The +0.3646R laggard excess on the 30-symbol bundle was noise and reversed sign on four times the sample."
-  },
-  "prereg": "EQUITIES-LAGGARD-EXCESS-2026-09 linked at ledger seq 16, verdict FAIL. Ledger verifies at 17 entries.",
-  "whatIsNotInDoubt": "The payoff geometry works and is free: ~40% win rate at a ~2.9 payoff, positive expectancy, confidence interval excluding zero. The owner's acceptance criterion is met in full. A coin flip meets it too, which is why it cannot be the acceptance test.",
-  "revisedBy": "crossSectionalMomentum below. The earlier answer was correct about ENTRY TIMING and wrong as a general claim, because every null this project had built was blind to selection."
- },
- "dataLimits": {
-  "sp500Bundle": {
-   "whatArrived": "129 symbols from the hand-assembled list, no manifest -- the simple script was run, not the Wikipedia reconstruction. SBNY dropped as a reused ticker (515 bars from 2024-08-15; the bank failed 2023-03). 128 used.",
-   "yahooDropsDelistedNames": "The decisive data finding, contradicting an assertion made earlier in this session: Yahoo serves essentially no delisted history. Of ten delisted names attempted -- SIVB, FRC, PACW, DISH, CTLT, PXD, MRO, WBA, CMA, IPG -- zero usable series were obtained. The free route cannot produce a survivorship-free universe; the membership reconstruction is free, the prices are not.",
-   "whyTheResultStillStands": "38 symbols lost money buy-and-hold (30%, against 7% in the first bundle) including CHPT -97%, LCID -92%, SEDG -88%, ENPH -86%. The hypothesis had ample population to show itself in and showed the opposite.",
-   "rawPriceArtifacts": "Unadjusted prices carry split discontinuities: MRNA +177% in a day, CHPT +75% on the final bar. auto_adjust=False preserves stop distances at that cost -- a tradeoff not stated when the advice was given."
-  }
- },
- "crossSectionalMomentum": {
-  "whyItWasNeverTested": "Every test before this asked whether ENTRY TIMING beats random, and matchedGeometryNull answers that by drawing random entries FROM THE SAME SYMBOLS IN THE SAME PROPORTIONS. That design holds symbol selection constant, so it is blind BY CONSTRUCTION to an edge living in WHICH asset you hold rather than WHEN you buy. Cross-sectional momentum is exactly that kind of edge and is among the most replicated results in the literature (Jegadeesh and Titman 1993, still present in their 2023 follow-up; time-series momentum with post-crisis Sharpe comparable to pre-2008, Moskowitz/Ooi/Pedersen and Baltas/Kosowski 2020).",
-  "theRule": "At each monthly rebalance, rank every symbol by its return over the past 252 bars skipping the most recent 21, hold the top decile equally weighted. No stop, no target, no entry trigger.",
-  "parametersArePreSpecified": "252 formation / 21 skip / 21 rebalance / top decile is the canonical Jegadeesh-Titman construction from 1993, not a configuration selected from a sweep. That matters: it is not best-of-N.",
-  "nullThatMatters": "Random SELECTION -- pick topK uniformly from the same eligible set at each rebalance and hold identically. It isolates the ranking, which is the only thing the strategy does.",
-  "results": {
-   "sp500-128": {
-    "final": 1743.35,
-    "cagrPct": 23.23,
-    "maxDrawdownPct": 29.65,
-    "basket": 1455.33,
-    "spySameWindow": 1649.03,
-    "randomMedian": 1126.49,
-    "p": 0.0149
-   },
-   "crypto-29": {
-    "final": 2430.28,
-    "cagrPct": 36.03,
-    "maxDrawdownPct": 66.96,
-    "basket": 1272.68,
-    "randomMedian": 968.11,
-    "p": 0.0199
-   },
-   "equities-30": {
-    "final": 2261.86,
-    "cagrPct": 35.89,
-    "maxDrawdownPct": 31.07,
-    "basket": 1759.69,
-    "randomMedian": 1558.33,
-    "p": 0.0547
-   }
-  },
-  "lookbackPattern": "Structured rather than scattered: every 252-bar configuration beats random (p=0.0149, 0.0199) and every 126-bar configuration fails (p=0.61, 0.93, 1.00). Short lookbacks getting eaten by reversal is what the literature predicts, which is weak evidence the effect is real rather than fitted.",
-  "whatIsNotEstablished": [
-   "The three universes are NOT independent -- same 2023-2026 regime, and sp500-128 contains the equities-30 symbols. The p-values must not be combined.",
-   "It beats SPY over the identical window by only 5.7% ($1743 against $1649) at a worse drawdown, 29.7% against ~21%. Risk-adjusted against the index it is close to a wash.",
-   "Crypto's 66.96% drawdown makes that version untradeable as constructed.",
-   "Only 2.66 years of rotation after the 252-bar warmup: roughly 32 rebalances.",
-   "No walk-forward yet, and no promotion-gate run."
+  "readThisFirst": "breakout + a 200-day MA trend gate is the first config to beat its own random-entry null by a detectable margin (p=0.005, excess 1.55R vs an MDE of 1.34R), and it does it at a 12.43% drawdown against BTC's 52.06%. It is still the best of 1152 in-sample configurations, so treat it as the thing to attack next, not as a finding. Everything before it -- long tpR, long maxHold -- was buying exposure in a rising market.",
+  "unsweptAxes": [
+    "maxStopPct",
+    "beTriggerR",
+    "beLockR",
+    "partialAtR/partialFrac",
+    "stopMode atr + atrStopK",
+    "chopFilter",
+    "alignMode",
+    "n (swing window)",
+    "minRoomR",
+    "240-minute timeframe",
+    "universe selection",
+    "new filters not yet in backtest.js"
   ],
-  "correctnessChecks": "xsmom.test.mjs, 7 tests, including one that fails on look-ahead: a symbol that only rises AFTER the rebalance must not be selected. Ranking is by DATE across a shared calendar, not by bar index, so symbols starting on different dates are never compared out of period.",
-  "attacks": {
-   "1_concentration_LONG_ONLY": {
-    "result": "BAD. 31 monthly periods; the best 3 produce 96.8% of the total return, the best single month 43%. 61% of months positive. Same fragility as every earlier finding.",
-    "verdict": "the long-only rotation is a tail-dependent result like everything before it"
-   },
-   "3_longShort": {
-    "topDecile": {
-     "final": 1743.35,
-     "cagrPct": 23.23,
-     "dd": 29.65
+  "nextUp": "Untested cells remaining: CARRY (crypto funding rates, free from exchange APIs, the second-most documented factor and a genuinely different mechanism); CROSS-ASSET RANKING (crypto and equities in ONE universe, never done); and the equities-only factors need a third universe to decide whether they are asset-class-specific or simply spurious.",
+  "randomEntryNull": {
+    "runner": "entrynull-run.mjs",
+    "bos 5% tpR100 hold100": {
+      "observedMeanR": 0.4576,
+      "nullMeanR": 0.3604,
+      "excessR": 0.0973,
+      "p": 0.3273,
+      "mdeR": 0.7665,
+      "nullBalance": 2971.85
     },
-    "bottomDecile": {
-     "final": 336.69,
-     "cagrPct": -33.57,
-     "dd": 68.35
+    "breakout 5% tpR100 hold400": {
+      "observedMeanR": 0.9807,
+      "nullMeanR": 0.3966,
+      "excessR": 0.5842,
+      "p": 0.1329,
+      "mdeR": 1.4401,
+      "nullBalance": 1790.36
     },
-    "spread": {
-     "final": 2077.42,
-     "cagrPct": 32.7,
-     "dd": 9.91,
-     "positiveMonths": "18/31",
-     "best3MonthsShare": "44.5%"
+    "breakout 5% tpR4 hold100": {
+      "observedMeanR": -0.0299,
+      "nullMeanR": -0.1324,
+      "excessR": 0.1025,
+      "p": 0.1239,
+      "mdeR": 0.2478,
+      "nullBalance": 749.73
     },
-    "reading": "The ranking genuinely separates: the bottom decile loses a third a year. The dollar-neutral spread beats SPY ($1649) at HALF its drawdown -- 9.91% against ~21% -- and concentration falls from 96.8% to 44.5%. This is the first result in the project that is simultaneously better AND less fragile."
-   },
-   "3b_borrowStress": {
-    "0%": {
-     "final": 2077.42,
-     "cagr": 32.7,
-     "dd": 9.9
+    "reading": "The leader's entry rule is worth 0.0973R against a coin flip with identical geometry, and a random-entry account ends ABOVE it. No config's excess reaches what this test could detect, so the honest statement is not 'no edge' but 'no edge large enough to see through the noise a 100R target creates'.",
+    "breakout + ma200 gate (the leader)": {
+      "observedMeanR": 1.8006,
+      "trades": 156,
+      "vs random entry on any bar": {
+        "nullMeanR": 0.3803,
+        "excessR": 1.4202,
+        "p": 0.0075,
+        "z": 3.06,
+        "mdeR": 1.3001,
+        "detectable": true,
+        "nullBalance": 1344.99
+      },
+      "vs random entry restricted to gated bars": {
+        "nullMeanR": 0.2474,
+        "excessR": 1.5532,
+        "p": 0.005,
+        "z": 3.25,
+        "mdeR": 1.3407,
+        "detectable": true,
+        "nullBalance": 1212.7
+      },
+      "reading": "The first configuration in this campaign whose excess over a matched-geometry random entry exceeds what the test can detect. It survives the harder version too: restricting the random entries to bars the 200-MA gate allows makes the excess LARGER, so the gate is not doing the work on its own. Caveat that has to stay attached: this is the best of ~1152 configurations searched on the same data, and at that many draws roughly 6 configs reach p<0.005 by chance. p=0.005 is not a discovery here, it is a reason to keep testing this one."
+    }
+  },
+  "leveredLeader": {
+    "same config at riskPct 0.10": {
+      "finalBalance": 1421133.39,
+      "maxDrawdownPct": 94
     },
-    "5%": {
-     "final": 1947.5,
-     "cagr": 29.4,
-     "dd": 10.1
+    "reading": "Not a better strategy, the same one levered 20x. A 94% drawdown means $1000 was worth about $60 at the low. Reported because the owner asked for the highest number; the drawdown is reported with it because the number is meaningless without it."
+  },
+  "concentration": {
+    "all": {
+      "trades": 182,
+      "meanR": 1.7617,
+      "final": 20949.34,
+      "dd": 20.77
     },
-    "10%": {
-     "final": 1825.69,
-     "cagr": 26.2,
-     "dd": 10.4
+    "leaveOnePairOut": {
+      "worst": "without DOGEUSD $12449.30",
+      "next": [
+        "without ZECUSD $13715.39",
+        "without XRPUSD $14413.02"
+      ]
     },
-    "20%": {
-     "final": 1604.47,
-     "cagr": 20.1,
-     "dd": 12.3
+    "trimTopWinners": {
+      "drop1": 13715.39,
+      "drop3": 7495.14,
+      "drop5": 4757.57,
+      "drop10": 2209.23,
+      "drop20": 887.48
     },
-    "30%": {
-     "final": 1410.05,
-     "cagr": 14.2,
-     "dd": 14.4
+    "perYearStandalone": {
+      "2023": {
+        "trades": 40,
+        "meanR": 3.139
+      },
+      "2024": {
+        "trades": 75,
+        "meanR": 2.053
+      },
+      "2025": {
+        "trades": 62,
+        "meanR": 0.7431
+      },
+      "2026": {
+        "trades": 5,
+        "meanR": -0.9957
+      }
     },
-    "50%": {
-     "final": 1089.04,
-     "cagr": 3.4,
-     "dd": 22.7
+    "fullHistoryPairsOnly": {
+      "pairs": 16,
+      "trades": 150,
+      "meanR": 1.6584,
+      "final": 13581.16
     },
-    "reading": "At realistic borrow (2-10%) the spread holds 26-31% CAGR at ~10% drawdown against SPY's ~20% at 21%. It only degrades to index-like at 30%+ borrow, which is exceptional rather than typical."
-   },
-   "survivorshipNowFavoursTheResult": "A reversal worth stating: for the long-only entry work, missing delisted names INFLATED results. For a long-short, they DEFLATE it. SIVB and FRC went to zero and would have sat in the bottom decile paying the short leg. Their absence from this bundle makes the spread an understatement.",
-   "4_walkForward": {
-    "construction": "Parameters (lookback, topK) refit each quarter from a six-point grid using only bars that closed before that quarter. Skip and rebalance held at the canonical 21/21 -- refitting those would turn a literature-specified strategy into a search result.",
+    "shape": {
+      "winRatePct": 40.1,
+      "medianNetR": -1.1061,
+      "top5SharePct": 57.4,
+      "distinctDays": 111,
+      "clusteringFactor": 1.64
+    },
+    "reading": "2025 lifts from +0.21R to +0.74R -- the only change in the campaign that has moved the worst year. The decay is reduced, not cured: 3.14 -> 2.05 -> 0.74 is still a decline, and 2026's five trades are negative."
+  },
+  "literatureSearched": {
+    "date": "2026-09-03",
+    "implemented": [
+      "maSlope (MA rising, not just price above it)",
+      "adx (trend strength)",
+      "maxExtension (ATR units above the MA)",
+      "atrPctBand (volatility regime)",
+      "btcRegime (BTC above its own MA as a market-wide state)"
+    ],
+    "notYetBuilt": [
+      "rolling-Sharpe cross-sectional pair selection",
+      "asymmetric long/short allocation",
+      "volatility-targeted position sizing"
+    ],
+    "sources": [
+      "arxiv 2602.11708 AdaptiveTrend",
+      "pyquantlab regime-filtered trend",
+      "quantmonitor SMA+ATR regime rules"
+    ]
+  },
+  "riskReturnDial": {
+    "note": "Every filter built so far trades return for drawdown rather than adding return.",
+    "examples": {
+      "no filters": {
+        "final": 3934.79,
+        "dd": 13.54
+      },
+      "atrPctBand": {
+        "final": 4077.96,
+        "dd": 13.54
+      },
+      "crossSection topN12": {
+        "final": 3685.85,
+        "dd": 10.96
+      },
+      "crossSection topN3": {
+        "final": 2363.77,
+        "dd": 7.81
+      },
+      "all four of adx+btc+slope+atr": {
+        "final": 2624.88,
+        "dd": 8.57
+      }
+    }
+  },
+  "silentNoOpsFound": {
+    "why": "A parameter the engine accepts and ignores produces byte-identical rows that read as a swept axis. Four found so far.",
+    "found": {
+      "stopMode": "only implemented for entryMode anticipate; now throws",
+      "alignMode": "only consulted by bos and anticipate, and only with a higher timeframe present; now documented in backtest.js",
+      "n (swing window)": "inert for breakout, which uses a lookback window rather than pivots",
+      "trailStartR": "inert whenever trailStartR <= trailR, because max() keeps the original stop"
+    },
+    "guard": "sweep.mjs's inertAxes() now names any axis whose values never changed a balance, printed above every table."
+  },
+  "costStress": {
+    "3x fee + 40x slip": 2580.11,
+    "2x fee + 10x slip": 3458.78,
+    "1.5x fee + 4x slip": 4003.34,
+    "as modelled": 4874.7,
+    "note": "Run at the pre-delay leader; the shape is what matters, not the level."
+  },
+  "walkForward": {
+    "runner": "walkforward.mjs (node walkforward.mjs, ~2 min), pinned by walkforward.test.mjs",
+    "construction": "Each quarter of 2024-01-01..2026-03-31 is scored by parameters fitted only on bars that closed before it began. Nine quarters chained into one curve.",
     "result": {
-     "borrow0": {
-      "final": 1722.18,
-      "cagrPct": 38.56,
-      "dd": 10.18,
-      "up": "14/20"
-     },
-     "borrow5pct": {
-      "final": 1651.89,
-      "cagrPct": 35.14,
-      "dd": 10.36,
-      "up": "14/20"
-     }
+      "trades": 135,
+      "meanR": 1.1448,
+      "finalBalance": 1974.68,
+      "maxDrawdownPct": 13.02
     },
-    "parameterStability": "252/5 chosen in ALL SEVEN quarters. The canonical lookback every time.",
-    "sameWindowBenchmark": {
-     "window": "2025-01-01..2026-08-11 (1.61y)",
-     "walkForwardSpread@5%": {
-      "final": 1651.89,
-      "cagr": 35.1,
-      "dd": 10.4
-     },
-     "SPY": {
-      "final": 1314.77,
-      "cagr": 18.6
-     },
-     "equalWeight128": {
-      "final": 1302.74,
-      "cagr": 17.9
-     }
+    "sameWindowNoStrategy": {
+      "btc": 1544.1,
+      "btcMaxDrawdownPct": 52.06,
+      "equalWeightBasket": 779.28
     },
-    "reading": "Every earlier result in this project lost about 40% of its apparent edge to a walk-forward and one lost all of it. This one lost nothing: 35.1% CAGR out of sample at a 10.4% drawdown against SPY's 18.6% over the identical window, with perfectly stable parameter selection."
-   }
+    "inSampleComparison": {
+      "sameWindowFittedOnAllData": {
+        "meanR": 1.8522,
+        "finalBalance": 2381.2
+      },
+      "reading": "+1.85R in-sample against +1.14R out-of-sample over the identical window. That gap is the size of the hindsight, measured rather than guessed: roughly 40% of the apparent edge was the search seeing the answer."
+    },
+    "parameterStability": "trendMa 150 and minStopPct 0.03 and volTarget 0.05 chosen in ALL NINE quarters; beTriggerR 2.5 in seven of nine. The search is not chasing noise. Note it never picks the full-sample leader's trendMa 200.",
+    "quarterlyShape": "Four of nine quarters positive. The return is concentrated in 2024Q1 (+2.84R), 2024Q4 (+1.73R) and 2025Q3 (+2.90R) -- the same fat-tail dependence as the in-sample result.",
+    "leaksStillPresent": "This is NOT a clean holdout and must not be quoted as one. The grid was designed after seeing full-sample results; the universe was chosen after seeing all of it; and walkforward.mjs's FIXED block holds the entry mode, the filters, and the one-bar fill delay constant at values selected in-sample rather than refitting them. Refitting those too would be the stronger test and has not been run.",
+    "laterStarts": {
+      "from 2025-01-01": {
+        "trades": 61,
+        "meanR": 0.9752,
+        "final": 1127.19,
+        "dd": 9.9,
+        "quarters": {
+          "25Q1": -1.1466,
+          "25Q2": -0.8352,
+          "25Q3": 2.9004,
+          "25Q4": -0.8006,
+          "26Q1": -0.7557
+        }
+      },
+      "from 2025-07-01": {
+        "trades": 42,
+        "meanR": 1.8462,
+        "final": 1206.97,
+        "dd": 6.34
+      },
+      "reading": "This is the caveat that matters most. The whole out-of-sample result is three quarters out of nine -- 2024Q1, 2024Q4 and 2025Q3. The other six are negative. Restricted to 2025 the walk-forward is positive ONLY because of 2025Q3; four of its five quarters lose money. A book running this would have spent most of its time losing and made everything back in three quarters. That is the trade-level tail dependence showing up at the quarter level, and it is what trend following is -- but it means nobody should read $1974.68 as a steady climb."
+    },
+    "refitEverything": {
+      "what": "Entry mode, fill delay and filters refitted every quarter alongside the numeric parameters, instead of held at in-sample values. 576 configs x 9 quarters.",
+      "result": {
+        "trades": 158,
+        "meanR": 1.0044,
+        "finalBalance": 2249.27,
+        "maxDrawdownPct": 14.75
+      },
+      "vsRestricted": "Better than the $1974.68 of the version that held those three constant. Removing the leak did not cost anything -- it helped.",
+      "whatItChose": {
+        "entryDelayBars 1": "ALL NINE quarters, on training data alone. The one-bar fill delay was not an in-sample spike; an independent search picks it every time.",
+        "trendMa 150": "all nine",
+        "minStopPct 0.03": "all nine",
+        "volTarget 0.05": "eight of nine",
+        "entryMode breakout": "eight of nine (anticipate once, in 2024Q2, which lost)",
+        "beTriggerR 3": "seven of nine",
+        "filters null": "SEVEN OF NINE. A training-only search mostly DECLINES the filters, which confirms what the in-sample sweeps only hinted: they are noise, not signal."
+      },
+      "stillFixed": "What remains held at in-sample values is the structural frame, and it is not nothing: long-only, trendGate on in 'ma' mode, tpR 100, maxStopPct 0.20, alignMode none, lockBreakeven on, beLockR 0.2, volClamp 3. The trend gate in particular was chosen in-sample and is the single change that created this result.",
+      "quarterlyShape": "Four of nine positive: 2024Q1 +2.84R, 2024Q3 +0.22R, 2024Q4 +3.53R, 2025Q3 +1.11R. The other five negative. Same concentration as every other cut of this result."
+    },
+    "structuralRefit": {
+      "what": "Refit the structural frame too -- whether to gate at all, in which mode, and the target multiple -- not just the tuned numbers. 384 configs x 9 quarters.",
+      "result": {
+        "trades": 149,
+        "meanR": 1.1036,
+        "finalBalance": 2300.28,
+        "maxDrawdownPct": 13.39
+      },
+      "vsEarlier": "Best walk-forward yet: $1974.68 (numbers only) -> $2249.27 (+ entry mode, delay, filters) -> $2300.28 (+ the structural frame). Every leak closed so far has made the result better, not worse.",
+      "whatItChose": {
+        "trendGate true": "ALL NINE quarters",
+        "trendGateMode ma": "all nine",
+        "trendMa 150": "all nine",
+        "minStopPct 0.03": "all nine",
+        "beTriggerR 3": "all nine",
+        "volTarget 0.05": "all nine",
+        "tpR 100": "eight of nine (tpR 12 once, in 2024Q2, which lost)",
+        "maxHold 50": "seven of nine"
+      },
+      "reading": "This is the strongest evidence in the campaign. A search that has never seen the quarter it is judged on converges on the same structure nine times out of nine -- INCLUDING on whether to apply the trend gate at all, which was the one choice most obviously made with hindsight. The gate is not an in-sample artifact.",
+      "stillFixed": "long-only, entryMode breakout, entryDelayBars 1, filters null, alignMode none (inert), maxStopPct 0.20, lockBreakeven, beLockR 0.2, volClamp 3. The first three were each chosen independently in 8/9 or 9/9 quarters by the previous refit, so holding them is now a recorded observation rather than an assumption."
+    },
+    "fittingObjective": {
+      "why": "The walk-forward's fit function maximised final balance and nothing else. Given a choice between an unlimited book and one capped at three positions it took unlimited in all nine quarters, because more concurrent bets is more balance in-sample -- it never saw that unlimited got there through a 24% drawdown while the cap took 9%. The campaign's leader had been picked on drawdown TOO, so the walk-forward was being asked to validate a choice made on a criterion it did not share.",
+      "fix": "walkforward.mjs now takes objective 'balance' or 'mar' (balance per unit of drawdown). Both are reported.",
+      "result": {
+        "balance": {
+          "trades": 149,
+          "meanR": 1.0957,
+          "final": 2281.86,
+          "dd": 13.39,
+          "chose": "unlimited @1% in all nine quarters"
+        },
+        "mar": {
+          "trades": 146,
+          "meanR": 1.1496,
+          "final": 2320.47,
+          "dd": 13.39,
+          "chose": "maxConcurrent 2 @0.5% for four quarters, then unlimited @1% for five"
+        }
+      },
+      "conclusion": "The concurrency cap is NOT validated out of sample under either objective. Its large in-sample gain was hindsight."
+    },
+    "btcRegimeOffered": {
+      "result": {
+        "trades": 142,
+        "meanR": 1.3737,
+        "finalBalance": 2588.43,
+        "maxDrawdownPct": 10.96
+      },
+      "chose": "btcRegime 50 in nine quarters of nine under the balance objective, eight of nine under mar",
+      "progression": "$1974.68 (numbers only) -> $2249.27 (+ entry mode, delay, filters) -> $2300.28 (+ structural frame) -> $2588.43 (+ btcRegime offered). Every step improved it.",
+      "lessonRecorded": "The filters were reported as 'declined in 7 of 9 quarters'. That was true of the filters the grid CONTAINED. btcRegime alone was never in it. A component absent from a grid is not a component the search rejected, and the write-up did not distinguish those."
+    },
+    "gridSizeIsAVariable": {
+      "ladder": "Four grid sizes, same fixed frame, same window, trendMa pinned at 150 so grid size is the only thing that varies.",
+      "table": [
+        {
+          "grid": "tiny",
+          "points": 2,
+          "stability": 1,
+          "oosFinal": 2281.86,
+          "oosDD": 13.39,
+          "meanR": 1.0957
+        },
+        {
+          "grid": "small",
+          "points": 8,
+          "stability": 1,
+          "oosFinal": 2588.43,
+          "oosDD": 10.96,
+          "meanR": 1.3737
+        },
+        {
+          "grid": "medium",
+          "points": 48,
+          "stability": 0.778,
+          "oosFinal": 2359.49,
+          "oosDD": 16.71,
+          "meanR": 1.12
+        },
+        {
+          "grid": "large",
+          "points": 192,
+          "stability": 0.963,
+          "oosFinal": 2387.26,
+          "oosDD": 13.46,
+          "meanR": 1.0815
+        }
+      ],
+      "finding": "Grid size matters and there is an INTERIOR optimum, around eight points here. Eight beats two and it beats forty-eight and one hundred and ninety-two, on balance, drawdown and mean R alike.",
+      "correction": "The previous commit claimed 'a bigger honest grid is a worse grid'. That is too strong and is withdrawn. It rested on one comparison, $2588.43 against $2387.26, which was partly confounded -- the small grid pinned trendMa at 150 while the large one swept it. With the confound removed the relationship is not monotone: 192 points beats 48, and 2 points loses to 8. The direction of the original observation survives for grids above the optimum; the general claim does not.",
+      "stabilityHypothesisRefuted": "Choice stability, computed from training runs alone, does NOT rank grids. It flags the worst one -- medium at 0.778 -- but tiny and small both score a perfect 1.000 and differ by 13% in out-of-sample balance. It is a useful warning sign and not a selection criterion, and it was proposed here as the latter.",
+      "consequenceForTheLeader": "None. The leader already comes from the eight-point grid, which the corrected ladder confirms is the best of the four."
+    }
   },
-  "spreadReplication": {
-   "crypto-29": {
-    "top": 2430.28,
-    "bottom": 213.25,
-    "spread": 3375.88,
-    "spreadDD": 9.0,
-    "at5pctBorrow": 3041.92,
-    "up": "33/50"
-   },
-   "sp500-128": {
-    "top": 1743.35,
-    "bottom": 336.69,
-    "spread": 2077.42,
-    "spreadDD": 9.91,
-    "at5pctBorrow": 1947.5,
-    "up": "18/31"
-   },
-   "equity-30": {
-    "top": 2261.86,
-    "bottom": 1515.91,
-    "spread": 1265.94,
-    "spreadDD": 16.1,
-    "at5pctBorrow": 1186.76,
-    "up": "18/31"
-   },
-   "reading": "Two strong, one weak, and the weak one is explained rather than anomalous: the 30-name bundle is all winners -- only 7% of it lost money -- so its bottom decile still ROSE and the short leg had nothing to work with. The spread needs dispersion and delivers where dispersion exists. Crypto is the striking case: a 67%-drawdown long strategy becomes a 9%-drawdown spread with a higher balance."
-  },
-  "whatRemainsUnproven": [
-   "20 out-of-sample monthly periods, 1.61 years, one market regime. That is the binding limitation and no amount of further analysis on this data fixes it.",
-   "No live or paper trading. Nothing here has met a real spread or a real borrow desk.",
-   "Short availability is modelled as a flat borrow rate. In practice parts of the bottom decile are hard to borrow or unborrowable, and that is lumpy rather than uniform.",
-   "Yahoo serves no delisted history, so the bundles contain no failures. For a LONG-SHORT this understates rather than flatters -- the failures would have paid the short leg -- but it is still a gap.",
-   "The three universes overlap in period and partly in symbols; their p-values must not be combined."
+  "bugsFound": [
+    {
+      "where": "walkforward.mjs, first version",
+      "symptom": "reported -0.42R and $883.39 out of sample -- a clean negative result",
+      "cause": "each quarter's run was truncated at the quarter end, amputating every position still open when the quarter closed. With 50-to-200-bar holds that is most of them, and the amputated part is the tail that carries a trend follower's return.",
+      "caught": "by checking the same configurations held FIXED over the identical window, which scored +0.74R to +1.85R. A -0.42R result next to a +1.85R result for the same trades is not a finding, it is a bug.",
+      "fix": "exits now run to the end of the data; only ENTRY dates are confined to the decision window. Letting a trade run its course after entry is not lookahead -- its exit rule was fixed when it was entered. Pinned by a test."
+    },
+    {
+      "where": "walkforward.mjs step reporting",
+      "symptom": "a nine-quarter refit of eight axes printed as though only five had been fitted",
+      "cause": "`chose` was a hardcoded list of five keys rather than derived from the grid",
+      "impact": "whether the entry mode and filters moved between quarters -- the entire question that run existed to answer -- was invisible in its own output",
+      "fix": "chose is now derived from Object.keys(grid); pinned by a test"
+    },
+    {
+      "where": "backtest.js, the bos entry branch",
+      "symptom": "a sweep of four btcRegime periods returned four byte-identical rows for the short side",
+      "cause": "entryGate was wired into the anticipate branch and the shared dip/breakout branch but not into bos, so every filters spec was silently ignored for that entry mode",
+      "fix": "entryGate is now checked in all three branches and its refusals are tallied as reason externalGate; a test asserts a gate that refuses everything produces no trades in bos, breakout and anticipate alike"
+    },
+    {
+      "where": "filters.mjs btcRegime",
+      "symptom": "would have admitted shorts only into rising markets",
+      "cause": "'BTC above its own average' is a market-wide uptrend, applied unchanged to both directions -- the same bug class as backtest.js's trend gate",
+      "fix": "direction-aware, with a test covering both directions against both a rising and a falling BTC"
+    },
+    {
+      "where": "backtest.js, systemic",
+      "symptom": "eight parameters accepted and silently ignored, each producing byte-identical rows that read as a swept axis",
+      "list": "stopMode outside anticipate; alignMode outside bos/anticipate; the swing window for breakout; trailStartR below trailR; entryGate in the bos branch; chopFilter, requireHigherLow and minRoomR for breakout",
+      "fix": "A capability table now declares which entry modes honour alignMode, chopFilter, requireHigherLow and minRoomR, and passing a RESTRICTIVE value to a mode that ignores it throws. Permissive values never throw -- alignMode 'none' asks for no alignment, which is exactly what an ignoring mode delivers, so it drops no claim and the whole campaign passes it. The signature default is accepted everywhere too, because omission and an explicit default cannot be told apart."
+    },
+    {
+      "where": "the grid-size ladder, first run",
+      "symptom": "reported that stability does not predict performance AND that bigger grids do better -- the opposite of the previous commit",
+      "cause": "trendMa was not in the ladder's FIXED block, so the two grids that did not SWEEP it fell back to backtest.js's default of 20 instead of the endorsed 150. The ladder measured 'was trendMa fitted at all', not grid size.",
+      "caught": "the two smallest grids scoring far below every walk-forward already recorded, which no change in grid size could explain",
+      "fix": "trendMa pinned at 150 in FIXED, with a comment saying why; ladder re-run"
+    },
+    {
+      "where": "bundle-loader.loadBundleCandles",
+      "symptom": "every equities file ended with the live session's incomplete row — real timestamp and OHL, empty close",
+      "cause": "the loader only validated `time`; parseFloat(\"\") is NaN and every NaN comparison is false, so that bar would trigger neither a stop nor a target and simply be stepped over",
+      "fix": "bars with any non-finite OHLC are dropped, with a test built from the real failing shape"
+    },
+    {
+      "where": "costs.costFor and bundle-loader.marketProxy",
+      "symptom": "CANDLE_COST_MODEL was set correctly and the first equities run still died saying no cost model was named",
+      "cause": "the env fallback lived in the signature default, and a JS default parameter only fires on `undefined` — every call site passes `config.x ?? null`, so both env vars were unreachable through the harness",
+      "fix": "resolved inside the function body; tests pin the null-call-site path for both"
+    }
   ],
-  "spreadNull": {
-   "construction": "Draw 2*topK symbols uniformly, split them arbitrarily into a long half and a short half, run the same dollar-neutral book. Asks the only question worth asking of a spread: does RANKING the two sides beat splitting the same names at random?",
-   "result": {
-    "spread": 1947.5,
-    "nullMedian": 944.11,
-    "nullP05": 744.67,
-    "nullP95": 1166.0,
-    "p": 0.005
-   },
-   "reading": "The spread sits entirely outside the null distribution -- above its 95th percentile. The cleanest null result the project has produced."
+  "concurrency": {
+    "measured": "The unlimited book peaks at 19 simultaneous positions on 2024-12-03 and spends 26% of its time with 9 or more open. It is flat 20.4% of the time.",
+    "whyItMatters": "simulateEquity compounds trades one after another in entry order, which silently assumes the book is never long two things at once. It is. Sequential compounding cannot see correlated positions moving together, so every drawdown this campaign reported before this point is a FLOOR, not a measurement. maxConcurrent does not fix the accounting -- it constrains the book the way a real one is constrained, and declined signals are counted and reported rather than quietly dropped.",
+    "stillUnmodelled": "Positions are still compounded sequentially rather than marked to market together, so a correlated multi-position drawdown is still not directly measured."
   },
-  "gateVerdict": {
-   "runner": "xsmom-gate.mjs",
-   "verdict": "FAIL",
-   "unitCaveat": "promotion.mjs was written for per-trade R-multiples and a rotation has no stop and therefore no R. Monthly spread log returns are used instead, one per rebalance, and every threshold is read in those units.",
-   "passed": [
-    "positive_net_expectancy",
-    "win_rate_margin (58.1% against a 37.7% breakeven)",
-    "interval_excludes_zero",
-    "survives_multiplicity",
-    "beats_matched_null (p=0.0050)",
-    "survivable (10.09% against a 25% ceiling)",
-    "out_of_sample (holds at 0.0251 monthly)"
-   ],
-   "failed": {
-    "sample_sufficient": "effective n 31 against 32 required -- short by one period",
-    "beats_baseline_controls": "mean monthly 0.02150 against SPY's 0.02251. ON RAW RETURN, SPY BEATS THE SPREAD over the full window."
-   },
-   "blockedPermanently": "pre_registration. Registering a hypothesis after seeing its result is not pre-registration; BLOCKED here is correct and must not be filled in retrospectively.",
-   "theHonestReading": "Seven conditions pass including the two hardest -- the matched null and out-of-sample replication. The baseline failure is real and is the thing to understand: this is a RISK-ADJUSTED improvement, not a raw-return one. Return per unit of drawdown is 2.92 against SPY's 0.89, but unlevered the spread returns less than simply owning the index over this window."
+  "equitiesBlocked": {
+    "status": "Cannot be tested in this container. Outbound HTTPS to public market-data hosts is denied by the environment's network policy -- the proxy gateway answers 403 to CONNECT for stooq.com and stooq.pl, confirmed in its own status endpoint.",
+    "whatWouldUnblockIt": "Equities daily bars supplied the same way the crypto bundle was: a tar.gz of per-symbol CSVs with time,open,high,low,close,volume. bundle-loader.mjs reads that format already and nothing else would need to change.",
+    "whyItMatters": "The owner named equities as the actual target. FINDINGS.md's own equities section is a warning about this exact failure mode -- an apparent edge that turned out to be the window's payoff geometry."
   },
-  "riskMatchedComparison": {
-   "why": "A market-neutral book at a 10% drawdown is not comparable to an index at 21% until the risk is matched. Financing charged at 6% annualised on the borrowed portion.",
-   "table": {
-    "1.0x": {
-     "final": 1947,
-     "cagr": 29.4,
-     "dd": 10.1,
-     "vsSPY": "below"
+  "decayDiagnosis": {
+    "runner": "regime.mjs, pinned by regime.test.mjs",
+    "question": "Is the leader's decline (2023 +2.92R, 2024 +2.01R, 2025 +0.21R, 2026 -0.94R) the strategy dying or the market going quiet?",
+    "table": {
+      "2023": {
+        "efficiencyRatio": 0.1706,
+        "randomEntryMeanR": 0.7606,
+        "randomEntryWinPct": 28.4,
+        "strategyMeanR": 2.9243,
+        "excessOverRandom": 2.16
+      },
+      "2024": {
+        "efficiencyRatio": 0.149,
+        "randomEntryMeanR": 0.2474,
+        "randomEntryWinPct": 25.9,
+        "strategyMeanR": 2.011,
+        "excessOverRandom": 1.76
+      },
+      "2025": {
+        "efficiencyRatio": 0.1457,
+        "randomEntryMeanR": -0.0585,
+        "randomEntryWinPct": 23.5,
+        "strategyMeanR": 0.2058,
+        "excessOverRandom": 0.27
+      },
+      "2026": {
+        "efficiencyRatio": 0.1552,
+        "randomEntryMeanR": -0.8574,
+        "randomEntryWinPct": 17.8,
+        "strategyMeanR": -0.9431,
+        "excessOverRandom": -0.08
+      }
     },
-    "1.5x": {
-     "final": 2515,
-     "cagr": 42.9,
-     "dd": 15.0,
-     "vsSPY": "beats"
+    "answer": "BOTH, and that is a better answer than either alone. What a RANDOM long entry earned under the same geometry fell from +0.76R to -0.86R -- no strategy choice can explain that, the trend simply stopped being there. But the strategy's EXCESS over random fell too, from +2.16R to +0.27R to -0.08R. So the market got harder AND the edge over a coin flip shrank.",
+    "theSharpPoint": "In 2025 the strategy beat a random entry by 0.27R. The campaign's own power analysis puts the smallest excess this test can detect at roughly 1.3-1.5R. In 2025 the strategy is not distinguishable from a coin flip.",
+    "notAnArtefact": "Checked at stop widths of 4%, 6%, 10% and 15%. The level of the random-entry return moves; the year ordering never does.",
+    "sideNote": "The efficiency ratio barely moved (0.171 to 0.146, a 17% range). What collapsed was the DIRECTION of the moves, not their straightness -- 2025-26 crypto was no choppier, it just stopped going up."
+  },
+  "shortSide": {
+    "fullPeriod": "Loses in all 99 configurations swept. Best $816.25, a 18.4% loss, at a 49.38% drawdown.",
+    "byYear": {
+      "2023": {
+        "trades": 110,
+        "meanR": -0.4981
+      },
+      "2024": {
+        "trades": 90,
+        "meanR": 0.3442
+      },
+      "2025": {
+        "trades": 156,
+        "meanR": 0.298
+      },
+      "2026": {
+        "trades": 36,
+        "meanR": -0.5164
+      }
     },
-    "2.0x": {
-     "final": 3248,
-     "cagr": 57.8,
-     "dd": 20.1,
-     "vsSPY": "beats",
-     "note": "risk-matched to SPY"
+    "theInterestingPart": "Shorts are POSITIVE in 2024 and 2025 -- 2025 being exactly the year the long side collapsed to +0.21R. The two sides are complementary in time.",
+    "combined": {
+      "long only": {
+        "final": 16749.27,
+        "dd": 25.1
+      },
+      "long + short at 1% each": {
+        "final": 13671.65,
+        "dd": 40.59
+      },
+      "long + short at 0.5% each": {
+        "final": 4067.23,
+        "dd": 22.68
+      },
+      "verdict": "Combining makes it worse on both axes. The short side's 2023 losses (-0.50R over 110 trades) outweigh its 2024-25 gains."
     },
-    "2.5x": {
-     "final": 4195,
-     "cagr": 74.2,
-     "dd": 24.9,
-     "vsSPY": "beats"
+    "theHandicapThatMattersAndIsNotResolved": "The engine implements shorts for entryMode 'bos' only and on the base stop/target/timeout path alone -- no breakeven lock, no trailing stop, no partials. The long side's result depends materially on the breakeven lock (beTriggerR 3, chosen by the walk-forward in nine quarters of nine), so the short side is being judged with a worse exit engine than the long side. The measured gap is far too large for the lock to close (-18% against +1575%), so the conclusion 'shorts do not rescue this' stands -- but 'shorts do not work' is NOT established and would need the short exit path built first.",
+    "engineChange": "backtest.js's trend gate is now direction-aware. Both gate conditions describe an uptrend; applied unchanged to a short they permitted selling only into rising markets, which is worse than no gate at all. Two tests pin both directions.",
+    "engineNowComplete": "trailR, trailStartR, partialAtR, partialFrac, trailingTpPct, lockBreakeven and exitOnSwingHigh are all mirrored for shorts. Only two ENTRY-side conditions remain long-only and they are genuinely unwritten rather than untested: requireHigherLow (a rising sequence of swing lows) and minRoomR (clear air above entry, measured by a nearestResAbove with no nearestSupportBelow counterpart).",
+    "verdictUpgraded": "Previously recorded as 'shorts do not rescue this, but shorts do not work is NOT established' because the short side was being judged with a worse exit engine. It is now judged with the same one and the answer does not move: the short side loses on this data. The handicap was not the explanation.",
+    "whyItStillMattered": "The engine capability is the deliverable. The owner wants the short path for EQUITIES, where a two-sided book is the normal construction rather than an afterthought."
+  },
+  "equitiesReadiness": {
+    "formatGivenToOwner": "candle-bundle/1440/<SYMBOL>.csv, header time,open,high,low,close,volume, time in unix seconds, oldest row first. bundle-loader.mjs reads it unchanged.",
+    "whatWasHardcoded": "Three call sites assumed XBTUSD was the market: benchmark.mjs's headline row, campaign.mjs's btcRegime series, and robustness.mjs's copy of it. On an equities bundle the benchmark would have printed 'BTC $n/a' next to every leaderboard and the btcRegime filter would have refused to compile with a message about BTC. Two of the three would have gone quiet, which is how the other eight silent no-ops in this campaign got as far as they did.",
+    "fix": "bundle-loader.marketProxy resolves it from the universe against an ordered candidate list -- XBTUSD, SPY, VOO, IVV, ^GSPC, QQQ -- honours an explicit override or CANDLE_MARKET_PROXY, and THROWS when it cannot resolve, naming what it looked for. benchmarks() now returns proxySymbol/proxy/proxyMaxDrawdownPct instead of btc/btcMaxDrawdownPct, because a field called 'btc' on an equities run is a lie even when the number is right.",
+    "stillToDoWhenDataArrives": [
+      "declare survivorship bias unless the bundle demonstrably includes delisted names",
+      "confirm with the owner whether prices are split/dividend adjusted -- adjustment changes historical stop distances, and stop distance is the variable this whole campaign turned on",
+      "rename btcRegime to marketRegime once it is used on a second asset class"
+    ],
+    "runOrder": [
+      "benchmark.mjs on that universe",
+      "robustness.mjs with the crypto-fitted leader untouched (the honest transfer test)",
+      "walkforward.mjs with an EIGHT-point grid (the corrected ladder's optimum)",
+      "only then sweep, and stop early"
+    ],
+    "costModel": {
+      "built": "costs.mjs. Named models with sourced numbers: krakenTaker (0.008/0.0005, what every crypto result here was computed under), usEquityRetail (0/0.0005), usEquityIbkr (0.00005/0.0005), and zeroCost as a labelled diagnostic.",
+      "whyItRefusesToGuess": "A crypto universe defaults to krakenTaker so existing results stay reproducible. Anything else must be named. The failure mode of guessing is not a slightly wrong number: at a 3% stop crypto pays 0.57R a trade and US equities pay 0.033R, so equities charged Kraken rates would look like a dead strategy and crypto charged equity rates would manufacture an edge. costFor() throws on an unrecognised universe and the message says so.",
+      "identity": "costInR(model, stopPct) = 2*(feeRate+slipPct)/stopPct. Pinned by a test against the two figures the campaign turned on: 1.70R at a 1% stop, 0.11R at 15%.",
+      "verified": "The leader reproduces byte-identically after the rewiring -- 182 trades, $20,949.34, 20.77%."
     }
-   },
-   "whatThisDoesNotSay": "Leverage is a separate decision with its own failure modes -- margin calls, financing that moves against you, and gap risk that a monthly rebalance cannot react to. The risk-matched number answers the gate's raw-return objection; it does not make 2x a recommendation. And it multiplies the momentum-crash exposure, which is the strategy's known failure mode and is absent from this sample."
   },
-  "CORRECTION_drawdown": {
-   "what": "Every spread drawdown reported before 2026-09-04T14:00 was understated by about 44%.",
-   "cause": "spread() combined MONTHLY period returns, so the drawdown was sampled only at rebalance points and never saw an intra-month low.",
-   "corrected": {
-    "inSample": {
-     "was": 10.09,
-     "is": 14.55
+  "equities": {
+    "bundle": "equity-bundle/1440, 30 symbols (10 sector/index ETFs + 20 large caps), 920 daily bars each, 2023-01-03 to 2026-09-02. Raw unadjusted OHLC from yfinance via Colab. Held in a SEPARATE root from candle-bundle so the two universes can never be mixed.",
+    "costModel": "usEquityRetail — 0 commission, 5bp per-leg slippage. Named explicitly; costFor() refused to run until it was.",
+    "benchmark": {
+      "SPY": {
+        "final": 2009.24,
+        "dd": 21.43
+      },
+      "equalWeightBasket": 2646.32,
+      "best": "NVDA $15676.56",
+      "worst": "PFE $566.13"
     },
-    "walkForward@5%": {
-     "was": 10.36,
-     "is": 14.11
+    "transferTest": {
+      "what": "The crypto-fitted leader, not one parameter changed, run on equities.",
+      "result": {
+        "trades": 252,
+        "meanR": 0.5814,
+        "finalBalance": 15873,
+        "maxDrawdownPct": 46.26
+      },
+      "perYear": {
+        "2023": 0.6421,
+        "2024": 1.0473,
+        "2025": 0.2364,
+        "2026": 0.565
+      },
+      "shape": {
+        "winRatePct": 40.5,
+        "medianNetR": -1.0144,
+        "top5SharePct": 43.5,
+        "distinctDays": 175
+      }
     },
-    "walkForward@0%": {
-     "was": 10.18,
-     "is": 13.89
+    "THE_RESULT": {
+      "null": {
+        "vsAnyBar": {
+          "nullMeanR": 0.5751,
+          "observedMeanR": 0.5814,
+          "excessR": 0.0064,
+          "p": 0.47413,
+          "z": 0.04,
+          "mdeR": 0.4855,
+          "detectable": false
+        },
+        "vsGatedBars": {
+          "nullMeanR": 0.4016,
+          "excessR": 0.1798,
+          "p": 0.14321,
+          "z": 1.08,
+          "mdeR": 0.466,
+          "detectable": false
+        }
+      },
+      "reading": "$15,873 is the UNIVERSE, not the strategy. A random entry on the same 30 symbols with the same stop distances, target, hold and cost earns 0.5751R against the strategy's 0.5814R. The excess is 0.0064R at p=0.47 -- a coin flip. It fails the harder gated-bar version too. Thirty of today's mega caps and sector ETFs over 2023-2026 make money almost however you enter them; the equal-weight basket alone returns $2,646.",
+      "whyTheDollarsMislead": "A random-entry ACCOUNT computed as 1000*(1+0.01*0.5751)^252 lands near $4,242, which invites the reading that the strategy's $15,873 beat it. It does not: that formula is a crude geometric approximation with no volatility targeting and no path ordering, so it is not like-for-like. The rigorous comparison is mean R per trade, and there the two are the same number."
+    },
+    "selectionBiasConfirmed": "This was flagged as a caveat before the run and the null turned it into the explanation. The symbol list was 30 currently-listed large caps chosen by me — NVDA at $15,676 buy-and-hold is in it and the companies that failed are not. Survivorship-free equities data (Norgate, Sharadar, CRSP) is the only way to test this properly and it is a paid source.",
+    "subgroupDiagnostic": {
+      "whyItIsWorthRunning": "The matched-geometry null draws from the same symbols in the same proportions, so it already controls for the universe being a basket of winners. That conclusion -- no detectable edge -- stands on its own and survivorship does not undermine it. What survivorship DOES remove is the thing a trend gate is for: the chance to avoid a name that falls and keeps falling.",
+      "table": {
+        "all 30": {
+          "trades": 252,
+          "strategy": 0.5814,
+          "random": 0.5751,
+          "excess": 0.0064,
+          "p": 0.4741,
+          "mde": 0.486
+        },
+        "best 10 by buy-and-hold": {
+          "trades": 116,
+          "strategy": 0.7442,
+          "random": 0.8292,
+          "excess": -0.0851,
+          "p": 0.6001,
+          "mde": 0.78
+        },
+        "worst 10 by buy-and-hold": {
+          "trades": 56,
+          "strategy": 0.3871,
+          "random": 0.0225,
+          "excess": 0.3646,
+          "p": 0.0767,
+          "mde": 0.696
+        }
+      },
+      "reading": "Directionally consistent: on names that only rose, the strategy is WORSE than random -- its stop-outs are pure drag. On the laggards, random entry earns almost nothing (+0.0225R) and the strategy earns +0.3871R.",
+      "whyItIsNotAFinding": [
+        "p=0.0767 is not significant",
+        "the excess of 0.3646R is BELOW the 0.696R this test could detect at 80% power",
+        "the split is POST-HOC -- subgroups defined by an outcome only knowable at the end, so it is not tradeable as stated",
+        "two subgroups tested, so even the nominal p carries a multiplicity cost"
+      ],
+      "prereg": "EQUITIES-LAGGARD-EXCESS-2026-09, registry ledger seq 15, registered before any survivorship-free data exists so the prediction cannot be reshaped once it does."
+    },
+    "survivorshipFreeRoute": {
+      "correction": "Recorded because it was stated the other way earlier: a survivorship-free universe was called a paid product. Partly wrong. The bulk of the reconstruction is free and mechanical; only the departed names are.",
+      "script": "tools/sp500-pointintime.py, one Colab cell.",
+      "whatWorks": "Wikipedia's constituents table carries a Date-added column, so every current member that JOINED after 2023-01-01 is removed by rule -- roughly sixty companies that entered the index because they did well. No judgement involved.",
+      "whatDoesNot": "The 'Selected changes' table that listed REMOVALS is gone from that page. Verified 2026-09-04: it returns two tables and the second is a navbox. So the departed names are hand-supplied from recall, the list is incomplete, and its incompleteness is the residual survivorship bias. The manifest reports how many resolved, which bounds what got in but not what was never listed.",
+      "standing": "Better than a hand-picked basket of winners, worse than a vendor point-in-time file. Results must be labelled that way and not called survivorship-free.",
+      "debugHistory": "Three scripts failed before this one and the useful lesson is about diagnosis, not Wikipedia: v1 and v2 used a `!pip` cell magic that is a SyntaxError when the file is run rather than pasted, so nothing executed and nothing printed -- a silent failure indistinguishable from several other causes. v3 removed the magic and printed a checkpoint per step, which located the real fault in one run."
     }
-   },
-   "caughtBy": "multifactor.runBook, an independent implementation that marks every bar, disagreeing with spread() on the same configuration.",
-   "secondErrorDuringTheFix": "The first fix took the BALANCE from the per-bar path too, which silently dropped turnover and slippage (charged at rebalances) and inflated the result 9%, from $1947.50 to $2130.88. Balance now comes from the costed monthly path and drawdown from a per-bar walk anchored to it.",
-   "nowCrossChecked": "spread() and runBook agree within $5.49 and 0.02 drawdown points on the same configuration.",
-   "whatItChanges": "The claim 'half of SPY's drawdown' was wrong. 14.55% against SPY's ~21% is better, not half. The gate's survivable condition still passes at 14.55 against a 25 ceiling. Nothing else in the verdict moves."
   },
-  "threeVariations": {
-   "designedTo": "occupy DIFFERENT cells of the edge space so they can fail independently, rather than re-parameterise the winner",
-   "V1_timeSeriesFilter": {
-    "cell": "whether to be in at all",
-    "result": "WORSE everywhere. sp500 $882 (CAGR -4.8%) against baseline $1942; crypto $1617 against $2834."
-   },
-   "V2_multiHorizon": {
-    "cell": "what signal",
-    "result": "WORSE. sp500 $1409, crypto $1342. Averaging ranks across 21/63/126/252 dilutes rather than confirms."
-   },
-   "V3_volScaled": {
-    "cell": "how much",
-    "result": "WORSE on return, much better on drawdown: sp500 $1309 at 6.56% DD, crypto $1394 at 9.1%. But risk-adjusted it still loses -- 1.68 return-per-drawdown against the baseline's 2.01."
-   },
-   "combinations": "All seven combinations underperform the baseline on both universes.",
-   "reading": "A clean negative and worth as much as the positive. The canonical 1993 construction beat all three of my improvements on both universes. That is evidence the original is not a lucky parameterisation -- deviations from it in three independent directions all cost money."
+  "acceptanceCriterion": {
+    "asStated": "~10 trades a month, win rate at or above 40%, wins large enough to offset the losses.",
+    "met": "Yes, on every count, by the current equities candidate: 5.7 trades/month, 40.5% win rate, 2.92R average win against a 1.01R average loss, expectancy +0.5814R.",
+    "andAlsoMetBy": "A RANDOM ENTRY using the same exits: 42.8% win rate -- HIGHER than the strategy -- with a 2.67 payoff and +0.5589R expectancy. That is the whole problem with the criterion as an acceptance test.",
+    "whyTheShapeIsFree": "A wide stop with no reachable take-profit and a bounded hold caps the loss near 1R and lets winners run past 3R. A ~40% win rate at a ~2.7 payoff is therefore a property of the EXIT geometry, not the entry, and it comes free with any long entry in a rising market. Breakeven at a 2.89:1 payoff is a 25.7% win rate, so 40% clears it with room -- and so does the coin flip's 42.8%.",
+    "whatFrequencyCosts": {
+      "perTradeSdOfR": 2.75,
+      "detectionAt10PerMonth": {
+        "1.00R": "0.7 years",
+        "0.50R": "2.9 years",
+        "0.25R": "11.4 years",
+        "0.15R": "31.7 years"
+      },
+      "reading": "Low frequency does not reduce risk, it buys noise. Ten trades a month needs about three years to confirm a half-R edge and over a decade for a quarter-R one, before any allowance for same-day clustering."
+    },
+    "gateVerdict": {
+      "runner": "gate-run.mjs",
+      "verdict": "FAIL",
+      "passed": [
+        "positive_net_expectancy",
+        "win_rate_margin",
+        "interval_excludes_zero",
+        "survives_multiplicity"
+      ],
+      "failed": {
+        "sample_sufficient": "effective n 175 against 882 required to detect a quarter-R edge",
+        "beats_matched_null": "excess 0.0064R, p=0.47413"
+      },
+      "blocked": [
+        "pre_registration",
+        "beats_baseline_controls",
+        "survivable",
+        "out_of_sample"
+      ],
+      "reading": "Four conditions green including the owner's own criterion. It fails on the two that decide whether the result is real."
+    }
+  },
+  "THE_ANSWER": {
+    "question": "Does the trend-gated breakout entry carry an edge over a matched random entry?",
+    "answer": "No, in either asset class, and the last remaining hypothesis is refuted rather than merely unproven.",
+    "crypto": "29 pairs, 2,446 configurations. Best out-of-sample $2,588 at 11.0% drawdown against BTC's $4,106 at 52%.",
+    "equities30": "Excess +0.0064R, p=0.4741. The $15,873 was the universe: a coin flip with the same exits earned 0.5751R against 0.5814R.",
+    "equities128": {
+      "trades": 1181,
+      "strategy": 0.3451,
+      "random": 0.3268,
+      "excess": 0.0183,
+      "p": 0.3932,
+      "mde": 0.218,
+      "subgroups": {
+        "90 winners": {
+          "excess": 0.0473,
+          "p": 0.2909
+        },
+        "38 losers": {
+          "excess": -0.1175,
+          "p": 0.8225
+        },
+        "worst 20": {
+          "excess": -0.2752,
+          "p": 0.961
+        },
+        "worst 10": {
+          "excess": -0.365,
+          "p": 0.954
+        }
+      },
+      "reading": "The registered prediction was that the strategy adds value by declining to hold falling names. It does the opposite: WORSE than random on the losers, monotonically worse the weaker the name. The +0.3646R laggard excess on the 30-symbol bundle was noise and reversed sign on four times the sample."
+    },
+    "prereg": "EQUITIES-LAGGARD-EXCESS-2026-09 linked at ledger seq 16, verdict FAIL. Ledger verifies at 17 entries.",
+    "whatIsNotInDoubt": "The payoff geometry works and is free: ~40% win rate at a ~2.9 payoff, positive expectancy, confidence interval excluding zero. The owner's acceptance criterion is met in full. A coin flip meets it too, which is why it cannot be the acceptance test.",
+    "revisedBy": "crossSectionalMomentum below. The earlier answer was correct about ENTRY TIMING and wrong as a general claim, because every null this project had built was blind to selection."
+  },
+  "dataLimits": {
+    "sp500Bundle": {
+      "whatArrived": "129 symbols from the hand-assembled list, no manifest -- the simple script was run, not the Wikipedia reconstruction. SBNY dropped as a reused ticker (515 bars from 2024-08-15; the bank failed 2023-03). 128 used.",
+      "yahooDropsDelistedNames": "The decisive data finding, contradicting an assertion made earlier in this session: Yahoo serves essentially no delisted history. Of ten delisted names attempted -- SIVB, FRC, PACW, DISH, CTLT, PXD, MRO, WBA, CMA, IPG -- zero usable series were obtained. The free route cannot produce a survivorship-free universe; the membership reconstruction is free, the prices are not.",
+      "whyTheResultStillStands": "38 symbols lost money buy-and-hold (30%, against 7% in the first bundle) including CHPT -97%, LCID -92%, SEDG -88%, ENPH -86%. The hypothesis had ample population to show itself in and showed the opposite.",
+      "rawPriceArtifacts": "Unadjusted prices carry split discontinuities: MRNA +177% in a day, CHPT +75% on the final bar. auto_adjust=False preserves stop distances at that cost -- a tradeoff not stated when the advice was given."
+    }
+  },
+  "crossSectionalMomentum": {
+    "whyItWasNeverTested": "Every test before this asked whether ENTRY TIMING beats random, and matchedGeometryNull answers that by drawing random entries FROM THE SAME SYMBOLS IN THE SAME PROPORTIONS. That design holds symbol selection constant, so it is blind BY CONSTRUCTION to an edge living in WHICH asset you hold rather than WHEN you buy. Cross-sectional momentum is exactly that kind of edge and is among the most replicated results in the literature (Jegadeesh and Titman 1993, still present in their 2023 follow-up; time-series momentum with post-crisis Sharpe comparable to pre-2008, Moskowitz/Ooi/Pedersen and Baltas/Kosowski 2020).",
+    "theRule": "At each monthly rebalance, rank every symbol by its return over the past 252 bars skipping the most recent 21, hold the top decile equally weighted. No stop, no target, no entry trigger.",
+    "parametersArePreSpecified": "252 formation / 21 skip / 21 rebalance / top decile is the canonical Jegadeesh-Titman construction from 1993, not a configuration selected from a sweep. That matters: it is not best-of-N.",
+    "nullThatMatters": "Random SELECTION -- pick topK uniformly from the same eligible set at each rebalance and hold identically. It isolates the ranking, which is the only thing the strategy does.",
+    "results": {
+      "sp500-128": {
+        "final": 1743.35,
+        "cagrPct": 23.23,
+        "maxDrawdownPct": 29.65,
+        "basket": 1455.33,
+        "spySameWindow": 1649.03,
+        "randomMedian": 1126.49,
+        "p": 0.0149
+      },
+      "crypto-29": {
+        "final": 2430.28,
+        "cagrPct": 36.03,
+        "maxDrawdownPct": 66.96,
+        "basket": 1272.68,
+        "randomMedian": 968.11,
+        "p": 0.0199
+      },
+      "equities-30": {
+        "final": 2261.86,
+        "cagrPct": 35.89,
+        "maxDrawdownPct": 31.07,
+        "basket": 1759.69,
+        "randomMedian": 1558.33,
+        "p": 0.0547
+      }
+    },
+    "lookbackPattern": "Structured rather than scattered: every 252-bar configuration beats random (p=0.0149, 0.0199) and every 126-bar configuration fails (p=0.61, 0.93, 1.00). Short lookbacks getting eaten by reversal is what the literature predicts, which is weak evidence the effect is real rather than fitted.",
+    "whatIsNotEstablished": [
+      "The three universes are NOT independent -- same 2023-2026 regime, and sp500-128 contains the equities-30 symbols. The p-values must not be combined.",
+      "It beats SPY over the identical window by only 5.7% ($1743 against $1649) at a worse drawdown, 29.7% against ~21%. Risk-adjusted against the index it is close to a wash.",
+      "Crypto's 66.96% drawdown makes that version untradeable as constructed.",
+      "Only 2.66 years of rotation after the 252-bar warmup: roughly 32 rebalances.",
+      "No walk-forward yet, and no promotion-gate run."
+    ],
+    "correctnessChecks": "xsmom.test.mjs, 7 tests, including one that fails on look-ahead: a symbol that only rises AFTER the rebalance must not be selected. Ranking is by DATE across a shared calendar, not by bar index, so symbols starting on different dates are never compared out of period.",
+    "attacks": {
+      "1_concentration_LONG_ONLY": {
+        "result": "BAD. 31 monthly periods; the best 3 produce 96.8% of the total return, the best single month 43%. 61% of months positive. Same fragility as every earlier finding.",
+        "verdict": "the long-only rotation is a tail-dependent result like everything before it"
+      },
+      "3_longShort": {
+        "topDecile": {
+          "final": 1743.35,
+          "cagrPct": 23.23,
+          "dd": 29.65
+        },
+        "bottomDecile": {
+          "final": 336.69,
+          "cagrPct": -33.57,
+          "dd": 68.35
+        },
+        "spread": {
+          "final": 2077.42,
+          "cagrPct": 32.7,
+          "dd": 9.91,
+          "positiveMonths": "18/31",
+          "best3MonthsShare": "44.5%"
+        },
+        "reading": "The ranking genuinely separates: the bottom decile loses a third a year. The dollar-neutral spread beats SPY ($1649) at HALF its drawdown -- 9.91% against ~21% -- and concentration falls from 96.8% to 44.5%. This is the first result in the project that is simultaneously better AND less fragile."
+      },
+      "3b_borrowStress": {
+        "0%": {
+          "final": 2077.42,
+          "cagr": 32.7,
+          "dd": 9.9
+        },
+        "5%": {
+          "final": 1947.5,
+          "cagr": 29.4,
+          "dd": 10.1
+        },
+        "10%": {
+          "final": 1825.69,
+          "cagr": 26.2,
+          "dd": 10.4
+        },
+        "20%": {
+          "final": 1604.47,
+          "cagr": 20.1,
+          "dd": 12.3
+        },
+        "30%": {
+          "final": 1410.05,
+          "cagr": 14.2,
+          "dd": 14.4
+        },
+        "50%": {
+          "final": 1089.04,
+          "cagr": 3.4,
+          "dd": 22.7
+        },
+        "reading": "At realistic borrow (2-10%) the spread holds 26-31% CAGR at ~10% drawdown against SPY's ~20% at 21%. It only degrades to index-like at 30%+ borrow, which is exceptional rather than typical."
+      },
+      "survivorshipNowFavoursTheResult": "A reversal worth stating: for the long-only entry work, missing delisted names INFLATED results. For a long-short, they DEFLATE it. SIVB and FRC went to zero and would have sat in the bottom decile paying the short leg. Their absence from this bundle makes the spread an understatement.",
+      "4_walkForward": {
+        "construction": "Parameters (lookback, topK) refit each quarter from a six-point grid using only bars that closed before that quarter. Skip and rebalance held at the canonical 21/21 -- refitting those would turn a literature-specified strategy into a search result.",
+        "result": {
+          "borrow0": {
+            "final": 1722.18,
+            "cagrPct": 38.56,
+            "dd": 10.18,
+            "up": "14/20"
+          },
+          "borrow5pct": {
+            "final": 1651.89,
+            "cagrPct": 35.14,
+            "dd": 10.36,
+            "up": "14/20"
+          }
+        },
+        "parameterStability": "252/5 chosen in ALL SEVEN quarters. The canonical lookback every time.",
+        "sameWindowBenchmark": {
+          "window": "2025-01-01..2026-08-11 (1.61y)",
+          "walkForwardSpread@5%": {
+            "final": 1651.89,
+            "cagr": 35.1,
+            "dd": 10.4
+          },
+          "SPY": {
+            "final": 1314.77,
+            "cagr": 18.6
+          },
+          "equalWeight128": {
+            "final": 1302.74,
+            "cagr": 17.9
+          }
+        },
+        "reading": "Every earlier result in this project lost about 40% of its apparent edge to a walk-forward and one lost all of it. This one lost nothing: 35.1% CAGR out of sample at a 10.4% drawdown against SPY's 18.6% over the identical window, with perfectly stable parameter selection."
+      }
+    },
+    "spreadReplication": {
+      "crypto-29": {
+        "top": 2430.28,
+        "bottom": 213.25,
+        "spread": 3375.88,
+        "spreadDD": 9,
+        "at5pctBorrow": 3041.92,
+        "up": "33/50"
+      },
+      "sp500-128": {
+        "top": 1743.35,
+        "bottom": 336.69,
+        "spread": 2077.42,
+        "spreadDD": 9.91,
+        "at5pctBorrow": 1947.5,
+        "up": "18/31"
+      },
+      "equity-30": {
+        "top": 2261.86,
+        "bottom": 1515.91,
+        "spread": 1265.94,
+        "spreadDD": 16.1,
+        "at5pctBorrow": 1186.76,
+        "up": "18/31"
+      },
+      "reading": "Two strong, one weak, and the weak one is explained rather than anomalous: the 30-name bundle is all winners -- only 7% of it lost money -- so its bottom decile still ROSE and the short leg had nothing to work with. The spread needs dispersion and delivers where dispersion exists. Crypto is the striking case: a 67%-drawdown long strategy becomes a 9%-drawdown spread with a higher balance."
+    },
+    "whatRemainsUnproven": [
+      "20 out-of-sample monthly periods, 1.61 years, one market regime. That is the binding limitation and no amount of further analysis on this data fixes it.",
+      "No live or paper trading. Nothing here has met a real spread or a real borrow desk.",
+      "Short availability is modelled as a flat borrow rate. In practice parts of the bottom decile are hard to borrow or unborrowable, and that is lumpy rather than uniform.",
+      "Yahoo serves no delisted history, so the bundles contain no failures. For a LONG-SHORT this understates rather than flatters -- the failures would have paid the short leg -- but it is still a gap.",
+      "The three universes overlap in period and partly in symbols; their p-values must not be combined."
+    ],
+    "spreadNull": {
+      "construction": "Draw 2*topK symbols uniformly, split them arbitrarily into a long half and a short half, run the same dollar-neutral book. Asks the only question worth asking of a spread: does RANKING the two sides beat splitting the same names at random?",
+      "result": {
+        "spread": 1947.5,
+        "nullMedian": 944.11,
+        "nullP05": 744.67,
+        "nullP95": 1166,
+        "p": 0.005
+      },
+      "reading": "The spread sits entirely outside the null distribution -- above its 95th percentile. The cleanest null result the project has produced."
+    },
+    "gateVerdict": {
+      "runner": "xsmom-gate.mjs",
+      "verdict": "FAIL",
+      "unitCaveat": "promotion.mjs was written for per-trade R-multiples and a rotation has no stop and therefore no R. Monthly spread log returns are used instead, one per rebalance, and every threshold is read in those units.",
+      "passed": [
+        "positive_net_expectancy",
+        "win_rate_margin (58.1% against a 37.7% breakeven)",
+        "interval_excludes_zero",
+        "survives_multiplicity",
+        "beats_matched_null (p=0.0050)",
+        "survivable (10.09% against a 25% ceiling)",
+        "out_of_sample (holds at 0.0251 monthly)"
+      ],
+      "failed": {
+        "sample_sufficient": "effective n 31 against 32 required -- short by one period",
+        "beats_baseline_controls": "mean monthly 0.02150 against SPY's 0.02251. ON RAW RETURN, SPY BEATS THE SPREAD over the full window."
+      },
+      "blockedPermanently": "pre_registration. Registering a hypothesis after seeing its result is not pre-registration; BLOCKED here is correct and must not be filled in retrospectively.",
+      "theHonestReading": "Seven conditions pass including the two hardest -- the matched null and out-of-sample replication. The baseline failure is real and is the thing to understand: this is a RISK-ADJUSTED improvement, not a raw-return one. Return per unit of drawdown is 2.92 against SPY's 0.89, but unlevered the spread returns less than simply owning the index over this window."
+    },
+    "riskMatchedComparison": {
+      "why": "A market-neutral book at a 10% drawdown is not comparable to an index at 21% until the risk is matched. Financing charged at 6% annualised on the borrowed portion.",
+      "table": {
+        "1.0x": {
+          "final": 1947,
+          "cagr": 29.4,
+          "dd": 10.1,
+          "vsSPY": "below"
+        },
+        "1.5x": {
+          "final": 2515,
+          "cagr": 42.9,
+          "dd": 15,
+          "vsSPY": "beats"
+        },
+        "2.0x": {
+          "final": 3248,
+          "cagr": 57.8,
+          "dd": 20.1,
+          "vsSPY": "beats",
+          "note": "risk-matched to SPY"
+        },
+        "2.5x": {
+          "final": 4195,
+          "cagr": 74.2,
+          "dd": 24.9,
+          "vsSPY": "beats"
+        }
+      },
+      "whatThisDoesNotSay": "Leverage is a separate decision with its own failure modes -- margin calls, financing that moves against you, and gap risk that a monthly rebalance cannot react to. The risk-matched number answers the gate's raw-return objection; it does not make 2x a recommendation. And it multiplies the momentum-crash exposure, which is the strategy's known failure mode and is absent from this sample."
+    },
+    "CORRECTION_drawdown": {
+      "what": "Every spread drawdown reported before 2026-09-04T14:00 was understated by about 44%.",
+      "cause": "spread() combined MONTHLY period returns, so the drawdown was sampled only at rebalance points and never saw an intra-month low.",
+      "corrected": {
+        "inSample": {
+          "was": 10.09,
+          "is": 14.55
+        },
+        "walkForward@5%": {
+          "was": 10.36,
+          "is": 14.11
+        },
+        "walkForward@0%": {
+          "was": 10.18,
+          "is": 13.89
+        }
+      },
+      "caughtBy": "multifactor.runBook, an independent implementation that marks every bar, disagreeing with spread() on the same configuration.",
+      "secondErrorDuringTheFix": "The first fix took the BALANCE from the per-bar path too, which silently dropped turnover and slippage (charged at rebalances) and inflated the result 9%, from $1947.50 to $2130.88. Balance now comes from the costed monthly path and drawdown from a per-bar walk anchored to it.",
+      "nowCrossChecked": "spread() and runBook agree within $5.49 and 0.02 drawdown points on the same configuration.",
+      "whatItChanges": "The claim 'half of SPY's drawdown' was wrong. 14.55% against SPY's ~21% is better, not half. The gate's survivable condition still passes at 14.55 against a 25 ceiling. Nothing else in the verdict moves."
+    },
+    "threeVariations": {
+      "designedTo": "occupy DIFFERENT cells of the edge space so they can fail independently, rather than re-parameterise the winner",
+      "V1_timeSeriesFilter": {
+        "cell": "whether to be in at all",
+        "result": "WORSE everywhere. sp500 $882 (CAGR -4.8%) against baseline $1942; crypto $1617 against $2834."
+      },
+      "V2_multiHorizon": {
+        "cell": "what signal",
+        "result": "WORSE. sp500 $1409, crypto $1342. Averaging ranks across 21/63/126/252 dilutes rather than confirms."
+      },
+      "V3_volScaled": {
+        "cell": "how much",
+        "result": "WORSE on return, much better on drawdown: sp500 $1309 at 6.56% DD, crypto $1394 at 9.1%. But risk-adjusted it still loses -- 1.68 return-per-drawdown against the baseline's 2.01."
+      },
+      "combinations": "All seven combinations underperform the baseline on both universes.",
+      "reading": "A clean negative and worth as much as the positive. The canonical 1993 construction beat all three of my improvements on both universes. That is evidence the original is not a lucky parameterisation -- deviations from it in three independent directions all cost money."
+    }
+  },
+  "factorBattery": {
+    "why": "'Test everything' and 'report an honest result' are in tension and the tension is arithmetic. Twelve signals at p<0.05 produce 0.6 false positives by expectation. Every signal is scored against the same null with the same machinery and corrected together with Benjamini-Hochberg.",
+    "signals": "momentum, reversal1m, reversal1w, lowVol, highVol, nearHigh, trendQuality, acceleration, lowSkew, volumeTrend, idioVol, beta -- each a documented anomaly, so the battery is a replication attempt rather than a fishing expedition.",
+    "equities128": {
+      "survivors": [
+        "momentum",
+        "lowVol",
+        "nearHigh",
+        "trendQuality",
+        "idioVol",
+        "beta"
+      ],
+      "best": "idioVol $2487.86, CAGR 42.31%, DD 8.86%",
+      "note": "five signals hit p=0.0050, the floor with 200 draws"
+    },
+    "crypto29": {
+      "survivors": [
+        "momentum",
+        "nearHigh",
+        "volumeTrend",
+        "beta"
+      ],
+      "best": "momentum $3041.92, CAGR 30.6%, DD 9.99%"
+    },
+    "correlationFinding": "The six equities survivors are TWO factors, not six. A momentum cluster (momentum, nearHigh, trendQuality) correlates 0.78-0.91 internally; a low-risk cluster (lowVol, idioVol, beta) correlates 0.79-0.87 internally; and momentum against lowVol is only 0.22. BH assumes independence and these are strongly positively dependent, so 'six survivors of twelve' overstates what was found.",
+    "crossAssetVerdict": {
+      "replicatesOnBoth": [
+        "momentum (p=0.005 both)",
+        "nearHigh (p=0.005 both, but r=0.83 with momentum -- the same factor)",
+        "beta (p=0.020 equities, 0.010 crypto, weak and with a 40.5% crypto drawdown)"
+      ],
+      "equitiesOnly": [
+        "idioVol -- the BEST equities factor at 42.31% CAGR, collapses to -9.02% on crypto at p=0.83",
+        "lowVol (p=0.16 crypto)",
+        "trendQuality (p=0.31 crypto)"
+      ],
+      "cryptoOnly": [
+        "volumeTrend (p=0.010 crypto, -5.19% on equities)"
+      ],
+      "reading": "This is what the battery was for. Six equities survivors reduce to essentially ONE robust factor -- momentum, with nearHigh as its correlated proxy -- once a second asset class is required. The low-risk cluster that produced the best equities numbers does not survive the crossing, which is exactly the failure mode a single-universe battery would have reported as a discovery."
+    },
+    "combination": {
+      "momentum alone": {
+        "final": 1947.5,
+        "cagr": 29.4,
+        "dd": 10.09,
+        "sharpe": 1.35
+      },
+      "idioVol alone": {
+        "final": 2487.86,
+        "cagr": 42.3,
+        "dd": 8.86,
+        "sharpe": 2.31
+      },
+      "50/50": {
+        "final": 2201.16,
+        "cagr": 35.7,
+        "dd": 7.47,
+        "sharpe": 2.14
+      },
+      "note": "Combining lowers drawdown below either leg (7.47%) because the two are only 0.22 correlated. But idioVol is equities-only, so this combination is not available cross-asset."
+    },
+    "caveatOnSharpe": "Sharpe 2.31 on 31 monthly observations has a standard error near 0.34. These are not precise numbers."
+  },
+  "crossAssetPortfolio": {
+    "question": "The directive was to apply the strategy to every asset class and decide what works best for each. That has two readings and only one of them works.",
+    "mergingUniversesFAILS": {
+      "what": "Pour all 157 symbols -- 29 crypto and 128 equities -- into one ranking and hold the top decile.",
+      "result": "$1340, 7.1% CAGR, 34.1% drawdown -- worse than either class ranked on its own.",
+      "why": "Momentum ranks on raw return, and crypto's return distribution is roughly 4x as wide. Crypto took 30% of the long slots while being 18% of the universe, so the book became a levered crypto bet wearing a diversification label. Ranking only compares like with like when the things compared have comparable dispersion.",
+      "fixNotAttempted": "Volatility-standardising the score before merging would plausibly repair this. It was not tested, and it introduces a free parameter."
+    },
+    "rankingWithinClassWORKS": {
+      "construction": "Rank inside each class separately at the canonical 252/21/21, run each long-short spread, then combine the two BOOKS. Periods are matched by rebalance DATE within 40 days, not by index -- crypto trades weekends and the calendars do not line up.",
+      "alignedPeriods": 31,
+      "correlation": -0.005,
+      "correlationReading": "Essentially zero. Not a small positive number talked up as diversification -- the two momentum spreads share no measurable common factor over this window. That is the whole reason the combination helps.",
+      "books": {
+        "crypto spread alone": {
+          "final": 2387.52,
+          "cagrPct": 40.1,
+          "maxDrawdownPct": 6.17,
+          "sharpe": 2.25,
+          "up": "21/31"
+        },
+        "equities spread alone": {
+          "final": 1798.22,
+          "cagrPct": 25.5,
+          "maxDrawdownPct": 9.95,
+          "sharpe": 1.21,
+          "up": "19/31"
+        },
+        "25/75": {
+          "final": 1957.35,
+          "cagrPct": 29.7,
+          "maxDrawdownPct": 6.63,
+          "sharpe": 1.79,
+          "up": "21/31"
+        },
+        "35/65": {
+          "final": 2019.48,
+          "cagrPct": 31.3,
+          "maxDrawdownPct": 6.55,
+          "sharpe": 2.06,
+          "up": "22/31"
+        },
+        "50/50": {
+          "final": 2110.47,
+          "cagrPct": 33.5,
+          "maxDrawdownPct": 6.42,
+          "sharpe": 2.42,
+          "up": "22/31"
+        },
+        "65/35": {
+          "final": 2198.3,
+          "cagrPct": 35.7,
+          "maxDrawdownPct": 6.3,
+          "sharpe": 2.6,
+          "up": "24/31"
+        },
+        "75/25": {
+          "final": 2254.79,
+          "cagrPct": 37,
+          "maxDrawdownPct": 6.22,
+          "sharpe": 2.59,
+          "up": "25/31"
+        },
+        "inverse-vol (causal)": {
+          "final": 2166.59,
+          "cagrPct": 34.9,
+          "maxDrawdownPct": 6.35,
+          "sharpe": 2.48,
+          "up": "22/31"
+        }
+      },
+      "theHeadline": "The sweep peak at 65/35 is NOT the result -- a five-point sweep picking its own winner in sample is the trap this campaign has fallen into repeatedly. The result is the inverse-vol row: a weight chosen from volatility realised STRICTLY BEFORE each period, warmed up at 50/50 for six periods, with nothing fitted. It returns Sharpe 2.48 against 2.25 for the better leg and 1.21 for the worse one, and it cuts the equities book's drawdown from 9.95% to 6.35%. Diversification that survives being chosen blind is the only kind worth having.",
+      "drawdownAndHitRate": "Crypto alone already has the lowest drawdown at 6.17%; the combinations sit within half a point of it (6.22-6.63%) while cutting the equities leg's 9.95% by roughly a third. The win rate improves in every blend, from 21/31 and 19/31 for the legs to 22-25/31."
+    },
+    "arithmeticCorrectionMade": "The first pass combined the two books as a weighted sum of LOG returns. That is not any portfolio's return. A book rebalanced to fixed weights each period earns log(w*e^a + (1-w)*e^b), and by Jensen the weighted sum of logs is strictly smaller, so the first pass UNDERSTATED every combination (50/50 read $2072 rather than $2110). The fix improves the headline, which is the direction that deserves the most suspicion -- it stands because the definition is forced, not chosen: at w=1 it must reproduce book A exactly, and a +10%/-10% pair at 50/50 must be exactly flat. Both are asserted in portfolio.test.mjs.",
+    "whatThisIsNot": [
+      "31 monthly observations. The standard error on a Sharpe ratio from 31 points is about 0.34, so 2.48 against 2.25 is well inside the noise. What is NOT inside the noise is the drawdown reduction against the equities leg and the near-zero correlation, both of which are structural rather than marginal.",
+      "One regime. 2023-2026 contained no momentum crash. The documented failure mode of this factor -- violent reversal off a market bottom -- is absent from the sample in BOTH asset classes, so the correlation of -0.005 has never been tested in the state where both books would be expected to break together.",
+      "Two asset classes, not 'every asset class'. Rates, commodities, FX and credit are untested for want of data. Carry, the factor that would most plausibly complement momentum, needs crypto funding rates that this container cannot fetch."
+    ],
+    "code": "portfolio.mjs (alignReturns, correlation, bookStats, blend) with portfolio.test.mjs, 8 tests; portfolio-run.mjs reproduces the table above."
   }
- },
- "factorBattery": {
-  "why": "'Test everything' and 'report an honest result' are in tension and the tension is arithmetic. Twelve signals at p<0.05 produce 0.6 false positives by expectation. Every signal is scored against the same null with the same machinery and corrected together with Benjamini-Hochberg.",
-  "signals": "momentum, reversal1m, reversal1w, lowVol, highVol, nearHigh, trendQuality, acceleration, lowSkew, volumeTrend, idioVol, beta -- each a documented anomaly, so the battery is a replication attempt rather than a fishing expedition.",
-  "equities128": {
-   "survivors": [
-    "momentum",
-    "lowVol",
-    "nearHigh",
-    "trendQuality",
-    "idioVol",
-    "beta"
-   ],
-   "best": "idioVol $2487.86, CAGR 42.31%, DD 8.86%",
-   "note": "five signals hit p=0.0050, the floor with 200 draws"
-  },
-  "crypto29": {
-   "survivors": [
-    "momentum",
-    "nearHigh",
-    "volumeTrend",
-    "beta"
-   ],
-   "best": "momentum $3041.92, CAGR 30.6%, DD 9.99%"
-  },
-  "correlationFinding": "The six equities survivors are TWO factors, not six. A momentum cluster (momentum, nearHigh, trendQuality) correlates 0.78-0.91 internally; a low-risk cluster (lowVol, idioVol, beta) correlates 0.79-0.87 internally; and momentum against lowVol is only 0.22. BH assumes independence and these are strongly positively dependent, so 'six survivors of twelve' overstates what was found.",
-  "crossAssetVerdict": {
-   "replicatesOnBoth": [
-    "momentum (p=0.005 both)",
-    "nearHigh (p=0.005 both, but r=0.83 with momentum -- the same factor)",
-    "beta (p=0.020 equities, 0.010 crypto, weak and with a 40.5% crypto drawdown)"
-   ],
-   "equitiesOnly": [
-    "idioVol -- the BEST equities factor at 42.31% CAGR, collapses to -9.02% on crypto at p=0.83",
-    "lowVol (p=0.16 crypto)",
-    "trendQuality (p=0.31 crypto)"
-   ],
-   "cryptoOnly": [
-    "volumeTrend (p=0.010 crypto, -5.19% on equities)"
-   ],
-   "reading": "This is what the battery was for. Six equities survivors reduce to essentially ONE robust factor -- momentum, with nearHigh as its correlated proxy -- once a second asset class is required. The low-risk cluster that produced the best equities numbers does not survive the crossing, which is exactly the failure mode a single-universe battery would have reported as a discovery."
-  },
-  "combination": {
-   "momentum alone": {
-    "final": 1947.5,
-    "cagr": 29.4,
-    "dd": 10.09,
-    "sharpe": 1.35
-   },
-   "idioVol alone": {
-    "final": 2487.86,
-    "cagr": 42.3,
-    "dd": 8.86,
-    "sharpe": 2.31
-   },
-   "50/50": {
-    "final": 2201.16,
-    "cagr": 35.7,
-    "dd": 7.47,
-    "sharpe": 2.14
-   },
-   "note": "Combining lowers drawdown below either leg (7.47%) because the two are only 0.22 correlated. But idioVol is equities-only, so this combination is not available cross-asset."
-  },
-  "caveatOnSharpe": "Sharpe 2.31 on 31 monthly observations has a standard error near 0.34. These are not precise numbers."
- }
 }
