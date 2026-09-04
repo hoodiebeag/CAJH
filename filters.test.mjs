@@ -125,3 +125,18 @@ test("crossSection refuses to compile without the universe it needs to rank agai
   assert.throws(() => buildEntryGate({ crossSection: { topN: 3 } }, { candles: ramp(300), entryMins: 1440 }),
     /needs sharpeRanks and pair/);
 });
+
+test("btcRegime is direction-aware -- a short wants BTC below its average, not above", () => {
+  // Same bug class as backtest.js's trend gate: "BTC above its own average" is a market-wide
+  // uptrend. Uninverted, it would admit shorts only into a rising market.
+  const alt = ramp(300);
+  const btcUp = ramp(300);
+  const t = Number(alt[250].time) + 1440 * 60;
+  const gate = (direction, btcCandles) =>
+    buildEntryGate({ btcRegime: { period: 50 } }, { candles: alt, entryMins: 1440, btcCandles, direction })(t);
+  assert.equal(gate("long", btcUp), true, "a rising BTC admits longs");
+  assert.equal(gate("short", btcUp), false, "and refuses shorts");
+  const btcDown = ramp(300, 400, -1);
+  assert.equal(gate("long", btcDown), false, "a falling BTC refuses longs");
+  assert.equal(gate("short", btcDown), true, "and admits shorts");
+});

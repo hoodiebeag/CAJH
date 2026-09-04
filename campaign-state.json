@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T02:55:00Z",
- "phase": "short side tested; it is not the answer, and the reason is stated",
+ "updatedAt": "2026-09-04T03:25:00Z",
+ "phase": "btcRegime endorsed 9/9 and adopted; entryGate bug found in the bos branch",
  "runsTested": 2326,
  "base": {
   "trendGate": false,
@@ -254,16 +254,20 @@
   "lockBreakeven": true,
   "beTriggerR": 3,
   "beLockR": 0.2,
-  "filters": null,
+  "filters": {
+   "btcRegime": {
+    "period": 50
+   }
+  },
   "volTarget": 0.05,
   "volClamp": 3,
   "riskPct": 0.01,
   "maxConcurrent": null,
-  "trades": 192,
-  "meanR": 1.5053,
-  "finalBalance": 16749.27,
-  "maxDrawdownPct": 25.1,
-  "why": "Every component was chosen by a training-only search in 8 or 9 quarters out of 9, and nothing the walk-forward declined is in it. It is also simply better in sample than the config the in-sample search preferred: $16,749.27 against $5,160.44, with better robustness margins. The cost is drawdown, 25.1% against 8.96% -- still half of BTC's 52.06%.",
+  "trades": 182,
+  "meanR": 1.7617,
+  "finalBalance": 20949.34,
+  "maxDrawdownPct": 20.77,
+  "why": "Every component chosen by a training-only search. btcRegime 50 is the newest: it had never actually been OFFERED to the walk-forward -- the filter grid held only null, atrPctBand and atrPctBand+crossSection -- and once offered it was chosen in nine quarters of nine, taking the out-of-sample result from $2300.28 at 13.39% to $2588.43 at 10.96%. Better on both axes in sample too, and it is the only change that has moved 2025.",
   "differsFromSearchBest": {
    "filters": "none (declined 7/9)",
    "maxConcurrent": "none (never selected)",
@@ -294,7 +298,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Nothing left in this data is likely to change the answer. The two things that would: (1) EQUITIES, blocked on data the container cannot fetch -- ask the owner for a bundle in the same shape as the crypto one; (2) building the short exit path (breakeven lock, trailing, partials) so the short side is judged with the same engine as the long side. (2) is a real change to a well-tested engine and should be a deliberate decision, not something done at the end of a long batch.",
+ "nextUp": "Offer the walk-forward the components it has never actually seen, rather than assuming absence means rejection -- btcRegime was declined only because it was never in the grid. Candidates: trendGateMode structure, chopFilter, requireHigherLow, minRoomR, exitOnSwingHigh, and combinations of btcRegime with the other filters. Beyond that: equities (blocked on data) and the short exit path (a deliberate engine build).",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -355,58 +359,57 @@
  },
  "concentration": {
   "all": {
-   "trades": 192,
-   "meanR": 1.5053,
-   "final": 16749.27,
-   "dd": 25.1
+   "trades": 182,
+   "meanR": 1.7617,
+   "final": 20949.34,
+   "dd": 20.77
   },
   "leaveOnePairOut": {
-   "worst": "without DOGEUSD $9953.38",
+   "worst": "without DOGEUSD $12449.30",
    "next": [
-    "without XRPUSD $11716.12",
-    "without SOLUSD $12066.30"
+    "without ZECUSD $13715.39",
+    "without XRPUSD $14413.02"
    ]
   },
   "trimTopWinners": {
-   "drop1": 13243.37,
-   "drop3": 7237.19,
-   "drop5": 4593.84,
-   "drop10": 2056.64,
-   "drop20": 826.18
+   "drop1": 13715.39,
+   "drop3": 7495.14,
+   "drop5": 4757.57,
+   "drop10": 2209.23,
+   "drop20": 887.48
   },
   "perYearStandalone": {
    "2023": {
-    "trades": 43,
-    "meanR": 2.9243
+    "trades": 40,
+    "meanR": 3.139
    },
    "2024": {
-    "trades": 76,
-    "meanR": 2.011
+    "trades": 75,
+    "meanR": 2.053
    },
    "2025": {
-    "trades": 69,
-    "meanR": 0.2058
+    "trades": 62,
+    "meanR": 0.7431
    },
    "2026": {
-    "trades": 4,
-    "meanR": -0.9431
+    "trades": 5,
+    "meanR": -0.9957
    }
   },
   "fullHistoryPairsOnly": {
    "pairs": 16,
-   "trades": 156,
-   "meanR": 1.5741,
-   "final": 13263.46
+   "trades": 150,
+   "meanR": 1.6584,
+   "final": 13581.16
   },
   "shape": {
-   "winRatePct": 38.5,
-   "medianNetR": -1.1074,
-   "top5SharePct": 54.8,
-   "distinctDays": 120,
-   "clusteringFactor": 1.6
+   "winRatePct": 40.1,
+   "medianNetR": -1.1061,
+   "top5SharePct": 57.4,
+   "distinctDays": 111,
+   "clusteringFactor": 1.64
   },
-  "reading": "Materially less fragile than every earlier leader. Top 5 of 192 trades carry 54.8% of all R, down from 77.6%, and dropping the ten best still leaves a POSITIVE mean (+0.29R, $2056.64) -- the first configuration in the campaign where that is true. Dropping twenty still flips it, so the tail dependence is reduced, not gone.",
-  "theRealCaveat": "THE EDGE DECAYS. 2023 +2.92R, 2024 +2.01R, 2025 +0.21R, 2026 -0.94R. The headline balance is earned almost entirely in the first two years and 2025 is flat. A test asserts this ordering so it cannot be averaged away. Anyone quoting $16,749 without it is quoting a number that stopped growing."
+  "reading": "2025 lifts from +0.21R to +0.74R -- the only change in the campaign that has moved the worst year. The decay is reduced, not cured: 3.14 -> 2.05 -> 0.74 is still a decline, and 2026's five trades are negative."
  },
  "literatureSearched": {
   "date": "2026-09-03",
@@ -579,6 +582,17 @@
     }
    },
    "conclusion": "The concurrency cap is NOT validated out of sample under either objective. Its large in-sample gain was hindsight."
+  },
+  "btcRegimeOffered": {
+   "result": {
+    "trades": 142,
+    "meanR": 1.3737,
+    "finalBalance": 2588.43,
+    "maxDrawdownPct": 10.96
+   },
+   "chose": "btcRegime 50 in nine quarters of nine under the balance objective, eight of nine under mar",
+   "progression": "$1974.68 (numbers only) -> $2249.27 (+ entry mode, delay, filters) -> $2300.28 (+ structural frame) -> $2588.43 (+ btcRegime offered). Every step improved it.",
+   "lessonRecorded": "The filters were reported as 'declined in 7 of 9 quarters'. That was true of the filters the grid CONTAINED. btcRegime alone was never in it. A component absent from a grid is not a component the search rejected, and the write-up did not distinguish those."
   }
  },
  "bugsFound": [
@@ -595,6 +609,18 @@
    "cause": "`chose` was a hardcoded list of five keys rather than derived from the grid",
    "impact": "whether the entry mode and filters moved between quarters -- the entire question that run existed to answer -- was invisible in its own output",
    "fix": "chose is now derived from Object.keys(grid); pinned by a test"
+  },
+  {
+   "where": "backtest.js, the bos entry branch",
+   "symptom": "a sweep of four btcRegime periods returned four byte-identical rows for the short side",
+   "cause": "entryGate was wired into the anticipate branch and the shared dip/breakout branch but not into bos, so every filters spec was silently ignored for that entry mode",
+   "fix": "entryGate is now checked in all three branches and its refusals are tallied as reason externalGate; a test asserts a gate that refuses everything produces no trades in bos, breakout and anticipate alike"
+  },
+  {
+   "where": "filters.mjs btcRegime",
+   "symptom": "would have admitted shorts only into rising markets",
+   "cause": "'BTC above its own average' is a market-wide uptrend, applied unchanged to both directions -- the same bug class as backtest.js's trend gate",
+   "fix": "direction-aware, with a test covering both directions against both a rising and a falling BTC"
   }
  ],
  "concurrency": {

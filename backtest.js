@@ -465,6 +465,10 @@ export function backtestMultiTF({ series } = {}, {
       else if (minStopPct && risk / entry < minStopPct)                           { ok = false; reason = "stopTooTight"; }
       else if (requireHigherLow && prevLowPrice != null && lowHere.price <= prevLowPrice) { ok = false; reason = "notHigherLow"; }
       else if (minRoomR && (nearestResAbove(entry, tClose) - entry) / risk < minRoomR)    { ok = false; reason = "noRoom"; }
+      // entryGate was wired into the "anticipate" branch and the shared dip/breakout branch but
+      // not into this one, so every filters spec was silently ignored for entryMode "bos". The
+      // tell was a sweep of four BTC-regime periods returning four byte-identical rows.
+      else if (entryGate && !entryGate(tClose))                                   { ok = false; reason = "externalGate"; }
       else                                                                        { reason = "taken"; }
       reasons[reason] = (reasons[reason] || 0) + 1;
       const tp = direction === "short" ? entry - tpR * risk : entry + tpR * risk;

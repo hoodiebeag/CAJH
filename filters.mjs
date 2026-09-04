@@ -168,7 +168,7 @@ export function sharpeRankTable(universe, { lookback = 60, barsPerYear = 365 } =
  * a typo in a filter name would otherwise read as "this filter does nothing", and a sweep would
  * log the result under a name it never applied.
  */
-export function buildEntryGate(spec, { candles, entryMins, btcCandles = null, sharpeRanks = null, pair = null } = {}) {
+export function buildEntryGate(spec, { candles, entryMins, btcCandles = null, sharpeRanks = null, pair = null, direction = "long" } = {}) {
   if (!spec || !Object.keys(spec).length) return null;
   const known = ["maSlope", "adx", "maxExtension", "atrPctBand", "btcRegime", "crossSection"];
   for (const key of Object.keys(spec)) {
@@ -206,6 +206,11 @@ export function buildEntryGate(spec, { candles, entryMins, btcCandles = null, sh
   }
   if (spec.btcRegime) {
     const { period = 200 } = spec.btcRegime;
+    // Direction-aware, for the same reason backtest.js's trend gate had to become so: "BTC above
+    // its own average" is a market-wide UPtrend, which is the state a long wants and the opposite
+    // of what a short wants. An uninverted version would have admitted shorts only into a rising
+    // market, which is worse than no filter at all.
+    const wantAbove = direction !== "short";
     if (!btcCandles?.length) throw new Error("filters: btcRegime needs btcCandles -- refusing to pass a filter it cannot evaluate");
     const s = sma(btcCandles, period);
     // BTC's own bars, looked up by time: an alt's bar index does not address BTC's series, and the
@@ -218,7 +223,8 @@ export function buildEntryGate(spec, { candles, entryMins, btcCandles = null, sh
         const mid = (lo + hi) >> 1;
         if (times[mid] + entryMins * 60 <= tClose) { found = mid; lo = mid + 1; } else { hi = mid - 1; }
       }
-      return found >= 0 && s[found] !== null && Number(btcCandles[found].close) > s[found];
+      if (found < 0 || s[found] === null) return false;
+      return (Number(btcCandles[found].close) > s[found]) === wantAbove;
     });
   }
 

@@ -5,9 +5,9 @@ import { report, summarise, LEADER } from "./robustness.mjs";
 const R = report();
 
 test("the leader reproduces exactly -- a silent change to the engine or the bundle fails here", () => {
-  assert.equal(R.all.trades, 192);
-  assert.equal(R.all.finalBalance, 16749.27);
-  assert.equal(R.all.maxDrawdownPct, 25.1);
+  assert.equal(R.all.trades, 182);
+  assert.equal(R.all.finalBalance, 20949.34);
+  assert.equal(R.all.maxDrawdownPct, 20.77);
 });
 
 test("it is positive in every full year standalone, not one good year", () => {
@@ -17,7 +17,7 @@ test("it is positive in every full year standalone, not one good year", () => {
 });
 
 test("it survives losing any single pair", () => {
-  assert.ok(R.leaveOnePairOut[0].finalBalance > 8000,
+  assert.ok(R.leaveOnePairOut[0].finalBalance > 10000,
     `worst case is ${R.leaveOnePairOut[0].without} at $${R.leaveOnePairOut[0].finalBalance}`);
 });
 
@@ -56,11 +56,25 @@ test("the pinned LEADER is the configuration the campaign state names", () => {
   assert.equal(LEADER.entryDelayBars, 1);
 });
 
-test("the leader carries nothing the walk-forward declined", () => {
-  // The two components the in-sample search liked and a training-only search did not: the filters
-  // (declined in 7 of 9 quarters) and the concurrency cap (never selected under either objective).
-  assert.equal(LEADER.filters, null);
+test("the leader carries nothing the walk-forward declined, and everything it endorsed", () => {
+  // The concurrency cap was liked in-sample and never selected by a training-only search under
+  // either objective, so it is out. The btcRegime filter is the mirror case: it had never been
+  // OFFERED to the walk-forward, and once it was, it was chosen in nine quarters of nine.
   assert.equal(LEADER.maxConcurrent, null);
+  assert.deepEqual(LEADER.filters, { btcRegime: { period: 50 } });
+  for (const declined of ["adx", "maSlope", "maxExtension", "atrPctBand", "crossSection"]) {
+    assert.ok(!(declined in LEADER.filters), `${declined} was declined in 7 of 9 quarters`);
+  }
+});
+
+test("the market-wide regime filter is what lifts the worst year", () => {
+  // 2025 is where the long side had collapsed. Knowing whether BTC is above its own average is
+  // state no single pair's chart contains, and it is the only change that moved that year.
+  const unfiltered = report({ ...LEADER, filters: null });
+  const yr = (r, y) => r.perYear.find((x) => x.year === y).meanR;
+  assert.ok(yr(R, 2025) > yr(unfiltered, 2025) * 2, `${yr(R, 2025)}R against ${yr(unfiltered, 2025)}R`);
+  assert.ok(R.all.finalBalance > unfiltered.all.finalBalance);
+  assert.ok(R.all.maxDrawdownPct < unfiltered.all.maxDrawdownPct, "and it lowers the drawdown too");
 });
 
 test("the edge decays across the sample, and the test says so rather than averaging it away", () => {
@@ -69,7 +83,7 @@ test("the edge decays across the sample, and the test says so rather than averag
   const y = Object.fromEntries(R.perYear.map((x) => [x.year, x.meanR]));
   assert.ok(y[2023] > y[2024], `${y[2023]} vs ${y[2024]}`);
   assert.ok(y[2024] > y[2025], `${y[2024]} vs ${y[2025]}`);
-  assert.ok(y[2025] < 0.5, `2025 is nearly flat at ${y[2025]}R and that must stay visible`);
+  assert.ok(y[2025] < 1.0, `2025 is still far below 2023-24 at ${y[2025]}R and that must stay visible`);
 });
 
 test("a one-bar fill delay wins on every margin, not just the headline balance", () => {

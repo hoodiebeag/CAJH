@@ -846,3 +846,24 @@ test("the trend gate still requires an uptrend for longs", () => {
   assert.equal(backtestMultiTF({ series }, { ...opts, trendGate: true }).trades, 0,
     "a long must not be admitted into a downtrend");
 });
+
+test("entryGate is honoured by every entry mode, not just two of them", () => {
+  // It was wired into "anticipate" and the shared dip/breakout branch but not into "bos", so a
+  // filters spec was silently ignored for that mode. The tell was a sweep of four BTC-regime
+  // periods returning four byte-identical rows.
+  const bar = (t, px, hi = px, lo = px) => ({ time: t, open: px, high: hi, low: lo, close: px, volume: 1 });
+  const day = 86400;
+  const candles = [];
+  for (let i = 0; i < 300; i++) {
+    const px = 100 + i;
+    candles.push(bar(i * day, px, px + (i === 150 ? 30 : 2), px - (i === 150 ? 30 : 2)));
+  }
+  const series = [{ label: "1440", mins: 1440, candles }];
+  for (const entryMode of ["bos", "breakout", "anticipate"]) {
+    const opts = { entryMode, alignMode: "none", trendGate: false, minStopPct: 0, maxStopPct: 1, entryTf: "1440" };
+    const open = backtestMultiTF({ series }, opts);
+    const shut = backtestMultiTF({ series }, { ...opts, entryGate: () => false });
+    assert.equal(shut.trades, 0, `${entryMode}: a gate that refuses everything must produce no trades`);
+    if (open.trades > 0) assert.ok(shut.reasons.externalGate > 0, `${entryMode}: refusals must be tallied`);
+  }
+});

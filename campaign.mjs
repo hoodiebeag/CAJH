@@ -72,7 +72,8 @@ export function runConfig(config, { minutes = 1440, from = SPLIT.trainStart, to 
     : null;
   for (const [pair, candles] of Object.entries(series)) {
     const entryGate = config.filters
-      ? buildEntryGate(config.filters, { candles, entryMins: minutes, btcCandles, sharpeRanks, pair })
+      ? buildEntryGate(config.filters, { candles, entryMins: minutes, btcCandles, sharpeRanks, pair,
+                                         direction: config.direction ?? "long" })
       : null;
     // `higherTfs` resamples the entry series upward. Without at least one, alignMode and the
     // higher-timeframe bias are structurally dead -- the bias list is empty and every alignMode

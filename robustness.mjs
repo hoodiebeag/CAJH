@@ -32,9 +32,14 @@ export const LEADER = {
   // walk-forward declined is in it. That is why it looks different from the configuration the
   // in-sample search preferred:
   //
-  //   filters           declined in 7 of 9 quarters, so there are none. The ADX, MA-slope,
-  //                     ATR-band, extension and cross-sectional-Sharpe filters built from the
-  //                     literature search are all out.
+  //   filters           the ADX, MA-slope, ATR-band, extension and cross-sectional-Sharpe filters
+  //                     from the literature search were all declined in 7 of 9 quarters and are
+  //                     out. btcRegime at 50 days is IN: it had never actually been offered to the
+  //                     walk-forward -- the filter grid held only null, atrPctBand, and
+  //                     atrPctBand+crossSection -- and once offered it was chosen 9 quarters of 9,
+  //                     taking the out-of-sample result from $2300.28 at 13.39% to $2588.43 at
+  //                     10.96%. Whether BTC is above its own average is a market-wide state that
+  //                     no single pair's chart contains.
   //   maxConcurrent     never selected under either fitting objective. The in-sample search liked
   //                     a cap of 3 ($5160 at 8.96% against $4875 at 12.94%); the walk-forward does
   //                     not support it, so it is not here.
@@ -46,7 +51,7 @@ export const LEADER = {
   // It is also simply better in sample: $16,749.27 against $5,160.44, and better on the robustness
   // margins too. The cost is drawdown -- 25.1% against 8.96%, still half of BTC's 52.06%.
   entryMode: "breakout", alignMode: "none", lockBreakeven: true, maxStopPct: 0.20,
-  beLockR: 0.2, volClamp: 3, entryDelayBars: 1, filters: null,
+  beLockR: 0.2, volClamp: 3, entryDelayBars: 1, filters: { btcRegime: { period: 50 } },
   trendGate: true, trendGateMode: "ma", trendMa: 150, tpR: 100, minStopPct: 0.03,
   beTriggerR: 3, maxHold: 50, volTarget: 0.05, riskPct: 0.01, maxConcurrent: null,
 };
