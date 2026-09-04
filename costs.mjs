@@ -69,7 +69,11 @@ const CRYPTO_SUFFIX = /(USD|USDT|EUR|GBP|BTC|ETH)$/;
  * of guessing is not a slightly wrong number -- it is an equities backtest charged 30x its real
  * cost, or a crypto backtest charged a thirtieth of its own, and both look like findings.
  */
-export function costFor(universe, override = process.env.CANDLE_COST_MODEL || null) {
+export function costFor(universe, requested = null) {
+  // Resolved here, not in the signature. A default parameter only applies to `undefined`, and the
+  // call sites pass `config.costModel ?? null` -- so a signature default silently ignored
+  // CANDLE_COST_MODEL through the whole harness, which is how the first equities run failed.
+  const override = requested ?? process.env.CANDLE_COST_MODEL ?? null;
   const symbols = Array.isArray(universe) ? universe : Object.keys(universe ?? {});
   if (override) {
     const model = COST_MODELS[override];

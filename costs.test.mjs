@@ -47,3 +47,18 @@ test("zeroCost exists and is labelled as a diagnostic, not a rate", () => {
   assert.equal(costFor(["AAPL"], "zeroCost").feeRate, 0);
   assert.match(COST_MODELS.zeroCost.note, /diagnostic only/);
 });
+
+test("the environment variable is honoured even when the call site passes null", () => {
+  // Every call site reads `config.costModel ?? null`, and a JS default parameter only fires on
+  // `undefined` — so a signature default made CANDLE_COST_MODEL unreachable through the harness.
+  // The first equities run died on exactly this, with the env var correctly set.
+  const prev = process.env.CANDLE_COST_MODEL;
+  try {
+    process.env.CANDLE_COST_MODEL = "usEquityRetail";
+    assert.equal(costFor(["AAPL", "SPY"], null).name, "usEquityRetail");
+    assert.equal(costFor(["AAPL", "SPY"]).name, "usEquityRetail");
+    assert.equal(costFor(["AAPL", "SPY"], "usEquityIbkr").name, "usEquityIbkr", "an explicit request still wins");
+  } finally {
+    if (prev === undefined) delete process.env.CANDLE_COST_MODEL; else process.env.CANDLE_COST_MODEL = prev;
+  }
+});

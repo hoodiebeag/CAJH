@@ -52,6 +52,12 @@ export function loadBundleCandles(pair, minutes = 1440, root = BUNDLE) {
     const c = line.split(",");
     const time = Number(c[idx.time]);
     if (!Number.isFinite(time)) continue;
+    // A bar with a non-finite OHLC is dropped rather than passed on. Every equities file in the
+    // first bundle ended with the current session's incomplete row -- a real timestamp, real open,
+    // high and low, and an EMPTY close. parseFloat("") is NaN, every comparison against NaN is
+    // false, so that bar would have triggered neither a stop nor a target and simply been stepped
+    // over. Silent, and indistinguishable from a quiet day.
+    if (![c[idx.open], c[idx.high], c[idx.low], c[idx.close]].every((v) => Number.isFinite(Number(v)) && v !== "")) continue;
     // Strings, matching what data.js's loader hands the backtester -- it coerces internally and
     // a silent type change here would be invisible until a comparison behaved oddly.
     out.push({
@@ -123,7 +129,10 @@ export function resampleBundleCandles(candles, spanMinutes) {
  */
 export const MARKET_PROXY_CANDIDATES = ["XBTUSD", "SPY", "VOO", "IVV", "^GSPC", "QQQ"];
 
-export function marketProxy(universe, override = process.env.CANDLE_MARKET_PROXY || null) {
+export function marketProxy(universe, requested = null) {
+  // Same reason as costs.costFor: a signature default only fires on `undefined`, and every call
+  // site passes `?? null`, so CANDLE_MARKET_PROXY was unreachable through the harness.
+  const override = requested ?? process.env.CANDLE_MARKET_PROXY ?? null;
   const symbols = Array.isArray(universe) ? universe : Object.keys(universe ?? {});
   if (override) {
     if (!symbols.includes(override)) {

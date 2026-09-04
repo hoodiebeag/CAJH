@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T05:35:00Z",
- "phase": "equities prep: cost models named; still waiting on the bundle",
+ "updatedAt": "2026-09-04T07:10:00Z",
+ "phase": "EQUITIES TESTED. The transfer result is the universe, not the strategy.",
  "runsTested": 2446,
  "base": {
   "trendGate": false,
@@ -310,7 +310,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Waiting on the equities bundle -- checked this tick, candle-bundle/1440 still holds the 29 crypto pairs only. Prep is done: short exit path built and mirrored, market proxy resolved from the universe, cost models named and refusing to guess. Nothing else in the crypto data will move the number.",
+ "nextUp": "Do NOT sweep equities on this bundle. The null says entry timing carries nothing detectable here, so a parameter search would fit the universe's upward drift and report it as an edge -- the exact mistake the crypto campaign spent 2,446 configurations learning to detect. What would make equities answerable: a survivorship-free universe including delisted names, and ideally a bundle chosen by a rule (all S&P 500 members as of 2023-01-01) rather than by hand.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -687,6 +687,18 @@
    "cause": "trendMa was not in the ladder's FIXED block, so the two grids that did not SWEEP it fell back to backtest.js's default of 20 instead of the endorsed 150. The ladder measured 'was trendMa fitted at all', not grid size.",
    "caught": "the two smallest grids scoring far below every walk-forward already recorded, which no change in grid size could explain",
    "fix": "trendMa pinned at 150 in FIXED, with a comment saying why; ladder re-run"
+  },
+  {
+   "where": "bundle-loader.loadBundleCandles",
+   "symptom": "every equities file ended with the live session's incomplete row \u2014 real timestamp and OHL, empty close",
+   "cause": "the loader only validated `time`; parseFloat(\"\") is NaN and every NaN comparison is false, so that bar would trigger neither a stop nor a target and simply be stepped over",
+   "fix": "bars with any non-finite OHLC are dropped, with a test built from the real failing shape"
+  },
+  {
+   "where": "costs.costFor and bundle-loader.marketProxy",
+   "symptom": "CANDLE_COST_MODEL was set correctly and the first equities run still died saying no cost model was named",
+   "cause": "the env fallback lived in the signature default, and a JS default parameter only fires on `undefined` \u2014 every call site passes `config.x ?? null`, so both env vars were unreachable through the harness",
+   "fix": "resolved inside the function body; tests pin the null-call-site path for both"
   }
  ],
  "concurrency": {
@@ -800,5 +812,63 @@
    "identity": "costInR(model, stopPct) = 2*(feeRate+slipPct)/stopPct. Pinned by a test against the two figures the campaign turned on: 1.70R at a 1% stop, 0.11R at 15%.",
    "verified": "The leader reproduces byte-identically after the rewiring -- 182 trades, $20,949.34, 20.77%."
   }
+ },
+ "equities": {
+  "bundle": "equity-bundle/1440, 30 symbols (10 sector/index ETFs + 20 large caps), 920 daily bars each, 2023-01-03 to 2026-09-02. Raw unadjusted OHLC from yfinance via Colab. Held in a SEPARATE root from candle-bundle so the two universes can never be mixed.",
+  "costModel": "usEquityRetail \u2014 0 commission, 5bp per-leg slippage. Named explicitly; costFor() refused to run until it was.",
+  "benchmark": {
+   "SPY": {
+    "final": 2009.24,
+    "dd": 21.43
+   },
+   "equalWeightBasket": 2646.32,
+   "best": "NVDA $15676.56",
+   "worst": "PFE $566.13"
+  },
+  "transferTest": {
+   "what": "The crypto-fitted leader, not one parameter changed, run on equities.",
+   "result": {
+    "trades": 252,
+    "meanR": 0.5814,
+    "finalBalance": 15873.0,
+    "maxDrawdownPct": 46.26
+   },
+   "perYear": {
+    "2023": 0.6421,
+    "2024": 1.0473,
+    "2025": 0.2364,
+    "2026": 0.565
+   },
+   "shape": {
+    "winRatePct": 40.5,
+    "medianNetR": -1.0144,
+    "top5SharePct": 43.5,
+    "distinctDays": 175
+   }
+  },
+  "THE_RESULT": {
+   "null": {
+    "vsAnyBar": {
+     "nullMeanR": 0.5751,
+     "observedMeanR": 0.5814,
+     "excessR": 0.0064,
+     "p": 0.47413,
+     "z": 0.04,
+     "mdeR": 0.4855,
+     "detectable": false
+    },
+    "vsGatedBars": {
+     "nullMeanR": 0.4016,
+     "excessR": 0.1798,
+     "p": 0.14321,
+     "z": 1.08,
+     "mdeR": 0.466,
+     "detectable": false
+    }
+   },
+   "reading": "$15,873 is the UNIVERSE, not the strategy. A random entry on the same 30 symbols with the same stop distances, target, hold and cost earns 0.5751R against the strategy's 0.5814R. The excess is 0.0064R at p=0.47 -- a coin flip. It fails the harder gated-bar version too. Thirty of today's mega caps and sector ETFs over 2023-2026 make money almost however you enter them; the equal-weight basket alone returns $2,646.",
+   "whyTheDollarsMislead": "A random-entry ACCOUNT computed as 1000*(1+0.01*0.5751)^252 lands near $4,242, which invites the reading that the strategy's $15,873 beat it. It does not: that formula is a crude geometric approximation with no volatility targeting and no path ordering, so it is not like-for-like. The rigorous comparison is mean R per trade, and there the two are the same number."
+  },
+  "selectionBiasConfirmed": "This was flagged as a caveat before the run and the null turned it into the explanation. The symbol list was 30 currently-listed large caps chosen by me \u2014 NVDA at $15,676 buy-and-hold is in it and the companies that failed are not. Survivorship-free equities data (Norgate, Sharadar, CRSP) is the only way to test this properly and it is a paid source."
  }
 }

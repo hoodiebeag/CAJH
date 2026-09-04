@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import os from "os";
+import fs from "fs";
+import path from "path";
 import { availablePairs, availableTimeframes, loadBundleCandles, resampleBundleCandles, marketProxy } from "./bundle-loader.mjs";
 
 test("the bundle resolves from the module, not the working directory", () => {
@@ -69,4 +71,33 @@ test("marketProxy throws rather than guessing, and names what it looked for", ()
 test("an explicit override wins, and one that is absent is an error not a fallback", () => {
   assert.equal(marketProxy(["AAPL", "SPY"], "AAPL"), "AAPL");
   assert.throws(() => marketProxy(["AAPL", "SPY"], "TSLA"), /is not in this universe/);
+});
+
+test("a bar with a blank or non-numeric price is dropped, not passed on as NaN", () => {
+  // Every file in the first equities bundle ended with the live session's incomplete row: real
+  // timestamp, real OHL, empty close. parseFloat("") is NaN and every NaN comparison is false, so
+  // the backtester would have stepped over that bar without triggering a stop or a target.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "bundle-"));
+  fs.mkdirSync(path.join(dir, "1440"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "1440", "TEST.csv"),
+    "time,open,high,low,close,volume\n" +
+    "1672704000,10,11,9,10.5,100\n" +
+    "1672790400,10.5,11.5,10,,100\n" +      // the incomplete live bar
+    "1672876800,11,12,10.5,abc,100\n" +     // an unparseable price
+    "1672963200,11,12,10.5,11.8,100\n");
+  const bars = loadBundleCandles("TEST", 1440, dir);
+  assert.equal(bars.length, 2, "only the two complete bars survive");
+  assert.deepEqual(bars.map((b) => b.close), ["10.5", "11.8"]);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("CANDLE_MARKET_PROXY is honoured even when the call site passes null", () => {
+  const prev = process.env.CANDLE_MARKET_PROXY;
+  try {
+    process.env.CANDLE_MARKET_PROXY = "QQQ";
+    assert.equal(marketProxy(["SPY", "QQQ", "AAPL"], null), "QQQ", "the env var must beat the convention");
+    assert.equal(marketProxy(["SPY", "QQQ", "AAPL"], "SPY"), "SPY", "an explicit request still wins");
+  } finally {
+    if (prev === undefined) delete process.env.CANDLE_MARKET_PROXY; else process.env.CANDLE_MARKET_PROXY = prev;
+  }
 });
