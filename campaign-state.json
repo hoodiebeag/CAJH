@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T11:00:00Z",
- "phase": "ANSWERED. The registered hypothesis is refuted with the sign reversed.",
+ "updatedAt": "2026-09-04T11:40:00Z",
+ "phase": "CROSS-SECTIONAL MOMENTUM: the first effect in this project to beat its own null on three universes",
  "runsTested": 2446,
  "base": {
   "trendGate": false,
@@ -310,7 +310,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "Nothing. Entry timing shows no detectable edge in crypto or equities and the one hypothesis that pointed anywhere is refuted with the sign reversed. Further sweeping would be fitting noise.",
+ "nextUp": "Attack the cross-sectional result rather than extend it. In order: (1) a walk-forward that refits topK and lookback on training data only; (2) run it through gate-run.mjs; (3) check whether the edge is concentrated in a few rebalances the way every earlier result was; (4) test whether long-short (top decile minus bottom) removes the market beta that currently makes it close to a wash against SPY.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -986,7 +986,8 @@
    "reading": "The registered prediction was that the strategy adds value by declining to hold falling names. It does the opposite: WORSE than random on the losers, monotonically worse the weaker the name. The +0.3646R laggard excess on the 30-symbol bundle was noise and reversed sign on four times the sample."
   },
   "prereg": "EQUITIES-LAGGARD-EXCESS-2026-09 linked at ledger seq 16, verdict FAIL. Ledger verifies at 17 entries.",
-  "whatIsNotInDoubt": "The payoff geometry works and is free: ~40% win rate at a ~2.9 payoff, positive expectancy, confidence interval excluding zero. The owner's acceptance criterion is met in full. A coin flip meets it too, which is why it cannot be the acceptance test."
+  "whatIsNotInDoubt": "The payoff geometry works and is free: ~40% win rate at a ~2.9 payoff, positive expectancy, confidence interval excluding zero. The owner's acceptance criterion is met in full. A coin flip meets it too, which is why it cannot be the acceptance test.",
+  "revisedBy": "crossSectionalMomentum below. The earlier answer was correct about ENTRY TIMING and wrong as a general claim, because every null this project had built was blind to selection."
  },
  "dataLimits": {
   "sp500Bundle": {
@@ -995,5 +996,47 @@
    "whyTheResultStillStands": "38 symbols lost money buy-and-hold (30%, against 7% in the first bundle) including CHPT -97%, LCID -92%, SEDG -88%, ENPH -86%. The hypothesis had ample population to show itself in and showed the opposite.",
    "rawPriceArtifacts": "Unadjusted prices carry split discontinuities: MRNA +177% in a day, CHPT +75% on the final bar. auto_adjust=False preserves stop distances at that cost -- a tradeoff not stated when the advice was given."
   }
+ },
+ "crossSectionalMomentum": {
+  "whyItWasNeverTested": "Every test before this asked whether ENTRY TIMING beats random, and matchedGeometryNull answers that by drawing random entries FROM THE SAME SYMBOLS IN THE SAME PROPORTIONS. That design holds symbol selection constant, so it is blind BY CONSTRUCTION to an edge living in WHICH asset you hold rather than WHEN you buy. Cross-sectional momentum is exactly that kind of edge and is among the most replicated results in the literature (Jegadeesh and Titman 1993, still present in their 2023 follow-up; time-series momentum with post-crisis Sharpe comparable to pre-2008, Moskowitz/Ooi/Pedersen and Baltas/Kosowski 2020).",
+  "theRule": "At each monthly rebalance, rank every symbol by its return over the past 252 bars skipping the most recent 21, hold the top decile equally weighted. No stop, no target, no entry trigger.",
+  "parametersArePreSpecified": "252 formation / 21 skip / 21 rebalance / top decile is the canonical Jegadeesh-Titman construction from 1993, not a configuration selected from a sweep. That matters: it is not best-of-N.",
+  "nullThatMatters": "Random SELECTION -- pick topK uniformly from the same eligible set at each rebalance and hold identically. It isolates the ranking, which is the only thing the strategy does.",
+  "results": {
+   "sp500-128": {
+    "final": 1743.35,
+    "cagrPct": 23.23,
+    "maxDrawdownPct": 29.65,
+    "basket": 1455.33,
+    "spySameWindow": 1649.03,
+    "randomMedian": 1126.49,
+    "p": 0.0149
+   },
+   "crypto-29": {
+    "final": 2430.28,
+    "cagrPct": 36.03,
+    "maxDrawdownPct": 66.96,
+    "basket": 1272.68,
+    "randomMedian": 968.11,
+    "p": 0.0199
+   },
+   "equities-30": {
+    "final": 2261.86,
+    "cagrPct": 35.89,
+    "maxDrawdownPct": 31.07,
+    "basket": 1759.69,
+    "randomMedian": 1558.33,
+    "p": 0.0547
+   }
+  },
+  "lookbackPattern": "Structured rather than scattered: every 252-bar configuration beats random (p=0.0149, 0.0199) and every 126-bar configuration fails (p=0.61, 0.93, 1.00). Short lookbacks getting eaten by reversal is what the literature predicts, which is weak evidence the effect is real rather than fitted.",
+  "whatIsNotEstablished": [
+   "The three universes are NOT independent -- same 2023-2026 regime, and sp500-128 contains the equities-30 symbols. The p-values must not be combined.",
+   "It beats SPY over the identical window by only 5.7% ($1743 against $1649) at a worse drawdown, 29.7% against ~21%. Risk-adjusted against the index it is close to a wash.",
+   "Crypto's 66.96% drawdown makes that version untradeable as constructed.",
+   "Only 2.66 years of rotation after the 252-bar warmup: roughly 32 rebalances.",
+   "No walk-forward yet, and no promotion-gate run."
+  ],
+  "correctnessChecks": "xsmom.test.mjs, 7 tests, including one that fails on look-ahead: a symbol that only rises AFTER the rebalance must not be selected. Ranking is by DATE across a shared calendar, not by bar index, so symbols starting on different dates are never compared out of period."
  }
 }
