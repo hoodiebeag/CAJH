@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T15:07:02.407Z",
+  "updatedAt": "2026-09-04T15:17:31.782Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -1921,6 +1921,48 @@
       "The twelve signals were drawn from the literature before any result was seen, which is the part that IS genuinely pre-specified. The universe is not: sp500-128 is today's constituent list, so it carries survivorship bias -- which for a long-short understates rather than flatters.",
       "The pipeline itself was designed while looking at 2023-2024. Only the SELECTION is out of sample, not the decision to build a cross-sectional factor battery at all."
     ],
-    "code": "selection-wf.mjs"
+    "code": "selection-wf.mjs",
+    "theDeskEndToEndOutOfSample": {
+      "construction": "Both sleeves are the quarterly re-selection book for their class -- idioVol in equities in six quarters of seven, momentum in crypto in every quarter -- blended by the causal inverse-vol rule. 20 blended periods, all 28 crypto periods used.",
+      "correlationFellOutOfSample": 0.077,
+      "books": {
+        "crypto, overlap only": {
+          "final": 1941.43,
+          "cagrPct": 48.5,
+          "maxDrawdownPct": 18.69,
+          "sharpe": 2.14,
+          "up": "14/20"
+        },
+        "equities sleeve, overlap": {
+          "final": 1450.63,
+          "cagrPct": 24.8,
+          "maxDrawdownPct": 11.53,
+          "sharpe": 1.36,
+          "up": "14/20"
+        },
+        "50/50": {
+          "final": 1697.89,
+          "cagrPct": 37.1,
+          "maxDrawdownPct": 11.28,
+          "sharpe": 2.46,
+          "up": "17/20"
+        },
+        "THE DESK, inverse-vol": {
+          "final": 1757.4,
+          "cagrPct": 39.9,
+          "maxDrawdownPct": 11.42,
+          "sharpe": 2.51,
+          "up": "17/20"
+        }
+      },
+      "finalWeight": "46.7% crypto",
+      "itIsBETTERThanInSampleWhichIsAReasonToSuspectItNotToCelebrate": "The out-of-sample desk returns 39.9% against the in-sample desk's 31.1%, at a similar drawdown and an identical Sharpe. An out-of-sample result that beats its own in-sample version is a warning sign, so here is the mechanical explanation rather than a claim: crypto momentum simply had a stronger 2025-2026 than 2023-2024 (51.0% against 39.9% full-sample), and the out-of-sample equities sleeve holds idioVol ALONE where the in-sample sleeve dilutes it 50/50 with the momentum half that decayed. Both effects push the same way. Nothing about the method got better out of sample; the window did.",
+      "whatIsActuallyOutOfSampleAndWhatIsNOT": {
+        "outOfSample": "The FACTOR CHOICE. A rule seeing only prior data picked idioVol for equities and momentum for crypto, and traded them through quarters it had not seen.",
+        "NOTOutOfSample": "The SELECTION RULE ITSELF -- rank by in-train Sharpe, take the top one -- was written today, after the in-sample battery had already shown idioVol to be the equities winner. A rule designed knowing what it would find is not an independent test of that rule. The same applies to the causal inverse-vol blend, designed earlier the same day after seeing the in-sample blend. This is the honest boundary: out of sample for the choice GIVEN the rule, not for the rule.",
+        "alsoNot": "The twelve signals were drawn from the literature before any result was seen, which IS clean. The universe is today's S&P constituent list and carries survivorship bias, which for a long-short understates. The test window 2025-01 to 2026-09 was picked as 'the last twenty months' rather than by any criterion."
+      },
+      "sampleSize": "20 blended periods. The standard error on a Sharpe at n=20 is about 0.42, so 2.51 against the crypto leg's 2.14 is well inside noise. The drawdown -- 11.42% against 18.69% for the crypto leg -- is again the part that is large relative to its error, and it holds even though the correlation fell from -0.216 in sample to +0.077 out of it."
+    }
   }
 }

@@ -14,6 +14,7 @@
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { perYear, anchoredDrawdown } from "./xsmom.mjs";
 import { SIGNALS, testSignal } from "./factors.mjs";
+import { alignReturns, correlation, bookStats, blend, blendDrawdownPct } from "./portfolio.mjs";
 
 const TEST_FROM = process.argv[2] ?? "2025-01-01";
 const TEST_TO = process.argv[3] ?? "2026-09-02";
@@ -53,6 +54,7 @@ function quarters(from, to) {
   return out;
 }
 
+const oos = {};   // label -> the out-of-sample book, for the blend below
 for (const [label, root, topK, slip] of [
   ["sp500", "./sp500-bundle", 12, 0.0005],
   ["crypto", "./candle-bundle", 3, 0.008],
@@ -130,4 +132,50 @@ for (const [label, root, topK, slip] of [
   show("top2", "re-select best two");
   const inSampleBest = names.map(n => [n, full[n].finalBalance]).sort((a, b) => b[1] - a[1])[0];
   console.log(`  in-sample best over the whole window: ${inSampleBest[0]} at $${inSampleBest[1]}`);
+
+  // The re-selection book, kept for the blend: its returns, the rebalance dates they belong to,
+  // and a per-bar path with zeros outside the traded quarters.
+  const barSeries = new Array(times.length).fill(0);
+  for (const { k, r } of bars.top1) barSeries[k] = r;
+  oos[label] = {
+    returns: books.top1.map(x => x.r),
+    rebalanceLog: books.top1.map(x => rlog[x.i]).concat([rlog[books.top1[books.top1.length - 1].i + 1]]),
+    times, barReturns: barSeries, periodsPerYear: ppy,
+    top: { rebalanceLog: books.top1.map(x => rlog[x.i]).concat([rlog[books.top1[books.top1.length - 1].i + 1]]) },
+  };
+}
+
+// === the desk, end to end out of sample ===
+// Both sleeves are the quarterly re-selection book for their class: idioVol in equities (six
+// quarters of seven), momentum in crypto (every quarter). Neither saw the data it traded.
+if (oos.sp500 && oos.crypto) {
+  const aligned = alignReturns(oos.crypto, oos.sp500);
+  console.log(`\n=== THE DESK, out of sample end to end ===`);
+  console.log(`${aligned.length} blended periods, using ${aligned.aPeriodsUsed} of ${aligned.aPeriodsTotal} crypto periods`);
+  console.log(`crypto against the equities sleeve: correlation ` +
+    `${(correlation(aligned.map(p => p.a), aligned.map(p => p.b)) ?? NaN).toFixed(3)}\n`);
+  const sd = xs => { const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+    return Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / (xs.length - 1)); };
+  const wts = [], desk = [];
+  for (let i = 0; i < aligned.length; i++) {
+    let w = 0.5;
+    if (i >= 6) {
+      const va = sd(aligned.slice(0, i).map(p => p.a)), vb = sd(aligned.slice(0, i).map(p => p.b));
+      if (va > 0 && vb > 0) w = (1 / va) / (1 / va + 1 / vb);
+    }
+    wts.push(w);
+    desk.push(Math.log(w * Math.exp(aligned[i].a) + (1 - w) * Math.exp(aligned[i].b)));
+  }
+  const row = (label, rets, dd) => {
+    const st = bookStats(rets, { periodsPerYear: oos.sp500.periodsPerYear });
+    console.log(label.padEnd(30) + ("$" + st.final.toFixed(2)).padStart(10) + st.cagrPct.toFixed(1).padStart(8) + "%" +
+      (dd === null ? "     n/a" : dd.toFixed(2).padStart(8) + "%") + (st.sharpe ?? NaN).toFixed(2).padStart(8) +
+      `   ${st.upPeriods}/${st.periods}`);
+  };
+  console.log("book".padEnd(30) + "final$".padStart(10) + "CAGR".padStart(9) + "maxDD".padStart(9) + "Sharpe".padStart(8) + "   up");
+  row("crypto, overlap only", aligned.map(p => p.a), blendDrawdownPct(oos.crypto, oos.sp500, aligned, 1));
+  row("equities sleeve, overlap", aligned.map(p => p.b), blendDrawdownPct(oos.crypto, oos.sp500, aligned, 0));
+  row("50/50", blend(aligned, 0.5), blendDrawdownPct(oos.crypto, oos.sp500, aligned, 0.5));
+  row("THE DESK (inverse-vol)", desk, blendDrawdownPct(oos.crypto, oos.sp500, aligned, wts));
+  console.log(`final inverse-vol weight: ${(100 * wts[wts.length - 1]).toFixed(1)}% crypto`);
 }
