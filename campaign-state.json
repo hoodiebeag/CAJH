@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T00:40:00Z",
- "phase": "sweep25 done; concurrency capped, new leader dominates on every axis",
+ "updatedAt": "2026-09-04T01:50:00Z",
+ "phase": "structural walk-forward done; the trend gate is not an in-sample artifact",
  "runsTested": 2227,
  "base": {
   "trendGate": false,
@@ -521,6 +521,28 @@
    },
    "stillFixed": "What remains held at in-sample values is the structural frame, and it is not nothing: long-only, trendGate on in 'ma' mode, tpR 100, maxStopPct 0.20, alignMode none, lockBreakeven on, beLockR 0.2, volClamp 3. The trend gate in particular was chosen in-sample and is the single change that created this result.",
    "quarterlyShape": "Four of nine positive: 2024Q1 +2.84R, 2024Q3 +0.22R, 2024Q4 +3.53R, 2025Q3 +1.11R. The other five negative. Same concentration as every other cut of this result."
+  },
+  "structuralRefit": {
+   "what": "Refit the structural frame too -- whether to gate at all, in which mode, and the target multiple -- not just the tuned numbers. 384 configs x 9 quarters.",
+   "result": {
+    "trades": 149,
+    "meanR": 1.1036,
+    "finalBalance": 2300.28,
+    "maxDrawdownPct": 13.39
+   },
+   "vsEarlier": "Best walk-forward yet: $1974.68 (numbers only) -> $2249.27 (+ entry mode, delay, filters) -> $2300.28 (+ the structural frame). Every leak closed so far has made the result better, not worse.",
+   "whatItChose": {
+    "trendGate true": "ALL NINE quarters",
+    "trendGateMode ma": "all nine",
+    "trendMa 150": "all nine",
+    "minStopPct 0.03": "all nine",
+    "beTriggerR 3": "all nine",
+    "volTarget 0.05": "all nine",
+    "tpR 100": "eight of nine (tpR 12 once, in 2024Q2, which lost)",
+    "maxHold 50": "seven of nine"
+   },
+   "reading": "This is the strongest evidence in the campaign. A search that has never seen the quarter it is judged on converges on the same structure nine times out of nine -- INCLUDING on whether to apply the trend gate at all, which was the one choice most obviously made with hindsight. The gate is not an in-sample artifact.",
+   "stillFixed": "long-only, entryMode breakout, entryDelayBars 1, filters null, alignMode none (inert), maxStopPct 0.20, lockBreakeven, beLockR 0.2, volClamp 3. The first three were each chosen independently in 8/9 or 9/9 quarters by the previous refit, so holding them is now a recorded observation rather than an assumption."
   }
  },
  "bugsFound": [

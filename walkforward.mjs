@@ -68,8 +68,9 @@ export function fit(trainFrom, until, { grid = GRID, fixed = FIXED } = {}) {
     const { trades } = runConfig(config, { from: trainFrom, to: until });
     if (trades.length < 20) continue; // too few to have chosen on
     const eq = simulateEquity(trades, {
-      riskPct: 0.005, startingBalance: 1000,
+      riskPct: config.riskPct ?? 0.005, startingBalance: 1000,
       volTarget: config.volTarget ?? null, volClamp: config.volClamp ?? 3,
+      maxConcurrent: config.maxConcurrent ?? null,
     });
     if (!best || eq.finalBalance > best.finalBalance) best = { config, finalBalance: eq.finalBalance, trades: trades.length };
   }
@@ -115,6 +116,7 @@ export function walkForward({
       ...q,
       chose: Object.fromEntries(Object.keys(grid).map((k) => [k, chosen.config[k]])),
       trainBalance: chosen.finalBalance, trainTrades: chosen.trades, oosTrades: trades.length,
+      maxConcurrent: chosen.config.maxConcurrent ?? null,
       oosMeanR: trades.length ? +(trades.reduce((s, t) => s + t.netR, 0) / trades.length).toFixed(4) : null,
     };
     steps.push(step);
@@ -123,12 +125,22 @@ export function walkForward({
 
   // The chained curve. volTarget can differ between quarters, so the weight is applied per trade
   // here rather than handed to simulateEquity as one setting for the whole run.
+  // The chain uses the most common limit its quarters chose; if they disagree the run is reported
+  // with the limit unset rather than silently picking one.
+  const limits = new Set(steps.filter((s) => !s.skipped).map((s) => s.maxConcurrent ?? null));
+  const chainMaxConcurrent = limits.size === 1 ? [...limits][0] : null;
+
   const weighted = oosTrades.map((t) => {
     if (t.volTarget === null || !(t.atrPct > 0)) return t;
     const w = Math.min(3, Math.max(1 / 3, t.volTarget / t.atrPct));
     return { ...t, netR: t.netR * w };
   });
-  const eq = weighted.length ? simulateEquity(weighted, { riskPct, startingBalance }) : null;
+  // maxConcurrent and riskPct can differ between quarters, so the chained curve applies the
+  // concurrency limit each quarter chose. A single limit for the whole run would be a parameter
+  // nobody fitted.
+  const eq = weighted.length
+    ? simulateEquity(weighted, { riskPct, startingBalance, maxConcurrent: chainMaxConcurrent })
+    : null;
   return {
     steps, trades: oosTrades.length,
     finalBalance: eq ? +eq.finalBalance.toFixed(2) : startingBalance,
