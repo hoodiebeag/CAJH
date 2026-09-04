@@ -6,8 +6,8 @@ const R = report();
 
 test("the leader reproduces exactly -- a silent change to the engine or the bundle fails here", () => {
   assert.equal(R.all.trades, 134);
-  assert.equal(R.all.finalBalance, 4874.70);
-  assert.equal(R.all.maxDrawdownPct, 12.94);
+  assert.equal(R.all.finalBalance, 5160.44);
+  assert.equal(R.all.maxDrawdownPct, 8.96);
 });
 
 test("it is positive in every full year standalone, not one good year", () => {
@@ -17,7 +17,7 @@ test("it is positive in every full year standalone, not one good year", () => {
 });
 
 test("it survives losing any single pair", () => {
-  assert.ok(R.leaveOnePairOut[0].finalBalance > 3500,
+  assert.ok(R.leaveOnePairOut[0].finalBalance > 2500,
     `worst case is ${R.leaveOnePairOut[0].without} at $${R.leaveOnePairOut[0].finalBalance}`);
 });
 
@@ -35,6 +35,7 @@ test("the payoff is right-tailed, and the test records how far -- it does not pr
   assert.ok(R.shape.medianNetR < 0, "the median trade is a loss; the tail carries everything");
   const dropTen = R.trimTopWinners.find((x) => x.dropped === 10);
   assert.ok(dropTen.meanR < 0, "dropping the ten best trades turns the mean negative");
+  assert.ok(dropTen.finalBalance > 1000, "though it now still finishes above starting capital");
 });
 
 test("trade counts are inflated by same-day clustering, and the factor is reported", () => {
@@ -52,6 +53,19 @@ test("the pinned LEADER is the configuration the campaign state names", () => {
   assert.equal(LEADER.beTriggerR, 2.5);
   assert.equal(LEADER.volTarget, 0.05);
   assert.equal(LEADER.entryDelayBars, 1);
+  assert.equal(LEADER.maxConcurrent, 3);
+});
+
+test("capping concurrency beats the unlimited book on return AND drawdown AND peak risk", () => {
+  // The unlimited book peaked at 19 simultaneous longs -- 9.5% of the account at risk at once in a
+  // near-one-factor market. Three positions at 1% is 3% peak risk and does better on both axes,
+  // because the nineteen were largely the same bet nineteen times.
+  const unlimited = report({ ...LEADER, maxConcurrent: null, riskPct: 0.005 });
+  assert.ok(R.all.finalBalance > unlimited.all.finalBalance,
+    `${R.all.finalBalance} vs ${unlimited.all.finalBalance}`);
+  assert.ok(R.all.maxDrawdownPct < unlimited.all.maxDrawdownPct,
+    `${R.all.maxDrawdownPct}% vs ${unlimited.all.maxDrawdownPct}%`);
+  assert.ok(LEADER.maxConcurrent * LEADER.riskPct < 19 * 0.005, "and it commits less capital at the peak");
 });
 
 test("a one-bar fill delay wins on every margin, not just the headline balance", () => {

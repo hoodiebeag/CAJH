@@ -43,6 +43,11 @@ export const LEADER = {
   // day's move. Two bars of delay collapses the result, so this is a discontinuity rather than a
   // curve, and one bar is where realism and result happen to agree.
   entryDelayBars: 1,
+  // Cap on positions open at once, with the per-position risk raised to match. The unlimited book
+  // peaked at 19 concurrent longs -- 9.5% of the account at risk simultaneously, in a market close
+  // to one factor. Three positions at 1% is 3% peak risk, and it earns MORE at a LOWER drawdown,
+  // because the nineteen were largely the same bet nineteen times.
+  maxConcurrent: 3, riskPct: 0.01,
 };
 
 /** Every trade a configuration takes, with the geometry the robustness checks slice on. */
@@ -73,15 +78,16 @@ export function collect(config, { minutes = 1440, from = SPLIT.trainStart, to = 
     for (const x of r.excursions) {
       if (!Number.isFinite(x.entryTime)) continue;
       trades.push({ symbol: pair, netR: x.r, entryTime: x.entryTime * 1000, stopPct: x.risk / x.entry,
-        barsHeld: x.barsHeld, atrPct: atrByTime.get(x.entryTime) });
+        barsHeld: x.barsHeld, atrPct: atrByTime.get(x.entryTime),
+        exitTime: (x.entryTime + (x.barsHeld ?? 0) * minutes * 60) * 1000 });
     }
   }
   return { trades, series };
 }
 
-export function summarise(trades, { riskPct = 0.005, startingBalance = 1000, volTarget = null, volClamp = 3 } = {}) {
+export function summarise(trades, { riskPct = 0.005, startingBalance = 1000, volTarget = null, volClamp = 3, maxConcurrent = null } = {}) {
   if (!trades.length) return { trades: 0, meanR: null, finalBalance: startingBalance, maxDrawdownPct: 0 };
-  const eq = simulateEquity(trades, { riskPct, startingBalance, volTarget, volClamp });
+  const eq = simulateEquity(trades, { riskPct, startingBalance, volTarget, volClamp, maxConcurrent });
   return {
     trades: trades.length,
     meanR: +(trades.reduce((s, t) => s + t.netR, 0) / trades.length).toFixed(4),
@@ -92,7 +98,8 @@ export function summarise(trades, { riskPct = 0.005, startingBalance = 1000, vol
 
 export function report(config = LEADER, opts = {}) {
   const { trades, series } = collect(config, opts);
-  opts = { volTarget: config.volTarget ?? null, volClamp: config.volClamp ?? 3, ...opts };
+  opts = { volTarget: config.volTarget ?? null, volClamp: config.volClamp ?? 3,
+           maxConcurrent: config.maxConcurrent ?? null, riskPct: config.riskPct ?? 0.005, ...opts };
   const out = { all: summarise(trades, opts) };
 
   out.leaveOnePairOut = [...new Set(trades.map((t) => t.symbol))]

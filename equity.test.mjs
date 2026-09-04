@@ -123,3 +123,33 @@ test("risk matching removes leverage from a volatility-targeting comparison", ()
 test("risk matching is the identity when volatility targeting is off", () => {
   assert.equal(riskMatchedRiskPct([{ netR: 1, entryTime: 1 }], { volTarget: null, riskPct: 0.005 }), 0.005);
 });
+
+test("a concurrency limit declines a signal when the book is already full", () => {
+  const day = 86400000;
+  const t = (at, hold, r = 1) => ({ netR: r, entryTime: at * day, exitTime: (at + hold) * day });
+  // Three overlapping trades, room for two. The third is declined, not silently dropped.
+  const r = simulateEquity([t(1, 10), t(2, 10), t(3, 10)], { maxConcurrent: 2, startingBalance: 1000, riskPct: 0.01 });
+  assert.equal(r.trades, 2);
+  assert.equal(r.declinedForConcurrency, 1);
+  assert.equal(r.peakConcurrent, 2);
+});
+
+test("a position that has already closed frees its slot", () => {
+  const day = 86400000;
+  const t = (at, hold) => ({ netR: 1, entryTime: at * day, exitTime: (at + hold) * day });
+  const r = simulateEquity([t(1, 2), t(10, 2), t(20, 2)], { maxConcurrent: 1, startingBalance: 1000, riskPct: 0.01 });
+  assert.equal(r.trades, 3, "sequential trades never compete for the same slot");
+  assert.equal(r.declinedForConcurrency, 0);
+});
+
+test("a concurrency limit refuses to run on trades with no exit time", () => {
+  assert.throws(() => simulateEquity([{ netR: 1, entryTime: 1 }], { maxConcurrent: 5 }),
+    /needs exitTime on every trade/);
+});
+
+test("maxConcurrent null reproduces the original behaviour and reports no peak", () => {
+  const r = simulateEquity([{ netR: 1, entryTime: 1 }, { netR: -1, entryTime: 2 }], { startingBalance: 1000, riskPct: 0.01 });
+  assert.equal(r.trades, 2);
+  assert.equal(r.declinedForConcurrency, 0);
+  assert.equal(r.peakConcurrent, null);
+});

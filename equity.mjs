@@ -36,6 +36,9 @@ export const DEFAULTS = Object.freeze({
   // Hard limit on how far volatility targeting may scale a bet in either direction, as a multiple
   // of riskPct. Without it a quiet pair sizes up without bound.
   volClamp: 3,
+  // Maximum positions open at once. null = unlimited, which is what this simulator did before and
+  // is not what a book does. See the note in simulateEquity.
+  maxConcurrent: null,
 });
 
 /**
@@ -46,7 +49,7 @@ export const DEFAULTS = Object.freeze({
  * order IS the result here, so guessing it would silently change the answer.
  */
 export function simulateEquity(trades, opts = {}) {
-  const { startingBalance, riskPct, fixedFractional, ruinThresholdPct, volTarget, volClamp } = { ...DEFAULTS, ...opts };
+  const { startingBalance, riskPct, fixedFractional, ruinThresholdPct, volTarget, volClamp, maxConcurrent } = { ...DEFAULTS, ...opts };
   if (!(startingBalance > 0)) throw new Error("simulateEquity: startingBalance must be positive");
   if (!(riskPct > 0 && riskPct < 1)) throw new Error("simulateEquity: riskPct must be between 0 and 1");
 
@@ -55,7 +58,7 @@ export function simulateEquity(trades, opts = {}) {
     const at = Number(t.entryTime);
     if (!Number.isFinite(r)) throw new Error(`simulateEquity: trade ${i} has no finite netR`);
     if (!Number.isFinite(at)) throw new Error(`simulateEquity: trade ${i} has no entryTime; order decides the result and must not be guessed`);
-    return { r, at, symbol: t.symbol ?? null, atrPct: Number(t.atrPct) };
+    return { r, at, symbol: t.symbol ?? null, atrPct: Number(t.atrPct), exitTime: Number(t.exitTime) };
   }).sort((a, b) => a.at - b.at);
 
   // Volatility targeting. Fixed-fractional sizing already equalises risk PER STOP, and because a
@@ -76,6 +79,33 @@ export function simulateEquity(trades, opts = {}) {
     return Math.min(volClamp, Math.max(1 / volClamp, volTarget / row.atrPct));
   };
 
+  // Concurrency. This simulator compounds trades one after another in entry order, which silently
+  // assumes the book is never long two things at once. It is: the engine holds one position per
+  // pair across 29 pairs, and the campaign's leader peaks at 19 open at the same time -- 9.5% of
+  // the account at risk simultaneously in a market that is close to one factor. Sequential
+  // compounding cannot see that, so the drawdown it reports is a floor rather than a measurement.
+  //
+  // maxConcurrent does not fix the accounting; it constrains the book the way a real one is
+  // constrained, by declining a signal when the position limit is already full. Trades declined
+  // this way are counted and reported rather than quietly dropped.
+  let declined = 0, peakConcurrent = 0;
+  if (maxConcurrent !== null) {
+    if (!Number.isInteger(maxConcurrent) || maxConcurrent < 1) throw new Error("simulateEquity: maxConcurrent must be a positive integer or null");
+    const missing = rows.filter((row) => !Number.isFinite(row.exitTime)).length;
+    if (missing) throw new Error(`simulateEquity: maxConcurrent needs exitTime on every trade; ${missing} of ${rows.length} have none`);
+    const openUntil = [];
+    const kept = [];
+    for (const row of rows) {
+      for (let i = openUntil.length - 1; i >= 0; i--) if (openUntil[i] <= row.at) openUntil.splice(i, 1);
+      if (openUntil.length >= maxConcurrent) { declined++; continue; }
+      openUntil.push(row.exitTime);
+      if (openUntil.length > peakConcurrent) peakConcurrent = openUntil.length;
+      kept.push(row);
+    }
+    rows.length = 0;
+    rows.push(...kept);
+  }
+
   let balance = startingBalance, peak = startingBalance, maxDD = 0, ruined = false;
   const ruinFloor = startingBalance * ruinThresholdPct;
   let effectivelyRuinedAt = null;
@@ -94,6 +124,8 @@ export function simulateEquity(trades, opts = {}) {
   const years = rows.length > 1 ? (rows[rows.length - 1].at - rows[0].at) / (365.25 * 86400000) : 0;
   return {
     startingBalance, finalBalance: balance, trades: rows.length,
+    declinedForConcurrency: declined,
+    peakConcurrent: maxConcurrent === null ? null : peakConcurrent,
     totalReturnPct: (balance / startingBalance - 1) * 100,
     cagrPct: years > 0 && balance > 0 ? ((balance / startingBalance) ** (1 / years) - 1) * 100 : null,
     maxDrawdownPct: maxDD * 100,

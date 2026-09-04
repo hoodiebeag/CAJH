@@ -99,7 +99,10 @@ export function runConfig(config, { minutes = 1440, from = SPLIT.trainStart, to 
     }
     for (const x of r.excursions) {
       if (!Number.isFinite(x.entryTime)) continue; // undated same-bar stops cannot be ordered
-      trades.push({ netR: x.r, entryTime: x.entryTime * 1000, symbol: pair, atrPct: atrByTime.get(x.entryTime) });
+      trades.push({ netR: x.r, entryTime: x.entryTime * 1000, symbol: pair, atrPct: atrByTime.get(x.entryTime),
+        // exitTime lets the simulator see that positions OVERLAP. Derived from the hold rather
+        // than recorded, because backtest.js reports barsHeld and not an exit timestamp.
+        exitTime: (x.entryTime + (x.barsHeld ?? 0) * minutes * 60) * 1000 });
     }
   }
   return { trades, symbolsUsed };
@@ -114,6 +117,7 @@ export function score(config, opts = {}) {
     startingBalance: opts.startingBalance ?? 1000,
     volTarget: config.volTarget ?? null,
     volClamp: config.volClamp ?? 3,
+    maxConcurrent: config.maxConcurrent ?? null,
   });
   return {
     config, symbolsUsed,
