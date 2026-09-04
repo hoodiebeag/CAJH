@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T14:21:20.618Z",
+  "updatedAt": "2026-09-04T14:27:20.539Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -1455,5 +1455,79 @@
       }
     },
     "lessonForTheRecord": "All three errors shared a shape: a constant that was correct for the universe it was written against (12 periods, 252 bars, one period per month, a period-end mark) and silently wrong for the second universe it was then applied to. Crossing asset classes is exactly the operation that breaks such constants, and the code carried four of them into the crossing. Anything derived per-universe should be derived FROM the universe."
+  },
+  "tradeLedger": {
+    "why": "Every result in this campaign has been reported per REBALANCE PERIOD -- '19 of 31 periods up'. The stated acceptance criterion is per TRADE: about ten trades a month at a win rate of 40% or better, with the wins covering the losses. Those are different questions and a book can pass one while failing the other. Nothing had measured the second until now.",
+    "construction": "A position opens when a symbol enters the held set and closes when it leaves, priced at the rebalance close on both ends. Every trade is charged slippage twice, in and out. Holds still open at the end of the series are reported separately, never marked as if closed -- 3 a side in crypto, 12 a side in equities.",
+    "results": {
+      "crypto-29 long leg": {
+        "trades": 35,
+        "perMonth": 1,
+        "winRatePct": 54.3,
+        "avgWinPct": 50.53,
+        "avgLossPct": -18.5,
+        "payoff": 2.73,
+        "expectancyPct": 18.975,
+        "medianHoldDays": 42
+      },
+      "crypto-29 short leg": {
+        "trades": 33,
+        "perMonth": 1,
+        "winRatePct": 42.4,
+        "avgWinPct": 41.62,
+        "avgLossPct": -15.45,
+        "payoff": 2.69,
+        "expectancyPct": 8.763,
+        "medianHoldDays": 42
+      },
+      "crypto-29 both legs": {
+        "trades": 68,
+        "perMonth": 2,
+        "winRatePct": 48.5,
+        "avgWinPct": 46.75,
+        "avgLossPct": -16.84,
+        "payoff": 2.78,
+        "expectancyPct": 14.02,
+        "medianHoldDays": 42
+      },
+      "sp500-128 long leg": {
+        "trades": 102,
+        "perMonth": 3.3,
+        "winRatePct": 54.9,
+        "avgWinPct": 19.43,
+        "avgLossPct": -10.82,
+        "payoff": 1.8,
+        "expectancyPct": 5.788,
+        "medianHoldDays": 32
+      },
+      "sp500-128 short leg": {
+        "trades": 79,
+        "perMonth": 2.5,
+        "winRatePct": 44.3,
+        "avgWinPct": 27.86,
+        "avgLossPct": -16.97,
+        "payoff": 1.64,
+        "expectancyPct": 2.892,
+        "medianHoldDays": 61
+      },
+      "sp500-128 both legs": {
+        "trades": 181,
+        "perMonth": 5.8,
+        "winRatePct": 50.3,
+        "avgWinPct": 22.67,
+        "avgLossPct": -13.83,
+        "payoff": 1.64,
+        "expectancyPct": 4.524,
+        "medianHoldDays": 33
+      }
+    },
+    "verdictAgainstTheCriterion": "Two of three conditions pass and one fails. WIN RATE passes on every leg -- 42.4% is the worst of the six and the criterion is 40%. 'Wins should win, and offset any losses' passes decisively: the payoff ratio is 1.64 to 2.78, so an average win covers between one and three average losses, and expectancy is positive on every leg net of costs. TRADE COUNT fails: 2.0 a month in crypto and 5.8 in equities, 7.8 for both books together, against a target of about 10.",
+    "theShortLegEarnsItsPlace": "42.4% and 44.3% win rates look weak beside the long legs' 54-55%, but the short legs carry payoff ratios of 2.69 and 1.64 and positive expectancy net of costs (8.8% and 2.9% a trade). A leg that wins less than half the time and still compounds is exactly what the criterion was written to allow.",
+    "howTradeCountCouldRISE": [
+      "More frequent rebalancing. The rebalance interval sets the trade count almost mechanically, and 21 bars is the canonical Jegadeesh-Titman choice rather than an optimised one. A frequency ladder is the obvious next test, and it is a COST question: crypto pays 1.6% round trip, so doubling frequency doubles a charge that already eats a tenth of the average win.",
+      "Larger topK. More slots means more names turning over, at the price of diluting the ranking toward the universe mean.",
+      "More asset classes. The two books already sum to 7.8 a month, so a third and fourth class reach the target without touching either rule -- and that is the only route on this list that does not trade edge for volume."
+    ],
+    "code": "trades.mjs (ledger, summarise) with trades.test.mjs, 7 tests; trades-run.mjs reproduces the table. runRotation's rebalance log now records closes for names being dropped as well as held, or every exit would be unpriced."
   }
 }

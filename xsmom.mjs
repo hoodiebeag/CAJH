@@ -115,7 +115,12 @@ export function runRotation({
     const turnover = held.length ? (chosen.length - keep) / chosen.length : 1;
     balance *= 1 - 2 * slipPct * turnover;
 
-    rebalances.push({ at: times[i], chosen, turnover: +turnover.toFixed(3) });
+    // Closes are recorded here so a trade ledger can be derived without a second copy of the
+    // shared-calendar grid logic -- the place where a duplicate would silently diverge. Names being
+    // DROPPED are priced too, or every exit would be unpriced and the ledger would be empty.
+    const priced = [...new Set([...chosen, ...held])];
+    rebalances.push({ at: times[i], chosen, turnover: +turnover.toFixed(3),
+                      closes: Object.fromEntries(priced.map((s) => [s, grid[s][i]])) });
     if (curve.length) periodReturns.push(Math.log(balance / curve[curve.length - 1].balance));
     held = chosen;
     curve.push({ at: times[i], balance });
