@@ -82,6 +82,29 @@ export const SIGNALS = {
     for (let j = i - 125; j <= i - 63; j++) if (v[j] > 0) { older += v[j]; on++; }
     return rn > 30 && on > 30 && older > 0 ? Math.log((recent / rn) / (older / on)) : null;
   },
+  // Amihud illiquidity: average price impact per dollar traded. The premium is compensation for
+  // bearing illiquidity, not a price-continuation effect, so it is the first signal in this battery
+  // whose MECHANISM differs from the rest. Higher = more illiquid = held long.
+  illiquidity:  (c, i, ctx) => {
+    const v = ctx.volume?.[ctx.symbol];
+    if (!v || i < 252) return null;
+    let sum = 0, n = 0;
+    for (let j = i - 251; j <= i; j++) {
+      const dollar = c[j] > 0 && v[j] > 0 ? c[j] * v[j] : 0;
+      if (dollar > 0 && c[j - 1] > 0) { sum += Math.abs(Math.log(c[j] / c[j - 1])) / dollar; n++; }
+    }
+    // Scaled only to keep the numbers readable; a monotone transform cannot change a ranking.
+    return n > 200 ? Math.log(1 + (sum / n) * 1e9) : null;
+  },
+  // The size premium, proxied by dollar volume because market capitalisation is not in these
+  // bundles. Small trades less, so LOW dollar volume scores high and is held long.
+  smallSize:    (c, i, ctx) => {
+    const v = ctx.volume?.[ctx.symbol];
+    if (!v || i < 252) return null;
+    let sum = 0, n = 0;
+    for (let j = i - 251; j <= i; j++) if (c[j] > 0 && v[j] > 0) { sum += c[j] * v[j]; n++; }
+    return n > 200 && sum > 0 ? -Math.log(sum / n) : null;
+  },
   idioVol:      (c, i, ctx) => {
     if (i < 126 || !ctx.basket) return null;
     const rs = [];
