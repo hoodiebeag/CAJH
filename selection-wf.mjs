@@ -70,8 +70,14 @@ for (const [label, root, topK, slip] of [
   const names = Object.keys(full);
   const ppy = full[names[0]].periodsPerYear;
 
-  const books = { top1: [], top2: [], momentum: [] };
-  const bars = { top1: [], top2: [], momentum: [] };
+  // fixedSleeve and equalAll are the two things the adaptive rule has to beat to be worth its
+  // complexity. fixedSleeve is the desk's a priori pair held every quarter with no re-selection --
+  // it shares the rule's hindsight about WHICH factors matter, so the comparison isolates the
+  // adaptive machinery alone. equalAll holds all fourteen signals equally weighted and uses no
+  // selection information whatsoever, which makes it the only genuinely choice-free baseline here.
+  const FIXED = label === "crypto" ? ["momentum"] : ["momentum", "idioVol"];
+  const books = { top1: [], top2: [], momentum: [], fixedSleeve: [], equalAll: [] };
+  const bars = { top1: [], top2: [], momentum: [], fixedSleeve: [], equalAll: [] };
   const times = full[names[0]].times, rlog = full[names[0]].top.rebalanceLog;
   const chosenLog = [];
 
@@ -87,7 +93,8 @@ for (const [label, root, topK, slip] of [
     }
     if (!ranked.length) { chosenLog.push([from, "no signal had enough training periods"]); continue; }
     ranked.sort((a, b) => b[1] - a[1]);
-    const pick = { top1: [ranked[0][0]], top2: ranked.slice(0, 2).map(x => x[0]), momentum: ["momentum"] };
+    const pick = { top1: [ranked[0][0]], top2: ranked.slice(0, 2).map(x => x[0]), momentum: ["momentum"],
+                   fixedSleeve: FIXED, equalAll: names };
     chosenLog.push([from, `${ranked[0][0]} (${ranked[0][1].toFixed(2)}), then ${ranked[1]?.[0]}`]);
 
     const lo = sec(from), hi = sec(to);
@@ -128,6 +135,8 @@ for (const [label, root, topK, slip] of [
       (sharpeOf(rets, ppy) ?? NaN).toFixed(2).padStart(8) + `   ${rets.filter(r => r > 0).length}/${rets.length}`);
   };
   show("momentum", "always momentum (no choice)");
+  show("equalAll", `equal weight all ${names.length} (no choice)`);
+  show("fixedSleeve", `fixed sleeve: ${FIXED.join(" + ")}`);
   show("top1", "re-select best each quarter");
   show("top2", "re-select best two");
   const inSampleBest = names.map(n => [n, full[n].finalBalance]).sort((a, b) => b[1] - a[1])[0];

@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T17:27:14.958Z",
+  "updatedAt": "2026-09-04T18:13:24.506Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2025,6 +2025,62 @@
         "alsoNot": "The twelve signals were drawn from the literature before any result was seen, which IS clean. The universe is today's S&P constituent list and carries survivorship bias, which for a long-short understates. The test window 2025-01 to 2026-09 was picked as 'the last twenty months' rather than by any criterion."
       },
       "sampleSize": "20 blended periods. The standard error on a Sharpe at n=20 is about 0.42, so 2.51 against the crypto leg's 2.14 is well inside noise. The drawdown -- 11.42% against 18.69% for the crypto leg -- is again the part that is large relative to its error, and it holds even though the correlation fell from -0.216 in sample to +0.077 out of it."
+    },
+    "doesTheMACHINERYEarnItsComplexity": {
+      "question": "The out-of-sample comparison was re-selection against ALWAYS-MOMENTUM, which is the wrong benchmark. The right one is: does the adaptive rule beat simply FIXING the factors? If a fixed pair does as well, the quarterly re-selection is unnecessary complexity dressed as sophistication.",
+      "baselines": {
+        "equalAll": "Equal weight over all fourteen signals every quarter. The only genuinely choice-free book here -- it uses no selection information at all.",
+        "fixedSleeve": "momentum + idioVol equally weighted in equities, momentum alone in crypto, held every quarter with no re-selection. It SHARES the adaptive rule's hindsight about which factors matter, so the comparison isolates the adaptive machinery rather than the factor knowledge."
+      },
+      "equitiesOutOfSample": {
+        "equal weight all 14 (no choice)": {
+          "final": 972.56,
+          "cagrPct": -1.6,
+          "maxDrawdownPct": 6.55,
+          "sharpe": -0.36,
+          "up": "10/20"
+        },
+        "always momentum (no choice)": {
+          "final": 1197.6,
+          "cagrPct": 11.3,
+          "maxDrawdownPct": 13.04,
+          "sharpe": 0.57,
+          "up": "9/20"
+        },
+        "fixed sleeve momentum+idioVol": {
+          "final": 1299.07,
+          "cagrPct": 16.9,
+          "maxDrawdownPct": 9.05,
+          "sharpe": 1.16,
+          "up": "12/20"
+        },
+        "re-select best each quarter": {
+          "final": 1450.63,
+          "cagrPct": 24.8,
+          "maxDrawdownPct": 11.53,
+          "sharpe": 1.36,
+          "up": "14/20"
+        },
+        "re-select best two": {
+          "final": 1257.33,
+          "cagrPct": 14.6,
+          "maxDrawdownPct": 12.82,
+          "sharpe": 0.84,
+          "up": "12/20"
+        }
+      },
+      "cryptoOutOfSample": {
+        "equal weight all 14": {
+          "final": 964.91,
+          "cagrPct": -2.2,
+          "sharpe": -0.46,
+          "up": "10/28"
+        },
+        "everything else": "identical to the cent -- $1941.43, 51.0%, Sharpe 1.93. The fixed sleeve IS momentum in crypto and the rule picks momentum every quarter, so all three books are the same book."
+      },
+      "answer": "Yes in equities, marginally, and the margin is not where it looks. Adaptive returns 24.8% against the fixed sleeve's 16.9%, so it wins clearly on RETURN. On risk-adjusted terms it is 1.36 against 1.16, a gap of 0.20 where the standard error on a Sharpe at n=20 is about 0.42 -- inside the noise -- and the fixed sleeve has the LOWER drawdown, 9.05% against 11.53%. The honest statement is that the machinery adds return and does not demonstrably add Sharpe. In crypto it adds exactly nothing, because there is one factor and every rule finds it.",
+      "theMoreImportantNUMBER": "Equal-weighting all fourteen signals LOSES MONEY in both universes: -1.6% at Sharpe -0.36 in equities and -2.2% at -0.46 in crypto. The only genuinely choice-free book in this study is a losing book. That cuts both ways and both ways matter. It confirms the battery is mostly noise and that essentially all of the value is in the selection -- and it warns that without correct selection there is nothing here at all. A reader who took 'twelve documented anomalies' as a portfolio would have lost money.",
+      "aCaveatOnThatBaseline": "equalAll contains lowVol and highVol, which are exact negatives, so that pair cancels and the book is really an equal weight over roughly thirteen mixed-sign signals. It is still the correct choice-free baseline -- a naive reader holding every documented anomaly is exactly what it models -- but its negative return is the average of strong positives and strong negatives, not evidence that every signal is bad."
     }
   },
   "decayOrRegime": {
