@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T18:13:24.506Z",
+  "updatedAt": "2026-09-04T18:16:30.260Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2419,5 +2419,31 @@
     ],
     "whyTheyAreNotBeingFIXEDHere": "Two reasons and both matter. Weakening or deleting an assertion to get a green suite is exactly the move that destroys a test suite's value, and it is forbidden here. And a test that asserts short orders are refused is a SAFETY assertion in a live-trading engine -- changing it is a live-trading change, which requires the D1->D2->D3 path and human sign-off, not a research batch.",
     "whatTheOWNERShouldDecide": "Whether the three backtest.test.mjs failures should be updated to match the short-path behaviour that was deliberately introduced. If yes, that is a live-trading-adjacent change and belongs in its own reviewed commit, not folded into factor research. Until then, every report from this campaign says '4 failures, the same 4 that fail on the base commit' rather than claiming a green suite."
+  },
+  "deskSleeveIsAnOpenChoice": {
+    "howItWasFound": "Re-running desk-run.mjs to verify the PR's published numbers against the cost-fixed code. They reproduce exactly -- $2013.20, 31.1%, 10.65%, Sharpe 2.54 -- so the PR is accurate. But running it surfaced an inconsistency in the construction itself: the out-of-sample section shows the adaptive rule picking idioVol ALONE and beating the fixed momentum+idioVol sleeve, while the desk is defined with that sleeve.",
+    "bothBuiltAndBothReported": {
+      "desk as defined, sleeve = momentum + idioVol": {
+        "final": 2013.2,
+        "cagrPct": 31.1,
+        "maxDrawdownPct": 10.65,
+        "sharpe": 2.54,
+        "up": "23/31",
+        "cryptoWeight": "39.9%"
+      },
+      "alternative, sleeve = idioVol alone": {
+        "final": 2125.73,
+        "cagrPct": 33.9,
+        "maxDrawdownPct": 9.78,
+        "sharpe": 2.61,
+        "up": "24/31",
+        "cryptoWeight": "40.1%"
+      }
+    },
+    "theAlternativeWinsOnEVERYMetric": "Higher return, LOWER drawdown, higher Sharpe, more up periods. And out of sample the same direction held: the adaptive rule, which is idioVol alone in six quarters of seven, returned 24.8% at Sharpe 1.36 against the fixed sleeve's 16.9% and 1.16.",
+    "whyTheBlendDoesNotHELP": "momentum and idioVol correlate 0.383 inside equities. That is far too high for a two-asset blend to buy much -- the cross-ASSET blend works because its correlation is -0.234, and 0.383 is a different world. The 50/50 sleeve was built on a diversification argument that the correlation does not support.",
+    "whyThisIsNotJustSELECTINGTHEWINNER": "Because the out-of-sample rule, which never saw the test window, picked idioVol alone independently. The case is 'a rule that could not see the data chose it, and it also does better in sample', not 'it did better in sample'. Those are different claims and only the first is worth anything.",
+    "theARGUMENTFORKEEPINGTHESLEEVEANYWAY": "Robustness, not performance. idioVol is ONE factor, it fails outright on crypto at p=0.539, and it fell with everything else in the equities regime shift (56 to 26 to 26). A sleeve holding only idioVol has nothing left if idioVol stops working, whereas momentum is the one factor that replicated across both asset classes and both disjoint halves. Paying 2.8 points of CAGR and 0.07 of Sharpe for that insurance is a defensible trade and it is a JUDGMENT, not a measurement.",
+    "status": "OPEN. Both constructions stay in desk-run.mjs and both numbers are published. The choice is the owner's, and it is a choice between a better backtest and a more robust story rather than between a right and a wrong answer."
   }
 }

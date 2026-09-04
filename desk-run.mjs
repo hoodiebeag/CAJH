@@ -58,32 +58,41 @@ console.log(`\nmomentum against idioVol inside equities: correlation ` +
 row("EQUITIES SLEEVE 50/50", bookStats(sleeve, { periodsPerYear: eqMom.periodsPerYear }),
     blendDrawdownPct(eqMom, { ...eqIdio, top: eqIdio.top }, eqPairs, 0.5));
 
-// --- the desk: crypto momentum against the equities sleeve, causal inverse-vol.
-const sleeveBook = { returns: sleeve, rebalanceLog: eqMom.top.rebalanceLog,
-                     times: eqMom.times, barReturns: eqMom.barReturns, top: eqMom.top };
-const aligned = alignReturns({ returns: cryptoBook.returns, rebalanceLog: cryptoBook.top.rebalanceLog }, sleeveBook);
-console.log(`\n${aligned.length} blended periods, using ${aligned.aPeriodsUsed} of ${aligned.aPeriodsTotal} crypto periods`);
-console.log(`crypto against the equities sleeve: correlation ` +
-  `${correlation(aligned.map(p => p.a), aligned.map(p => p.b)).toFixed(3)}\n`);
+// The sleeve is defined as momentum + idioVol on a DIVERSIFICATION argument -- momentum is the one
+// factor robust across asset classes, idioVol the one genuine equities-only factor, so hold both.
+// That argument is not a performance claim and the evidence runs against it, so both are built and
+// both are reported: the desk as defined, and the desk with idioVol alone as its equities sleeve.
 
-const sd = xs => { const m = xs.reduce((a, b) => a + b, 0) / xs.length;
-  return Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / (xs.length - 1)); };
-const wts = [], desk = [];
-for (let i = 0; i < aligned.length; i++) {
-  let w = 0.5;
-  if (i >= 6) {
-    const va = sd(aligned.slice(0, i).map(p => p.a)), vb = sd(aligned.slice(0, i).map(p => p.b));
-    if (va > 0 && vb > 0) w = (1 / va) / (1 / va + 1 / vb);
+// --- the desk: crypto momentum against the equities sleeve, causal inverse-vol.
+function buildDesk(sleeveReturns, name) {
+  const sleeveBook = { returns: sleeveReturns, rebalanceLog: eqMom.top.rebalanceLog,
+                       times: eqMom.times, barReturns: eqMom.barReturns, top: eqMom.top };
+  const aligned = alignReturns({ returns: cryptoBook.returns, rebalanceLog: cryptoBook.top.rebalanceLog }, sleeveBook);
+  const sd = xs => { const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+    return Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / (xs.length - 1)); };
+  const wts = [], desk = [];
+  for (let i = 0; i < aligned.length; i++) {
+    let w = 0.5;
+    if (i >= 6) {
+      const va = sd(aligned.slice(0, i).map(p => p.a)), vb = sd(aligned.slice(0, i).map(p => p.b));
+      if (va > 0 && vb > 0) w = (1 / va) / (1 / va + 1 / vb);
+    }
+    wts.push(w);
+    desk.push(Math.log(w * Math.exp(aligned[i].a) + (1 - w) * Math.exp(aligned[i].b)));
   }
-  wts.push(w);
-  desk.push(Math.log(w * Math.exp(aligned[i].a) + (1 - w) * Math.exp(aligned[i].b)));
+  console.log(`\n${name}: ${aligned.length} blended periods, using ${aligned.aPeriodsUsed} of ` +
+    `${aligned.aPeriodsTotal} crypto periods, correlation ` +
+    `${(correlation(aligned.map(p => p.a), aligned.map(p => p.b)) ?? NaN).toFixed(3)}`);
+  console.log("book".padEnd(30) + "final$".padStart(10) + "CAGR".padStart(9) + "maxDD".padStart(9) + "Sharpe".padStart(8) + "   up");
+  row("crypto, overlap only", bookStats(aligned.map(p => p.a)), blendDrawdownPct(cryptoBook, sleeveBook, aligned, 1));
+  row("equities sleeve, overlap", bookStats(aligned.map(p => p.b)), blendDrawdownPct(cryptoBook, sleeveBook, aligned, 0));
+  row("50/50", bookStats(blend(aligned, 0.5)), blendDrawdownPct(cryptoBook, sleeveBook, aligned, 0.5));
+  row("THE DESK (inverse-vol)", bookStats(desk), blendDrawdownPct(cryptoBook, sleeveBook, aligned, wts));
+  console.log(`final inverse-vol weight: ${(100 * wts[wts.length - 1]).toFixed(1)}% crypto`);
+  return aligned;
 }
-console.log("book".padEnd(30) + "final$".padStart(10) + "CAGR".padStart(9) + "maxDD".padStart(9) + "Sharpe".padStart(8) + "   up");
-row("crypto, overlap only", bookStats(aligned.map(p => p.a)), blendDrawdownPct(cryptoBook, sleeveBook, aligned, 1));
-row("equities sleeve, overlap", bookStats(aligned.map(p => p.b)), blendDrawdownPct(cryptoBook, sleeveBook, aligned, 0));
-row("50/50", bookStats(blend(aligned, 0.5)), blendDrawdownPct(cryptoBook, sleeveBook, aligned, 0.5));
-row("THE DESK (inverse-vol)", bookStats(desk), blendDrawdownPct(cryptoBook, sleeveBook, aligned, wts));
-console.log(`final inverse-vol weight: ${(100 * wts[wts.length - 1]).toFixed(1)}% crypto`);
+const aligned = buildDesk(sleeve, "DESK AS DEFINED (equities sleeve = momentum + idioVol)");
+buildDesk(eqIdio.returns.slice(0, n), "ALTERNATIVE (equities sleeve = idioVol alone)");
 
 // --- what it asks of you, per trade.
 const years = aligned.length / eqMom.periodsPerYear;
