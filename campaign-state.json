@@ -9,9 +9,9 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T02:25:00Z",
- "phase": "regime analysis -- the decay is BOTH the market and the strategy",
- "runsTested": 2227,
+ "updatedAt": "2026-09-04T02:55:00Z",
+ "phase": "short side tested; it is not the answer, and the reason is stated",
+ "runsTested": 2326,
  "base": {
   "trendGate": false,
   "alignMode": "none",
@@ -225,6 +225,18 @@
    "axis": "maxConcurrent x riskPct",
    "configs": 21,
    "result": "Capping simultaneous positions at 3 and raising per-position risk to 1% gives $5160.44 at an 8.96% drawdown, against the unlimited book's $4874.70 at 12.94%. More return, less drawdown, and LESS capital at risk at the peak: 3 x 1% = 3% against 19 x 0.5% = 9.5%. The nineteen concurrent longs were largely the same bet nineteen times."
+  },
+  {
+   "phase": "sweep26",
+   "axis": "short side, as currently supported",
+   "configs": 27,
+   "result": "Every one of 27 configurations loses. Best $993.06 at a 49.48% drawdown. Run without a trend gate, because the 'ma' gate as written asks whether price is ABOVE its average -- the wrong condition for a short."
+  },
+  {
+   "phase": "sweep27",
+   "axis": "short side with a direction-aware trend gate",
+   "configs": 72,
+   "result": "The gate is now inverted for shorts in backtest.js, and it helps -- $816.25 against $633.27 ungated -- but every one of 72 configurations still loses over the full period."
   }
  ],
  "leader": {
@@ -282,7 +294,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "The decay question is answered as far as this data can answer it. What is left that would actually change anything: (1) EQUITIES, still blocked on data the container cannot fetch -- this is the one the owner asked for; (2) a short side, since the diagnosis is that the market stopped going UP and the engine is long-only (backtest.js supports direction 'short' for entryMode 'bos' only, with most exit features unimplemented); (3) nothing else in the parameter space is likely to matter -- 2,227 configurations in, the axes that move the result are all known and all swept.",
+ "nextUp": "Nothing left in this data is likely to change the answer. The two things that would: (1) EQUITIES, blocked on data the container cannot fetch -- ask the owner for a bundle in the same shape as the crypto one; (2) building the short exit path (breakeven lock, trailing, partials) so the short side is judged with the same engine as the long side. (2) is a real change to a well-tested engine and should be a deliberate decision, not something done at the end of a long batch.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -632,5 +644,44 @@
   "theSharpPoint": "In 2025 the strategy beat a random entry by 0.27R. The campaign's own power analysis puts the smallest excess this test can detect at roughly 1.3-1.5R. In 2025 the strategy is not distinguishable from a coin flip.",
   "notAnArtefact": "Checked at stop widths of 4%, 6%, 10% and 15%. The level of the random-entry return moves; the year ordering never does.",
   "sideNote": "The efficiency ratio barely moved (0.171 to 0.146, a 17% range). What collapsed was the DIRECTION of the moves, not their straightness -- 2025-26 crypto was no choppier, it just stopped going up."
+ },
+ "shortSide": {
+  "fullPeriod": "Loses in all 99 configurations swept. Best $816.25, a 18.4% loss, at a 49.38% drawdown.",
+  "byYear": {
+   "2023": {
+    "trades": 110,
+    "meanR": -0.4981
+   },
+   "2024": {
+    "trades": 90,
+    "meanR": 0.3442
+   },
+   "2025": {
+    "trades": 156,
+    "meanR": 0.298
+   },
+   "2026": {
+    "trades": 36,
+    "meanR": -0.5164
+   }
+  },
+  "theInterestingPart": "Shorts are POSITIVE in 2024 and 2025 -- 2025 being exactly the year the long side collapsed to +0.21R. The two sides are complementary in time.",
+  "combined": {
+   "long only": {
+    "final": 16749.27,
+    "dd": 25.1
+   },
+   "long + short at 1% each": {
+    "final": 13671.65,
+    "dd": 40.59
+   },
+   "long + short at 0.5% each": {
+    "final": 4067.23,
+    "dd": 22.68
+   },
+   "verdict": "Combining makes it worse on both axes. The short side's 2023 losses (-0.50R over 110 trades) outweigh its 2024-25 gains."
+  },
+  "theHandicapThatMattersAndIsNotResolved": "The engine implements shorts for entryMode 'bos' only and on the base stop/target/timeout path alone -- no breakeven lock, no trailing stop, no partials. The long side's result depends materially on the breakeven lock (beTriggerR 3, chosen by the walk-forward in nine quarters of nine), so the short side is being judged with a worse exit engine than the long side. The measured gap is far too large for the lock to close (-18% against +1575%), so the conclusion 'shorts do not rescue this' stands -- but 'shorts do not work' is NOT established and would need the short exit path built first.",
+  "engineChange": "backtest.js's trend gate is now direction-aware. Both gate conditions describe an uptrend; applied unchanged to a short they permitted selling only into rising markets, which is worse than no gate at all. Two tests pin both directions."
  }
 }

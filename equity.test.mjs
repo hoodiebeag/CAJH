@@ -97,9 +97,20 @@ test("the volatility clamp stops a quiet pair sizing up without bound", () => {
   assert.equal(r.finalBalance, 1030, "clamped to 3x, not 40x");
 });
 
-test("volatility targeting refuses to run on trades that carry no volatility", () => {
+test("a whole run with no volatility data is a wiring failure and still throws", () => {
   assert.throws(() => simulateEquity([{ netR: 1, entryTime: 1 }], { volTarget: 0.04 }),
-    /needs atrPct on every trade/);
+    /wiring failure, not a warm-up edge case/);
+});
+
+test("a few trades entered before ATR exists are sized at base risk and counted, not refused", () => {
+  // The short side hits this: with no long moving-average gate holding entries back, a handful
+  // enter in the first bars of a series, before the ATR window has filled. Refusing the whole run
+  // over four trades in seven hundred would be wrong; hiding them would be worse.
+  const trades = Array.from({ length: 100 }, (_, i) => ({ netR: 0, entryTime: i + 1, atrPct: 0.05 }));
+  trades[0] = { netR: 0, entryTime: 0, atrPct: undefined };
+  const r = simulateEquity(trades, { volTarget: 0.05, startingBalance: 1000, riskPct: 0.01 });
+  assert.equal(r.unscaledForMissingVol, 1);
+  assert.equal(r.trades, 100, "nothing is dropped");
 });
 
 test("volTarget null reproduces the original sizing exactly", () => {

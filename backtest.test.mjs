@@ -813,3 +813,36 @@ test('stopMode "atr" throws for an entryMode that would ignore it', () => {
   assert.doesNotThrow(() => backtestMultiTF({ series }, { entryMode: "anticipate", stopMode: "atr" }));
   assert.doesNotThrow(() => backtestMultiTF({ series }, { entryMode: "breakout" }));
 });
+
+test("the trend gate is inverted for shorts -- an uninverted gate is worse than none", () => {
+  // Both gate conditions ("price above its MA", "higher highs and higher lows") describe an
+  // uptrend. Applied unchanged to a short they permit selling only into rising markets.
+  const bar = (t, px, hi = px, lo = px) => ({ time: t, open: px, high: hi, low: lo, close: px, volume: 1 });
+  const day = 86400;
+  // A clean downtrend with a pivot high partway through, so "bos" has a short candidate to take.
+  const candles = [];
+  for (let i = 0; i < 300; i++) {
+    const px = 500 - i;
+    candles.push(bar(i * day, px, px + (i === 200 ? 40 : 2), px - 2));
+  }
+  const opts = { entryMode: "bos", direction: "short", alignMode: "none", trendGateMode: "ma",
+                 trendMa: 50, minStopPct: 0, maxStopPct: 1, entryTf: "1440", lockBreakeven: false };
+  const series = [{ label: "1440", mins: 1440, candles }];
+  const gated = backtestMultiTF({ series }, { ...opts, trendGate: true });
+  const ungated = backtestMultiTF({ series }, { ...opts, trendGate: false });
+  // In a pure downtrend the inverted gate blocks nothing, so gated and ungated agree. An
+  // uninverted gate would have blocked every entry in exactly this market.
+  assert.equal(gated.trades, ungated.trades, "a downtrend must not be gated out of shorting");
+  assert.ok(gated.trades > 0, "the scenario has to produce short entries for the test to mean anything");
+});
+
+test("the trend gate still requires an uptrend for longs", () => {
+  const bar = (t, px, hi = px, lo = px) => ({ time: t, open: px, high: hi, low: lo, close: px, volume: 1 });
+  const day = 86400;
+  const falling = Array.from({ length: 300 }, (_, i) => bar(i * day, 500 - i, 500 - i + 2, 500 - i - 2));
+  const series = [{ label: "1440", mins: 1440, candles: falling }];
+  const opts = { entryMode: "bos", alignMode: "none", trendGateMode: "ma", trendMa: 50,
+                 minStopPct: 0, maxStopPct: 1, entryTf: "1440" };
+  assert.equal(backtestMultiTF({ series }, { ...opts, trendGate: true }).trades, 0,
+    "a long must not be admitted into a downtrend");
+});

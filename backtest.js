@@ -450,7 +450,10 @@ export function backtestMultiTF({ series } = {}, {
         const tg = trendGateMode === "structure"
           ? trendAsOf(tClose)     // 4h making higher highs AND higher lows
           : aboveMaAsOf(tClose);  // 4h close above its MA
-        if (!tg) { aligned = false; gateReason = "trendGate"; }
+        // Inverted for shorts. Both gate conditions describe an UPtrend, which is the state a long
+        // wants and the opposite of what a short wants -- an uninverted gate would have permitted
+        // shorts only into rising markets, which is worse than no gate at all.
+        if (direction === "short" ? tg : !tg) { aligned = false; gateReason = "trendGate"; }
       }
       const entry = C[k];
       const stop  = pivotHere.price;

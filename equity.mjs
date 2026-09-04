@@ -68,14 +68,24 @@ export function simulateEquity(trades, opts = {}) {
   // The clamp is not optional. A pair whose ATR is 0.2% of price would otherwise be sized twenty
   // times the base risk on the strength of one quiet week, which is how a volatility-targeted book
   // discovers that quiet and safe are different words.
+  let unscaledForMissingVol = 0;
   if (volTarget !== null) {
     if (!(volTarget > 0)) throw new Error("simulateEquity: volTarget must be positive when set");
     if (!(volClamp >= 1)) throw new Error("simulateEquity: volClamp must be at least 1");
-    const missing = rows.filter((row) => !(row.atrPct > 0)).length;
-    if (missing) throw new Error(`simulateEquity: volTarget needs atrPct on every trade; ${missing} of ${rows.length} have none`);
+    unscaledForMissingVol = rows.filter((row) => !(row.atrPct > 0)).length;
+    // A trade entered before its pair's ATR window has filled genuinely has no volatility to size
+    // against; on the short side a handful do, because no long moving-average gate is holding
+    // entries back from the first bars of a series. Those are sized at the base risk and COUNTED.
+    // A large fraction is a different thing entirely -- it means atrPct was never wired through --
+    // and that still throws, because silently sizing an entire run flat would be invisible.
+    const fraction = rows.length ? unscaledForMissingVol / rows.length : 0;
+    if (fraction > 0.05) {
+      throw new Error(`simulateEquity: volTarget is set but ${unscaledForMissingVol} of ${rows.length} trades `
+        + `(${(100 * fraction).toFixed(1)}%) carry no atrPct — that is a wiring failure, not a warm-up edge case`);
+    }
   }
   const weight = (row) => {
-    if (volTarget === null) return 1;
+    if (volTarget === null || !(row.atrPct > 0)) return 1;
     return Math.min(volClamp, Math.max(1 / volClamp, volTarget / row.atrPct));
   };
 
@@ -125,6 +135,7 @@ export function simulateEquity(trades, opts = {}) {
   return {
     startingBalance, finalBalance: balance, trades: rows.length,
     declinedForConcurrency: declined,
+    unscaledForMissingVol,
     peakConcurrent: maxConcurrent === null ? null : peakConcurrent,
     totalReturnPct: (balance / startingBalance - 1) * 100,
     cagrPct: years > 0 && balance > 0 ? ((balance / startingBalance) ** (1 / years) - 1) * 100 : null,
