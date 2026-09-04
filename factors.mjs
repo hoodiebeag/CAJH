@@ -175,6 +175,9 @@ export function testSignal(name, series, {
   const years = n / ppy;
   return {
     name, periods: n,
+    // The period returns and the two legs, so a caller can combine this signal's BOOK with another
+    // rather than only compare their summary statistics.
+    returns, top, bot, periodsPerYear: +ppy.toFixed(2),
     finalBalance: +bal.toFixed(2),
     cagrPct: +(((bal / 1000) ** (1 / years) - 1) * 100).toFixed(2),
     maxDrawdownPct: +(100 * maxDD).toFixed(2),

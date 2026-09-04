@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T14:40:30.608Z",
+  "updatedAt": "2026-09-04T14:44:18.565Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -1413,7 +1413,28 @@
       "what": "Pour all 157 symbols -- 29 crypto and 128 equities -- into one ranking and hold the top decile.",
       "result": "$1340, 7.1% CAGR, 34.1% drawdown -- worse than either class ranked on its own.",
       "why": "Momentum ranks on raw return, and crypto's return distribution is roughly 4x as wide. Crypto took 30% of the long slots while being 18% of the universe, so the book became a levered crypto bet wearing a diversification label. Ranking only compares like with like when the things compared have comparable dispersion.",
-      "fixNotAttempted": "Volatility-standardising the score before merging would plausibly repair this. It was not tested, and it introduces a free parameter."
+      "fixNotAttempted": "Volatility-standardising the score before merging would plausibly repair this. It was not tested, and it introduces a free parameter.",
+      "fixNowTested": {
+        "what": "The record said volatility-standardising the score before merging would plausibly repair the merge and that it had not been tested. It has now. One change only: rank by formation return divided by realised volatility over the same window. Everything else -- 252/21/21, the book, the costs, the null -- is unchanged, so the comparison isolates the standardisation.",
+        "results": {
+          "merged, raw return": {
+            "final": 1366.57,
+            "cagrPct": 11.2,
+            "maxDrawdownPct": 33.57,
+            "p": 0.001,
+            "cryptoShareOfLongSlots": "30.4%"
+          },
+          "merged, return / vol": {
+            "final": 1838.12,
+            "cagrPct": 22.9,
+            "maxDrawdownPct": 14.57,
+            "p": 0.001,
+            "cryptoShareOfLongSlots": "11.0%"
+          }
+        },
+        "reading": "The diagnosis was right and the untested fix works. Crypto's share of the long slots falls from 30.4% to 11.0% against a neutral 17.9%, the drawdown falls from 33.57% to 14.57%, and the CAGR doubles. Standardising by volatility does not merely reduce crypto's weight, it OVERSHOOTS past neutral -- risk-adjusted momentum prefers the steadier names, which is the low-volatility effect leaking into the ranking.",
+        "butItStillLoses": "Merged-and-standardised returns 22.9% at a 14.57% drawdown. Ranking within class and blending the books returns 29.4% at 12.36%. So the answer to 'one universe or two' is still two: standardisation repairs the merge from broken to respectable, and does not reach what keeping the rankings separate achieves."
+      }
     },
     "rankingWithinClassWORKS": {
       "construction": "Rank inside each class separately at the canonical 252/21/21, run each long-short spread, then combine the two BOOKS. The faster book (crypto, 17.39 rebalances a year) is compounded into the slower book's clock (equities, 11.92) so every period is used exactly once.",
@@ -1610,5 +1631,53 @@
     "effectOnSIGNIFICANCE": "Small, and in the safe direction. The null carries the same bug, and a random split turns over close to 100% against a ranked book's 25%, so the null received the LARGER spurious credit. Every p-value reported before this fix was therefore conservative, not flattering.",
     "effectOnLEVELS": "Large. The crypto spread falls from $3130 at 48.7% CAGR to $2623 at 39.9%, and its Sharpe from 1.79 to 1.50.",
     "crossCheckNowAgrees": "After the fix the two implementations differ by 5.96% on crypto and 1.32% on equities, and at zero slippage the crypto gap is 5.97% -- so the entire residual is the different warmup (252 bars against 273), which changes the rebalance dates and the holdings. The cost handling matches. Per-bar drawdowns agree to 22.63% and 22.63%, 13.34% and 13.34%."
+  },
+  "rebalanceFrequency": {
+    "question": "'Maximize the number of trades taken, while still being confident in their ability to win.' Rebalance frequency is the dial that sets trade count, and it is a cost question: crypto pays 1.6% round trip.",
+    "discipline": "The whole ladder is reported, never the best cell. 21 bars stays the pre-registered canonical choice whatever this shows.",
+    "crypto": {
+      "5 bars": {
+        "periods": 210,
+        "final": 2404.95,
+        "cagrPct": 35.7,
+        "maxDrawdownPct": 22.51,
+        "up": "106/210",
+        "p": 0.001
+      },
+      "10 bars": {
+        "periods": 105,
+        "final": 2736.86,
+        "cagrPct": 41.9,
+        "maxDrawdownPct": 22.11,
+        "up": "56/105",
+        "p": 0.001
+      },
+      "21 bars": {
+        "periods": 50,
+        "final": 2623.26,
+        "cagrPct": 39.9,
+        "maxDrawdownPct": 22.73,
+        "up": "30/50",
+        "p": 0.001
+      },
+      "42 bars": {
+        "periods": 25,
+        "final": 2194.47,
+        "cagrPct": 31.4,
+        "maxDrawdownPct": 23.69,
+        "up": "17/25",
+        "p": 0.002
+      },
+      "63 bars": {
+        "periods": 16,
+        "final": 2617.8,
+        "cagrPct": 41.7,
+        "maxDrawdownPct": 21.85,
+        "up": "11/16",
+        "p": 0.001
+      }
+    },
+    "cryptoReading": "Flat. Every rung returns 31-42% at p<=0.002 with a drawdown between 21.9% and 23.7%, across a twelvefold range of turnover, while paying 0.8% slippage a side. That is the opposite of the usual finding, where cost eats a fast rebalance -- and flatness across a parameter is stronger evidence the effect is real than any single rung's number. The practical consequence: crypto trade count can be raised roughly fourfold, from 2 a month to about 8, without visible damage to the edge. The variation from $2194 to $2737 across rungs is the noise floor, not a signal about which rung is best.",
+    "code": "frequency-run.mjs, which takes its trade counts from the real ledger rather than a bars-per-year formula -- that assumption has already been wrong once here."
   }
 }
