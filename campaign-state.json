@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T16:09:55.548Z",
+  "updatedAt": "2026-09-04T16:12:58.713Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2083,5 +2083,37 @@
     "whatItSaysAboutIdioVol": "idioVol fell too -- 56 to 26 to 26 -- so it is not immune to the equities regime. It fell LESS than momentum (54 to 9 to 17), which is exactly why the out-of-sample selection rule keeps choosing it. The rule is not finding an unaffected factor, it is finding the least affected one. And idioVol is negative in all THREE crypto slices (-7, -13, -31), which makes its crypto failure structural rather than one bad draw.",
     "honestly": "About ten periods per equities slice and sixteen to eighteen per crypto slice. A CAGR annualised from ten monthly returns is not a measurement, and neither is a Sharpe. Nothing here should be read cell by cell; the claim is about the shape across slices, which is consistent across six factors and therefore harder to explain by noise than any single cell.",
     "code": "subperiod-run.mjs"
+  },
+  "momentumCrashExposure": {
+    "whatCanAndCannotBeDone": "A momentum crash -- past losers rebounding violently off a market bottom while the book is short them -- did not occur in either asset class over 2023-2026. It cannot be tested here. What CAN be measured is the LOADING: whether the book carries the exposure a crash would act on.",
+    "equities": {
+      "upBeta": -0.51,
+      "upPeriods": 19,
+      "downBeta": 0.49,
+      "downPeriods": 12,
+      "fullSampleBeta": 0.02,
+      "reading": "The full-sample beta of 0.02 says market-neutral and HIDES the shape completely. Split by market direction the spread has a negative beta when the market rises and a positive beta when it falls -- it loses at both extremes. That is a concave, short-convexity payoff, and it is the same exposure a momentum crash acts on: the book is positioned against a strong market move in either direction, and a violent rebound is a strong move.",
+      "deepDrawdownPeriods": "Only 2 periods began with the equities basket 10% or more below its peak and only 1 at 20%. The deepest was 22.2%. There is essentially no bear-market observation in this universe.",
+      "worstPeriods": [
+        "2024-08-06  spread -10.5%, market -3.4%, market 2.3% below peak at the start",
+        "2025-03-10  spread  -7.1%, market -8.8%, market 1.0% below peak",
+        "2026-08-11  spread  -5.1%, market +2.7%, market at its peak",
+        "2025-01-06  spread  -5.0%, market -1.9%, market at its peak"
+      ]
+    },
+    "crypto": {
+      "upBeta": 0.04,
+      "upPeriods": 23,
+      "downBeta": -0.01,
+      "downPeriods": 27,
+      "fullSampleBeta": -0.01,
+      "reading": "Genuinely neutral, with no concavity. The betas are indistinguishable from zero in both directions, so the crypto book does not carry the loading the equities book does.",
+      "andItWasACTUALLYTESTED": "This is the one place in the campaign where a stress was observed rather than assumed. The crypto basket fell 71.7% from its peak, and 32 of 50 periods BEGAN with it 30% or more below peak. Through those periods the spread averaged +1.79% and was up in 20 of 32. The book was run through deep-drawdown conditions and held.",
+      "theOneCrashLIKEPeriod": "2026-01-18: spread -10.0% while the market rose 5.2% from 59.7% below its peak. That is the crash signature in miniature -- market up off a deep low, spread down hard -- and it is a single observation, so it is a warning rather than a measurement.",
+      "whyItIsSTILLNotACrashTest": "Crypto's drawdown was a long grind, not a V. The basket stayed 20%+ below peak for 36 of 50 periods rather than snapping back. A momentum crash needs the violent reversal, and this sample has one period that looks like one."
+    },
+    "honestly": "19 up and 12 down equities periods. Betas estimated from 12 observations have very wide errors and the -0.51 / +0.49 split should be read as a shape worth watching, not a measured coefficient. The claim being made is that the full-sample beta conceals a direction-dependent one, which is visible in both universes' numbers and is qualitatively opposite between them.",
+    "whatItMeansForTheDesk": "The desk's crypto sleeve has been stress-observed and its equities sleeve has not. The 20-month out-of-sample window contained no equities bear market at all. Any statement about the desk's drawdown in a real equity bear market is extrapolation, and should be labelled as such rather than inferred from a 10.65% in-sample figure.",
+    "code": "crash-run.mjs"
   }
 }
