@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T20:37:03.195Z",
+  "updatedAt": "2026-09-04T22:24:01.235Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2738,5 +2738,89 @@
       "whatToDo": "Hold the canonical decile, and now on evidence rather than convention. Twelve a side is not leaving money on the table -- it is the width at which the number computed is close to the number that would have been earned on a different but equally arbitrary universe. Concentrating further buys a larger point estimate and a much larger error bar, and the error bar grows faster.",
       "code": "concentration-run.mjs; factors-halves-run.mjs now takes topK as its second argument."
     }
+  },
+  "CORRUPTED_SYMBOL_INVALIDATES_THE_EQUITIES_RESULT": {
+    "severity": "This is the most consequential error of the campaign. It inverts the conclusion. Found while computing capacity for the live book -- the capacity table named PARA as the binding constraint at $0.4M/day, which is not a plausible figure for a then-S&P-500 company, and checking it rather than reporting it uncovered the rest.",
+    "whatPARAIs": "The sp500 bundle's PARA series carries closes from $1.07 to $113,900 -- a 106,449x range -- with 162 bars showing no volume at all. On 2024-04-25 it shows a close of $3,500 on nineteen shares; Paramount Global traded near $11 that day. Whatever instrument that series describes, it is not the company the ticker names.",
+    "whyItMattered": "A price path falling five orders of magnitude is the strongest possible loser, so a cross-sectional ranking shorts it every period. Momentum held PARA short in 31 of 32 rebalances. It was not a rounding error in the book -- it WAS the book.",
+    "inSampleDamage": {
+      "momentum": {
+        "withPARA": {
+          "cagrPct": 25,
+          "maxDrawdownPct": 13.55,
+          "sharpe": 1.19
+        },
+        "screened": {
+          "cagrPct": 9.1,
+          "maxDrawdownPct": 15.79,
+          "sharpe": 0.46
+        }
+      },
+      "idioVol": {
+        "withPARA": {
+          "cagrPct": 34.9,
+          "maxDrawdownPct": 11.53,
+          "sharpe": 2.17
+        },
+        "screened": {
+          "cagrPct": 13.1,
+          "maxDrawdownPct": 19.12,
+          "sharpe": 0.89
+        }
+      },
+      "pair5050": {
+        "withPARA": {
+          "cagrPct": 30.4,
+          "sharpe": 1.96
+        },
+        "screened": {
+          "cagrPct": 11.6,
+          "sharpe": 0.84
+        }
+      },
+      "note": "Return roughly a third of what was reported, and drawdowns WORSE rather than better -- the fake short was suppressing them too."
+    },
+    "outOfSampleDamage": {
+      "always momentum": {
+        "cagrPct": -0.7,
+        "maxDrawdownPct": 15.79,
+        "sharpe": -0.04,
+        "up": "8/20"
+      },
+      "equal weight all 14": {
+        "cagrPct": -2.6,
+        "maxDrawdownPct": 7.98,
+        "sharpe": -0.56,
+        "up": "8/20"
+      },
+      "fixed pair momentum+idioVol": {
+        "cagrPct": 2.3,
+        "maxDrawdownPct": 12.26,
+        "sharpe": 0.18,
+        "up": "8/20"
+      },
+      "fixed single idioVol": {
+        "cagrPct": 4,
+        "maxDrawdownPct": 19.12,
+        "sharpe": 0.26,
+        "up": "13/20"
+      },
+      "adaptive re-select": {
+        "cagrPct": 0.2,
+        "maxDrawdownPct": 22.25,
+        "sharpe": 0.01,
+        "up": "13/20"
+      },
+      "verdict": "THE EQUITIES LONG-SHORT HAS NO OUT-OF-SAMPLE EDGE. Every construction lands between -2.6% and +4.0% CAGR at a Sharpe of 0.26 or below over the last twenty months. The 16.9%/1.16 and 24.8%/1.36 figures reported earlier were PARA."
+    },
+    "whatSURVIVES": "Crypto, entirely unaffected -- the screen rejects nothing in candle-bundle or equity-bundle, and crypto's 51.0% out-of-sample at Sharpe 1.93 stands. So does every crypto finding: the frequency ladder, the cost stress, the stress-observation through a 71.7% drawdown, the concavity decomposition showing crypto symmetric where equities is not.",
+    "theINVERSION": "The campaign's position is now the exact opposite of what it was an hour ago. The book with a real, stress-observed, out-of-sample edge is CRYPTO, and the venue cannot short it. The book that can be traded is EQUITIES, and once the corrupted symbol is removed it has no out-of-sample edge. Both halves of that were reported the other way round earlier today and both were wrong.",
+    "whatIsNowInDoubt": [
+      "Every sp500-based number in this campaign: the 14-signal battery, the BH survivors, the disjoint-halves adjudication, the concentration ladder, the sub-period regime finding, the crash/concavity decomposition, the cost stress on equities, and the whole desk book's equities sleeve.",
+      "idioVol as a factor. Its status as the one genuine equities-only factor rested on numbers that included PARA. In sample on the screened universe it is 13.1% at Sharpe 0.89, still p=0.0010 against the null, so something is there -- but it is a different and much smaller claim, and out of sample it is 4.0% at 0.26.",
+      "The disjoint-halves dispersion figures, which were computed on the contaminated universe and would have had PARA in exactly one half."
+    ],
+    "theFIX": "universe.mjs screenUniverse(), applied before any ranking. Three blunt limits stated in advance rather than tuned: a close range above 500x, more than 20% of bars with no volume, or a median dollar volume under $100k. It rejects impossible DATA, not bad performance -- CHPT, SEDG, LCID and PLUG fell 26-59x in this window and all survive it. Eight tests, including one that pins the PARA case and one that pins a real 50x collapse being kept. Across all three bundles it rejects exactly one symbol.",
+    "theLESSON": "The campaign had seven bug-classes recorded and none of them was 'the input data is wrong'. Every check was on the arithmetic downstream of the data. A universe screen should have been the first thing built, not the twenty-ninth. And the tell was available all along: a 25% CAGR from a long-short book whose short leg holds the same name in 31 of 32 rebalances is not a cross-sectional strategy, it is one position."
   }
 }

@@ -15,6 +15,7 @@ import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { perYear, anchoredDrawdown } from "./xsmom.mjs";
 import { SIGNALS, testSignal } from "./factors.mjs";
 import { alignReturns, correlation, bookStats, blend, blendDrawdownPct } from "./portfolio.mjs";
+import { screenUniverse } from "./universe.mjs";
 
 const TEST_FROM = process.argv[2] ?? "2025-01-01";
 const TEST_TO = process.argv[3] ?? "2026-09-02";
@@ -26,7 +27,11 @@ const load = root => {
     const c = loadBundleCandles(p, 1440, root).filter(b => +b.time >= sec("2023-01-01") && +b.time <= sec(TEST_TO));
     if (c.length >= 400) o[p] = c;
   }
-  return o;
+  // PARA carried closes from $1.07 to $113,900 and was shorted in 31 of 32 rebalances, supplying
+  // two thirds of the equities book's return. Every universe is screened before it is ranked.
+  const { kept, rejected } = screenUniverse(o);
+  for (const [s, why] of rejected) console.log(`  screened out ${s}: ${why}`);
+  return kept;
 };
 // Bars strictly before a cutoff. The series is NOT truncated when TRADING -- a position's forward
 // return is not lookahead -- only when FITTING, which is the distinction a walk-forward once got
