@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T20:16:27.859Z",
+  "updatedAt": "2026-09-04T20:37:03.195Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2610,6 +2610,133 @@
       "theMACHINERYBarelyEarnsAnything": "Adaptive beats fixed-idioVol by 3.4 points of CAGR and 0.06 of Sharpe, at an IDENTICAL 11.53% drawdown and an identical 14/20 up-period count. The two books differ in exactly one quarter out of seven -- the first, where the rule picks lowVol. At n=20 the standard error on a Sharpe is about 0.42, so 1.36 against 1.30 is nothing at all. Essentially the whole of what looked like an adaptivity premium was the absence of the momentum half. The quarterly re-selection machinery does not earn its complexity, and the earlier claim that it did was an artifact of comparing it against the wrong baseline.",
       "whatTheTHREEWAYComparisonActuallyShows": "The pair has a MATERIALLY LOWER drawdown -- 9.05% against 11.53% -- at a lower return. So the momentum half is buying drawdown reduction rather than return, which is the classic diversification trade and is a real argument for keeping it. The choice is therefore not 'better vs worse' but 21.4% at 11.53% against 16.9% at 9.05%: a fifth more return for a quarter more drawdown. On risk-adjusted terms they are 1.30 against 1.16, which at this sample size is not a distinction.",
       "recommendation": "Fix the sleeve rather than re-select it, and hold the PAIR. The adaptivity is unpaid complexity; the momentum half is paid-for drawdown reduction and is also the only factor in this campaign that replicated across two asset classes and both disjoint halves, which is the insurance that matters if idioVol turns out to be a 2023-2026 artifact. This is a recommendation, not a measurement -- the return difference is real and the risk-adjusted difference is not resolvable at n=20."
+    },
+    "concentration": {
+      "question": "While the equities book was half a blended desk, topK was a parameter. As the whole live book it is a risk decision: too few names and the result is a handful of idiosyncratic bets, too many and the ranking dilutes toward a basket that returns 6.4%.",
+      "theLadder": {
+        "momentum": {
+          "6": {
+            "final": 2653.44,
+            "cagrPct": 45.5,
+            "maxDrawdownPct": 18.31,
+            "sharpe": 1.6,
+            "tradesPerMonth": 3.2,
+            "winRatePct": 44.6
+          },
+          "20": {
+            "final": 1431.71,
+            "cagrPct": 14.8,
+            "maxDrawdownPct": 11.05,
+            "sharpe": 0.94,
+            "tradesPerMonth": 9.1,
+            "winRatePct": 50.2
+          },
+          "32": {
+            "final": 1223.15,
+            "cagrPct": 8.1,
+            "maxDrawdownPct": 8.87,
+            "sharpe": 0.69,
+            "tradesPerMonth": 12.7,
+            "winRatePct": 49.1
+          },
+          "48": {
+            "final": 1111.75,
+            "cagrPct": 4.2,
+            "maxDrawdownPct": 8.23,
+            "sharpe": 0.5,
+            "tradesPerMonth": 15.7,
+            "winRatePct": 42.4
+          },
+          "3 (2.3% of universe)": {
+            "final": 8463.62,
+            "cagrPct": 127.3,
+            "maxDrawdownPct": 17.22,
+            "sharpe": 2.71,
+            "tradesPerMonth": 1.5,
+            "winRatePct": 58.3
+          },
+          "12 (canonical decile)": {
+            "final": 1785.63,
+            "cagrPct": 25,
+            "maxDrawdownPct": 13.55,
+            "sharpe": 1.19,
+            "tradesPerMonth": 5.8,
+            "winRatePct": 50.3
+          }
+        },
+        "idioVol": {
+          "3": {
+            "final": 7012.46,
+            "cagrPct": 111.5,
+            "maxDrawdownPct": 18.51,
+            "sharpe": 3.16,
+            "tradesPerMonth": 0.6,
+            "winRatePct": 80
+          },
+          "6": {
+            "final": 3389.16,
+            "cagrPct": 59.9,
+            "maxDrawdownPct": 16.62,
+            "sharpe": 2.59,
+            "tradesPerMonth": 1,
+            "winRatePct": 71.9
+          },
+          "12": {
+            "final": 2176.39,
+            "cagrPct": 34.9,
+            "maxDrawdownPct": 11.53,
+            "sharpe": 2.17,
+            "tradesPerMonth": 2.1,
+            "winRatePct": 60.6
+          },
+          "20": {
+            "final": 1570.02,
+            "cagrPct": 18.9,
+            "maxDrawdownPct": 11.38,
+            "sharpe": 1.5,
+            "tradesPerMonth": 4.1,
+            "winRatePct": 59.7
+          },
+          "32": {
+            "final": 1334.04,
+            "cagrPct": 11.7,
+            "maxDrawdownPct": 10.11,
+            "sharpe": 1.16,
+            "tradesPerMonth": 5.7,
+            "winRatePct": 51.4
+          },
+          "48": {
+            "final": 1208.13,
+            "cagrPct": 7.5,
+            "maxDrawdownPct": 7.25,
+            "sharpe": 1.05,
+            "tradesPerMonth": 6.4,
+            "winRatePct": 54.2
+          }
+        }
+      },
+      "theTemptingReading": "Return rises monotonically as the book concentrates -- 127.3% CAGR for momentum and 111.5% for idioVol at three names a side, against 25.0% and 34.9% at twelve. Sharpe rises too. It reads like free money for anyone willing to hold a concentrated book.",
+      "whyItIsNOTFreeMoney": "Two tells before any test. The p column reads 0.0025 at EVERY rung, which is 1/401 -- the floor with 400 draws -- so it discriminates nothing and must not be read as 'significant at every width'. And the trade counts collapse: idioVol at three names a side runs 0.6 trades a month, about nineteen trades in the whole window. A 111% CAGR computed from nineteen trades is not a measurement.",
+      "theTestThatSettlesIt": "Split the universe into disjoint halves and run the SAME signal in each. If the concentrated result is information it should appear in both; if it is noise amplification the two halves should disagree by more the tighter the book.",
+      "crossHalfDispersion": {
+        "note": "Ratio of the better half's final balance to the worse half's. Same signal, same period, same construction, differing only in which arbitrary half of the universe it was allowed to rank.",
+        "2 a side (~4 of 128)": {
+          "momentum": "6.6x  ($2203 vs $14580)",
+          "idioVol": "5.9x  ($2053 vs $12049)",
+          "nearHigh": "13.6x, and it FAILS one half at p=0.0825"
+        },
+        "5 a side (~10 of 128)": {
+          "momentum": "1.7x  ($1534 vs $2632)",
+          "idioVol": "2.5x  ($1484 vs $3744)"
+        },
+        "10 a side (~20 of 128)": {
+          "momentum": "1.2x  ($1262 vs $1546)",
+          "idioVol": "1.7x  ($1194 vs $1989)"
+        }
+      },
+      "verdict": "Monotone, and it settles the ladder. The SIGN replicates at every width -- momentum and idioVol clear p<0.05 in both halves at all three concentrations -- so the edge is real however tightly the book is held. The MAGNITUDE does not. At two names a side the same signal over the same period returns six times more in one arbitrary half of the universe than the other, so the 127% headline is one draw from a distribution six times wider than the number itself. At ten a side the two halves agree within 20%.",
+      "whatToDo": "Hold the canonical decile, and now on evidence rather than convention. Twelve a side is not leaving money on the table -- it is the width at which the number computed is close to the number that would have been earned on a different but equally arbitrary universe. Concentrating further buys a larger point estimate and a much larger error bar, and the error bar grows faster.",
+      "code": "concentration-run.mjs; factors-halves-run.mjs now takes topK as its second argument."
     }
   }
 }

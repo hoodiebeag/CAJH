@@ -30,7 +30,11 @@ for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i 
 const halves = [shuffled.slice(0, Math.floor(shuffled.length / 2)), shuffled.slice(Math.floor(shuffled.length / 2))];
 const sub = ks => Object.fromEntries(ks.map(k => [k, all[k]]));
 
-const TOPK = 5;   // half the universe, so half the book: 5 a side rather than 10.
+// Half the universe, so half the book: 5 a side rather than 10 by default. Overridable because the
+// concentration ladder found the edge rising monotonically as topK falls -- 127% CAGR at 3 names a
+// side against 25% at 12 -- and the only way to tell information from noise amplification at that
+// end is to ask whether the concentrated book replicates in both halves.
+const TOPK = Number(process.argv[3] ?? 5);
 const opts = { lookbackBars: 252, skipBars: 21, rebalanceBars: 21, topK: TOPK, slipPct: 0.0005 };
 const nulls = halves.map((h, i) => {
   const t0 = Date.now();
