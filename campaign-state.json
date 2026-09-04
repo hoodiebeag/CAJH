@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T13:59:45.042Z",
+  "updatedAt": "2026-09-04T14:21:20.618Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -1267,7 +1267,8 @@
       },
       "combinations": "All seven combinations underperform the baseline on both universes.",
       "reading": "A clean negative and worth as much as the positive. The canonical 1993 construction beat all three of my improvements on both universes. That is evidence the original is not a lucky parameterisation -- deviations from it in three independent directions all cost money."
-    }
+    },
+    "calendarBugCheck": "Checked against the same bug and CLEAN: this section's crypto CAGR of 36.03% on a $2430.28 final implies 2.886 years, which is the true span, so its year count was never the assumed n/12. Its 66.96% drawdown is a per-bar figure from the rotation curve, not a period-end mark."
   },
   "factorBattery": {
     "why": "'Test everything' and 'report an honest result' are in tension and the tension is arithmetic. Twelve signals at p<0.05 produce 0.6 false positives by expectation. Every signal is scored against the same null with the same machinery and corrected together with Benjamini-Hochberg.",
@@ -1331,7 +1332,9 @@
       },
       "note": "Combining lowers drawdown below either leg (7.47%) because the two are only 0.22 correlated. But idioVol is equities-only, so this combination is not available cross-asset."
     },
-    "caveatOnSharpe": "Sharpe 2.31 on 31 monthly observations has a standard error near 0.34. These are not precise numbers."
+    "caveatOnSharpe": "Sharpe 2.31 on 31 monthly observations has a standard error near 0.34. These are not precise numbers.",
+    "CALENDAR_BUG_AFFECTS_THE_CRYPTO_ROWS": "2026-09-04. Every crypto number in this section was produced by testSignal under the calendar bug described in crossAssetPortfolio.threeErrors.1: CAGR annualised on n/12 when crypto rebalances 17.39 times a year, and borrow charged 12 times a year instead of 17.39. Check the arithmetic on the headline: $3041.92 at '30.6% CAGR' implies 4.17 years, which is n/12; the sample is 2.87 years, so the true figure is about 47%. The final balances are also slightly understated by the over-charged borrow. The drawdowns are period-end marks and understate the real per-bar figure. The EQUITIES rows are unaffected -- 252/21 is 12, so the constant was right for them. Re-running at 3000 null draws with the fix; do not cite the crypto rows until that lands.",
+    "nullDrawFloorBeingRaised": "The 200-draw floor of p=0.0050 that five equities signals sat on is being replaced by a 3000-draw run (floor 0.00033). The null does not depend on the signal, so it is computed once and shared across the family -- which also makes explicit that every p-value in the family is read off the SAME null sample and is dependent by construction, not merely correlated through the data."
   },
   "crossAssetPortfolio": {
     "question": "The directive was to apply the strategy to every asset class and decide what works best for each. That has two readings and only one of them works.",
@@ -1342,77 +1345,115 @@
       "fixNotAttempted": "Volatility-standardising the score before merging would plausibly repair this. It was not tested, and it introduces a free parameter."
     },
     "rankingWithinClassWORKS": {
-      "construction": "Rank inside each class separately at the canonical 252/21/21, run each long-short spread, then combine the two BOOKS. Periods are matched by rebalance DATE within 40 days, not by index -- crypto trades weekends and the calendars do not line up.",
+      "construction": "Rank inside each class separately at the canonical 252/21/21, run each long-short spread, then combine the two BOOKS. The faster book (crypto, 17.39 rebalances a year) is compounded into the slower book's clock (equities, 11.92) so every period is used exactly once.",
       "alignedPeriods": 31,
-      "correlation": -0.005,
-      "correlationReading": "Essentially zero. Not a small positive number talked up as diversification -- the two momentum spreads share no measurable common factor over this window. That is the whole reason the combination helps.",
+      "cryptoPeriodsUsed": "45 of 50",
+      "correlation": -0.235,
+      "correlationReading": "Genuinely negative, not merely uncorrelated. That is what makes the drawdown reduction below real rather than arithmetic. It is also 31 observations, where the standard error on a correlation is about 0.18 -- so -0.235 is barely one standard error from zero and should be read as 'no positive dependence', not as reliable hedging.",
       "books": {
-        "crypto spread alone": {
-          "final": 2387.52,
-          "cagrPct": 40.1,
-          "maxDrawdownPct": 6.17,
-          "sharpe": 2.25,
-          "up": "21/31"
+        "crypto spread, all 50 periods": {
+          "final": 3130,
+          "cagrPct": 48.7,
+          "maxDrawdownPct": 22.73,
+          "sharpe": 1.79,
+          "up": "31/50"
         },
-        "equities spread alone": {
-          "final": 1798.22,
+        "equities spread, all 31 periods": {
+          "final": 1797.43,
+          "cagrPct": 25.3,
+          "maxDrawdownPct": 13.53,
+          "sharpe": 1.21,
+          "up": "19/31"
+        },
+        "crypto, overlap only": {
+          "final": 2483.02,
+          "cagrPct": 42.2,
+          "maxDrawdownPct": 28.63,
+          "sharpe": 1.73,
+          "up": "20/31"
+        },
+        "equities, overlap only": {
+          "final": 1797.43,
           "cagrPct": 25.5,
-          "maxDrawdownPct": 9.95,
+          "maxDrawdownPct": 13.53,
           "sharpe": 1.21,
           "up": "19/31"
         },
         "25/75": {
-          "final": 1957.35,
-          "cagrPct": 29.7,
-          "maxDrawdownPct": 6.63,
-          "sharpe": 1.79,
-          "up": "21/31"
-        },
-        "35/65": {
-          "final": 2019.48,
-          "cagrPct": 31.3,
-          "maxDrawdownPct": 6.55,
-          "sharpe": 2.06,
+          "final": 1993.41,
+          "cagrPct": 30.6,
+          "maxDrawdownPct": 11.12,
+          "sharpe": 1.94,
           "up": "22/31"
         },
+        "35/65": {
+          "final": 2068.59,
+          "cagrPct": 32.5,
+          "maxDrawdownPct": 10.27,
+          "sharpe": 2.24,
+          "up": "21/31"
+        },
         "50/50": {
-          "final": 2110.47,
-          "cagrPct": 33.5,
-          "maxDrawdownPct": 6.42,
-          "sharpe": 2.42,
+          "final": 2176.76,
+          "cagrPct": 35.1,
+          "maxDrawdownPct": 12.87,
+          "sharpe": 2.48,
           "up": "22/31"
         },
         "65/35": {
-          "final": 2198.3,
-          "cagrPct": 35.7,
-          "maxDrawdownPct": 6.3,
-          "sharpe": 2.6,
-          "up": "24/31"
+          "final": 2278.31,
+          "cagrPct": 37.5,
+          "maxDrawdownPct": 15.56,
+          "sharpe": 2.38,
+          "up": "20/31"
         },
         "75/25": {
-          "final": 2254.79,
-          "cagrPct": 37,
-          "maxDrawdownPct": 6.22,
-          "sharpe": 2.59,
-          "up": "25/31"
+          "final": 2341.76,
+          "cagrPct": 39,
+          "maxDrawdownPct": 17.31,
+          "sharpe": 2.2,
+          "up": "21/31"
         },
-        "inverse-vol (causal)": {
-          "final": 2166.59,
-          "cagrPct": 34.9,
-          "maxDrawdownPct": 6.35,
-          "sharpe": 2.48,
+        "inverse-vol, causal": {
+          "final": 2108.84,
+          "cagrPct": 33.5,
+          "maxDrawdownPct": 12.56,
+          "sharpe": 2.27,
           "up": "22/31"
         }
       },
-      "theHeadline": "The sweep peak at 65/35 is NOT the result -- a five-point sweep picking its own winner in sample is the trap this campaign has fallen into repeatedly. The result is the inverse-vol row: a weight chosen from volatility realised STRICTLY BEFORE each period, warmed up at 50/50 for six periods, with nothing fitted. It returns Sharpe 2.48 against 2.25 for the better leg and 1.21 for the worse one, and it cuts the equities book's drawdown from 9.95% to 6.35%. Diversification that survives being chosen blind is the only kind worth having.",
-      "drawdownAndHitRate": "Crypto alone already has the lowest drawdown at 6.17%; the combinations sit within half a point of it (6.22-6.63%) while cutting the equities leg's 9.95% by roughly a third. The win rate improves in every blend, from 21/31 and 19/31 for the legs to 22-25/31."
+      "theHeadline": "Not the sweep peak -- a five-point sweep picking its own winner in sample is the trap this campaign keeps falling into. The result is the inverse-vol row, whose weight comes from volatility realised STRICTLY BEFORE each period with a six-period 50/50 warmup and nothing fitted. It returns 33.5% CAGR at a 12.56% drawdown and Sharpe 2.27, against 48.7% at 22.73% (Sharpe 1.79) for crypto alone and 25.3% at 13.53% (Sharpe 1.21) for equities alone. It beats BOTH legs on Sharpe and has a lower drawdown than EITHER. That is the whole case: not a bigger number, a better-shaped one.",
+      "drawdownIsWhereTheDiversificationShows": "Every blend from 25/75 to 50/50 lands between 10.27% and 12.87% -- below the equities leg's 13.53% and roughly half the crypto leg's 22.73%. Returns interpolate between the legs; risk does not. That asymmetry is diversification, and it is the only part of this result that is large relative to its error bars."
     },
-    "arithmeticCorrectionMade": "The first pass combined the two books as a weighted sum of LOG returns. That is not any portfolio's return. A book rebalanced to fixed weights each period earns log(w*e^a + (1-w)*e^b), and by Jensen the weighted sum of logs is strictly smaller, so the first pass UNDERSTATED every combination (50/50 read $2072 rather than $2110). The fix improves the headline, which is the direction that deserves the most suspicion -- it stands because the definition is forced, not chosen: at w=1 it must reproduce book A exactly, and a +10%/-10% pair at 50/50 must be exactly flat. Both are asserted in portfolio.test.mjs.",
+    "arithmeticCorrectionMade": "A fourth, smaller one, found before the three above: the first pass combined the books as a weighted sum of LOG returns, which is no portfolio's return. A book rebalanced to fixed weights earns log(w*e^a + (1-w)*e^b), and by Jensen the weighted sum of logs is strictly smaller. Both forcing constraints are asserted in portfolio.test.mjs: at w=1 it must reproduce book A exactly, and +10%/-10% at 50/50 must be exactly flat.",
     "whatThisIsNot": [
-      "31 monthly observations. The standard error on a Sharpe ratio from 31 points is about 0.34, so 2.48 against 2.25 is well inside the noise. What is NOT inside the noise is the drawdown reduction against the equities leg and the near-zero correlation, both of which are structural rather than marginal.",
-      "One regime. 2023-2026 contained no momentum crash. The documented failure mode of this factor -- violent reversal off a market bottom -- is absent from the sample in BOTH asset classes, so the correlation of -0.005 has never been tested in the state where both books would be expected to break together.",
-      "Two asset classes, not 'every asset class'. Rates, commodities, FX and credit are untested for want of data. Carry, the factor that would most plausibly complement momentum, needs crypto funding rates that this container cannot fetch."
+      "31 observations. Standard error on a Sharpe is about 0.34 and on a correlation about 0.18, so 2.27 against 1.79 and -0.235 against 0 are both around one standard error. The drawdown halving is the part that is large relative to its error.",
+      "One regime. No momentum crash in either class over 2023-2026, so -0.235 has never been measured in the state where both books would be expected to break together.",
+      "Two asset classes, not 'every asset class'. Rates, commodities, FX and credit are untested for want of data. Carry needs crypto funding rates this container cannot fetch.",
+      "Reproducible from the first commit of this section. Three of its numbers were wrong; only the direction of the finding survived."
     ],
-    "code": "portfolio.mjs (alignReturns, correlation, bookStats, blend) with portfolio.test.mjs, 8 tests; portfolio-run.mjs reproduces the table above."
+    "code": "portfolio.mjs (alignReturns aggregating, correlation, bookStats, blend, blendDrawdownPct) with portfolio.test.mjs, 9 tests; xsmom.mjs perYear with 3 tests; portfolio-run.mjs reproduces the table.",
+    "CORRECTED": "2026-09-04. The table first recorded here was wrong in three independent ways, all found within an hour of committing it. The finding survives; none of its numbers did. See threeErrors below.",
+    "threeErrors": {
+      "1_calendar": {
+        "what": "spread(), randomSpreadNull(), testSignal() and walkForward() all divided an annual borrow rate by 12 and annualised CAGR on n/12, and walked per-bar borrow on 252 bars a year.",
+        "wrong": "True for US equities at a 21-bar rebalance. False for crypto, whose daily bundle carries 365 bars a year, so a 21-bar rebalance comes round 17.39 times a year, not 12.",
+        "effect": "Every crypto CAGR was computed over 4.17 years of a 2.87-year sample and was therefore UNDERSTATED, and borrow was charged about 40% too often. The crypto spread reads $3130 at 48.7% CAGR, not the $2387 at 40.1% first recorded.",
+        "fix": "perYear(timestamps) in xsmom.mjs derives periods-per-year and bars-per-year from the timestamps. No universe constant anywhere. Three tests, including one that pins the crypto and equity cases apart."
+      },
+      "2_alignment": {
+        "what": "alignReturns paired each equity month with the single most recent crypto period.",
+        "wrong": "Crypto rebalances 17.4 times a year against equities' 12, so taking one crypto period per equity month silently discarded roughly two of every five. The row labelled 'the crypto book' was a subsample of it.",
+        "effect": "THE CORRELATION WAS THE ARTIFACT. -0.005 -- the number the whole finding was built on -- becomes -0.235 once every crypto period is used. The conclusion holds and is better supported, but the headline figure was measurement noise from a subsample.",
+        "fix": "alignReturns now AGGREGATES: a faster book's periods are compounded into the slower book's clock, log returns adding over exactly the right window. It reports how many of the fast book's periods it consumed (45 of 50; 5 fall outside the equity span) so a future subsample cannot hide."
+      },
+      "3_drawdown": {
+        "what": "The portfolio table took drawdown from bookStats, which marks only at period ends.",
+        "wrong": "A period-end mark never sees an intra-period low. This is the THIRD time the same mistake has produced a number in this project -- it understated a spread's drawdown by 44% once already, and that fix did not generalise to the new code path.",
+        "effect": "The crypto spread's real per-bar drawdown is 22.73%, not the 6.17% recorded. Off by a factor of 3.7. Every blend row was similarly flattering.",
+        "fix": "blendDrawdownPct walks the union calendar per bar and re-anchors to the costed balance at EACH LEG'S OWN rebalances -- not just the blend's, or crypto's turnover goes uncharged inside most windows. Validated by agreement: at weight 0 it reproduces spread()'s independently-computed 13.53% for equities exactly."
+      }
+    },
+    "lessonForTheRecord": "All three errors shared a shape: a constant that was correct for the universe it was written against (12 periods, 252 bars, one period per month, a period-end mark) and silently wrong for the second universe it was then applied to. Crossing asset classes is exactly the operation that breaks such constants, and the code carried four of them into the crossing. Anything derived per-universe should be derived FROM the universe."
   }
 }

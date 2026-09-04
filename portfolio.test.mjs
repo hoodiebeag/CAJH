@@ -5,29 +5,45 @@ import { alignReturns, correlation, bookStats, blend } from "./portfolio.mjs";
 const DAY = 86400;
 const book = (returns, ts) => ({ returns, rebalanceLog: ts.map(at => ({ at })) });
 
-test("alignReturns matches by date, not by index", () => {
-  // A rebalances every 20 days, B every 30. Index i in one is not period i in the other.
-  const a = book([0.1, 0.2, 0.3], [0, 20 * DAY, 40 * DAY, 60 * DAY]);
-  const b = book([0.5, 0.6], [0, 30 * DAY, 60 * DAY]);
+test("alignReturns compounds every A period inside each B period", () => {
+  // A closes on days 10, 20, 30, 40, 50, 60; B on days 30 and 60. Each B period must absorb
+  // all three A periods that closed inside it, not just the last one.
+  const a = book([0.1, 0.2, 0.3, 0.4, 0.5, 0.6], [0, 10, 20, 30, 40, 50, 60].map(d => d * DAY));
+  const b = book([1.0, 2.0], [0, 30 * DAY, 60 * DAY]);
   const pairs = alignReturns(a, b);
   assert.equal(pairs.length, 2);
-  assert.equal(pairs[0].b, 0.5);
-  assert.equal(pairs[0].a, 0.1); // A's period ending day 20 is the last one at or before day 30
-  assert.equal(pairs[1].b, 0.6);
-  assert.equal(pairs[1].a, 0.3); // A's period ending day 60
+  assert.ok(Math.abs(pairs[0].a - (0.1 + 0.2 + 0.3)) < 1e-12);
+  assert.ok(Math.abs(pairs[1].a - (0.4 + 0.5 + 0.6)) < 1e-12);
+  assert.equal(pairs[0].aPeriods, 3);
+  assert.equal(pairs[0].b, 1.0);
+  assert.equal(pairs[1].b, 2.0);
 });
 
-test("alignReturns never pairs a B period with a LATER A period", () => {
+test("alignReturns uses every A period exactly once and reports the count", () => {
+  const a = book([0.1, 0.2, 0.3, 0.4], [0, 10, 20, 30, 40].map(d => d * DAY));
+  const b = book([1.0, 2.0], [0, 20 * DAY, 40 * DAY]);
+  const pairs = alignReturns(a, b);
+  assert.equal(pairs.aPeriodsUsed, 4);
+  assert.equal(pairs.aPeriodsTotal, 4);
+});
+
+test("alignReturns never pulls an A period from the future of its B period", () => {
+  // A's only close is day 90, well after B's period ends at day 30.
   const a = book([0.9], [0, 90 * DAY]);
   const b = book([0.1], [0, 30 * DAY]);
-  assert.deepEqual(alignReturns(a, b), []);
+  const pairs = alignReturns(a, b);
+  assert.deepEqual([...pairs], []);
+  assert.equal(pairs.aPeriodsUsed, 0);      // and the A period is reported as unused, not hidden
+  assert.equal(pairs.aPeriodsTotal, 1);
 });
 
-test("alignReturns drops matches staler than maxLagDays", () => {
-  const a = book([0.1], [0, 10 * DAY]);
-  const b = book([0.5], [0, 100 * DAY]);
-  assert.equal(alignReturns(b === a ? a : a, b, { maxLagDays: 40 }).length, 0);
-  assert.equal(alignReturns(a, b, { maxLagDays: 120 }).length, 1);
+test("alignReturns drops a B period that contains no A close", () => {
+  // A closes only in B's second period, so the first has nothing to pair with.
+  const a = book([0.5], [30 * DAY, 50 * DAY]);
+  const b = book([1.0, 2.0], [0, 40 * DAY, 60 * DAY]);
+  const pairs = alignReturns(a, b);
+  assert.equal(pairs.length, 1);
+  assert.equal(pairs[0].b, 2.0);
 });
 
 test("correlation is 1 for a series against itself and -1 against its negation", () => {

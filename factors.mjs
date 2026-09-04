@@ -27,7 +27,7 @@
  *   beta            sensitivity to the basket, the direct betting-against-beta test.
  */
 
-import { runRotation, randomSpreadNull, selectionP, spread } from "./xsmom.mjs";
+import { runRotation, randomSpreadNull, selectionP, spread, perYear } from "./xsmom.mjs";
 import { buildGrid, trailingVol } from "./multifactor.mjs";
 
 /** log return over [i-lookback, i-skip] */
@@ -123,6 +123,11 @@ export function basketReturns(grid, symbols, times) {
 /** Score one signal as a dollar-neutral long-short book, with its own random-split null. */
 export function testSignal(name, series, {
   rebalanceBars = 21, topK = 10, slipPct = 0.0005, borrow = 0.05, draws = 200, seed = 20260904,
+  // The random-split null does not depend on the signal, so a battery scoring twelve signals
+  // against it recomputes the identical draws twelve times. Pass one in to share it -- which also
+  // makes explicit that every p-value in the family is read off the SAME null sample, and so the
+  // family's p-values are dependent by construction, not merely correlated through the data.
+  nullResult = null,
 } = {}) {
   const fn = SIGNALS[name];
   if (!fn) throw new Error(`factors: unknown signal "${name}" (have: ${Object.keys(SIGNALS).join(", ")})`);
@@ -154,13 +159,15 @@ export function testSignal(name, series, {
   const n = Math.min(top.periodReturns.length, bot.periodReturns.length);
   if (n < 6) return { name, periods: n, insufficient: true };
   const returns = [];
-  for (let i = 0; i < n; i++) returns.push(0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i] - 0.5 * borrow / 12);
+  // Borrow is annual; divide by this universe's own rebalances per year, not by an assumed 12.
+  const ppy = perYear(top.rebalanceLog) ?? 12;
+  for (let i = 0; i < n; i++) returns.push(0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i] - 0.5 * borrow / ppy);
   let bal = 1000, peak = 1000, maxDD = 0;
   for (const r of returns) { bal *= Math.exp(r); peak = Math.max(peak, bal); maxDD = Math.max(maxDD, (peak - bal) / peak); }
 
-  const nul = randomSpreadNull(series, { ...opts, topK }, { draws, seed, borrow });
+  const nul = nullResult ?? randomSpreadNull(series, { ...opts, topK }, { draws, seed, borrow });
   const p = selectionP(nul, +bal.toFixed(2));
-  const years = n / 12;
+  const years = n / ppy;
   return {
     name, periods: n,
     finalBalance: +bal.toFixed(2),

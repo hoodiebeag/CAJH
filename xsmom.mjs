@@ -178,14 +178,34 @@ export function selectionP(nullResult, observedFinal) {
  * in whether borrow was charged on half the book or all of it. It is half: the short leg is half
  * the capital.
  */
+/**
+ * Periods (or bars) per year, measured from the timestamps rather than assumed.
+ *
+ * The earlier code hardcoded 12 periods and 252 bars a year, which is right for a 21-bar rebalance
+ * on US equities and wrong for crypto: crypto trades weekends, so its daily bundle carries 365
+ * bars a year and a 21-bar rebalance comes round 17.4 times, not 12. Everything downstream that
+ * divides an annual rate by a period count -- borrow, and the CAGR annualisation -- was therefore
+ * off by that factor on every crypto result. It is derived here so a universe's own calendar
+ * decides, and so a non-monthly rebalance is handled without a second constant.
+ */
+export function perYear(timestamps) {
+  if (!timestamps || timestamps.length < 2) return null;
+  const first = Number(timestamps[0].at ?? timestamps[0]);
+  const last = Number(timestamps[timestamps.length - 1].at ?? timestamps[timestamps.length - 1]);
+  const years = (last - first) / (365.25 * 86400);
+  return years > 0 ? (timestamps.length - 1) / years : null;
+}
+
 export function spread(series, opts = {}, { borrow = 0 } = {}) {
   const top = runRotation({ ...opts, series, pick: "top" });
   const bot = runRotation({ ...opts, series, pick: "bottom" });
   const n = Math.min(top.periodReturns.length, bot.periodReturns.length);
 
-  // Monthly returns, for the gate and the null, which reason per rebalance.
+  // Per-rebalance returns, for the gate and the null, which reason per rebalance. Borrow is an
+  // ANNUAL rate, so it is divided by this universe's own rebalances per year, not by 12.
+  const ppy = perYear(top.rebalanceLog) ?? 12;
   const returns = [];
-  for (let i = 0; i < n; i++) returns.push(0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i] - 0.5 * borrow / 12);
+  for (let i = 0; i < n; i++) returns.push(0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i] - 0.5 * borrow / ppy);
 
   // BALANCE comes from the monthly path, because that is where turnover and slippage are charged
   // -- taking it from the per-bar path silently dropped those costs and inflated the result by 9%.
@@ -196,7 +216,10 @@ export function spread(series, opts = {}, { borrow = 0 } = {}) {
   // never saw an intra-month low and understated this book's risk by 44% -- 10.09% against a real
   // 14.55%. Both paths end at the same balance; only the path between them differs.
   let peak = 1000, maxDD = 0, anchor = 1000;
-  const perBarBorrow = 0.5 * borrow / 252;
+  const perBarBorrow = 0.5 * borrow / (perYear(top.times) ?? 252);
+  // The spread's own per-bar return series, kept so callers that need an intra-period mark do not
+  // re-derive it and get the borrow or the halving wrong.
+  const barReturns = top.times.map((_, k) => 0.5 * top.barReturns[k] - 0.5 * bot.barReturns[k] - perBarBorrow);
   for (let m = 0; m < n; m++) {
     const lo = top.rebalanceLog[m]?.at, hi = top.rebalanceLog[m + 1]?.at;
     let sub = anchor;
@@ -204,7 +227,7 @@ export function spread(series, opts = {}, { borrow = 0 } = {}) {
       for (let k = 0; k < top.times.length; k++) {
         const t = top.times[k];
         if (t <= lo || t > hi) continue;
-        sub *= Math.exp(0.5 * top.barReturns[k] - 0.5 * bot.barReturns[k] - perBarBorrow);
+        sub *= Math.exp(barReturns[k]);
         peak = Math.max(peak, sub);
         maxDD = Math.max(maxDD, (peak - sub) / peak);
       }
@@ -213,9 +236,10 @@ export function spread(series, opts = {}, { borrow = 0 } = {}) {
     peak = Math.max(peak, anchor);
     maxDD = Math.max(maxDD, (peak - anchor) / peak);
   }
-  const years = n / 12;
+  const years = n / ppy;
   return {
-    returns, periods: n,
+    returns, periods: n, periodsPerYear: +ppy.toFixed(2),
+    times: top.times, barReturns,
     finalBalance: +bal.toFixed(2),
     cagrPct: years > 0 ? +(((bal / 1000) ** (1 / years) - 1) * 100).toFixed(2) : null,
     maxDrawdownPct: +(100 * maxDD).toFixed(2),
@@ -247,8 +271,9 @@ export function randomSpreadNull(series, opts = {}, { draws = 200, seed = 202609
     const a = runRotation({ ...opts, series, select: pickHalf("a") });
     const b = runRotation({ ...opts, series, select: pickHalf("b") });
     const n = Math.min(a.periodReturns.length, b.periodReturns.length);
+    const ppy = perYear(a.rebalanceLog) ?? 12;
     let bal = 1000;
-    for (let i = 0; i < n; i++) bal *= Math.exp(0.5 * a.periodReturns[i] - 0.5 * b.periodReturns[i] - 0.5 * borrow / 12);
+    for (let i = 0; i < n; i++) bal *= Math.exp(0.5 * a.periodReturns[i] - 0.5 * b.periodReturns[i] - 0.5 * borrow / ppy);
     finals.push(+bal.toFixed(2));
   }
   finals.sort((x, y) => x - y);

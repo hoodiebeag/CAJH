@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { formationReturn, runRotation, randomSelectionNull, selectionP, spread } from "./xsmom.mjs";
+import { formationReturn, runRotation, randomSelectionNull, selectionP, spread, perYear } from "./xsmom.mjs";
 
 const DAY = 86400;
 /** A symbol whose close follows `fn(i)`. */
@@ -116,4 +116,26 @@ test("runRotation exposes per-bar returns aligned to its calendar", () => {
     lookbackBars: 252, skipBars: 21, rebalanceBars: 21, topK: 1, slipPct: 0 });
   assert.equal(r.barReturns.length, r.times.length, "one return per calendar bar");
   assert.ok(r.barReturns.some((x) => x !== 0), "a held book must produce non-zero bar returns");
+});
+
+test("perYear reads the calendar off the timestamps instead of assuming one", () => {
+  const DAY = 86400;
+  // 21-bar rebalance on a 7-day-a-week market: 365/21 = 17.4 periods a year.
+  const crypto = Array.from({ length: 20 }, (_, i) => ({ at: i * 21 * DAY }));
+  assert.ok(Math.abs(perYear(crypto) - 365.25 / 21) < 0.01);
+  // The same rebalance on a 5-day week: 252/21 = 12.
+  const equity = Array.from({ length: 20 }, (_, i) => ({ at: Math.round(i * 21 * (365.25 / 252)) * DAY }));
+  assert.ok(Math.abs(perYear(equity) - 12) < 0.05);
+});
+
+test("perYear accepts bare timestamps as well as rebalance-log entries", () => {
+  const DAY = 86400;
+  const bare = Array.from({ length: 366 }, (_, i) => i * DAY);
+  assert.ok(Math.abs(perYear(bare) - 365.25) < 1);
+});
+
+test("perYear refuses to guess from too little, or from no elapsed time", () => {
+  assert.equal(perYear([]), null);
+  assert.equal(perYear([{ at: 0 }]), null);
+  assert.equal(perYear([{ at: 5 }, { at: 5 }]), null);   // zero span, not an infinite rate
 });

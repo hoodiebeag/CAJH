@@ -6,25 +6,37 @@
 // each ranking comparing like with like.
 //
 // The books do not rebalance on the same calendar (crypto trades weekends), so periods are
-// matched by DATE, not by index.
+// matched by DATE, and the faster book's periods are compounded into the slower book's clock.
 
-// Pair each book-B period with the most recent book-A period that closed at or before it.
-// Returns [{ at, a, b }] in book-B order. maxLagDays bounds how stale a match may be.
-export function alignReturns(a, b, { maxLagDays = 40 } = {}) {
-  const maxLag = maxLagDays * 86400;
+// Put book A on book B's clock by AGGREGATION, not by sampling.
+//
+// The first version of this picked, for each B period, the single most recent A period -- which
+// silently threw away every other A period. That is not a small approximation when the books
+// rebalance at different rates: crypto's daily bundle carries 365 bars a year against US equities'
+// 252, so a 21-bar rebalance comes round 17.4 times a year in crypto and 12 in equities, and
+// sampling one crypto period per equity month discarded roughly two of every five. The "crypto
+// book" it produced was a subsample of the crypto book.
+//
+// A's period j covers (aLog[j], aLog[j+1]] and is assigned to whichever B period contains its
+// close. Log returns add, so the aggregate is the compounded return over exactly that window.
+// Pass the FASTER book as `a`; A periods falling outside B's span are reported, not hidden.
+export function alignReturns(a, b) {
   const pairs = [];
+  let used = 0;
   for (let i = 0; i < b.returns.length; i++) {
-    const at = b.rebalanceLog[i + 1]?.at;
-    if (at === undefined) continue;
-    let best = null, bestLag = Infinity;
+    const lo = b.rebalanceLog[i]?.at, hi = b.rebalanceLog[i + 1]?.at;
+    if (lo === undefined || hi === undefined) continue;
+    let sum = 0, count = 0;
     for (let j = 0; j < a.returns.length; j++) {
       const t = a.rebalanceLog[j + 1]?.at;
-      if (t === undefined) continue;
-      const lag = at - t;
-      if (lag >= 0 && lag < bestLag) { bestLag = lag; best = j; }
+      if (t !== undefined && t > lo && t <= hi) { sum += a.returns[j]; count++; }
     }
-    if (best !== null && bestLag <= maxLag) pairs.push({ at, a: a.returns[best], b: b.returns[i] });
+    if (count === 0) continue;                 // no A period closed inside this B period
+    used += count;
+    pairs.push({ from: lo, at: hi, a: sum, b: b.returns[i], aPeriods: count });
   }
+  pairs.aPeriodsUsed = used;
+  pairs.aPeriodsTotal = a.returns.length;
   return pairs;
 }
 
@@ -70,4 +82,69 @@ export function bookStats(returns, { start = 1000, periodsPerYear = 12 } = {}) {
 export function blend(pairs, weightA) {
   const wb = 1 - weightA;
   return pairs.map(p => Math.log(weightA * Math.exp(p.a) + wb * Math.exp(p.b)));
+}
+
+/**
+ * Max drawdown of a blend, marked PER BAR, with each leg anchored on its OWN rebalance calendar.
+ *
+ * Three things all have to be right here and the obvious implementation gets two of them wrong.
+ *
+ * Marking at period ends never sees an intra-period low; doing that once understated a spread's
+ * drawdown by 44%. So the walk is per bar.
+ *
+ * A per-bar walk drifts away from the costed path, because turnover and slippage are charged per
+ * rebalance and the bar returns do not carry them. So the walk is re-anchored to the costed
+ * balance at every rebalance -- and crucially at each leg's own rebalances, not just the blend's:
+ * crypto turns over 17.4 times a year against equities' 12, and anchoring only on the equity
+ * calendar leaves a crypto rebalance uncosted inside most windows.
+ *
+ * The two legs trade different calendars. On a day the equity market is shut only the crypto leg
+ * moves, so a missing bar means "did not move", not "went to zero".
+ *
+ * The blend itself is rebalanced back to weightA at each blended period close, which is what
+ * `blend` assumes. weightA may be a single number, or one weight per period for a rule whose
+ * weight moves -- the causal inverse-volatility rule, say.
+ */
+export function blendDrawdownPct(legA, legB, pairs, weightA) {
+  if (!pairs.length) return null;
+  const wAt = i => (Array.isArray(weightA) ? weightA[Math.min(i, weightA.length - 1)] : weightA);
+  const costedByDate = leg => {
+    const m = new Map();
+    for (let i = 0; i < leg.returns.length; i++) {
+      const at = leg.top.rebalanceLog[i + 1]?.at;
+      if (at !== undefined) m.set(Number(at), leg.returns[i]);
+    }
+    return m;
+  };
+  const barsByDate = leg => {
+    const m = new Map();
+    leg.times.forEach((t, k) => m.set(Number(t), leg.barReturns[k]));
+    return m;
+  };
+  const [costA, costB] = [costedByDate(legA), costedByDate(legB)];
+  const [barA, barB] = [barsByDate(legA), barsByDate(legB)];
+  const blendAt = new Map(pairs.map((p, i) => [Number(p.at), i]));
+  const start = Number(pairs[0].from), end = Number(pairs[pairs.length - 1].at);
+  const dates = [...new Set([...barA.keys(), ...barB.keys(), ...blendAt.keys()])]
+    .filter(t => t > start && t <= end).sort((x, y) => x - y);
+
+  let capA = wAt(0) * 1000, capB = (1 - wAt(0)) * 1000;
+  let anchorA = capA, anchorB = capB;
+  let peak = 1000, maxDD = 0;
+  for (const t of dates) {
+    capA *= Math.exp(barA.get(t) ?? 0);
+    capB *= Math.exp(barB.get(t) ?? 0);
+    if (costA.has(t)) { capA = anchorA * Math.exp(costA.get(t)); anchorA = capA; }
+    if (costB.has(t)) { capB = anchorB * Math.exp(costB.get(t)); anchorB = capB; }
+    if (blendAt.has(t)) {
+      const w = wAt(blendAt.get(t) + 1);          // the weight in force for the NEXT period
+      const total = capA + capB;
+      capA = w * total; capB = (1 - w) * total;
+      anchorA = capA; anchorB = capB;
+    }
+    const total = capA + capB;
+    peak = Math.max(peak, total);
+    maxDD = Math.max(maxDD, (peak - total) / peak);
+  }
+  return +(100 * maxDD).toFixed(2);
 }
