@@ -213,8 +213,14 @@ export function backtestMultiTF({ series } = {}, {
     if (entryMode !== "bos") {
       throw new Error(`backtestMultiTF: direction "short" is only implemented for entryMode "bos" — every other entryMode's candidate generator is long-only (SHORT-SIDE-ENGINE-CAPABILITY)`);
     }
-    if (trailR || partialAtR || trailingTpPct || lockBreakeven || exitOnSwingHigh || requireHigherLow || minRoomR) {
-      throw new Error(`backtestMultiTF: direction "short" only supports the base stop/target/timeout exit path — trailR, partialAtR, trailingTpPct, lockBreakeven, exitOnSwingHigh, requireHigherLow, and minRoomR are not yet implemented for shorts (SHORT-SIDE-ENGINE-CAPABILITY)`);
+    // SHORT-SIDE-ENGINE-CAPABILITY. The EXIT path is now fully mirrored -- trailR, partialAtR,
+    // trailingTpPct, lockBreakeven and exitOnSwingHigh all work for shorts. What remains long-only
+    // is the two ENTRY-side conditions, and they are genuinely unwritten rather than merely
+    // untested: requireHigherLow asks for a rising sequence of swing lows, whose mirror is a
+    // falling sequence of swing highs, and minRoomR measures clear air ABOVE entry using
+    // nearestResAbove, whose mirror needs a nearestSupportBelow that does not exist.
+    if (requireHigherLow || minRoomR) {
+      throw new Error(`backtestMultiTF: direction "short" does not implement requireHigherLow or minRoomR — both are entry-side conditions written against a long's structure and their mirrors do not exist yet (SHORT-SIDE-ENGINE-CAPABILITY)`);
     }
   }
   // `series` = timeframes ascending, e.g. [{label:"1h",mins:60,candles},{label:"4h",...},{label:"1d",...}].
@@ -703,9 +709,29 @@ export function backtestMultiTF({ series } = {}, {
       // BELOW entry and triggers on the bar's LOW — the mirror of a long's low-triggers-stop,
       // high-triggers-target (SHORT-SIDE-ENGINE-CAPABILITY). Same-bar ambiguity still
       // resolves to the stop first, for the same conservative reason as the long path.
+      // SHORT-SIDE-ENGINE-CAPABILITY. Every exit below is now mirrored rather than long-only, so
+      // the two sides are judged by the same machinery. Four quantities flip, and they are named
+      // once here so each block can be read as the single expression it is:
+      //
+      //   sign      +1 long, -1 short. "Favourable" is entry + sign*distance.
+      //   best      the best price reached since entry: the running HIGH for a long, the running
+      //             LOW for a short. Both start at the entry price and only ever improve.
+      //   favours   did this bar reach a favourable price? the high for a long, the low for a short.
+      //   tighten   a stop may only ever move toward the entry side: max() for a long (upward),
+      //             min() for a short (downward). Using the wrong one would silently LOOSEN a stop.
+      const sign = isShort ? -1 : 1;
+      const favours = isShort ? lo : hi;
+      const tighten = (a, b) => (isShort ? Math.min(a, b) : Math.max(a, b));
+      const reached = (px) => (isShort ? lo <= px : hi >= px);
+
       if (isShort) {
         if (hi >= pos.stop) closeLeg(pos.stop, pos.open, pos.beMoved || pos.trailing ? "trail/be" : "stop");
-        else if (lo <= pos.tp) closeLeg(pos.tp, pos.open, "target");
+        else if (!trailingTpPct && lo <= pos.tp) closeLeg(pos.tp, pos.open, "target");
+        else if (trailingTpPct && pos.peak < pos.entry) {
+          // Mirror of the long's pullback-from-peak: a short exits on a BOUNCE from the trough.
+          const bouncePx = pos.peak * (1 + trailingTpPct);
+          if (hi >= bouncePx) closeLeg(bouncePx, pos.open, "trailingTp");
+        }
       } else {
         if (lo <= pos.stop) closeLeg(pos.stop, pos.open, pos.beMoved || pos.trailing ? "trail/be" : "stop");
         else if (!trailingTpPct && hi >= pos.tp) closeLeg(pos.tp, pos.open, "target");
@@ -717,39 +743,43 @@ export function backtestMultiTF({ series } = {}, {
 
       // Partial scale-out: bank `partialFrac` at the partial target, let the rest run.
       if (pos && partialAtR && !pos.partialDone) {
-        const px = pos.entry + partialAtR * pos.risk;
-        if (hi >= px) {
+        const px = pos.entry + sign * partialAtR * pos.risk;
+        if (reached(px)) {
           pos.partialDone = true;
           closeLeg(px, partialFrac, "partial+runner");
         }
       }
 
-      // Trailing stop: once price has run trailStartR, keep the stop trailR below the
-      // running peak. Updated after the stop check, so it only binds on later candles.
+      // Trailing stop: once price has run trailStartR in the favourable direction, keep the stop
+      // trailR behind the best price reached. Updated after the stop check, so it only binds on
+      // later candles.
       if (pos && trailR) {
-        pos.peak = Math.max(pos.peak, hi);
-        if (pos.peak >= pos.entry + trailStartR * pos.risk) {
-          pos.stop = Math.max(pos.stop, pos.peak - trailR * pos.risk);
+        pos.peak = tighten(pos.peak, favours);
+        const armedAt = pos.entry + sign * trailStartR * pos.risk;
+        if (isShort ? pos.peak <= armedAt : pos.peak >= armedAt) {
+          pos.stop = tighten(pos.stop, pos.peak + sign * trailR * pos.risk);
           pos.trailing = true;
         }
       }
 
-      // Trailing take-profit: extend the running peak for the next candle's pullback
-      // check above. Updated after that check, so it only binds on later candles.
-      if (pos && trailingTpPct) pos.peak = Math.max(pos.peak, hi);
+      // Trailing take-profit: extend the best price for the next candle's reversal check above.
+      // Updated after that check, so it only binds on later candles.
+      if (pos && trailingTpPct) pos.peak = tighten(pos.peak, favours);
 
-      // Breakeven-plus: once this candle's high reaches the trigger, lift the stop
-      // above entry for subsequent candles.
+      // Breakeven-plus: once this candle reaches the trigger, move the stop past entry on the
+      // profitable side for subsequent candles.
       if (pos && lockBreakeven && !pos.beMoved) {
         const lockOffset = Math.max(beLockR * pos.risk, feeBufferPct * pos.entry);
         const armOffset  = Math.max(beTriggerR * pos.risk, lockOffset + 0.5 * pos.risk);
-        if (hi >= pos.entry + armOffset) {
-          pos.stop = Math.max(pos.stop, pos.entry + lockOffset);
+        if (reached(pos.entry + sign * armOffset)) {
+          pos.stop = tighten(pos.stop, pos.entry + sign * lockOffset);
           pos.beMoved = true;
         }
       }
-      // Structure-based take-profit: a swing high confirmed here, while in profit.
-      if (pos && exitOnSwingHigh && highAt.has(k) && C[k] > pos.entry) closeLeg(C[k], pos.open, "swingHigh");
+      // Structure-based take-profit while in profit: a confirmed swing HIGH ends a long, a
+      // confirmed swing LOW ends a short.
+      if (pos && exitOnSwingHigh && (isShort ? lowAt.has(k) : highAt.has(k))
+          && (isShort ? C[k] < pos.entry : C[k] > pos.entry)) closeLeg(C[k], pos.open, "swingHigh");
       // trailingTpPct holds the position indefinitely (stop or pullback only) — no timeout.
       if (pos && !trailingTpPct && k - pos.openedAt >= maxHold) closeLeg(C[k], pos.open, "timeout");
     }

@@ -9,9 +9,9 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T04:35:00Z",
- "phase": "grid-size ladder, corrected; an earlier claim walked back",
- "runsTested": 2374,
+ "updatedAt": "2026-09-04T05:05:00Z",
+ "phase": "short exit path built; the short side loses with the same engine as the long side",
+ "runsTested": 2446,
  "base": {
   "trendGate": false,
   "alignMode": "none",
@@ -243,6 +243,12 @@
    "axis": "never-offered components, screened for inertness",
    "configs": 48,
    "result": "chopFilter, requireHigherLow and minRoomR are ALL inert for breakout -- flagged automatically by sweep.mjs's inertAxes. Only trendGateMode and exitOnSwingHigh bind. Three more silent no-ops, bringing the total found to eight."
+  },
+  {
+   "phase": "sweep29",
+   "axis": "short side with the full exit engine",
+   "configs": 72,
+   "result": "Still loses in all 72 configurations. Best $816.25, a 18.4% loss, at a 49.38% drawdown -- identical to the best result before the exit engine was built. And lockBreakeven FALSE tops the table: the breakeven lock, which is worth a great deal on the long side, does nothing for the short side here."
   }
  ],
  "leader": {
@@ -304,7 +310,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "The methodology questions are answered as far as this data can answer them, and the last four batches have produced bugs, corrections and negative results rather than a bigger number -- which is what an exhausted search looks like. The two things that would change that are both the owner's call: EQUITIES data, and building the short exit path.",
+ "nextUp": "EQUITIES. The short path is built and tested, the format spec has been given to the owner (candle-bundle/1440/<SYMBOL>.csv, six columns, unix seconds), and nothing else in the crypto data will move the number. When a bundle arrives: run benchmark.mjs and robustness.mjs first to see what buy-and-hold and the existing leader do there, then walkforward.mjs with an eight-point grid -- the corrected ladder's optimum -- and only then start sweeping.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -768,6 +774,9 @@
    "verdict": "Combining makes it worse on both axes. The short side's 2023 losses (-0.50R over 110 trades) outweigh its 2024-25 gains."
   },
   "theHandicapThatMattersAndIsNotResolved": "The engine implements shorts for entryMode 'bos' only and on the base stop/target/timeout path alone -- no breakeven lock, no trailing stop, no partials. The long side's result depends materially on the breakeven lock (beTriggerR 3, chosen by the walk-forward in nine quarters of nine), so the short side is being judged with a worse exit engine than the long side. The measured gap is far too large for the lock to close (-18% against +1575%), so the conclusion 'shorts do not rescue this' stands -- but 'shorts do not work' is NOT established and would need the short exit path built first.",
-  "engineChange": "backtest.js's trend gate is now direction-aware. Both gate conditions describe an uptrend; applied unchanged to a short they permitted selling only into rising markets, which is worse than no gate at all. Two tests pin both directions."
+  "engineChange": "backtest.js's trend gate is now direction-aware. Both gate conditions describe an uptrend; applied unchanged to a short they permitted selling only into rising markets, which is worse than no gate at all. Two tests pin both directions.",
+  "engineNowComplete": "trailR, trailStartR, partialAtR, partialFrac, trailingTpPct, lockBreakeven and exitOnSwingHigh are all mirrored for shorts. Only two ENTRY-side conditions remain long-only and they are genuinely unwritten rather than untested: requireHigherLow (a rising sequence of swing lows) and minRoomR (clear air above entry, measured by a nearestResAbove with no nearestSupportBelow counterpart).",
+  "verdictUpgraded": "Previously recorded as 'shorts do not rescue this, but shorts do not work is NOT established' because the short side was being judged with a worse exit engine. It is now judged with the same one and the answer does not move: the short side loses on this data. The handicap was not the explanation.",
+  "whyItStillMattered": "The engine capability is the deliverable. The owner wants the short path for EQUITIES, where a two-sided book is the normal construction rather than an afterthought."
  }
 }
