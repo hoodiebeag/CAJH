@@ -27,7 +27,7 @@
  *   beta            sensitivity to the basket, the direct betting-against-beta test.
  */
 
-import { runRotation, randomSpreadNull, selectionP, spread, perYear } from "./xsmom.mjs";
+import { runRotation, randomSpreadNull, selectionP, spread, perYear, anchoredDrawdown } from "./xsmom.mjs";
 import { buildGrid, trailingVol } from "./multifactor.mjs";
 
 /** log return over [i-lookback, i-skip] */
@@ -167,20 +167,27 @@ export function testSignal(name, series, {
     returns.push(0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i]
                  + (bot.periodCosts[i] ?? 0) - 0.5 * borrow / ppy);
   }
-  let bal = 1000, peak = 1000, maxDD = 0;
-  for (const r of returns) { bal *= Math.exp(r); peak = Math.max(peak, bal); maxDD = Math.max(maxDD, (peak - bal) / peak); }
+  let bal = 1000;
+  for (const r of returns) bal *= Math.exp(r);
 
   const nul = nullResult ?? randomSpreadNull(series, { ...opts, topK }, { draws, seed, borrow });
   const p = selectionP(nul, +bal.toFixed(2));
   const years = n / ppy;
+  // The spread's own per-bar series, built exactly as spread() builds it, so a caller can mark this
+  // signal's book intra-period instead of only at period ends.
+  const perBarBorrow = 0.5 * borrow / (perYear(top.times) ?? 252);
+  const barReturns = top.times.map((_, k) => 0.5 * top.barReturns[k] - 0.5 * bot.barReturns[k] - perBarBorrow);
+  // Per-bar and anchored, the same way spread() does it. The period-end mark this replaced never
+  // saw an intra-period low and understated every drawdown the battery reported.
+  const maxDD = anchoredDrawdown(returns, barReturns, top.times, top.rebalanceLog);
   return {
     name, periods: n,
-    // The period returns and the two legs, so a caller can combine this signal's BOOK with another
-    // rather than only compare their summary statistics.
-    returns, top, bot, periodsPerYear: +ppy.toFixed(2),
+    // The period returns, the two legs and the per-bar path, so a caller can combine this signal's
+    // BOOK with another rather than only compare their summary statistics.
+    returns, top, bot, periodsPerYear: +ppy.toFixed(2), times: top.times, barReturns,
     finalBalance: +bal.toFixed(2),
     cagrPct: +(((bal / 1000) ** (1 / years) - 1) * 100).toFixed(2),
-    maxDrawdownPct: +(100 * maxDD).toFixed(2),
+    maxDrawdownPct: maxDD,
     upPeriods: returns.filter((r) => r > 0).length,
     nullMedian: nul.median, p,
   };

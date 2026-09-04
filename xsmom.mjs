@@ -209,6 +209,36 @@ export function perYear(timestamps) {
   return years > 0 ? (timestamps.length - 1) / years : null;
 }
 
+/**
+ * Max drawdown of a book whose BALANCE comes from a costed per-period path but whose PATH between
+ * those points is per bar. Marking only at period ends never sees an intra-period low and
+ * understated one spread's drawdown by 44%; walking the bars alone drops the turnover charged at
+ * each rebalance. So the bars are walked and re-anchored to the costed balance every period.
+ *
+ * Returned as a percentage. Shared rather than reimplemented: the two copies of this walk that
+ * existed drifted, and the battery's copy was a period-end mark that understated every drawdown.
+ */
+export function anchoredDrawdown(periodReturns, barReturns, times, rebalanceLog) {
+  let peak = 1000, maxDD = 0, anchor = 1000;
+  for (let m = 0; m < periodReturns.length; m++) {
+    const lo = rebalanceLog[m]?.at, hi = rebalanceLog[m + 1]?.at;
+    let sub = anchor;
+    if (lo && hi) {
+      for (let k = 0; k < times.length; k++) {
+        const t = times[k];
+        if (t <= lo || t > hi) continue;
+        sub *= Math.exp(barReturns[k]);
+        peak = Math.max(peak, sub);
+        maxDD = Math.max(maxDD, (peak - sub) / peak);
+      }
+    }
+    anchor *= Math.exp(periodReturns[m]);      // re-anchor on the costed per-period balance
+    peak = Math.max(peak, anchor);
+    maxDD = Math.max(maxDD, (peak - anchor) / peak);
+  }
+  return +(100 * maxDD).toFixed(2);
+}
+
 export function spread(series, opts = {}, { borrow = 0 } = {}) {
   const top = runRotation({ ...opts, series, pick: "top" });
   const bot = runRotation({ ...opts, series, pick: "bottom" });
@@ -237,34 +267,18 @@ export function spread(series, opts = {}, { borrow = 0 } = {}) {
   // DRAWDOWN comes from a per-bar walk anchored to those monthly balances. Measuring it monthly
   // never saw an intra-month low and understated this book's risk by 44% -- 10.09% against a real
   // 14.55%. Both paths end at the same balance; only the path between them differs.
-  let peak = 1000, maxDD = 0, anchor = 1000;
   const perBarBorrow = 0.5 * borrow / (perYear(top.times) ?? 252);
   // The spread's own per-bar return series, kept so callers that need an intra-period mark do not
   // re-derive it and get the borrow or the halving wrong.
   const barReturns = top.times.map((_, k) => 0.5 * top.barReturns[k] - 0.5 * bot.barReturns[k] - perBarBorrow);
-  for (let m = 0; m < n; m++) {
-    const lo = top.rebalanceLog[m]?.at, hi = top.rebalanceLog[m + 1]?.at;
-    let sub = anchor;
-    if (lo && hi) {
-      for (let k = 0; k < top.times.length; k++) {
-        const t = top.times[k];
-        if (t <= lo || t > hi) continue;
-        sub *= Math.exp(barReturns[k]);
-        peak = Math.max(peak, sub);
-        maxDD = Math.max(maxDD, (peak - sub) / peak);
-      }
-    }
-    anchor *= Math.exp(returns[m]);          // re-anchor on the costed monthly balance
-    peak = Math.max(peak, anchor);
-    maxDD = Math.max(maxDD, (peak - anchor) / peak);
-  }
+  const maxDD = anchoredDrawdown(returns, barReturns, top.times, top.rebalanceLog);
   const years = n / ppy;
   return {
     returns, periods: n, periodsPerYear: +ppy.toFixed(2),
     times: top.times, barReturns,
     finalBalance: +bal.toFixed(2),
     cagrPct: years > 0 ? +(((bal / 1000) ** (1 / years) - 1) * 100).toFixed(2) : null,
-    maxDrawdownPct: +(100 * maxDD).toFixed(2),
+    maxDrawdownPct: maxDD,
     upPeriods: returns.filter((r) => r > 0).length,
     top, bot,
   };

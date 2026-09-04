@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T14:44:18.565Z",
+  "updatedAt": "2026-09-04T14:47:23.692Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -1679,5 +1679,82 @@
     },
     "cryptoReading": "Flat. Every rung returns 31-42% at p<=0.002 with a drawdown between 21.9% and 23.7%, across a twelvefold range of turnover, while paying 0.8% slippage a side. That is the opposite of the usual finding, where cost eats a fast rebalance -- and flatness across a parameter is stronger evidence the effect is real than any single rung's number. The practical consequence: crypto trade count can be raised roughly fourfold, from 2 a month to about 8, without visible damage to the edge. The variation from $2194 to $2737 across rungs is the noise floor, not a signal about which rung is best.",
     "code": "frequency-run.mjs, which takes its trade counts from the real ledger rather than a bars-per-year formula -- that assumption has already been wrong once here."
+  },
+  "theDesk": {
+    "what": "'Apply these strategies to every asset class and decide what works best for each. Eventually we will pick and choose our strategy rather than strictly trading one variation.' This is that book.",
+    "howEachSleeveWasChosen": "By the three pre-specified screens, never by return. BH on equities, BH on crypto, and both disjoint halves left cross-sectional momentum standing everywhere and idioVol standing in equities only. So crypto runs momentum alone -- idioVol is -21.6% at p=0.539 there -- and equities runs momentum and idioVol at equal weight. Equal weight is a priori, not fitted.",
+    "equitiesSleeve": {
+      "correlationBetweenTheTwoFactors": 0.383,
+      "momentum alone": {
+        "final": 1785.63,
+        "cagrPct": 25,
+        "maxDrawdownPct": 13.55,
+        "sharpe": 1.19,
+        "up": "19/31"
+      },
+      "idioVol alone": {
+        "final": 2176.39,
+        "cagrPct": 34.9,
+        "maxDrawdownPct": 11.53,
+        "sharpe": 2.17,
+        "up": "25/31"
+      },
+      "sleeve 50/50": {
+        "final": 1992.98,
+        "cagrPct": 30.4,
+        "maxDrawdownPct": 10.2,
+        "sharpe": 1.96,
+        "up": "22/31"
+      },
+      "reading": "The sleeve draws down less than EITHER factor alone -- 10.20% against 13.55% and 11.53% -- at a correlation of 0.383. Its return sits between them and its Sharpe below idioVol's. This is the same shape as the cross-asset result: combining buys risk reduction, not return."
+    },
+    "theBook": {
+      "correlationCryptoVsEquitiesSleeve": -0.234,
+      "blendedPeriods": 31,
+      "cryptoPeriodsUsed": "45 of 50",
+      "crypto, overlap only": {
+        "final": 2148.94,
+        "cagrPct": 34.5,
+        "maxDrawdownPct": 31.26,
+        "sharpe": 1.45,
+        "up": "20/31"
+      },
+      "equities sleeve, overlap": {
+        "final": 1992.98,
+        "cagrPct": 30.6,
+        "maxDrawdownPct": 14.77,
+        "sharpe": 1.97,
+        "up": "22/31"
+      },
+      "50/50": {
+        "final": 2117.51,
+        "cagrPct": 33.7,
+        "maxDrawdownPct": 12.84,
+        "sharpe": 2.66,
+        "up": "22/31"
+      },
+      "THE DESK, causal inverse-vol": {
+        "final": 2013.2,
+        "cagrPct": 31.1,
+        "maxDrawdownPct": 10.65,
+        "sharpe": 2.54,
+        "up": "23/31"
+      },
+      "finalWeight": "39.9% crypto, arrived at by the causal rule rather than chosen"
+    },
+    "againstTheCriterionAllTHREEConditionsNowPASS": {
+      "tradesPerMonth": "10.1 -- 2.2 from crypto momentum and 7.9 from the two equities factors. The target was about ten. This is the first construction in the campaign to reach it.",
+      "winRate": "48.5% on crypto and 53.0% on equities, against a 40% bar.",
+      "winsCoveringLosses": "Payoff 2.78 on crypto and 1.96 on equities; expectancy +14.02% and +7.88% a trade, both net of a round-trip slippage charge on every trade.",
+      "note": "Reached WITHOUT rebalancing faster. The frequency ladder shows crypto could add another fourfold on top of this if more trades were wanted."
+    },
+    "whatThisIsNot": [
+      "31 blended observations. The standard error on a Sharpe is about 0.34, so 2.54 against the equities sleeve's 1.97 is well inside the noise. The drawdown -- 10.65% against 31.26% and 14.77% for the sleeves -- is the part that is large relative to its error.",
+      "Out of sample. Every number here is in-sample on 2023-2026. The walk-forward that exists covers momentum on equities only, not this book.",
+      "Free of selection. idioVol is one of twelve signals and was chosen for the equities sleeve. It was chosen by screens fixed in advance -- BH on two universes plus both disjoint halves -- rather than by its return, which is the strongest defence available and is not the same as no selection at all.",
+      "Tested in a momentum crash. None occurred in this window in either asset class, and that is the documented way this factor fails.",
+      "Survivorship-free. Yahoo serves no delisted history. For a long-short that understates rather than flatters."
+    ],
+    "code": "desk-run.mjs"
   }
 }
