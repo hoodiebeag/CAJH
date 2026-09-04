@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T20:13:50.320Z",
+  "updatedAt": "2026-09-04T20:16:27.859Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2565,5 +2565,51 @@
     "verdict": "FAILS, and not marginally. On crypto it gives up 78% of the return -- 28.3% to 6.3% -- to remove 37% of the drawdown, and what is left is still a 43.59% drawdown, still untradeable. On equities it gives up 60% of the return for a 12% drawdown reduction. In both cases the trade is far worse than one-for-one, and the overlay is also charged nothing for the cash it holds, so the real comparison is slightly worse still.",
     "conclusion": "The long-only crypto book cannot be rescued by a market-regime overlay. Combined with the blend failing (+0.154 correlation, both legs long beta) and the naive beta hedge failing, three separate attempts to make the crypto sleeve work without shorting have now failed. The honest conclusion is that this result requires the ability to short, and at a venue that cannot, the tradable scope is the equities long-short alone.",
     "code": "regime-overlay-run.mjs"
+  },
+  "equitiesIsNowTheWholeBook": {
+    "context": "Owner confirmed 2026-09-04 that the account has no short access for crypto, so the crypto sleeve is research-only and the equities long-short is the live path. Every question about the equities sleeve that was academic while it was half a blended book is now the whole decision.",
+    "theSleeveQuestionRESOLVED": {
+      "whyTheEarlierComparisonWasWrong": "It compared the ADAPTIVE rule against the fixed momentum+idioVol PAIR and concluded the machinery earned its keep. But the adaptive rule picks idioVol in six quarters of seven, so most of its advantage over the pair could simply be the absence of the momentum half rather than any adaptivity. The comparison that answers the question is against fixing the single factor adaptive keeps choosing, and it had not been run.",
+      "outOfSample20Periods": {
+        "always momentum": {
+          "final": 1197.6,
+          "cagrPct": 11.3,
+          "maxDrawdownPct": 13.04,
+          "sharpe": 0.57,
+          "up": "9/20"
+        },
+        "equal weight all 14": {
+          "final": 972.56,
+          "cagrPct": -1.6,
+          "maxDrawdownPct": 6.55,
+          "sharpe": -0.36,
+          "up": "10/20"
+        },
+        "fixed pair momentum+idioVol": {
+          "final": 1299.07,
+          "cagrPct": 16.9,
+          "maxDrawdownPct": 9.05,
+          "sharpe": 1.16,
+          "up": "12/20"
+        },
+        "fixed single idioVol": {
+          "final": 1385.12,
+          "cagrPct": 21.4,
+          "maxDrawdownPct": 11.53,
+          "sharpe": 1.3,
+          "up": "14/20"
+        },
+        "adaptive re-select best": {
+          "final": 1450.63,
+          "cagrPct": 24.8,
+          "maxDrawdownPct": 11.53,
+          "sharpe": 1.36,
+          "up": "14/20"
+        }
+      },
+      "theMACHINERYBarelyEarnsAnything": "Adaptive beats fixed-idioVol by 3.4 points of CAGR and 0.06 of Sharpe, at an IDENTICAL 11.53% drawdown and an identical 14/20 up-period count. The two books differ in exactly one quarter out of seven -- the first, where the rule picks lowVol. At n=20 the standard error on a Sharpe is about 0.42, so 1.36 against 1.30 is nothing at all. Essentially the whole of what looked like an adaptivity premium was the absence of the momentum half. The quarterly re-selection machinery does not earn its complexity, and the earlier claim that it did was an artifact of comparing it against the wrong baseline.",
+      "whatTheTHREEWAYComparisonActuallyShows": "The pair has a MATERIALLY LOWER drawdown -- 9.05% against 11.53% -- at a lower return. So the momentum half is buying drawdown reduction rather than return, which is the classic diversification trade and is a real argument for keeping it. The choice is therefore not 'better vs worse' but 21.4% at 11.53% against 16.9% at 9.05%: a fifth more return for a quarter more drawdown. On risk-adjusted terms they are 1.30 against 1.16, which at this sample size is not a distinction.",
+      "recommendation": "Fix the sleeve rather than re-select it, and hold the PAIR. The adaptivity is unpaid complexity; the momentum half is paid-for drawdown reduction and is also the only factor in this campaign that replicated across two asset classes and both disjoint halves, which is the insurance that matters if idioVol turns out to be a 2023-2026 artifact. This is a recommendation, not a measurement -- the return difference is real and the risk-adjusted difference is not resolvable at n=20."
+    }
   }
 }
