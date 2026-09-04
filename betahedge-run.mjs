@@ -9,6 +9,7 @@
 // sized -- and clamped to [0.5, 1.5] so a near-zero beta estimate cannot blow the book up.
 // Usage: node betahedge-run.mjs
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
+import { screenUniverse } from "./universe.mjs";
 import { spread, perYear } from "./xsmom.mjs";
 import { bookStats } from "./portfolio.mjs";
 
@@ -20,7 +21,9 @@ const load = root => {
     const c = loadBundleCandles(p, 1440, root).filter(b => +b.time >= sec("2023-01-01") && +b.time <= sec("2026-09-02"));
     if (c.length >= 400) o[p] = c;
   }
-  return o;
+  // Screened before ranking: a corrupted series is the strongest possible loser and gets shorted
+  // every period. PARA supplied two thirds of the equities result before this existed.
+  return screenUniverse(o).kept;
 };
 function basketPeriods(series, rebalanceLog) {
   const closeAt = {};

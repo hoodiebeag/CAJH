@@ -6,6 +6,7 @@
 // cross-sectional factor is a statement about relative ranking and must appear in both halves; a
 // result driven by a few names appears in the half that holds them and vanishes from the other.
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
+import { screenUniverse } from "./universe.mjs";
 import { randomSpreadNull, selectionP } from "./xsmom.mjs";
 import { SIGNALS, testSignal } from "./factors.mjs";
 
@@ -17,7 +18,9 @@ const load = root => {
     const c = loadBundleCandles(p, 1440, root).filter(b => +b.time >= sec("2023-01-01") && +b.time <= sec("2026-09-02"));
     if (c.length >= 400) o[p] = c;
   }
-  return o;
+  // Screened before ranking: a corrupted series is the strongest possible loser and gets shorted
+  // every period. PARA supplied two thirds of the equities result before this existed.
+  return screenUniverse(o).kept;
 };
 const all = load("./sp500-bundle");
 const names = Object.keys(all).sort();

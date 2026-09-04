@@ -13,6 +13,7 @@
 // warmed up at 50/50. No weight and no factor is chosen by looking at an outcome.
 // Usage: node desk-run.mjs
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
+import { screenUniverse } from "./universe.mjs";
 import { spread } from "./xsmom.mjs";
 import { testSignal } from "./factors.mjs";
 import { alignReturns, correlation, bookStats, blend, blendDrawdownPct } from "./portfolio.mjs";
@@ -25,7 +26,9 @@ const load = root => {
     const c = loadBundleCandles(p, 1440, root).filter(b => +b.time >= sec("2023-01-01") && +b.time <= sec("2026-09-02"));
     if (c.length >= 400) o[p] = c;
   }
-  return o;
+  // Screened before ranking: a corrupted series is the strongest possible loser and gets shorted
+  // every period. PARA supplied two thirds of the equities result before this existed.
+  return screenUniverse(o).kept;
 };
 const CANON = { lookbackBars: 252, skipBars: 21, rebalanceBars: 21 };
 const crypto = load("./candle-bundle"), equity = load("./sp500-bundle");

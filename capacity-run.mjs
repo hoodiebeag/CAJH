@@ -10,6 +10,7 @@
 // reasonable model at all, because the order is a material share of the day's volume?
 // Usage: node capacity-run.mjs [topK]
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
+import { screenUniverse } from "./universe.mjs";
 import { spread } from "./xsmom.mjs";
 import { testSignal } from "./factors.mjs";
 
@@ -23,6 +24,12 @@ for (const p of availablePairs(1440, "./sp500-bundle")) {
   const c = loadBundleCandles(p, 1440, "./sp500-bundle")
     .filter(b => +b.time >= sec("2023-01-01") && +b.time <= sec("2026-09-02"));
   if (c.length >= 400) series[p] = c;
+}
+{
+  // Screened before ranking; PARA supplied two thirds of the equities result before this existed.
+  const { kept, rejected } = screenUniverse({ ...series });
+  for (const k of Object.keys(series)) if (!(k in kept)) delete series[k];
+  for (const [s, why] of rejected) console.log(`screened out ${s}: ${why}`);
 }
 
 // Median daily dollar volume over the 63 bars ending at `at`. Contemporaneous, not current: a name

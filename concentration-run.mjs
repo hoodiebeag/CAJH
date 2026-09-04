@@ -11,6 +11,7 @@
 // account may not be able to hold.
 // Usage: node concentration-run.mjs [nullDraws]
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
+import { screenUniverse } from "./universe.mjs";
 import { spread, randomSpreadNull, selectionP } from "./xsmom.mjs";
 import { testSignal } from "./factors.mjs";
 import { ledger, summarise } from "./trades.mjs";
@@ -25,6 +26,12 @@ for (const p of availablePairs(1440, "./sp500-bundle")) {
   const c = loadBundleCandles(p, 1440, "./sp500-bundle")
     .filter(b => +b.time >= sec("2023-01-01") && +b.time <= sec("2026-09-02"));
   if (c.length >= 400) series[p] = c;
+}
+{
+  // Screened before ranking; PARA supplied two thirds of the equities result before this existed.
+  const { kept, rejected } = screenUniverse({ ...series });
+  for (const k of Object.keys(series)) if (!(k in kept)) delete series[k];
+  for (const [s, why] of rejected) console.log(`screened out ${s}: ${why}`);
 }
 const N = Object.keys(series).length;
 console.log(`sp500 universe: ${N} symbols. Each rung holds topK a side, so 2*topK names in total.\n`);

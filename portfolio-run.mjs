@@ -1,6 +1,7 @@
 // Ranks WITHIN each asset class, then combines the resulting books.
 // Usage: node portfolio-run.mjs
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
+import { screenUniverse } from "./universe.mjs";
 import { spread } from "./xsmom.mjs";
 import { alignReturns, correlation, bookStats, blend, blendDrawdownPct } from "./portfolio.mjs";
 
@@ -13,7 +14,8 @@ function load(root) {
     const c = loadBundleCandles(p, 1440, root).filter(b => +b.time >= FROM && +b.time <= TO);
     if (c.length >= 400) out[p] = c;
   }
-  return out;
+  // Screened before ranking; PARA supplied two thirds of the equities result before this existed.
+  return screenUniverse(out).kept;
 }
 
 const CANONICAL = { lookbackBars: 252, skipBars: 21, rebalanceBars: 21 };

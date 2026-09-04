@@ -11,6 +11,7 @@
 // lookback than a late one.
 // Usage: node subperiod-run.mjs [slices]
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
+import { screenUniverse } from "./universe.mjs";
 import { anchoredDrawdown } from "./xsmom.mjs";
 import { testSignal } from "./factors.mjs";
 
@@ -23,7 +24,9 @@ const load = root => {
     const c = loadBundleCandles(p, 1440, root).filter(b => +b.time >= sec("2023-01-01") && +b.time <= sec("2026-09-02"));
     if (c.length >= 400) o[p] = c;
   }
-  return o;
+  // Screened before ranking: a corrupted series is the strongest possible loser and gets shorted
+  // every period. PARA supplied two thirds of the equities result before this existed.
+  return screenUniverse(o).kept;
 };
 const sharpe = (rets, ppy) => {
   if (rets.length < 3) return null;

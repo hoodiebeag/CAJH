@@ -5,6 +5,7 @@
 // almost the same names.
 // Usage: node correlations-run.mjs [threshold]
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
+import { screenUniverse } from "./universe.mjs";
 import { SIGNALS, testSignal } from "./factors.mjs";
 import { correlation } from "./portfolio.mjs";
 
@@ -16,7 +17,9 @@ const load = root => {
     const c = loadBundleCandles(p, 1440, root).filter(b => +b.time >= sec("2023-01-01") && +b.time <= sec("2026-09-02"));
     if (c.length >= 400) o[p] = c;
   }
-  return o;
+  // Screened before ranking: a corrupted series is the strongest possible loser and gets shorted
+  // every period. PARA supplied two thirds of the equities result before this existed.
+  return screenUniverse(o).kept;
 };
 
 for (const [label, root, topK, slip] of [

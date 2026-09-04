@@ -5,6 +5,7 @@
 // sat exactly there -- which says only "not resolved", not "p = 0.005". Raising the draw count
 // is the only way to tell a signal at p=0.004 from one at p=0.00002.
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
+import { screenUniverse } from "./universe.mjs";
 import { randomSpreadNull } from "./xsmom.mjs";
 import { SIGNALS, testSignal, benjaminiHochberg } from "./factors.mjs";
 
@@ -18,7 +19,8 @@ function load(root) {
     const c = loadBundleCandles(p, 1440, root).filter(b => +b.time >= FROM && +b.time <= TO);
     if (c.length >= 400) out[p] = c;
   }
-  return out;
+  // Screened before ranking; PARA supplied two thirds of the equities result before this existed.
+  return screenUniverse(out).kept;
 }
 
 const UNIVERSES = [

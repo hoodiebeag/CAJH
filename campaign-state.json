@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T22:24:01.235Z",
+  "updatedAt": "2026-09-04T23:13:36.589Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2821,6 +2821,45 @@
       "The disjoint-halves dispersion figures, which were computed on the contaminated universe and would have had PARA in exactly one half."
     ],
     "theFIX": "universe.mjs screenUniverse(), applied before any ranking. Three blunt limits stated in advance rather than tuned: a close range above 500x, more than 20% of bars with no volume, or a median dollar volume under $100k. It rejects impossible DATA, not bad performance -- CHPT, SEDG, LCID and PLUG fell 26-59x in this window and all survive it. Eight tests, including one that pins the PARA case and one that pins a real 50x collapse being kept. Across all three bundles it rejects exactly one symbol.",
-    "theLESSON": "The campaign had seven bug-classes recorded and none of them was 'the input data is wrong'. Every check was on the arithmetic downstream of the data. A universe screen should have been the first thing built, not the twenty-ninth. And the tell was available all along: a 25% CAGR from a long-short book whose short leg holds the same name in 31 of 32 rebalances is not a cross-sectional strategy, it is one position."
+    "theLESSON": "The campaign had seven bug-classes recorded and none of them was 'the input data is wrong'. Every check was on the arithmetic downstream of the data. A universe screen should have been the first thing built, not the twenty-ninth. And the tell was available all along: a 25% CAGR from a long-short book whose short leg holds the same name in 31 of 32 rebalances is not a cross-sectional strategy, it is one position.",
+    "screenAppliedEverywhere": "screenUniverse() is now called before ranking in all seventeen runners that load a universe, and in selection-wf.mjs. Each prints what it rejected, so an exclusion can never be silent again.",
+    "subPeriodFindingALSOOverturned": {
+      "whatWasReported": "'A regime, not decay, and it belongs to the whole cross-section -- a level shift rather than a slide, since slice 3 beats slice 2 for four of six factors.'",
+      "whatTheScreenedDataShows": {
+        "momentum": [
+          29,
+          0,
+          1
+        ],
+        "nearHigh": [
+          8,
+          -14,
+          -1
+        ],
+        "trendQuality": [
+          28,
+          2,
+          7
+        ],
+        "idioVol": [
+          28,
+          12,
+          2
+        ],
+        "lowVol": [
+          31,
+          3,
+          -3
+        ],
+        "beta": [
+          13,
+          -1,
+          -5
+        ],
+        "note": "CAGR by contiguous slice. Slice 1 is 2024-01 to 2024-11, slice 2 to 2025-09, slice 3 to 2026-08."
+      },
+      "correctedReading": "Not a level shift. The equities cross-section produced returns in the first ten months of the sample and essentially NOTHING across the following twenty -- every factor collapses to zero or below after slice 1, and idioVol runs 28 to 12 to 2. Decay and regime still cannot be distinguished at this sample size, but either way the recent state is 'no edge', which is exactly what the out-of-sample numbers said independently. The earlier 'slice 3 beats slice 2' reading was PARA holding slices 2 and 3 up.",
+      "cryptoUnchanged": "Byte-identical rows, confirming the screen touches nothing in candle-bundle."
+    }
   }
 }
