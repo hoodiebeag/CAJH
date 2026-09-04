@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { quarters, fit, walkForward, FIXED, GRID, OBJECTIVES } from "./walkforward.mjs";
+import { quarters, fit, walkForward, choiceStability, FIXED, GRID, OBJECTIVES } from "./walkforward.mjs";
 
 test("quarters cover the window and stop at its end", () => {
   const qs = quarters("2024-01-01", "2026-03-31");
@@ -77,4 +77,24 @@ test("the fitting objective changes what the walk-forward can validate", () => {
 test("an unknown objective is refused rather than silently defaulting", () => {
   assert.throws(() => fit("2023-01-01", "2023-12-31", { grid: { trendMa: [150] }, objective: "sharpe" }),
     /unknown objective/);
+});
+
+test("choice stability is 1 when every quarter decides identically", () => {
+  const steps = [{ chose: { a: 1, b: "x" } }, { chose: { a: 1, b: "x" } }, { chose: { a: 1, b: "x" } }];
+  assert.equal(choiceStability(steps).mean, 1);
+});
+
+test("choice stability falls when an axis cannot make up its mind", () => {
+  // The diagnostic the grid-size finding rests on, and it is computable from training runs alone.
+  const steps = [{ chose: { a: 1, b: "x" } }, { chose: { a: 1, b: "y" } },
+                 { chose: { a: 1, b: "z" } }, { chose: { a: 1, b: "w" } }];
+  const s = choiceStability(steps);
+  assert.equal(s.byAxis.a, 1, "a was decided the same way every time");
+  assert.equal(s.byAxis.b, 0.25, "b never agreed with itself");
+  assert.equal(s.mean, 0.625);
+});
+
+test("skipped quarters do not count toward stability", () => {
+  const steps = [{ chose: { a: 1 } }, { skipped: "no trades" }, { chose: { a: 1 } }];
+  assert.equal(choiceStability(steps).quarters, 2);
 });

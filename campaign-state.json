@@ -9,8 +9,8 @@
  },
  "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
  "startedAt": "2026-09-03T19:00:00Z",
- "updatedAt": "2026-09-04T04:00:00Z",
- "phase": "grid size measured as a variable; the capability table closes the silent-no-op class",
+ "updatedAt": "2026-09-04T04:35:00Z",
+ "phase": "grid-size ladder, corrected; an earlier claim walked back",
  "runsTested": 2374,
  "base": {
   "trendGate": false,
@@ -304,7 +304,7 @@
   "universe selection",
   "new filters not yet in backtest.js"
  ],
- "nextUp": "The parameter space is exhausted and the methodology is now the interesting part. What is left: (1) EQUITIES, blocked on data the container cannot fetch; (2) the short exit path, a deliberate engine build; (3) nothing else here will move the number -- 2,374 configurations in, every axis that binds has been swept and the last three sweeps have each found a bug rather than an improvement.",
+ "nextUp": "The methodology questions are answered as far as this data can answer them, and the last four batches have produced bugs, corrections and negative results rather than a bigger number -- which is what an exhausted search looks like. The two things that would change that are both the owner's call: EQUITIES data, and building the short exit path.",
  "randomEntryNull": {
   "runner": "entrynull-run.mjs",
   "bos 5% tpR100 hold100": {
@@ -601,25 +601,45 @@
    "lessonRecorded": "The filters were reported as 'declined in 7 of 9 quarters'. That was true of the filters the grid CONTAINED. btcRegime alone was never in it. A component absent from a grid is not a component the search rejected, and the write-up did not distinguish those."
   },
   "gridSizeIsAVariable": {
-   "what": "The same walk-forward, same fixed frame, offered a LARGER honest grid: six filter combinations instead of one, plus trendGateMode, exitOnSwingHigh, maxHold and three trendMa values.",
-   "result": {
-    "balance": {
-     "trades": 167,
-     "meanR": 1.0815,
-     "final": 2387.26,
-     "dd": 13.46
+   "ladder": "Four grid sizes, same fixed frame, same window, trendMa pinned at 150 so grid size is the only thing that varies.",
+   "table": [
+    {
+     "grid": "tiny",
+     "points": 2,
+     "stability": 1.0,
+     "oosFinal": 2281.86,
+     "oosDD": 13.39,
+     "meanR": 1.0957
     },
-    "mar": {
-     "trades": 161,
-     "meanR": 0.8821,
-     "final": 1947.78,
-     "dd": 12.44
+    {
+     "grid": "small",
+     "points": 8,
+     "stability": 1.0,
+     "oosFinal": 2588.43,
+     "oosDD": 10.96,
+     "meanR": 1.3737
+    },
+    {
+     "grid": "medium",
+     "points": 48,
+     "stability": 0.778,
+     "oosFinal": 2359.49,
+     "oosDD": 16.71,
+     "meanR": 1.12
+    },
+    {
+     "grid": "large",
+     "points": 192,
+     "stability": 0.963,
+     "oosFinal": 2387.26,
+     "oosDD": 13.46,
+     "meanR": 1.0815
     }
-   },
-   "against": "The small grid (btcRegime only, two maxHold values) gave $2588.43 at 10.96%.",
-   "finding": "A BIGGER HONEST GRID IS A WORSE GRID. Every choice was still made on training data alone -- no leak was introduced -- and the out-of-sample result fell by 8% under the balance objective and 25% under the risk-adjusted one. More options to choose from is more opportunity to fit the training window's noise.",
-   "theTell": "Under the mar objective the filter choice is unstable across quarters -- crossSection, maxExtension, crossSection, adx, btc-only, btc-only, btc-only, crossSection, crossSection. Compare the small grid, which chose btcRegime 50 nine times out of nine. Stability of choice is the diagnostic, and it is available BEFORE looking at the out-of-sample number.",
-   "consequenceForTheLeader": "The leader stays on the small-grid configuration. The larger grid did not endorse anything; it demonstrated that offering more choices costs accuracy."
+   ],
+   "finding": "Grid size matters and there is an INTERIOR optimum, around eight points here. Eight beats two and it beats forty-eight and one hundred and ninety-two, on balance, drawdown and mean R alike.",
+   "correction": "The previous commit claimed 'a bigger honest grid is a worse grid'. That is too strong and is withdrawn. It rested on one comparison, $2588.43 against $2387.26, which was partly confounded -- the small grid pinned trendMa at 150 while the large one swept it. With the confound removed the relationship is not monotone: 192 points beats 48, and 2 points loses to 8. The direction of the original observation survives for grids above the optimum; the general claim does not.",
+   "stabilityHypothesisRefuted": "Choice stability, computed from training runs alone, does NOT rank grids. It flags the worst one -- medium at 0.778 -- but tiny and small both score a perfect 1.000 and differ by 13% in out-of-sample balance. It is a useful warning sign and not a selection criterion, and it was proposed here as the latter.",
+   "consequenceForTheLeader": "None. The leader already comes from the eight-point grid, which the corrected ladder confirms is the best of the four."
   }
  },
  "bugsFound": [
@@ -654,6 +674,13 @@
    "symptom": "eight parameters accepted and silently ignored, each producing byte-identical rows that read as a swept axis",
    "list": "stopMode outside anticipate; alignMode outside bos/anticipate; the swing window for breakout; trailStartR below trailR; entryGate in the bos branch; chopFilter, requireHigherLow and minRoomR for breakout",
    "fix": "A capability table now declares which entry modes honour alignMode, chopFilter, requireHigherLow and minRoomR, and passing a RESTRICTIVE value to a mode that ignores it throws. Permissive values never throw -- alignMode 'none' asks for no alignment, which is exactly what an ignoring mode delivers, so it drops no claim and the whole campaign passes it. The signature default is accepted everywhere too, because omission and an explicit default cannot be told apart."
+  },
+  {
+   "where": "the grid-size ladder, first run",
+   "symptom": "reported that stability does not predict performance AND that bigger grids do better -- the opposite of the previous commit",
+   "cause": "trendMa was not in the ladder's FIXED block, so the two grids that did not SWEEP it fell back to backtest.js's default of 20 instead of the endorsed 150. The ladder measured 'was trendMa fitted at all', not grid size.",
+   "caught": "the two smallest grids scoring far below every walk-forward already recorded, which no change in grid size could explain",
+   "fix": "trendMa pinned at 150 in FIXED, with a comment saying why; ladder re-run"
   }
  ],
  "concurrency": {

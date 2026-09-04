@@ -45,6 +45,35 @@ export const GRID = {
 const iso = (d) => d.toISOString().slice(0, 10);
 const addDays = (s, n) => iso(new Date(Date.parse(s + "T00:00:00Z") + n * 86400000));
 
+/**
+ * How consistently the refit chose the same value for each axis, across quarters.
+ *
+ * This is computable from the TRAINING runs alone -- it never touches an out-of-sample result --
+ * which is what makes it useful. The campaign found that offering a larger honest grid made the
+ * out-of-sample result worse, and the visible symptom was the choice jumping around between
+ * quarters: the small grid picked btcRegime 50 nine times of nine and scored $2588.43, while the
+ * larger grid's filter choice moved almost every quarter and scored $2387.26 or $1947.78.
+ *
+ * If that relationship holds, a search can size its own grid before ever looking at the test
+ * period. Per axis it is the share of quarters that agreed with the modal choice; `mean` is the
+ * average across axes, and 1 means every axis was decided identically every time.
+ */
+export function choiceStability(steps) {
+  const live = steps.filter((s) => !s.skipped && s.chose);
+  if (!live.length) return { mean: null, byAxis: {} };
+  const byAxis = {};
+  for (const axis of Object.keys(live[0].chose)) {
+    const counts = new Map();
+    for (const s of live) {
+      const key = JSON.stringify(s.chose[axis]);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    byAxis[axis] = +(Math.max(...counts.values()) / live.length).toFixed(3);
+  }
+  const values = Object.values(byAxis);
+  return { mean: +(values.reduce((a, b) => a + b, 0) / values.length).toFixed(3), byAxis, quarters: live.length };
+}
+
 /** Calendar quarters from `start` up to (not past) `end`. */
 export function quarters(start, end) {
   const out = [];
@@ -171,6 +200,8 @@ export function walkForward({
     : null;
   return {
     objective,
+    stability: choiceStability(steps),
+    gridPoints: expand(grid).length,
     steps, trades: oosTrades.length,
     finalBalance: eq ? +eq.finalBalance.toFixed(2) : startingBalance,
     maxDrawdownPct: eq ? +eq.maxDrawdownPct.toFixed(2) : 0,
