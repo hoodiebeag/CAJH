@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-05T03:13:27.093Z",
+  "updatedAt": "2026-09-05T04:12:19.309Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2954,7 +2954,53 @@
       "reading": "Attenuated but structurally intact, and not a PARA artifact. Past losers still run at roughly twice the market's beta in rallies and well under it in declines, and the book is short them. Worst periods are worse than reported -- -11.6%, -8.6%, -7.3%, -5.5% against -10.5%, -7.1%, -5.1%, -5.0% -- which is what removing a fake profit source does.",
       "stillUntested": "The equities book still has no bear-market observation: two periods began 10% below peak, one at 20%, deepest 22.1%."
     },
-    "notReRunAndWHY": "The equities cost stress, frequency ladder, dispersion gate and volatility-standardised merge were all computed pre-screen. They are NOT being re-run, and the reason is not time: each asks how an edge behaves under some stress, and on clean data the equities book has no out-of-sample edge for those questions to be about. Their pre-screen numbers must not be quoted. The crypto halves of the frequency ladder, cost stress and dispersion test are unaffected and stand."
+    "notReRunAndWHY": "The equities cost stress, frequency ladder, dispersion gate and volatility-standardised merge were all computed pre-screen. They are NOT being re-run, and the reason is not time: each asks how an edge behaves under some stress, and on clean data the equities book has no out-of-sample edge for those questions to be about. Their pre-screen numbers must not be quoted. The crypto halves of the frequency ladder, cost stress and dispersion test are unaffected and stand.",
+    "secondEquitiesUniverse": {
+      "why": "The whole equities conclusion rested on one universe, sp500-128. equity-bundle -- 30 hand-picked names, never used as an independent check -- was the last untested thing available without new data. It answers whether 'equities has no edge' is about equities or about that one universe.",
+      "composition": "30 symbols: 20 mega-caps plus 10 ETFs (SPY QQQ IWM and seven sector SPDRs). A third of the universe is ETFs, against 7.8% in sp500-128, so it is a genuinely different composition rather than a subset.",
+      "results": {
+        "momentum": {
+          "final": 1174.04,
+          "cagrPct": 6.4,
+          "maxDrawdownPct": 17.11,
+          "sharpe": 0.34,
+          "p": 0.0539
+        },
+        "trendQuality": {
+          "final": 1136.75,
+          "cagrPct": 5.1,
+          "maxDrawdownPct": 17.94,
+          "sharpe": 0.45,
+          "p": 0.0799
+        },
+        "nearHigh": {
+          "final": 927.37,
+          "cagrPct": -2.9,
+          "maxDrawdownPct": 21.53,
+          "sharpe": -0.23,
+          "p": 0.4595
+        },
+        "idioVol": {
+          "final": 832.59,
+          "cagrPct": -6.8,
+          "maxDrawdownPct": 37.72,
+          "sharpe": -0.42,
+          "p": 0.7143
+        },
+        "lowVol": {
+          "final": 689.92,
+          "cagrPct": -13.3,
+          "maxDrawdownPct": 46.02,
+          "sharpe": -0.8,
+          "p": 0.9481
+        }
+      },
+      "verdict": "NOT ONE signal reaches p<0.05. momentum is closest at 0.0539 and still fails. idioVol -- the factor this campaign once called the one genuine equities-only factor -- is NEGATIVE at -6.8% with p=0.7143, and lowVol is worse at -13.3%.",
+      "theCaveatOwed": "Thirty names at topK 3 is low power, and a third of the universe being ETFs makes the cross-section unusual. 'Fails here' is therefore partly a power statement, not purely an effect statement. This universe alone would not refute anything.",
+      "butItIsTheTHIRDIndependentSignal": "It does not stand alone. sp500-128 gives nothing out of sample (-2.6% to +4.0%, Sharpe <= 0.26). The five-split halves test on sp500-128 gives 0/5 for momentum and lowVol and 2/5 for idioVol and trendQuality. And now a second universe gives no signal at all. Three different tests, three different failures, all pointing the same way.",
+      "andItUnderminesIdioVolFurther": "idioVol fills 63% of its long slots with ETFs in sp500-128, where ETFs are 7.8% of the universe. Here ETFs are 33% of the universe, so idioVol loads on them even harder -- and it loses money. A factor whose ranking is mechanically drawn to index funds, and which does worse the more index funds it can hold, is not measuring what its name claims."
+    },
+    "equitiesLineCLOSED": "Closed. Three independent tests -- out-of-sample on sp500-128, five-split disjoint halves on sp500-128, and a second 30-name universe -- all fail. The remaining in-sample significance on the full sp500-128 universe is real but is concentrated in one thematic short (the 2024 clean-energy collapse) and does not survive any of the three. No further equities variant should be run without new data or a new mechanism; running one would be looking for the universe that agrees."
   },
   "cryptoUnderTheSameStandard": {
     "why": "The disjoint-halves test across five independent splits is what demolished the equities claim. It had never been run on crypto. Continuing to call the crypto edge real while only the equities edge had faced the harder test would have been choosing which result to scrutinise.",
