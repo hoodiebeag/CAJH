@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-04T23:25:26.401Z",
+  "updatedAt": "2026-09-05T00:18:45.838Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2924,6 +2924,36 @@
       "butItIsSTILLConcentration": "Half A's edge is largely one thematic short -- the clean-energy collapse of 2023-2026 -- expressed through four correlated names. That is a real trade and it is not a cross-sectional factor. It is also exactly why the effect does not travel to a half that does not contain those names."
     },
     "theCOMPLETEPicture": "On clean data the equities cross-section shows a real but weak in-sample effect (four signals survive BH at 9-20% CAGR with 16-28% drawdowns), concentrated in one thematic short that worked in 2024, undetectable in half the universe half the time, and worth nothing out of sample (-2.6% to +4.0% CAGR, Sharpe <= 0.26 over the last twenty months). That is not a strategy. It is a description of what happened to clean-energy stocks in 2024.",
-    "whatIsLEFTOfTheCampaign": "One asset class with a genuine, stress-observed, out-of-sample edge -- crypto momentum at 51.0% and Sharpe 1.93 -- which the account cannot short and therefore cannot trade. And one asset class that can be traded and has no edge. Carry remains untested and blocked on data."
+    "whatIsLEFTOfTheCampaign": "One asset class with a genuine, stress-observed, out-of-sample edge -- crypto momentum at 51.0% and Sharpe 1.93 -- which the account cannot short and therefore cannot trade. And one asset class that can be traded and has no edge. Carry remains untested and blocked on data.",
+    "concentrationREDONE": {
+      "before": "The contaminated ladder rose monotonically as the book tightened -- 127.3% for momentum and 111.5% for idioVol at three names a side -- and I concluded 'hold the decile because concentrating buys a bigger point estimate and a much bigger error bar'.",
+      "now": {
+        "momentum": {
+          "3": "25.4% CAGR, 38.21% DD, Sharpe 0.85, p=0.0075",
+          "6": "8.7%, 29.53%, 0.36, p=0.0200",
+          "12": "9.1%, 15.79%, 0.46, p=0.0050",
+          "20": "4.6%, 12.64%, 0.32",
+          "32": "2.5%, 12.29%, 0.22",
+          "48": "0.4%, 10.61%, 0.04, p=0.0274"
+        },
+        "idioVol": {
+          "3": "13.1%, 45.45%, 0.47, p=0.0549 -- FAILS at 0.05",
+          "6": "19.3%, 25.37%, 1.01, p=0.0025",
+          "12": "13.1%, 19.12%, 0.89",
+          "20": "8.6%, 19.54%, 0.72",
+          "32": "5.4%, 14.74%, 0.56",
+          "48": "3.4%, 10.31%, 0.50"
+        }
+      },
+      "whatChanged": "The monotone rise was PARA. It is gone, and so is the shape: momentum is not monotone at all (25.4%, then 8.7%, then 9.1%), and idioVol PEAKS at six a side rather than three. The p column also discriminates now instead of sitting on its floor at every rung -- idioVol at three a side actually fails at p=0.0549.",
+      "theDECILEStillWins": "But for a different reason than the one I gave. Concentrating no longer buys a bigger point estimate at all -- it buys a far bigger drawdown: 38.21% for momentum and 45.45% for idioVol at three a side, against 15.79% and 19.12% at twelve. The old justification (bigger estimate, bigger error bar) was wrong on the clean data; the new one is simpler. Twelve a side is where the drawdown is tolerable and the return is no worse.",
+      "correlationAlsoMoved": "momentum against idioVol inside equities is 0.268 on clean data, not the 0.383 reported before."
+    },
+    "concavitySURVIVES": {
+      "finding": "This one holds. Beta against the equal-weight basket is 0.02 full-sample and hides a direction-dependent shape: -0.44 in up periods, +0.31 in down ones, against -0.51 and +0.49 before. Per leg the long is 1.13/1.40 and the SHORT is 2.01/0.77, against 1.16/1.49 and 2.17/0.51 before.",
+      "reading": "Attenuated but structurally intact, and not a PARA artifact. Past losers still run at roughly twice the market's beta in rallies and well under it in declines, and the book is short them. Worst periods are worse than reported -- -11.6%, -8.6%, -7.3%, -5.5% against -10.5%, -7.1%, -5.1%, -5.0% -- which is what removing a fake profit source does.",
+      "stillUntested": "The equities book still has no bear-market observation: two periods began 10% below peak, one at 20%, deepest 22.1%."
+    },
+    "notReRunAndWHY": "The equities cost stress, frequency ladder, dispersion gate and volatility-standardised merge were all computed pre-screen. They are NOT being re-run, and the reason is not time: each asks how an edge behaves under some stress, and on clean data the equities book has no out-of-sample edge for those questions to be about. Their pre-screen numbers must not be quoted. The crypto halves of the frequency ladder, cost stress and dispersion test are unaffected and stand."
   }
 }
