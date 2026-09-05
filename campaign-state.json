@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-05T04:12:19.309Z",
+  "updatedAt": "2026-09-05T04:31:41.254Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -3019,5 +3019,54 @@
     },
     "theCaveatThatIsOWED": "Some of this gap is the asset class rather than the edge. Twenty-eight crypto assets are far more correlated with each other than 128 equities are, and crypto's cross-sectional return dispersion is roughly four times wider -- which is the same fact that made merging the universes fail. Wider dispersion makes a ranking easier to detect at any given edge size. So the contrast overstates how much BIGGER the crypto edge is, while still being a fair test of whether it is THERE. It is.",
     "whatThisSettles": "The campaign's remaining claim is now the one that has faced the most scrutiny rather than the least. Crypto momentum: significant against a random-split null at 3000 draws, replicating across both disjoint halves in five of five splits, flat across a twelvefold range of rebalance frequency, surviving roughly six times its assumed trading cost, symmetric in up and down betas where equities is concave, and observed through a 71.7% market drawdown. And it cannot be traded at this venue."
+  },
+  "VENUE_SEARCH_CLOSES_THE_CRYPTO_PATH": {
+    "question": "Owner asked whether OKX or Bybit provide the short access Kraken lacked. Researched, and then tested against the strategy rather than stopping at the feature list.",
+    "jurisdiction": "Both are closed to US persons for derivatives. Bybit lists the United States as a restricted jurisdiction with no US entity. OKX geoblocks US residents from OKX Global; OKX US launched 2025 is SPOT ONLY and additionally blocked in NY, TX and Nevada. Given the Kraken and IBKR setup this is almost certainly the binding constraint, and it should be confirmed by the owner rather than assumed.",
+    "theVenueThatDOESWork": "Kraken itself. As of April 2026 Kraken Derivatives US offers margin and short selling to eligible US retail clients who self-certify as an Eligible Contract Participant. So the archived 'no short access' finding is OUT OF DATE -- the account can short now. That was the good news for about ten minutes.",
+    "butTheUNIVERSEIsTheProblem": {
+      "krakenMarginPairs": "19 at launch. Excluding USDC and PAXG, 16 crypto. Fourteen of them are in this bundle: ADA AVAX BCH DOGE DOT ETH LINK LTC SOL SUI UNI XBT XRP ZEC. AAVE and HYPE are margin-eligible but absent from the bundle.",
+      "result": {
+        "full 28, topK 3, 5% borrow": {
+          "cagrPct": 39.9,
+          "maxDrawdownPct": 22.73,
+          "sharpe": 1.5,
+          "p": 0.0017
+        },
+        "full 28, topK 3, 43.8% borrow": {
+          "cagrPct": 15.2,
+          "maxDrawdownPct": 23.73,
+          "sharpe": 0.63,
+          "p": 0.0017
+        },
+        "Kraken 14, topK 2, 5% borrow": {
+          "cagrPct": -2.4,
+          "maxDrawdownPct": 44.04,
+          "sharpe": -0.09,
+          "p": 0.0616
+        },
+        "Kraken 14, topK 3, 5% borrow": {
+          "cagrPct": 0.8,
+          "maxDrawdownPct": 36.19,
+          "sharpe": 0.03,
+          "p": 0.03
+        },
+        "Kraken 14, topK 3, 43.8% borrow": {
+          "cagrPct": -16.9,
+          "maxDrawdownPct": 56.01,
+          "sharpe": -0.75,
+          "p": 0.03
+        }
+      },
+      "verdict": "The strategy does not work on the pairs Kraken lets you short, and it fails BEFORE the borrow cost is applied. At the old 5% borrow assumption the 14-name book returns -2.4% to +0.8% with 36-44% drawdowns. At Kraken's actual rollover it loses 17-20% a year."
+    },
+    "theBorrowCostSeparately": "Kraken charges up to 0.02% per 4 hours to hold a margin position, which is roughly 43.8% annualised -- nine times the 5% this campaign had been assuming, and charged on the short leg. On its own that is survivable: the full 28-name book still returns 15.2% at Sharpe 0.63 under it. The universe restriction is what kills it, not the fee.",
+    "whyTheRestrictedUniverseFails": "Mechanistic and consistent with the rest of the campaign. The 14 margin-eligible names are the largest and most liquid, and they move together -- BTC, ETH, ADA, XRP, LTC, BCH are close to one trade. Cross-sectional momentum needs DISPERSION to rank, and the alts that supply it here (TAO, TIA, INJ, NEAR, APT, FIL, POL) are precisely the ones no venue will lend. This is the mirror image of why merging crypto with equities failed: there the dispersion mismatch was too wide, here the surviving universe is too narrow.",
+    "theCONCLUSION": "There is no tradable version of this result at any venue the owner can legally use. Not because shorting is unavailable -- Kraken now provides it -- but because the shortable universe is exactly the half of the market where the effect is not measurable. The edge lives in the names nobody will lend.",
+    "whatWouldChangeIt": [
+      "Non-US jurisdiction, which is a life decision rather than a research one.",
+      "A venue that lends the mid-cap alts. Worth checking directly rather than assuming; the Kraken finding shows these lists move fast and an archived answer went stale in months.",
+      "Confirming the owner's actual jurisdiction and ECP status, since everything above assumes US retail."
+    ]
   }
 }
