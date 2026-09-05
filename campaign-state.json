@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-05T00:18:45.838Z",
+  "updatedAt": "2026-09-05T03:13:27.093Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -2955,5 +2955,23 @@
       "stillUntested": "The equities book still has no bear-market observation: two periods began 10% below peak, one at 20%, deepest 22.1%."
     },
     "notReRunAndWHY": "The equities cost stress, frequency ladder, dispersion gate and volatility-standardised merge were all computed pre-screen. They are NOT being re-run, and the reason is not time: each asks how an edge behaves under some stress, and on clean data the equities book has no out-of-sample edge for those questions to be about. Their pre-screen numbers must not be quoted. The crypto halves of the frequency ladder, cost stress and dispersion test are unaffected and stand."
+  },
+  "cryptoUnderTheSameStandard": {
+    "why": "The disjoint-halves test across five independent splits is what demolished the equities claim. It had never been run on crypto. Continuing to call the crypto edge real while only the equities edge had faced the harder test would have been choosing which result to scrutinise.",
+    "construction": "Identical method: screen the universe, split it into two disjoint halves, rank inside each, five independent random splits. Crypto's halves are 14 symbols against equities' 63, so crypto is being asked to show the effect in less than a quarter of the sample size.",
+    "result": {
+      "momentum": "5/5",
+      "nearHigh": "5/5",
+      "beta": "5/5",
+      "trendQuality": "4/5",
+      "typicalPValues": "0.002 to 0.008 in BOTH halves on most splits, against a floor of 1/601 = 0.0017 at 600 draws -- so several are at or near the bound."
+    },
+    "theContrast": {
+      "crypto": "momentum 5/5, nearHigh 5/5, beta 5/5, trendQuality 4/5 on halves of 14",
+      "equities": "momentum 0/5, idioVol 2/5, trendQuality 2/5, lowVol 0/5 on halves of 63",
+      "reading": "Not a marginal difference. Crypto shows the effect in every split on a quarter of the sample size; equities cannot show it reliably in any split at four times the sample size. The crypto edge withstands the exact standard that killed the equities one."
+    },
+    "theCaveatThatIsOWED": "Some of this gap is the asset class rather than the edge. Twenty-eight crypto assets are far more correlated with each other than 128 equities are, and crypto's cross-sectional return dispersion is roughly four times wider -- which is the same fact that made merging the universes fail. Wider dispersion makes a ranking easier to detect at any given edge size. So the contrast overstates how much BIGGER the crypto edge is, while still being a fair test of whether it is THERE. It is.",
+    "whatThisSettles": "The campaign's remaining claim is now the one that has faced the most scrutiny rather than the least. Crypto momentum: significant against a random-split null at 3000 draws, replicating across both disjoint halves in five of five splits, flat across a twelvefold range of rebalance frequency, surviving roughly six times its assumed trading cost, symmetric in up and down betas where equities is concave, and observed through a 71.7% market drawdown. And it cannot be traded at this venue."
   }
 }
