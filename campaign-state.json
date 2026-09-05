@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-05T04:31:41.254Z",
+  "updatedAt": "2026-09-05T04:33:48.544Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -3062,11 +3062,53 @@
     },
     "theBorrowCostSeparately": "Kraken charges up to 0.02% per 4 hours to hold a margin position, which is roughly 43.8% annualised -- nine times the 5% this campaign had been assuming, and charged on the short leg. On its own that is survivable: the full 28-name book still returns 15.2% at Sharpe 0.63 under it. The universe restriction is what kills it, not the fee.",
     "whyTheRestrictedUniverseFails": "Mechanistic and consistent with the rest of the campaign. The 14 margin-eligible names are the largest and most liquid, and they move together -- BTC, ETH, ADA, XRP, LTC, BCH are close to one trade. Cross-sectional momentum needs DISPERSION to rank, and the alts that supply it here (TAO, TIA, INJ, NEAR, APT, FIL, POL) are precisely the ones no venue will lend. This is the mirror image of why merging crypto with equities failed: there the dispersion mismatch was too wide, here the surviving universe is too narrow.",
-    "theCONCLUSION": "There is no tradable version of this result at any venue the owner can legally use. Not because shorting is unavailable -- Kraken now provides it -- but because the shortable universe is exactly the half of the market where the effect is not measurable. The edge lives in the names nobody will lend.",
+    "theCONCLUSION": "There is no tradable version of this result at any venue a US person can use, and it has now been tested rather than assumed. Kraken margin (14 names): fails before costs. IBKR futures (4 names): fails, structurally. Asymmetric long-anywhere/short-lendable: best case 7.1% at a 37% drawdown at an unrealistic borrow, negative at the real one. OKX and Bybit: closed to US persons entirely. The edge lives in the mid-cap alts, and no venue lends them.",
     "whatWouldChangeIt": [
       "Non-US jurisdiction, which is a life decision rather than a research one.",
       "A venue that lends the mid-cap alts. Worth checking directly rather than assuming; the Kraken finding shows these lists move fast and an archived answer went stale in months.",
       "Confirming the owner's actual jurisdiction and ECP status, since everything above assumes US retail."
-    ]
+    ],
+    "ibkr": {
+      "whatItOffers": "Spot crypto in 11 coins (BTC ETH LTC BCH LINK SOL ADA XRP DOGE AVAX SUI) through Paxos or Zero Hash -- SPOT ONLY, no shorting. Shortable crypto is futures: CME BTC, ETH, SOL and XRP, plus Coinbase Derivatives nano BTC and ETH added February 2026. So the shortable universe is FOUR names, against Kraken margin's fourteen.",
+      "fourNamesTested": {
+        "topK": 1,
+        "borrow": 0.05,
+        "cagrPct": 2.7,
+        "maxDrawdownPct": 36.9,
+        "sharpe": 0.07,
+        "p": 0.0732
+      },
+      "note": "topK 1 is the most granularity four names allow -- long the single best, short the single worst. It fails at p=0.0732 and returns 2.7% for a 36.9% drawdown. A four-name universe cannot support a decile ranking; this is structural, not marginal.",
+      "equitiesSideIsFine": "IBKR shorts equities well and cheaply. That does not help, because the equities line is closed for lack of an edge rather than for lack of a venue."
+    },
+    "asymmetricConstruction": {
+      "idea": "The natural real-world compromise, and the one construction not previously tested: rank the LONG leg from all 28 names, since holding spot is unrestricted at any venue, and rank the SHORT leg only from what is actually lendable. It is the shape an account can really hold.",
+      "results": {
+        "long 28 / short Kraken-14, 5% borrow": {
+          "cagrPct": -3.1,
+          "maxDrawdownPct": 39.89,
+          "sharpe": -0.14,
+          "up": "24/50"
+        },
+        "long 28 / short IBKR-4, 5% borrow": {
+          "cagrPct": 7.1,
+          "maxDrawdownPct": 37.26,
+          "sharpe": 0.19,
+          "up": "21/50"
+        },
+        "long 28 / short Kraken-14, 43.8% borrow": {
+          "cagrPct": -20.2,
+          "maxDrawdownPct": 58.31,
+          "sharpe": -0.98
+        },
+        "long 28 / short IBKR-4, 43.8% borrow": {
+          "cagrPct": -11.8,
+          "maxDrawdownPct": 53.53,
+          "sharpe": -0.34
+        }
+      },
+      "verdict": "It does not rescue anything. The best case anywhere is 7.1% CAGR at a 37% drawdown and Sharpe 0.19, and that is at the OLD 5% borrow assumption rather than the real one. At Kraken's actual rollover every version loses 12-20% a year.",
+      "whyItFails": "The short leg is not decoration. It is what makes the book market-neutral AND it is where the losers-underperform half of the effect lives. Restricting it to four or fourteen large caps means shorting names that are not the actual losers, so the ranking has nothing to work with on that side. Half a cross-sectional strategy is not half as good; it is a different and worse strategy."
+    }
   }
 }
