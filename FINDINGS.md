@@ -393,3 +393,38 @@ never be filled in retrospectively.
 
 Runners: `xsmom.mjs`, `xsmom-wf.mjs`, `xsmom-gate.mjs`. Universes in `candle-bundle/`,
 `equity-bundle/`, `sp500-bundle/`, deliberately separate roots.
+
+## Block bootstrap: the independence assumption, measured (2026-09-05)
+
+Every interval this campaign has quoted treated its period returns as independent draws. They are
+not, and the sub-period tables always said so. `bootstrap.mjs` resamples contiguous blocks instead
+of single periods, at n^(1/3) block length, on the same data and seed as the i.i.d. version.
+
+**The prediction was wrong. The bands got narrower, not wider.**
+
+| book | n | lag-1 acf (se) | 5-95 CAGR, i.i.d. | 5-95 CAGR, blocks of n^(1/3) | band ratio | P(lose) |
+|---|---|---|---|---|---|---|
+| crypto momentum | 50 | -0.140 (0.14) | 12.6% .. 73.8% | 16.6% .. 71.2% | 0.89x | 0.5% -> 0.0% |
+| equities momentum | 31 | -0.323 (0.18) | -9.8% .. 31.4% | -4.3% .. 24.4% | 0.70x | 22.1% -> 14.0% |
+
+Both books mean-revert period to period, so a replicate built from contiguous runs varies *less*
+than one built from independent draws. Dependence does not automatically widen an interval; it
+widens it when the dependence is positive, and these are negative.
+
+**The narrowing is the data, not the scheme.** A moving-block bootstrap under-weights the ends of
+the series — period 0 sits in one block where an interior period sits in `blockLen` — and equities'
+fourth largest move *is* period 0, so the artefact was a live candidate. The circular version, which
+wraps the series so every period carries equal weight, gives 0.89x and 0.70x against the moving
+scheme's 0.92x and 0.72x. The gap is negligible; the effect is real.
+
+**What this does and does not establish.** It is the strongest form of the crypto claim so far: a
+test built to attack it, whose result could have taken it down, left the 5th percentile of annual
+return *above* where the i.i.d. assumption had put it. It does not make 39% a forecast. The
+bootstrap resamples realised period returns, so it carries sampling variation in those returns and
+nothing else — not the choice of topK, not the canonical lookback, not regime change, and not the
+momentum crash the sample has never contained. Its median is centred on the realised sample by
+construction and is an in-sample number.
+
+For equities the narrower band changes nothing: the book is closed on out-of-sample grounds
+(0/5 and 2/5 on disjoint halves, no signal on a second universe), and a median of 8.9% with a 14%
+chance of losing money is not an argument against that.
