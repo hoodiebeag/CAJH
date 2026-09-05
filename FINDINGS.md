@@ -428,3 +428,43 @@ construction and is an in-sample number.
 For equities the narrower band changes nothing: the book is closed on out-of-sample grounds
 (0/5 and 2/5 on disjoint halves, no signal on a second universe), and a median of 8.9% with a 14%
 chance of losing money is not an argument against that.
+
+## Short-horizon momentum in crypto: closed (2026-09-05)
+
+The campaign had tested short-horizon *reversal* and long-horizon *momentum*, never short-horizon
+momentum. Pre-registered grid: lookback in {4, 8, 15, 30, 60} x skip in {0, 1}, rebalance = lookback,
+topK 3. Ten cells, Benjamini-Hochberg at q=0.05 over a family of ten.
+
+**The ranking carries information at short horizons. It does not survive to the account.**
+
+Gross (zero-cost) final balance beats $1000 at every horizon but 60 bars — $2050 at 4 bars, $2851 at
+8. Seven of ten cells clear BH. But at 4 bars the book rebalances 91 times a year against the
+canonical book's 17.4, and the standing 0.8% crypto slippage — calibrated for a 21-bar rebalance —
+is then charged five times as often. Cost eats 99% of the 4-bar result, 88% of the 8-bar, 47% of the
+30-bar.
+
+**A p-value at the floor beside a net of $29 is not evidence of anything tradeable.** The 4/0 cell's
+p is 0.0020 and the random-selection null's median final balance is **$10**. Beating random selection
+at the same ruinous turnover says the ranking works; it says nothing about the book. Both numbers are
+now printed side by side because the p alone invites the wrong read.
+
+Swept across execution cost, canonical 252/21/21 wins at every column — $3147 gross, $3111 at 0.05%,
+$3076 at 0.10%, $2623 at 0.80% — against the best short-horizon cell's $3034 / $2933 / $2836 / $1759.
+No short horizon replaces it at any cost anyone could achieve.
+
+### The diversification claim, and why it was wrong
+
+30/1/30 looked decorrelated from canonical (rho 0.10) and a 50/50 blend beat both legs on Sharpe at
+every cost level. That result was an artefact of my own code. `alignReturns` compounds the faster
+book onto the slower one's clock and the faster book must be passed first — and 30/1/30 rebalances
+**12.2 times a year against canonical's 17.4**, so canonical is the faster one. Hard-coding the order
+aligned them backwards.
+
+Corrected, the correlation is **0.55, not 0.10**, and the blend beats both legs at **0 of 4** cost
+levels. Sweeping every horizon rather than the cherry-picked one: 4/1, 8/1, 15/1, 30/1 and 60/1 all
+score 0/4. There is no horizon diversification benefit here.
+
+This is the fourth time in this project that a misalignment has read as decorrelation. It is worth
+stating as a rule: **misalignment destroys covariance and nothing else, so a surprisingly low
+correlation is a bug report until proven otherwise.** It was caught only because extending the test
+to horizons I had not selected forced the ordering logic to become explicit.
