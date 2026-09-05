@@ -757,7 +757,13 @@ export function backtestMultiTF({ series } = {}, {
         pos.peak = tighten(pos.peak, favours);
         const armedAt = pos.entry + sign * trailStartR * pos.risk;
         if (isShort ? pos.peak <= armedAt : pos.peak >= armedAt) {
-          pos.stop = tighten(pos.stop, pos.peak + sign * trailR * pos.risk);
+          // MINUS sign, not plus. `sign` points the FAVOURABLE way, which is right for a partial
+          // target or a breakeven lock -- both sit on the profitable side of a reference price. A
+          // trailing stop sits on the ADVERSE side of the peak. With `+` a long's stop was placed
+          // ABOVE its own peak, so the next bar's low was always at or under it and the position
+          // exited at a price no bar had traded: peak 100.7 gave a stop of 103.4 and a fill there
+          // on a bar whose high was 101.7.
+          pos.stop = tighten(pos.stop, pos.peak - sign * trailR * pos.risk);
           pos.trailing = true;
         }
       }

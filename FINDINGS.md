@@ -393,3 +393,78 @@ never be filled in retrospectively.
 
 Runners: `xsmom.mjs`, `xsmom-wf.mjs`, `xsmom-gate.mjs`. Universes in `candle-bundle/`,
 `equity-bundle/`, `sp500-bundle/`, deliberately separate roots.
+
+## Block bootstrap: the independence assumption, measured (2026-09-05)
+
+Every interval this campaign has quoted treated its period returns as independent draws. They are
+not, and the sub-period tables always said so. `bootstrap.mjs` resamples contiguous blocks instead
+of single periods, at n^(1/3) block length, on the same data and seed as the i.i.d. version.
+
+**The prediction was wrong. The bands got narrower, not wider.**
+
+| book | n | lag-1 acf (se) | 5-95 CAGR, i.i.d. | 5-95 CAGR, blocks of n^(1/3) | band ratio | P(lose) |
+|---|---|---|---|---|---|---|
+| crypto momentum | 50 | -0.140 (0.14) | 12.6% .. 73.8% | 16.6% .. 71.2% | 0.89x | 0.5% -> 0.0% |
+| equities momentum | 31 | -0.323 (0.18) | -9.8% .. 31.4% | -4.3% .. 24.4% | 0.70x | 22.1% -> 14.0% |
+
+Both books mean-revert period to period, so a replicate built from contiguous runs varies *less*
+than one built from independent draws. Dependence does not automatically widen an interval; it
+widens it when the dependence is positive, and these are negative.
+
+**The narrowing is the data, not the scheme.** A moving-block bootstrap under-weights the ends of
+the series — period 0 sits in one block where an interior period sits in `blockLen` — and equities'
+fourth largest move *is* period 0, so the artefact was a live candidate. The circular version, which
+wraps the series so every period carries equal weight, gives 0.89x and 0.70x against the moving
+scheme's 0.92x and 0.72x. The gap is negligible; the effect is real.
+
+**What this does and does not establish.** It is the strongest form of the crypto claim so far: a
+test built to attack it, whose result could have taken it down, left the 5th percentile of annual
+return *above* where the i.i.d. assumption had put it. It does not make 39% a forecast. The
+bootstrap resamples realised period returns, so it carries sampling variation in those returns and
+nothing else — not the choice of topK, not the canonical lookback, not regime change, and not the
+momentum crash the sample has never contained. Its median is centred on the realised sample by
+construction and is an in-sample number.
+
+For equities the narrower band changes nothing: the book is closed on out-of-sample grounds
+(0/5 and 2/5 on disjoint halves, no signal on a second universe), and a median of 8.9% with a 14%
+chance of losing money is not an argument against that.
+
+## Short-horizon momentum in crypto: closed (2026-09-05)
+
+The campaign had tested short-horizon *reversal* and long-horizon *momentum*, never short-horizon
+momentum. Pre-registered grid: lookback in {4, 8, 15, 30, 60} x skip in {0, 1}, rebalance = lookback,
+topK 3. Ten cells, Benjamini-Hochberg at q=0.05 over a family of ten.
+
+**The ranking carries information at short horizons. It does not survive to the account.**
+
+Gross (zero-cost) final balance beats $1000 at every horizon but 60 bars — $2050 at 4 bars, $2851 at
+8. Seven of ten cells clear BH. But at 4 bars the book rebalances 91 times a year against the
+canonical book's 17.4, and the standing 0.8% crypto slippage — calibrated for a 21-bar rebalance —
+is then charged five times as often. Cost eats 99% of the 4-bar result, 88% of the 8-bar, 47% of the
+30-bar.
+
+**A p-value at the floor beside a net of $29 is not evidence of anything tradeable.** The 4/0 cell's
+p is 0.0020 and the random-selection null's median final balance is **$10**. Beating random selection
+at the same ruinous turnover says the ranking works; it says nothing about the book. Both numbers are
+now printed side by side because the p alone invites the wrong read.
+
+Swept across execution cost, canonical 252/21/21 wins at every column — $3147 gross, $3111 at 0.05%,
+$3076 at 0.10%, $2623 at 0.80% — against the best short-horizon cell's $3034 / $2933 / $2836 / $1759.
+No short horizon replaces it at any cost anyone could achieve.
+
+### The diversification claim, and why it was wrong
+
+30/1/30 looked decorrelated from canonical (rho 0.10) and a 50/50 blend beat both legs on Sharpe at
+every cost level. That result was an artefact of my own code. `alignReturns` compounds the faster
+book onto the slower one's clock and the faster book must be passed first — and 30/1/30 rebalances
+**12.2 times a year against canonical's 17.4**, so canonical is the faster one. Hard-coding the order
+aligned them backwards.
+
+Corrected, the correlation is **0.55, not 0.10**, and the blend beats both legs at **0 of 4** cost
+levels. Sweeping every horizon rather than the cherry-picked one: 4/1, 8/1, 15/1, 30/1 and 60/1 all
+score 0/4. There is no horizon diversification benefit here.
+
+This is the fourth time in this project that a misalignment has read as decorrelation. It is worth
+stating as a rule: **misalignment destroys covariance and nothing else, so a surprisingly low
+correlation is a bug report until proven otherwise.** It was caught only because extending the test
+to horizons I had not selected forced the ordering logic to become explicit.
