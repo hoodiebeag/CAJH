@@ -468,3 +468,61 @@ This is the fourth time in this project that a misalignment has read as decorrel
 stating as a rule: **misalignment destroys covariance and nothing else, so a surprisingly low
 correlation is a bug report until proven otherwise.** It was caught only because extending the test
 to horizons I had not selected forced the ordering logic to become explicit.
+
+## Funding rates: analysis pre-registered 2026-09-06, before the data existed
+
+Written while every exchange host is blocked from this container and no funding series is
+obtainable. Nothing in it was chosen by looking at a result, because there was nothing to look at.
+Every prior failure in this project came from choosing after seeing — the PARA symbol, the blend
+weight, the 30-bar horizon picked out of a grid that had just been run. `carry-run.mjs` is fixed
+before the data lands and runs once, unchanged, when it does.
+
+**Why funding.** It is the first non-price input this project has had. All fourteen signals tested
+so far are transforms of the same OHLCV. Funding is a payment stream between longs and shorts and
+carries positioning information price does not.
+
+**Three hypotheses, directions fixed in advance.** H1 carry: short highest-funding, long lowest,
+return = price spread **plus** funding collected; needs perpetuals, so it is not tradeable by this
+account, but it establishes whether the premium exists. H2 crowding, long-short spot: identical
+positions, price return only — persistent positive funding means crowded longs, so the registered
+direction is that high trailing funding predicts **lower** subsequent spot return. H3 crowding,
+long-only spot: the only one this account can hold today.
+
+**H1 and H2 are the same book measured two ways** and are therefore not independent tests. Family
+of 9 per venue for Benjamini-Hochberg; genuinely independent groups are closer to 3, one per
+lookback. Both counts are printed.
+
+Parameters fixed and not to be swept: lookbacks {7, 30, 90} bars, rebalance 21, topK 3 a side,
+slippage 0.80%, borrow 5%/yr, 252-bar warmup for every lookback so all three start on the same date.
+Kraken and OKX analysed separately and never averaged; a cell counts only if it survives on **both**.
+
+**Kill conditions, registered now:** if no H2 or H3 cell clears BH on both venues, funding-as-signal
+is closed. A result at one lookback only, or one venue only, is noise.
+
+### What validation showed, before any real data
+
+| check | result |
+|---|---|
+| power — planted crowding signal | all 9 cells clear BH, p at the floor |
+| false positives — both venues pure noise, 8 independent draws | **0 of 8** confirmed |
+| funding actually flows into H1 | H1 $5,410 vs H2 $2,015 on a planted 0.1%/day, correct sign |
+| no-lookahead | pinned by test: ranking at bar i uses funding through i−1 only |
+
+Three defects were found and fixed by building it this way rather than after the fact:
+
+**`Number("")` is 0, not NaN.** An empty `fundingTime` passed a `Number.isFinite` guard and became
+1970-01-01 — a row silently wrong rather than loudly absent.
+
+**BH was pooled across venues** into a family of 18, contradicting the registration's own "family
+size 9, venues analysed independently". On the adversarial validation (one venue signal, one noise)
+the pooled procedure passed two **noise** cells: nine strong true positives dragged the threshold up
+until marginal noise cleared it. Per venue, every noise cell is correctly rejected.
+
+**`anchoredDrawdown` was called with the rotation objects** rather than `(periodReturns, barReturns,
+times, rebalanceLog)`. It would have reported a drawdown built from garbage without erroring.
+
+**Known limitation, stated rather than discovered later.** Cross-venue confirmation protects against
+a fluke when both venues are clean — 0 of 8 above. It is weaker when one venue carries genuine
+signal, because the requirement then collapses to whether the other venue flukes at the same cell;
+in the adversarial synthetic, one cell did. Both venues measure the same underlying quantity in the
+real case, which is the case the 0-of-8 covers.
