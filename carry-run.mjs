@@ -68,7 +68,11 @@ const DRAWS = Number(process.argv[2] ?? 2000);
 const QUIET = process.env.CARRY_QUIET === "1";        // used by the false-positive harness
 const LOOKBACKS = [7, 30, 90];
 const REBALANCE = 21, TOPK = 3, SLIP = 0.008, BORROW = 0.05, Q = 0.05;
-const VENUES = ["funding-kraken", "funding-okx"];
+// funding-binance added 2026-09-06 when data.binance.vision yielded 2020-01 onward. This adds a
+// DATA SOURCE to the registered procedure; it changes no hypothesis, direction, parameter, family
+// size or threshold. The registration named Kraken and OKX because those were the only reachable
+// venues when it was written.
+const VENUES = ["funding-kraken", "funding-okx", "funding-binance"];
 const sec = d => Date.parse(d + "T00:00:00Z") / 1000;
 
 // ---- price universe, screened before anything is ranked

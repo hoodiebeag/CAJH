@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-06T03:21:11.694Z",
+  "updatedAt": "2026-09-06T04:28:02.974Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -3152,5 +3152,14 @@
     "predictedFailureModeConfirmed": "Through the 2018 collapse the book returned -12.4% CAGR. FINDINGS.md had named this as the untested failure mode and called the 10% drawdown its least trustworthy number. It was right.",
     "pValuesStillSignificant": "p < 0.0025 in every window, including the ones that lose to the basket. Beating random selection is selection skill, not tradeable return. Report both or the p misleads.",
     "status": "The crypto momentum result no longer stands as the campaign survivor. It is window-specific and source-fragile."
+  },
+  "CARRY_TESTED_AND_CLOSED": {
+    "when": "2026-09-06",
+    "data": "data.binance.vision monthly funding archives, 29 symbols, 2020-01..2026-08, ~7300 settlements each. 25 of 28 clear the pre-registered 80% coverage screen; 51 rebalance periods.",
+    "result": "NOTHING clears Benjamini-Hochberg. Best p 0.0495 against a rank-1 threshold of 0.0056. All nine cells lose money ($295 to $820 from $1000), all Sharpes negative. Pre-registered kill condition triggered: funding-as-signal is CLOSED.",
+    "fundingIsGenuinelyNonPrice": "Cross-sectional rank correlation between trailing funding and trailing return is 0.017 (L=7), 0.055 (L=30), 0.089 (L=90). Funding is NOT momentum in disguise. This was a real test of a real non-price information source and it does not predict the cross-section.",
+    "inverseDirection": "Every book losing in the registered direction implies the inverse would have gained. The inverse is NOT momentum (see above). It is unregistered and cannot be claimed. Testing it requires prospective registration on data not yet seen.",
+    "crossVenueDisagreement": "Kraken and Binance daily funding correlate at a median of 0.514 over their one-year overlap, 14 of 28 below 0.50, with sign disagreement on the annual mean for ADA ETC LTC NEAR UNI. The same two vendors agree on candle RETURNS at 0.997-0.9999. Liquidity refuted as the cause (top half 0.432, bottom half 0.471). Timezone refuted (timestamps verified exact UTC against the API probe). No confirmed mechanism.",
+    "status": "Carry is closed. It was the last untested mechanism that was not another price transform."
   }
 }

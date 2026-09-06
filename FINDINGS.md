@@ -598,3 +598,75 @@ Excluded on integrity grounds before any of this: ALGO, ETC, TAO and ZEC, whose 
 disagree on daily returns (correlation below 0.99, TAO at 0.922 with a 45% maximum discrepancy),
 and XMR, delisted from Binance in 2024-02 while the Kraken bundle starts 2025-01 — no overlap, so
 nothing to reconcile.
+
+## Carry: tested properly, and closed (2026-09-06)
+
+`data.binance.vision` — reachable where `fapi.binance.com` returns 451 — yielded monthly funding
+archives for 29 symbols spanning **2020-01 to 2026-08**, roughly 7,300 settlements each. That is
+6.7 years against Kraken's one, and it clears the pre-registered 80% coverage screen: 25 of 28
+symbols usable, 51 rebalance periods.
+
+`carry-run.mjs` ran with its hypotheses, directions, parameters, family size and thresholds exactly
+as registered. Adding `funding-binance` to the venue list adds a data source; it changes nothing the
+registration fixed.
+
+### The result: nothing, and not narrowly
+
+| L | hypothesis | final | CAGR | maxDD | Sharpe | p |
+|---|---|---|---|---|---|---|
+| 90 | H1 carry (price+funding) | $820 | −6.7% | 44.3% | −0.32 | 0.0495 |
+| 90 | H2 spot long-short | $697 | −11.8% | 51.0% | −0.57 | 0.1179 |
+| 7 | H1 carry | $656 | −13.7% | 46.1% | −0.82 | 0.1579 |
+| 7 | H2 spot long-short | $566 | −18.0% | 51.0% | −1.10 | 0.2794 |
+| 30 | H1 carry | $457 | −23.9% | 58.1% | −1.61 | 0.5192 |
+| 90 | H3 spot long-only | $420 | −26.0% | 88.4% | −0.35 | 0.6092 |
+| 7 | H3 spot long-only | $394 | −27.7% | 87.7% | −0.43 | 0.6802 |
+| 30 | H2 spot long-short | $391 | −27.9% | 63.7% | −1.87 | 0.6882 |
+| 30 | H3 spot long-only | $295 | −34.6% | 89.6% | −0.56 | 0.9100 |
+
+**Nothing clears Benjamini-Hochberg.** Best p is 0.0495 against a rank-1 threshold of 0.0056. Every
+cell loses money and every Sharpe is negative. Under the pre-registered kill condition,
+funding-as-signal is **closed**.
+
+### Funding really is non-price information — which is what makes this negative worth something
+
+The registered direction was crowding: high trailing funding predicts lower subsequent spot return.
+Every book lost, which implies the inverse would have gained. The obvious suspicion is that the
+inverse is just momentum — high funding follows a price rise — and that funding therefore carries
+nothing price does not.
+
+Measured, not assumed. Cross-sectional rank correlation between trailing funding and trailing
+return over the same window: **0.017 at L=7, 0.055 at L=30, 0.089 at L=90**. Funding ranks the
+universe almost independently of price.
+
+So this was a genuine test of a genuine non-price source — the thing the campaign was told it had
+never attempted — and the source does not predict the cross-section. The inverse direction would
+have made money, is **not** momentum, is unregistered, and cannot be claimed. What it is, I do not
+know.
+
+### An unexplained cross-venue disagreement, reported rather than resolved
+
+Kraken and Binance overlap for a year. Their **daily funding correlates at a median of 0.514**, with
+14 of 28 symbols below 0.50 (LTC −0.05, SUI 0.007, UNI 0.058) and outright sign disagreement on the
+year's mean for ADA, ETC, LTC, NEAR and UNI. Compare the candle cross-check, where the same two
+vendors agreed on returns at 0.997–0.9999.
+
+This triggers the registered kill condition independently of the BH result.
+
+Two explanations were proposed and both refuted:
+
+**Liquidity** — that major perps arbitrage across venues while thin alts have local positioning.
+Top half by dollar volume, mean correlation 0.432; bottom half, 0.471. If anything backwards.
+
+**Timezone** — the Kraken pull used Python's `time.mktime`, which reads a struct as local rather
+than UTC. Checked: the first CSV record is `2025-09-03T08:00:00Z`, exactly matching the API probe,
+and every settlement lands on an exact UTC hour. No shift.
+
+The disagreement is real and I have no confirmed mechanism for it.
+
+### Three mechanisms proposed today, three refuted by measurement
+
+Liquidity explaining the venue split. Timezone explaining the venue split. Momentum explaining the
+inverse carry book. Each was plausible, each was measured, each was wrong. The one before them —
+dispersion explaining the Kraken-14 ranking — was also wrong. **In this project a proposed mechanism
+has a worse than even record, and the only ones that survived were the ones that got measured.**
