@@ -142,3 +142,50 @@ export function legFundingReturns(rebalanceLog, grid, barTimes, { side = 1 } = {
   }
   return out;
 }
+
+/**
+ * Bucket a LEVEL series to bars by taking the last observation inside each bar.
+ *
+ * bucketFunding SUMS, which is right for a payment stream and wrong for a level. Open interest at
+ * the end of a day is not the sum of its intraday readings, and summing 288 five-minute snapshots
+ * would report an open interest 288 times too large while still producing a plausible-looking
+ * series that ranks almost the same way. The two aggregations are kept separate and named for what
+ * they do so a caller cannot pick the wrong one by accident.
+ */
+export function bucketLast(records, barTimes) {
+  const out = new Array(barTimes.length).fill(null);
+  const covered = new Array(barTimes.length).fill(false);
+  if (!barTimes.length) return { perBar: out, covered };
+  const span = barTimes.length > 1 ? barTimes[1] - barTimes[0] : 86400;
+  let j = 0;
+  for (let i = 0; i < barTimes.length; i++) {
+    const hi = barTimes[i], lo = hi - span;
+    while (j < records.length && records[j].time <= lo) j++;
+    let last = null;
+    while (j < records.length && records[j].time <= hi) { last = records[j].rate; j++; }
+    if (last !== null) { out[i] = last; covered[i] = true; }
+  }
+  return { perBar: out, covered };
+}
+
+/**
+ * Log change in a level over the `lookback` bars ending STRICTLY BEFORE bar `i`.
+ *
+ * Same exclusive bound as trailingFunding and for the same reason: ranking at bar i may use data
+ * through i-1 and not a tick more. Returns null unless BOTH endpoints exist and are positive, so a
+ * gap in the series produces no rank rather than a fabricated one.
+ */
+export function trailingChange(perBar, i, lookback) {
+  const a = perBar[i - 1 - lookback], b = perBar[i - 1];
+  if (a == null || b == null || !(a > 0) || !(b > 0)) return null;
+  return Math.log(b / a);
+}
+
+/** Mean of a level over the `lookback` bars ending strictly before `i`; null if any bar is missing. */
+export function trailingLevel(perBar, i, lookback) {
+  const start = i - lookback;
+  if (start < 0 || lookback < 1) return null;
+  let s = 0;
+  for (let k = start; k < i; k++) { if (perBar[k] == null) return null; s += perBar[k]; }
+  return s / lookback;
+}

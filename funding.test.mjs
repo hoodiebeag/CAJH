@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert";
-import { parseFundingCsv, bucketFunding, trailingFunding, screenFunding, fundingGrid, legFundingReturns } from "./funding.mjs";
+import { parseFundingCsv, bucketFunding, trailingFunding, screenFunding, fundingGrid, legFundingReturns, bucketLast, trailingChange, trailingLevel } from "./funding.mjs";
 
 const DAY = 86400, H8 = 8 * 3600;
 const csv = rows => "symbol,fundingTime,fundingRate\n" + rows.map(r => r.join(",")).join("\n");
@@ -152,4 +152,38 @@ test("legFundingReturns treats a name with no funding series as contributing not
   const grid = { A: [0, 0.10] };
   const log = [{ at: 0, chosen: ["A", "NOPERP"] }, { at: 1 * DAY, chosen: ["A", "NOPERP"] }];
   assert.deepEqual(legFundingReturns(log, grid, bars, { side: -1 }), [0.05]);
+});
+
+test("bucketLast takes the last reading in a bar, it does not sum them", () => {
+  // Open interest at the end of a day is not the sum of its intraday snapshots. Summing 288
+  // five-minute readings reports a level 288x too large while still ranking almost the same way,
+  // which is exactly the kind of wrong that survives a plausibility check.
+  const bars = [1 * DAY, 2 * DAY];
+  const recs = [{ time: 1 * DAY - 3600, rate: 100 }, { time: 1 * DAY, rate: 110 }, { time: 2 * DAY, rate: 90 }];
+  const { perBar, covered } = bucketLast(recs, bars);
+  assert.deepEqual(perBar, [110, 90]);
+  assert.deepEqual(covered, [true, true]);
+});
+
+test("bucketLast reports an empty bar as null, not as zero", () => {
+  // Zero open interest is a real and different claim from "no reading".
+  const bars = [1 * DAY, 2 * DAY, 3 * DAY];
+  const { perBar, covered } = bucketLast([{ time: 1 * DAY, rate: 5 }, { time: 3 * DAY, rate: 7 }], bars);
+  assert.deepEqual(perBar, [5, null, 7]);
+  assert.deepEqual(covered, [true, false, true]);
+});
+
+test("trailingChange excludes the current bar and needs both endpoints", () => {
+  const perBar = [100, 110, 121, 999];
+  // At i=3 the window of 2 runs from index 0 to index 2 -- never touching index 3.
+  assert.ok(Math.abs(trailingChange(perBar, 3, 2) - Math.log(121 / 100)) < 1e-12);
+  assert.equal(trailingChange(perBar, 3, 5), null, "window runs off the start");
+  assert.equal(trailingChange([null, 110, 121], 2, 1), null, "missing endpoint yields no rank");
+  assert.equal(trailingChange([0, 110, 121], 2, 1), null, "a zero level cannot produce a log change");
+});
+
+test("trailingLevel averages strictly before the current bar and rejects gaps", () => {
+  assert.equal(trailingLevel([1, 2, 3, 999], 3, 3), 2);
+  assert.equal(trailingLevel([1, null, 3], 3, 3), null, "a gap yields no rank rather than a short mean");
+  assert.equal(trailingLevel([1, 2, 3], 1, 3), null);
 });
