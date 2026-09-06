@@ -526,3 +526,75 @@ a fluke when both venues are clean — 0 of 8 above. It is weaker when one venue
 signal, because the requirement then collapses to whether the other venue flukes at the same cell;
 in the adversarial synthetic, one cell did. Both venues measure the same underlying quantity in the
 real case, which is the case the 0-of-8 covers.
+
+## The data arrived, and it broke the surviving result (2026-09-06)
+
+The owner ran the pull in Colab, routing around a container egress policy that denies exchange
+hosts. Three datasets landed: Binance daily bars back to 2017-08, Kraken funding, OKX funding.
+
+### Carry: untestable, not negative
+
+`carry-run.mjs` ran **exactly as pre-registered**, unchanged. It scored nothing.
+
+Kraken funding covers **25.2%** of the price window against the registered 80% screen; OKX covers
+**4.4%**, which is 2 rebalance periods against a registered minimum of 6. Kraken's history begins
+2025-09 and OKX's endpoint serves roughly three months. The registration requires cross-venue
+confirmation and states that one venue "is one measurement, and the pre-registration does not
+accept it as a finding" — so the verdict was fixed before the run.
+
+This is a data limitation, not a result. Carry remains untested. It needs a venue serving several
+years of funding history.
+
+### The result that matters: momentum is source-fragile
+
+The control row failed, which is why it was there. On identical names and dates, the Kraken bundle
+returns $2,910 and the Binance bundle $1,915 — a **34% gap** between two sources whose daily returns
+correlate 0.997 to 0.9999 on every name used. The Kraken run reproduces the published $2,623 exactly,
+so the plumbing is sound and the discrepancy is real.
+
+The two sources select **different names at 65% of rebalances** — 2.47 of 3 in common on average.
+Concentration is the mechanism, and it was measured rather than asserted:
+
+| topK | Kraken | Binance | gap | identical picks | names shared |
+|---|---|---|---|---|---|
+| 3 | $2,910 | $1,915 | **34%** | 53% | 2.47 of 3 |
+| 6 | $1,860 | $1,485 | 20% | 34% | 4.86 of 6 |
+| 9 | $1,399 | $1,242 | 11% | 25% | 7.58 of 9 |
+
+At 3 names a side, one flipped rank is a third of a leg. **The published 39.9% CAGR was measured at
+the most source-sensitive configuration available**, and returns fall as the configuration becomes
+reproducible. No amount of testing against one data source could have revealed this.
+
+### Out of sample, on longer history, it fails
+
+Within a single consistent source, so the comparison is like for like:
+
+| window | periods | final | CAGR | maxDD | basket | p |
+|---|---|---|---|---|---|---|
+| 2023-01..2026-09 (the original window) | 51 | $1,861 | 23.6% | 32.7% | $992 | <0.0025 |
+| **pre-2023, strictly out of sample** | **75** | **$1,116** | **2.6%** | **47.8%** | **$1,147** | <0.0025 |
+| full 2017-08..2026-09 | 139 | $1,706 | 6.9% | 61.8% | $1,114 | <0.0025 |
+| 2018 collapse | 14 | $899 | −12.4% | 19.6% | $929 | <0.0025 |
+
+**Out of sample it returns 2.6% a year with a 47.8% drawdown and loses to simply holding the
+universe.** Over the full nine years, 6.9% with a 61.8% drawdown.
+
+**The predicted failure mode is confirmed.** Through the 2018 collapse the book returned −12.4% a
+year. This document named that exact scenario as the untested one and called the 10% drawdown "the
+least trustworthy number above." It was right.
+
+**Every window is still significant at p < 0.0025, including the ones that lose to the basket.**
+The ranking beats random selection everywhere. That is selection skill and it is not tradeable
+return, and quoting the p without the basket column would misrepresent all four rows.
+
+### Where this leaves the campaign
+
+Crypto momentum was the surviving claim, held through a random-selection null at 3,000 draws, five
+disjoint-half splits, a twelvefold frequency range, a cost stress, and a block bootstrap built to
+break it. It does not survive a second data source or a longer sample. The 2023–2026 window was not
+representative and 3 names a side was not reproducible.
+
+Excluded on integrity grounds before any of this: ALGO, ETC, TAO and ZEC, whose two sources
+disagree on daily returns (correlation below 0.99, TAO at 0.922 with a 45% maximum discrepancy),
+and XMR, delisted from Binance in 2024-02 while the Kraken bundle starts 2025-01 — no overlap, so
+nothing to reconcile.

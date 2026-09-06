@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-05T04:38:18.990Z",
+  "updatedAt": "2026-09-06T03:21:11.694Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -3142,5 +3142,15 @@
       "theREFRAMING": "This is a materially more hopeful finding than the one it replaces, and it is the honest headline. The edge is not fragile and it is not confined to some lucky corner of the market -- it is present in essentially ANY fourteen crypto names. It is absent from exactly one basket: the one venues are willing to lend. So the constraint is not a property of the strategy, it is a property of the borrow list, and a borrow list is a business decision that can change or be sourced elsewhere.",
       "andTheCostIsSurvivable": "Worth restating beside this: the full 28-name book still returns 15.2% at Sharpe 0.63 under Kraken's real 43.8% annualised rollover. The fee was never the problem. Access to the mid-cap alts is the entire problem."
     }
+  },
+  "LONG_HISTORY_BREAKS_THE_CRYPTO_RESULT": {
+    "when": "2026-09-06",
+    "data": "Owner supplied Binance daily bars back to 2017-08 (24 usable names after integrity screening) plus Kraken and OKX funding. Container egress is blocked; the pull ran in Colab.",
+    "carry": "CLOSED AS UNTESTABLE, not as negative. Kraken funding covers 25.2% of the price window and OKX 4.4%, against the pre-registered 80% screen. OKX yields 2 rebalance periods, below the registered minimum of 6. carry-run.mjs ran exactly as pre-registered and scored nothing. Cross-venue confirmation is impossible with one venue, and the pre-registration does not accept a single venue as a finding.",
+    "dataSourceSensitivity": "Two sources whose daily returns correlate 0.997-0.9999 produce final balances 34% apart on IDENTICAL names and dates: Kraken $2910 vs Binance $1915 at topK 3. The gap falls monotonically with topK (34% at 3, 20% at 6, 11% at 9) and shared picks rise (2.47/3, 4.86/6, 7.58/9), so concentration is the mechanism. The published 39.9% CAGR was measured at the most source-sensitive configuration the campaign could have chosen.",
+    "outOfSample": "On a single consistent source, strictly pre-2023 (75 periods, out of sample versus the original study): $1116, 2.6% CAGR, 47.8% drawdown, LOSES to the equal-weight basket at $1147. Full 2017-2026: $1706, 6.9% CAGR, 61.8% drawdown. The 2023-2026 window was not representative.",
+    "predictedFailureModeConfirmed": "Through the 2018 collapse the book returned -12.4% CAGR. FINDINGS.md had named this as the untested failure mode and called the 10% drawdown its least trustworthy number. It was right.",
+    "pValuesStillSignificant": "p < 0.0025 in every window, including the ones that lose to the basket. Beating random selection is selection skill, not tradeable return. Report both or the p misleads.",
+    "status": "The crypto momentum result no longer stands as the campaign survivor. It is window-specific and source-fragile."
   }
 }
