@@ -670,3 +670,46 @@ Liquidity explaining the venue split. Timezone explaining the venue split. Momen
 inverse carry book. Each was plausible, each was measured, each was wrong. The one before them —
 dispersion explaining the Kraken-14 ranking — was also wrong. **In this project a proposed mechanism
 has a worse than even record, and the only ones that survived were the ones that got measured.**
+
+## Derivatives positioning: tested, and closed (2026-09-10)
+
+Binance daily `metrics` archives, 29 symbols, 2022-01 to 2026-09, ~1,712 days each — open
+interest, top-trader long/short ratio, taker buy/sell volume ratio. `positioning-run.mjs` ran
+**exactly as pre-registered**: three signals with directions fixed in advance, family of 18,
+Benjamini-Hochberg at q=0.05, and a kill condition labelling any cell that ranks like price a
+price transform.
+
+**Six of eighteen cells cleared BH. None is tradeable.**
+
+Against the controls the runner did not print — equal-weight basket **$1,091 / 3.1% / 75.3% DD**,
+buy-and-hold BTC **$2,498 / 37.3%** over the same 1,055 bars:
+
+| cell | final | CAGR | maxDD | Sharpe | p | vs basket |
+|---|---|---|---|---|---|---|
+| TAKER 90 long-only | $1,355 | 11.1% | 81.2% | 0.12 | 0.0020 | beats, *worse* DD |
+| TAKER 7 long-only | $1,188 | 6.2% | 74.4% | 0.08 | 0.0055 | marginal |
+| TAKER 30 long-only | $1,126 | 4.2% | 73.8% | 0.06 | 0.0060 | ≈ basket |
+| TAKER 30 long-short | $1,094 | 3.2% | 19.0% | 0.19 | 0.0065 | ≈ basket, quarter the DD |
+| OI 7 long-only | $1,068 | 2.3% | 85.0% | 0.03 | 0.0080 | **loses** |
+| TAKER 90 long-short | $992 | **−0.3%** | 23.3% | −0.01 | 0.0115 | **loses** |
+
+One survivor loses to the basket. One has a negative CAGR and still clears BH at p=0.0115 — the
+clearest illustration yet that **beating random selection is selection skill, not return**. The
+best cell loses to buy-and-hold BTC by 3.4× while carrying a larger drawdown than holding
+everything. Every Sharpe lies between −0.01 and 0.19.
+
+**The one cell worth naming.** `TAKER 30 long-short` returns what the basket returns at a 19.0%
+drawdown against its 75.3%. That is a real risk reduction rather than a return, and its Sharpe of
+0.19 over under three years carries a standard error near 0.6 — indistinguishable from zero. It is
+a direction worth remembering, not a result.
+
+**Positioning IS non-price information.** Rank correlation against trailing return ran −0.16 to
++0.10 across all nine signal-lookback pairs, so the pre-registered price-transform kill condition
+never fired. As with funding, this was a genuine test of a genuine non-price source, and the source
+does not produce a tradeable cross-sectional edge.
+
+**A defect in the pre-registration, recorded rather than quietly fixed.** `positioning-run.mjs`
+prints no basket control. Six cells cleared BH and nothing in its output would have revealed that
+two of them lose to simply holding the universe. Standing discipline caught it; the runner did not.
+Any future pre-registration in this project must carry its baseline control inside the registered
+analysis, not alongside it.

@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-10T14:35:08.674Z",
+  "updatedAt": "2026-09-10T23:56:01.860Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -3170,5 +3170,14 @@
     "funding-kraken / funding-okx": "pull_v2_colab.py. Both too short to clear the 80% coverage screen; retained as the cross-venue comparison that produced the unexplained 0.514 median correlation.",
     "sp500-bundle / equity-bundle": "Owner-supplied tarballs, 2026-09-04. Not survivorship-free.",
     "rebuildCommand": "node bundle-candles.mjs   # writes candle-bundle/1440/*.csv from candles/"
+  },
+  "POSITIONING_TESTED_AND_CLOSED": {
+    "when": "2026-09-10",
+    "data": "Binance daily metrics archives, 29 symbols, 2022-01..2026-09, ~1712 days. Open interest, top-trader long/short ratio, taker buy/sell volume ratio.",
+    "result": "6 of 18 cells cleared BH and NONE is tradeable. Basket control $1091/3.1%/75.3%DD, BTC buy-and-hold $2498/37.3%. One survivor LOSES to the basket; one has CAGR -0.3% and still clears at p=0.0115. Best cell loses to BTC by 3.4x with a larger drawdown than holding everything. All Sharpes between -0.01 and 0.19.",
+    "theOneCellWorthRemembering": "TAKER L=30 long-short: basket-equivalent return at 19.0% drawdown against the basket 75.3%. A risk reduction, not a return. Sharpe 0.19 with a standard error near 0.6 over under three years -- indistinguishable from zero.",
+    "positioningIsNonPrice": "Rank correlation against trailing return -0.16 to +0.10 across all nine signal-lookback pairs. The pre-registered price-transform kill condition never fired. Like funding, a genuine non-price source that does not predict the cross-section.",
+    "defectInMyOwnPreregistration": "positioning-run.mjs prints NO basket control. Six cells cleared and its output would never have revealed that two lose to holding the universe. Standing discipline caught it, the runner did not. Every future pre-registration must carry its baseline control INSIDE the registered analysis.",
+    "status": "Positioning is closed. Four mechanisms now tested to exhaustion: momentum, equities, carry, positioning."
   }
 }
