@@ -3,8 +3,8 @@
  * Gateway is actually running, to confirm brokers/ibkr.mjs's real connection
  * works end-to-end.
  *
- * Read-only: calls getAccountBalanceSnapshot, getCurrentPriceSnapshot, and
- * fetchOHLC only. Never calls placeBuy/placeSell - no order is placed.
+ * Read-only: calls getAccountBalanceSnapshot, getCurrentPriceSnapshot, fetchOHLC
+ * and getHoldings only. Never calls placeBuy/placeSell - no order is placed.
  *
  * Usage:
  *   node scripts/ibkr-smoke.mjs [SYMBOL]
@@ -33,7 +33,19 @@ try {
     candles ? `${candles.length} bars, most recent ${JSON.stringify(candles[candles.length - 1])}` : "null (fetch failed - see errors above)"
   );
 
-  console.log("\nAll three read-only calls succeeded - connection is solid.");
+  // getHoldings joined the broker contract on 2026-09-10 and has only ever been driven by a
+  // mocked @stoqey/ib. It is the one call whose real behaviour is still unverified, and the one
+  // monitor.js's reconciliation depends on, so an empty account is a PASS here - what is being
+  // checked is that reqPositions/positionEnd arrive and the shape is right, not that anything
+  // is held.
+  const { holdings, totalUsd } = await IBKRBroker.getHoldings();
+  console.log(`✓ getHoldings: ${holdings.length} position(s), total $${totalUsd.toFixed(2)}`);
+  for (const h of holdings) {
+    console.log(`    ${h.asset.padEnd(8)} qty ${h.qty}  @ ${h.price}  = $${h.value.toFixed(2)}` +
+      (h.qty < 0 ? "   SHORT" : ""));
+  }
+
+  console.log("\nAll four read-only calls succeeded - connection is solid.");
   process.exit(0);
 } catch (err) {
   console.error("\nFailed:", err.message);
