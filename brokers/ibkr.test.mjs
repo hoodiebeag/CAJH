@@ -139,12 +139,13 @@ test("symbolToNativeId returns the plain symbol (documented display-id, not a fu
   assert.equal(IBKRBroker.symbolToNativeId("AAPL"), "AAPL");
 });
 
-test("IBKRBroker exposes exactly the six interface methods", () => {
+test("IBKRBroker exposes exactly the seven interface methods", () => {
   const keys = Object.keys(IBKRBroker).sort();
   assert.deepEqual(keys, [
     "fetchOHLC",
     "getAccountBalanceSnapshot",
     "getCurrentPriceSnapshot",
+    "getHoldings",
     "placeBuy",
     "placeSell",
     "symbolToNativeId",
@@ -275,4 +276,77 @@ test("a fatal order error still rejects", async () => {
   await new Promise((r) => setTimeout(r, 0));
   c.emit(EventName.error, 1, 201, "Order rejected - reason: insufficient margin");
   await assert.rejects(() => promise, /201/);
+});
+
+// --- getHoldings ------------------------------------------------------------
+// monitor.js destructures { holdings } and hands it to reconcile, which reads asset, qty and
+// value. These pin that contract and the two places IBKR genuinely differs from Kraken.
+
+function holdingsMock() {
+  const c = mockClient();
+  c.reqPositions = () => c;
+  c.cancelPositions = () => c;
+  return c;
+}
+const contract = (symbol) => ({ symbol, secType: "STK", currency: "USD" });
+
+/** Drives one getHoldings call: emits the given positions, then positionEnd, then answers each
+ *  price request with `prices[symbol]` (or an error when absent). */
+function runHoldings(c, positions, prices) {
+  // Price requests are answered from the contract the adapter asks for, not from call order:
+  // holdings are sorted by value, so order-keyed prices would silently pair up wrong.
+  c.reqMktData = (id, ctr) => {
+    const px = prices[ctr?.symbol];
+    setTimeout(() => {
+      if (px === undefined) c.emit(EventName.error, new Error("no market data"), 200, id);
+      else c.emit(EventName.tickPrice, id, 4, px, {});
+    }, 0);
+    return c;
+  };
+  const p = IBKRBroker.getHoldings();
+  // getHoldings awaits getClient() first, so these must land on a macrotask -- a microtask emit
+  // fires before the listeners are attached and the call sits until its timeout.
+  setTimeout(() => {
+    for (const [sym, qty] of positions) c.emit(EventName.position, "DU123", contract(sym), qty, 0);
+    c.emit(EventName.positionEnd);
+  }, 0);
+  return p;
+}
+
+test("getHoldings returns Kraken's shape, sorted by value descending", async () => {
+  const c = holdingsMock();
+  setIBApiForTests(() => c);
+  const { holdings, totalUsd } = await runHoldings(c, [["AAPL", 10], ["MSFT", 5]], { AAPL: 20, MSFT: 100 });
+  assert.deepEqual(holdings.map(h => h.asset), ["MSFT", "AAPL"], "descending by value, not insertion order");
+  assert.deepEqual(holdings[0], { asset: "MSFT", qty: 5, price: 100, value: 500 });
+  assert.equal(totalUsd, 700);
+});
+
+test("getHoldings skips closed and dust positions", async () => {
+  // A position IBKR still reports at qty 0 is not a holding; treating it as one would raise a
+  // phantom orphan in reconciliation every cycle.
+  const c = holdingsMock();
+  setIBApiForTests(() => c);
+  const { holdings } = await runHoldings(c, [["AAPL", 0], ["MSFT", 1e-12], ["TSLA", 3]], { TSLA: 10 });
+  assert.deepEqual(holdings.map(h => h.asset), ["TSLA"]);
+});
+
+test("getHoldings reports a SHORT with negative qty rather than dropping or absolute-valuing it", async () => {
+  // Kraken spot cannot be short so trader.js never had to represent one. Hiding it here would let
+  // a real short position pass reconciliation invisibly.
+  const c = holdingsMock();
+  setIBApiForTests(() => c);
+  const { holdings, totalUsd } = await runHoldings(c, [["AAPL", -4]], { AAPL: 25 });
+  assert.deepEqual(holdings[0], { asset: "AAPL", qty: -4, price: 25, value: -100 });
+  assert.equal(totalUsd, -100);
+});
+
+test("getHoldings THROWS when a holding cannot be priced, never zeroes it", async () => {
+  // The safety property this shares with the Kraken adapter. A zero-priced holding falls below
+  // reconcile's dust threshold and disappears from reconciliation instead of raising an orphan.
+  const c = holdingsMock();
+  setIBApiForTests(() => c);
+  await assert.rejects(
+    runHoldings(c, [["AAPL", 10]], {}),
+    /holding price for AAPL is unknown/);
 });

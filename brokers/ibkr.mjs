@@ -308,12 +308,95 @@ async function placeSell({ symbol, volume }) {
  * rather than relying on this. This exists as the interface's required
  * display-id shape, not a functionally complete native identifier.
  */
+/**
+ * Positions held at the broker, for monitor.js's reconciliation against tracked trades.
+ *
+ * Matches trader.js's Kraken `getHoldings` contract exactly -- `{ holdings: [{asset, qty, price,
+ * value}], totalUsd }`, sorted by value descending -- because monitor.js destructures it and hands
+ * `holdings` straight to `reconcile`, which reads `asset`, `qty` and `value`.
+ *
+ * THROWS rather than defaulting an unknown price to zero. That is the Kraken adapter's behaviour
+ * and it is deliberate: a holding priced at zero silently drops below `reconcile`'s dust threshold
+ * and the position vanishes from reconciliation instead of raising an orphan. A reconciliation that
+ * cannot price a position must fail loudly; monitor.js already halts new entries when it does.
+ *
+ * TWO DIFFERENCES FROM KRAKEN, both real rather than incidental:
+ *
+ *  1. `reqPositions` is account-wide and carries NO reqId, unlike every other request in this file.
+ *     Errors therefore cannot be matched to it, so only socket-level failures are treated as ours.
+ *  2. IBKR positions can be SHORT. Kraken spot cannot, so trader.js never had to represent one.
+ *     A short is reported with negative qty and negative value rather than being dropped or made
+ *     absolute -- `reconcile` then sees it as a ghost against a long-only tracker, which is the
+ *     correct reading and not something this adapter should quietly paper over.
+ *
+ * CASH IS NOT INCLUDED. Kraken's version lists stablecoin balances because on a spot venue cash and
+ * positions are the same kind of thing. On IBKR they are not, and cash already has its own accessor
+ * in getAccountBalanceSnapshot. `totalUsd` here is therefore the market value of POSITIONS, and
+ * `reconcile` never reads it.
+ */
+async function getHoldings() {
+  const c = await getClient();
+  const raw = await new Promise((resolve, reject) => {
+    const found = [];
+    let settled = false;
+    const finish = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      c.off(EventName.position, onPosition);
+      c.off(EventName.positionEnd, onEnd);
+      c.off(EventName.error, onError);
+      try { c.cancelPositions(); } catch { /* the subscription may already be gone */ }
+      fn(arg);
+    };
+    const onPosition = (_account, contract, pos) => {
+      const qty = Number(pos);
+      if (!Number.isFinite(qty) || Math.abs(qty) < 1e-8) return;   // closed or dust
+      const sym = contract?.symbol;
+      if (!sym) return;
+      found.push({ asset: String(sym).toUpperCase(), qty });
+    };
+    const onEnd = () => finish(resolve, found);
+    const onError = (a, b, cc) => {
+      const e = parseErrorEvent(a, b, cc);
+      // No reqId exists for reqPositions, so only a socket failure can be attributed here.
+      // isFatal is redundant after that test: it returns true for every socket error by definition.
+      if (!e.socket) return;
+      finish(reject, new Error(`IBKR getHoldings: ${e.message}`));
+    };
+    const timer = setTimeout(
+      () => finish(reject, new Error("IBKR getHoldings: timed out waiting for positionEnd")),
+      MKT_DATA_TIMEOUT_MS);
+    c.on(EventName.position, onPosition);
+    c.on(EventName.positionEnd, onEnd);
+    c.on(EventName.error, onError);
+    c.reqPositions();
+  });
+
+  const holdings = [];
+  let totalUsd = 0;
+  for (const h of raw) {
+    let price;
+    try {
+      ({ price } = await getCurrentPriceSnapshot(h.asset));
+    } catch (err) {
+      throw new Error(`holding price for ${h.asset} is unknown: ${err.message}`);
+    }
+    const value = h.qty * price;
+    holdings.push({ asset: h.asset, qty: h.qty, price, value });
+    totalUsd += value;
+  }
+  holdings.sort((a, b) => b.value - a.value);
+  return { holdings, totalUsd };
+}
+
 const symbolToNativeId = (symbol) => symbol;
 
 export const IBKRBroker = {
   fetchOHLC,
   getCurrentPriceSnapshot,
   getAccountBalanceSnapshot,
+  getHoldings,
   placeBuy,
   placeSell,
   symbolToNativeId,
