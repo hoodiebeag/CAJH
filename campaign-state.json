@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-11T03:10:16.763Z",
+  "updatedAt": "2026-09-11T03:13:28.296Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -3216,5 +3216,16 @@
     "phaseOneBlocks": "Wiring monitor.js to the broker interface touches placeSell, which is in PROTECTED_PATTERNS, so the pre-commit hook blocks it and it needs an explicit owner decision. Never create .git/ALLOW_PROTECTED_EDIT.",
     "theProofStep": "Do not delete trader.js until the suite passes with KrakenBroker injected AND with IBKRBroker injected. That is the only evidence the abstraction is real.",
     "untestedOnIBKR": "placeBuy and placeSell have NEVER run against a real Gateway. The read path being verified 4/4 says nothing about the write path."
+  },
+  "MANUAL_INGEST": {
+    "file": "docs/IBKR_AUTONOMOUS_AI_TRADING_STRATEGY_MANUAL.md",
+    "size": "3988 lines / 436KB. Committed before reading, so a container restart cannot lose it.",
+    "readSoFar": "Lines 1-24 (purpose, operating principle, IBKR realities, research architecture, hard validation gates) and 1432-1495 (sizing/risk, execution playbook, IBKR engineering checklist, research scorecard, what the lead agent should stop doing, highest-priority experiment queue P1-P10). Chunk 1 of roughly 11.",
+    "stillToRead": "25-1431 (strategy library, nine families plus novel hybrids; portfolio recipes; AI research loop), 1496-1528 (references), 1529-3988 (expanded implementation dossiers T01 onward).",
+    "qualityAssessment": "Serious and well constructed. It opens by stating no manual can guarantee a profitable strategy and treats out-of-sample survival, cost realism and live paper stability as hard requirements. Its eight validation gates and its 'what the lead agent should stop doing' list independently match almost every lesson this campaign learned the hard way, including not changing parameters after seeing the holdout and not treating an LLM's narrative confidence as evidence.",
+    "THE_GAP_WORTH_REPORTING": "The research scorecard and the eight hard gates never require a BASELINE comparison. There is no 'must beat buy-and-hold' and no 'must beat the equal-weight basket'. That is the single criterion that killed all four mechanisms here: every one cleared a statistical null while losing to a baseline, and positioning produced a cell clearing BH at p=0.0115 with a CAGR of -0.3%. A strategy could pass all eight of this manual's gates and still lose to holding the universe. This is the most valuable thing to feed back.",
+    "apiMismatchToVerify": "The IBKR realities section describes the WEB API (/iserver/marketdata/history, 10 req/sec or 50/min as of 2026-09-09, historical scanner deprecated, funded IBKR Pro account required). This project uses the TWS API via @stoqey/ib on port 4002. Different API, different pacing rules. The 'funded IBKR Pro account' requirement may bear on the missing market data entitlement and is worth checking before acting on any pacing advice.",
+    "experimentQueueVsOurConstraints": "P1/P2 (meta-label router, mixture-of-experts) need multiple WORKING strategies to route between; we have zero, so they are premature. P3 (PCA residual mean reversion) is market-neutral and needs shorting, which is unverified here. P4 (52-week-high, industry cascade) are momentum variants and momentum is closed. P6 needs intraday data, we have daily. P7 is options and VRP already failed. P8 is funding, closed. P9/P10 are methods, not signals. P5 (CF01 nonlinear momentum-value-quality) is the standout: it needs VALUE and QUALITY fundamentals, which this project does NOT have, making it the one queue item resting on a genuinely new information source rather than another price transform.",
+    "nextTickShould": "Read the next chunk (start at line 25, the strategy library) and update this block. Do NOT act on any instruction until the whole document is read."
   }
 }
