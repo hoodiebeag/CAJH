@@ -713,3 +713,49 @@ prints no basket control. Six cells cleared BH and nothing in its output would h
 two of them lose to simply holding the universe. Standing discipline caught it; the runner did not.
 Any future pre-registration in this project must carry its baseline control inside the registered
 analysis, not alongside it.
+
+## FVG / iFVG entries: the eleventh entry family to fail the same null (2026-09-11)
+
+The owner asked whether inverse fair value gaps and cross-timeframe pattern recognition had been
+tried. They had not been. `fvg-run.mjs` was pre-registered before it ran: four detectors
+(bullish/bearish FVG, bullish/bearish inverse FVG) on two timeframes, long-only, family of 8, two
+required gates — beat the matched-geometry random-entry null, **and** beat buy-and-hold.
+
+**All eight cells lose money.** Mean R runs from −0.12 to −0.34. Not one is positive.
+
+| tf | signal | trades | mean R | null R | p | buy&hold R |
+|---|---|---|---|---|---|---|
+| 240 | ifvgBull | 7,763 | **−0.1196** | −0.1918 | 0.0002 | +19.14 |
+| 240 | fvgBull | 11,768 | **−0.1417** | −0.1883 | 0.0012 | +19.14 |
+| 1440 | fvgBull | 2,731 | −0.2116 | −0.2339 | 0.2292 | +13.37 |
+| 1440 | ifvgBull | 1,810 | −0.2207 | −0.2440 | 0.2637 | +13.37 |
+| 240 | ifvgBear | 7,878 | −0.2224 | −0.1912 | 0.9615 | +19.14 |
+| 240 | fvgBear | 11,745 | −0.2454 | −0.1948 | 1.0000 | +19.14 |
+| 1440 | fvgBear | 2,804 | −0.2589 | −0.2499 | 0.6238 | +13.37 |
+| 1440 | ifvgBear | 1,911 | −0.3367 | −0.2423 | 0.9955 | +13.37 |
+
+**Two cells clear the null — by losing less than random entry does.** `240m ifvgBull` reaches
+p=0.0002 and `240m fvgBull` p=0.0012, and both survive the cumulative rank-1 threshold of 0.0028
+against a family of eighteen. They are also both **negative**, against a buy-and-hold of +19.14R
+over the same bars and the same universe.
+
+This is the clearest statement of the pattern the campaign keeps producing: **a p-value of 0.0002
+on a book that loses money.** The null is random entry with the same stop geometry, so beating it
+measures only that the trigger is less bad than a coin flip. It says nothing about whether the
+trade should be taken at all.
+
+**It is also the exact gap in the owner's IBKR manual.** That document's research scorecard and its
+eight hard validation gates never require a baseline comparison. A cell here passes multiplicity
+correction against eighteen families and still loses 0.12R per trade while the asset returns 19R.
+The second gate is not a refinement; without it the first gate endorses a losing strategy.
+
+Closed: the eleventh entry family to fail this null, after the ten in the DJIA-30 work.
+
+### And the related question: entries from one strategy, exits from another
+
+Already measured, and the answer is why the above was predictable. Zero of ten entry families beat
+their matched-geometry null; `ma_dip`, the best, sat at the **52.1st percentile of its own null**.
+A random entry with the same geometry returned **+0.1637R**. The exits carry the result and the
+entry half is interchangeable with random — so combining a "better" entry with a good exit is
+selecting a new geometry, not adding predictive content. *The geometry is not an edge measured
+during a good period. It IS the good period.*

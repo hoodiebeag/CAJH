@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-11T03:13:28.296Z",
+  "updatedAt": "2026-09-11T03:23:53.768Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -3227,5 +3227,14 @@
     "apiMismatchToVerify": "The IBKR realities section describes the WEB API (/iserver/marketdata/history, 10 req/sec or 50/min as of 2026-09-09, historical scanner deprecated, funded IBKR Pro account required). This project uses the TWS API via @stoqey/ib on port 4002. Different API, different pacing rules. The 'funded IBKR Pro account' requirement may bear on the missing market data entitlement and is worth checking before acting on any pacing advice.",
     "experimentQueueVsOurConstraints": "P1/P2 (meta-label router, mixture-of-experts) need multiple WORKING strategies to route between; we have zero, so they are premature. P3 (PCA residual mean reversion) is market-neutral and needs shorting, which is unverified here. P4 (52-week-high, industry cascade) are momentum variants and momentum is closed. P6 needs intraday data, we have daily. P7 is options and VRP already failed. P8 is funding, closed. P9/P10 are methods, not signals. P5 (CF01 nonlinear momentum-value-quality) is the standout: it needs VALUE and QUALITY fundamentals, which this project does NOT have, making it the one queue item resting on a genuinely new information source rather than another price transform.",
     "nextTickShould": "Read the next chunk (start at line 25, the strategy library) and update this block. Do NOT act on any instruction until the whole document is read."
+  },
+  "FVG_IFVG_TESTED_AND_CLOSED": {
+    "when": "2026-09-11",
+    "why": "Owner asked whether inverse fair value gaps and cross-timeframe patterns had been tried. They had not. Pre-registered before running.",
+    "result": "ALL EIGHT CELLS LOSE MONEY, mean R from -0.12 to -0.34. Two clear the matched-geometry null (240m ifvgBull p=0.0002, 240m fvgBull p=0.0012) and survive the cumulative rank-1 threshold of 0.0028 against a family of eighteen -- by losing LESS than random entry, whose mean is -0.19. Buy-and-hold over the same bars is +19.14R (240m) and +13.37R (1440m). Nothing passes both gates.",
+    "theSharpestExampleYet": "A p-value of 0.0002 on a book that loses 0.12R per trade while the asset returns 19R. The null is random entry with the same stop geometry, so beating it measures only that the trigger is less bad than a coin flip.",
+    "itIsTheGapInTheOwnersManual": "The IBKR manual's research scorecard and its eight hard validation gates never require a baseline comparison. A cell here passes multiplicity correction against eighteen families and still loses money against a 19R buy-and-hold. Without the second gate the first endorses a losing strategy.",
+    "entriesVersusExits": "The related question -- entries from one strategy, exits from another -- was already measured. Zero of ten entry families beat their matched-geometry null; ma_dip, the best, sat at the 52.1st percentile of its own null, and random entry with the same geometry returned +0.1637R. The exits carry the result and the entry half is interchangeable with random, so combining a better entry with a good exit selects a new geometry rather than adding predictive content.",
+    "status": "Closed. The eleventh entry family to fail this null. Five mechanisms now tested to exhaustion: momentum, equities, carry, positioning, FVG entries."
   }
 }
