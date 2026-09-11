@@ -57,5 +57,7 @@ if (!results.find(([n]) => n.startsWith("fetchOHLC"))?.[1]) {
   console.log("fetchOHLC WORKED - historical bars are available even though streaming quotes are not,");
   console.log("so IBKR is usable as an independent data vendor for cross-checking.");
 }
-console.log("\nRetry with IBKR_MARKET_DATA_TYPE=4 to request delayed data where live is unsubscribed.");
+if (ok < results.length) {
+  console.log("\nRetry with IBKR_MARKET_DATA_TYPE=4 to request delayed data where live is unsubscribed.");
+}
 process.exit(ok === results.length ? 0 : 1);

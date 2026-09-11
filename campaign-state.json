@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-11T00:11:40.331Z",
+  "updatedAt": "2026-09-11T02:47:49.405Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -3187,5 +3187,14 @@
     "shortability": "UNKNOWN for all 128 -- the shortable feed (generic tick 236) returned nothing. This is NOT the same as unborrowable, and the probe says so in its own output. Zero symbols reported delayed data either, which leaves two readings: market data works and only tick 236 is unentitled, or no market data subscription is active at all. Paper accounts do not automatically inherit live entitlements. Disambiguated by counting rows carrying a price in ibkr-universe.json.",
     "whyItMatters": "A long-short equities book cannot be shown executable on this account today. This is the same class of constraint that closed the crypto path -- found BEFORE a strategy was built on it rather than after, which was the point of running the probe early.",
     "status": "Long side confirmed executable. Short side unverifiable pending an IBKR market-data/shortable entitlement."
+  },
+  "IBKR_ADAPTER_VERIFIED_LIVE": {
+    "when": "2026-09-11",
+    "what": "brokers/ibkr.mjs verified END TO END against a real IB Gateway for the first time. 4/4 calls: getAccountBalanceSnapshot, getCurrentPriceSnapshot (delayed), fetchOHLC (501 daily bars), getHoldings (empty account).",
+    "whatIsNOTverified": "placeBuy and placeSell -- no order was placed, correctly. getHoldings against a NON-empty account. Live non-delayed quotes, which need a market data subscription this account lacks.",
+    "marketData": "No live subscription. Delayed IS available and now works. The delayed quote came back 2.76 hours stale (9948s) against MAX_ORDER_SNAPSHOT_AGE_MS of 10s, so validateFreshPositiveSnapshot rejects it for orders by roughly 995x while research and monitoring can use it. The adapter stamps the real exchange timestamp rather than Date.now(), which is what makes that guard function.",
+    "fetchOHLCworks": "501 daily bars for AAPL through 2026-09-08. Historical data is a SEPARATE entitlement from streaming quotes and it is present, so IBKR is usable as an independent third data vendor for cross-checking -- the thing that broke the momentum result.",
+    "theBugThatOnlyALiveGatewayCouldFind": "parseErrorEvent read @stoqey/ib error events backwards. The library always emits (Error, code, reqId); the adapter treated a leading Error argument as proof of a socket failure, so EVERY message classified as socket with code -1, isFatal short-circuited, and isNonFatalError was unreachable dead code. Error 10167, which means delayed data is on its way, therefore killed every price request. It survived because the test mock emitted (reqId, code, message) -- arguments backwards and types wrong -- so 27 green tests certified the bug. Fixed, mock corrected, three tests added pinning the real shape.",
+    "status": "Adapter functional. Long side executable on 128/128 symbols. Shortability still unknown pending a market data entitlement."
   }
 }
