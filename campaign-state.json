@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-11T02:59:26.722Z",
+  "updatedAt": "2026-09-11T03:10:16.763Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -3205,5 +3205,16 @@
     "executionLimits": "IBKR long side executable on 128/128 symbols. Shortability UNKNOWN pending a market data entitlement, so a long-short equities book cannot be shown executable. Live quotes unavailable; delayed work and arrive ~2.76h stale, which validateFreshPositiveSnapshot correctly refuses for orders.",
     "whatWouldChangeThis": "A strategy that clears the gate on evidence, not more plumbing. That needs NEW DATA: survivorship-free equity history, an IBKR shortable entitlement, or a genuinely untried non-price source. Four price-and-positioning mechanisms are exhausted.",
     "standingConstraint": "LIVE_TRADING remains off. No live order in any asset class without D1-D2-D3 and explicit human sign-off at D3. A request to BE READY for live trading is not authorization to ENABLE it."
+  },
+  "KRAKEN_REMOVAL_ROADMAP": {
+    "where": "docs/KRAKEN-REMOVAL-ROADMAP.md",
+    "written": "2026-09-11, at owner request. NOTHING EXECUTED. Plan only.",
+    "headline": "Removal is NOT migration. IBKR offers roughly four CME crypto futures names against a 29-pair research universe, and a cross-sectional book needs at least six. Removing Kraken ends crypto as an asset class for this project rather than moving it. That is a strategic decision, not a cleanup.",
+    "preconditions": "Four, none currently met: a strategy has cleared the gate (four mechanisms closed); IBKR market data entitlement (delayed only, ~2.76h stale); shortability known (unknown on all 128); owner has accepted losing crypto (not asked).",
+    "coupling": "kraken-api has exactly ONE importer, trader.js. But trader.js is imported by monitor.js, scanner.js and commands.js, storage.js exports symbolToKrakenId, and twelve test files reference the path.",
+    "theDangerousPart": "strategy.js FEE_BUFFER_PCT=0.018 and FEE_RATE=0.008 are calibrated to Kraken Tier 1 taker fees and consumed by backtest.js as defaults. They are measurements to redo, not names to change. US equity commissions are an order of magnitude smaller, so carrying 1.8% into an IBKR book would push every breakeven stop far above where it belongs and silently change every exit -- a system that runs, tests green, and trades incorrectly.",
+    "phaseOneBlocks": "Wiring monitor.js to the broker interface touches placeSell, which is in PROTECTED_PATTERNS, so the pre-commit hook blocks it and it needs an explicit owner decision. Never create .git/ALLOW_PROTECTED_EDIT.",
+    "theProofStep": "Do not delete trader.js until the suite passes with KrakenBroker injected AND with IBKRBroker injected. That is the only evidence the abstraction is real.",
+    "untestedOnIBKR": "placeBuy and placeSell have NEVER run against a real Gateway. The read path being verified 4/4 says nothing about the write path."
   }
 }
