@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EventEmitter } from "node:events";
-import { EventName, OrderAction } from "@stoqey/ib";
+import { EventName, OrderAction, ErrorCode } from "@stoqey/ib";
 
 import { IBKRBroker, setIBApiForTests } from "./ibkr.mjs";
 
@@ -63,8 +63,8 @@ test("fetchOHLC resolves null on a request-scoped error, not on an unrelated req
   setIBApiForTests(() => c);
   const promise = IBKRBroker.fetchOHLC("AAPL", 60);
   await new Promise((r) => setTimeout(r, 0));
-  c.emit(EventName.error, 999, 200, "unrelated request error");
-  c.emit(EventName.error, 1, 200, "No security definition has been found");
+  c.emit(EventName.error, new Error("unrelated request error"), 200, 999);
+  c.emit(EventName.error, new Error("No security definition has been found"), 200, 1);
   assert.equal(await promise, null);
 });
 
@@ -176,7 +176,7 @@ test("getClient survives a 2104 data-farm notice arriving BEFORE the connected e
   Object.assign(c, { reqMktData: () => c, cancelMktData: () => c });
   c.connect = () => {
     // real TWS ordering: informational notices can precede the handshake completing
-    queueMicrotask(() => c.emit(EventName.error, -1, 2104, "Market data farm connection is OK:usfarm"));
+    queueMicrotask(() => c.emit(EventName.error, new Error("Market data farm connection is OK:usfarm"), 2104, -1));
     queueMicrotask(() => c.emit(EventName.connected));
     return c;
   };
@@ -190,7 +190,7 @@ test("getClient survives a 2104 data-farm notice arriving BEFORE the connected e
 
 test("getClient still rejects on a genuinely fatal connect error", async () => {
   const c = new EventEmitter();
-  c.connect = () => { queueMicrotask(() => c.emit(EventName.error, -1, 502, "Couldn't connect to TWS")); return c; };
+  c.connect = () => { queueMicrotask(() => c.emit(EventName.error, new Error("Couldn't connect to TWS"), 502, -1)); return c; };
   setIBApiForTests(() => c);
   await assert.rejects(() => IBKRBroker.getCurrentPriceSnapshot("AAPL", 500), /502/);
 });
@@ -201,7 +201,7 @@ test("getCurrentPriceSnapshot ignores 10167 and resolves DELAYED_LAST with the R
   const promise = IBKRBroker.getCurrentPriceSnapshot("AAPL", 500);
   await new Promise((r) => setTimeout(r, 0));
   // exact sequence observed on a real Gateway
-  c.emit(EventName.error, 1, 10167, "Requested market data is not subscribed. Displaying delayed market data.");
+  c.emit(EventName.error, new Error("Requested market data is not subscribed. Displaying delayed market data."), 10167, 1);
   c.emit(EventName.tickPrice, 1, 68 /* DELAYED_LAST */, 309.77);
   c.emit(EventName.tickString, 1, 88 /* DELAYED_LAST_TIMESTAMP */, "1787135865");
   const snap = await promise;
@@ -238,7 +238,7 @@ test("getCurrentPriceSnapshot cancels the subscription on a fatal request error"
   setIBApiForTests(() => c);
   const promise = IBKRBroker.getCurrentPriceSnapshot("AAPL", 500);
   await new Promise((r) => setTimeout(r, 0));
-  c.emit(EventName.error, 1, 200, "No security definition has been found");
+  c.emit(EventName.error, new Error("No security definition has been found"), 200, 1);
   await assert.rejects(() => promise, /200/);
   assert.equal(c.calls.cancelMktData, 1);
 });
@@ -248,7 +248,7 @@ test("fetchOHLC does not abandon the request on a non-fatal 10090", async () => 
   setIBApiForTests(() => c);
   const promise = IBKRBroker.fetchOHLC("AAPL", 60);
   await new Promise((r) => setTimeout(r, 0));
-  c.emit(EventName.error, 1, 10090, "Part of requested market data is not subscribed.");
+  c.emit(EventName.error, new Error("Part of requested market data is not subscribed."), 10090, 1);
   c.emit(EventName.historicalData, 1, "20260101", 100, 105, 99, 104, 1000);
   c.emit(EventName.historicalData, 1, "finished-x", -1, -1, -1, -1, -1);
   const bars = await promise;
@@ -262,7 +262,7 @@ test("a benign order warning does NOT reject a genuinely filled order (phantom-p
   await new Promise((r) => setTimeout(r, 0));
   // 2109 is in the informational band; rejecting here would mean "do not track"
   // for an order that actually filled - an untracked real position.
-  c.emit(EventName.error, 1, 2109, "Outside Regular Trading Hours warning");
+  c.emit(EventName.error, new Error("Outside Regular Trading Hours warning"), 2109, 1);
   c.emit(EventName.orderStatus, 1, "Filled", 10, 0, 100.05);
   const fill = await promise;
   assert.equal(fill.volume, 10);
@@ -274,7 +274,7 @@ test("a fatal order error still rejects", async () => {
   setIBApiForTests(() => c);
   const promise = IBKRBroker.placeSell({ symbol: "AAPL", volume: 10 });
   await new Promise((r) => setTimeout(r, 0));
-  c.emit(EventName.error, 1, 201, "Order rejected - reason: insufficient margin");
+  c.emit(EventName.error, new Error("Order rejected - reason: insufficient margin"), 201, 1);
   await assert.rejects(() => promise, /201/);
 });
 
@@ -401,4 +401,48 @@ test("connectionClosed clears the cached client too", async () => {
   assert.equal(built, 2);
   made[1].emit(EventName.tickPrice, 2, 4, 103, {});
   assert.equal((await next).price, 103);
+});
+
+// --- error-event shape ------------------------------------------------------
+// The bug these exist to prevent: this mock used to emit (reqId, code, message) while the real
+// decoder emits (Error, code, reqId). parseErrorEvent was written to match the MOCK, so against a
+// live Gateway every message classified as a fatal socket error, isFatal short-circuited, and the
+// non-fatal band was never consulted. 27 tests passed throughout. A mock is only evidence about
+// the real decoder if it emits what the real decoder emits.
+
+/** Exactly what controller.js does: emitError(msg, code, reqId) -> emit(error, Error, code, reqId). */
+const emitLikeTws = (c, msg, code, reqId) => c.emit(EventName.error, new Error(msg), code, reqId ?? ErrorCode.NO_VALID_ID);
+
+test("a non-fatal notice arriving in the REAL argument order does not kill the request", async () => {
+  // 10167 means delayed data is on its way. Treating it as fatal is what made every price call
+  // fail on a live account that was entitled to delayed quotes.
+  const c = mockClient();
+  setIBApiForTests(() => c);
+  const p = IBKRBroker.getCurrentPriceSnapshot("AAPL");
+  await new Promise((r) => setTimeout(r, 0));
+  emitLikeTws(c, "Requested market data is not subscribed. Displaying delayed market data.", 10167, 1);
+  c.emit(EventName.tickPrice, 1, 4, 123.45, {});
+  assert.equal((await p).price, 123.45, "a 10167 notice must not abort a request that then receives its tick");
+});
+
+test("another request's error does not abort this one", async () => {
+  // Only possible once reqId survives parsing. While every error looked like a socket failure the
+  // id was discarded, so one request's rejection took down every request in flight.
+  const c = mockClient();
+  setIBApiForTests(() => c);
+  const p = IBKRBroker.getCurrentPriceSnapshot("AAPL");
+  await new Promise((r) => setTimeout(r, 0));
+  emitLikeTws(c, "No security definition has been found", 200, 4242);   // a DIFFERENT reqId
+  c.emit(EventName.tickPrice, 1, 4, 77.7, {});
+  assert.equal((await p).price, 77.7);
+});
+
+test("a transport failure is still fatal, and is identified by CONNECT_FAIL rather than guessed", async () => {
+  // socket.js's onError calls emitError(err.message, ErrorCode.CONNECT_FAIL), so 502 is the
+  // discriminator. Without one, the fix for the above would have made genuine disconnects benign.
+  const c = new EventEmitter();
+  c.connect = () => { queueMicrotask(() => emitLikeTws(c, "connect ECONNREFUSED 127.0.0.1:4002", ErrorCode.CONNECT_FAIL)); return c; };
+  c.reqMktData = () => c; c.cancelMktData = () => c;
+  setIBApiForTests(() => c);
+  await assert.rejects(IBKRBroker.getCurrentPriceSnapshot("AAPL"), /ECONNREFUSED|connect failed/);
 });

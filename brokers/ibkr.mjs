@@ -31,16 +31,42 @@
  * on submission) - same hard requirement as trader.js's confirmBuyFill/
  * confirmSellFill, for the same reason: prevents phantom positions.
  */
-import { IBApi, EventName, Stock, MarketOrder, OrderAction, WhatToShow, BarSizeSetting, MarketDataType, isNonFatalError } from "@stoqey/ib";
+import { IBApi, EventName, Stock, MarketOrder, OrderAction, WhatToShow, BarSizeSetting, MarketDataType, ErrorCode, isNonFatalError } from "@stoqey/ib";
 
 /**
  * The error event is OVERLOADED by @stoqey/ib: request-scoped errors arrive as
  * (id, errorCode, errorMsg), but socket-level failures arrive as (error: Error).
  * Filtering on a numeric id silently swallows the latter. Normalizes both shapes.
  */
+/**
+ * Unpack @stoqey/ib's error event, which is ALWAYS (Error, code, reqId).
+ *
+ * controller.js does `emitError(errMsg, code, reqId)` ->
+ *   emitEvent(EventName.error, new Error(errMsg), code, reqId ?? NO_VALID_ID)
+ * for every error it raises, transport failures included.
+ *
+ * THIS WAS WRONG UNTIL 2026-09-11 AND 27 GREEN TESTS CERTIFIED IT. The previous version read
+ * "first argument is an Error" as proof of a socket failure. Since the first argument is always an
+ * Error, EVERY message was classified socket:true with code -1, isFatal short-circuited on
+ * `e.socket`, and the isNonFatalError call below it became unreachable. The whole non-fatal band
+ * the comment describes was never once consulted against a real Gateway.
+ *
+ * Two consequences, both observed on a live account: 10167 ("Displaying delayed market data" --
+ * data IS on its way) killed every price request, and reqId matching never worked, so one
+ * request's error aborted all of them.
+ *
+ * It survived because brokers/ibkr.test.mjs's mock emitted (reqId, code, message) -- the arguments
+ * backwards and the types wrong. The tests encoded the bug and then confirmed it. A mock is only
+ * evidence about the real decoder if it emits what the real decoder emits.
+ *
+ * A genuine transport failure is not guessed at either: socket.js's onError calls
+ * `emitError(err.message, ErrorCode.CONNECT_FAIL)`, so code 502 is the discriminator.
+ */
 function parseErrorEvent(a, b, c) {
-  if (a instanceof Error) return { id: -1, code: -1, message: a.message, error: a, socket: true };
-  return { id: a, code: b, message: String(c ?? ""), error: new Error(String(c ?? "")), socket: false };
+  const error = a instanceof Error ? a : new Error(String(a ?? ""));
+  const code = Number.isFinite(Number(b)) ? Number(b) : -1;
+  const id = Number.isFinite(Number(c)) ? Number(c) : -1;
+  return { id, code, message: error.message, error, socket: code === ErrorCode.CONNECT_FAIL };
 }
 
 /**
