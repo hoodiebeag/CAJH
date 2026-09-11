@@ -94,8 +94,10 @@ Six Tier-A ideas are not adjacent to any closed row:
 2. **MR08 — liquidity shock normalization** (Amihud illiquidity z-score spike
    then partial normalization). Volume has only ever been used here as a
    confirmation filter, never as the signal.
-3. **RV02 / RV03 / RV10 — residual mean reversion** (PCA residuals, basket-vs-
-   constituent, cross-asset beta residual). Not a repeat of
+3. **RV02 / RV03 — residual mean reversion** (PCA residuals, basket-vs-constituent).
+   *Corrected 2026-09-11, before the run: RV10 was listed here and does not belong.
+   Its rule is a dynamic beta to MACRO drivers and the S&P bundle holds no rates,
+   no USD and no commodities, so it is Tier B, gated on a pull.* Not a repeat of
    PAIRS-COINTEGRATION-STATARB: that screened 105 explicit pairs for
    cointegration and found none, whereas these estimate a common-factor model
    across the 128-name S&P bundle and trade the residual. Different estimator,

@@ -185,7 +185,7 @@ function runBook(key, book) {
 /** The same geometry with the ranking replaced by a coin flip. */
 function selectionNull(book, k) {
   const rng = seededRng(20260911);
-  const draws = [];
+  const draws = [], sharpes = [];
   for (let d = 0; d < k; d++) {
     const rets = [];
     for (const r of usable) {
@@ -201,8 +201,9 @@ function selectionNull(book, k) {
       rets.push((L - S) / 2);
     }
     draws.push(compound(rets, (book === "LS" ? 4 : 2) * LEG));
+    sharpes.push(sharpe(rets));
   }
-  return draws;
+  return { draws, sharpes };
 }
 
 /** Annualised Sharpe from the per-rebalance return series. */
@@ -224,7 +225,8 @@ console.log(`\nBASELINE equal-weight buy-and-hold: ${pct(bh)} over ${years.toFix
 
 // ---- the four pre-registered cells --------------------------------------
 console.log(`\nrunning ${DRAWS} selection-null draws per book...`);
-const nulls = { LS: selectionNull("LS", DRAWS), LO: selectionNull("LO", DRAWS) };
+const nullRuns = { LS: selectionNull("LS", DRAWS), LO: selectionNull("LO", DRAWS) };
+const nulls = { LS: nullRuns.LS.draws, LO: nullRuns.LO.draws };
 
 const cells = [
   { id: "P-LS", name: "PCA k=3 residual, long-short", key: "P3", book: "LS" },
@@ -261,7 +263,14 @@ for (const [lbl, key] of [["PCA k=1", "P1"], ["PCA k=5", "P5"]]) {
   }
 }
 
-console.log(`\nnull means: LS ${pct(nullSummary(nulls.LS, 0).nullMean)}, LO ${pct(nullSummary(nulls.LO, 0).nullMean)} (coin-flip picks, same geometry and costs)`);
+// The Sharpe of the null matters as much as its return. If a coin flip under this geometry also
+// produces a high Sharpe, then a cell's Sharpe is a property of the rebalancing geometry, not of
+// the selection -- the distinction that has decided most of this campaign.
+for (const book of ["LS", "LO"]) {
+  const n = nullSummary(nulls[book], 0), sh = nullRuns[book].sharpes;
+  console.log(`\nNULL ${book}: mean return ${pct(n.nullMean)}, mean Sharpe ${mean(sh).toFixed(3)}` +
+    ` (coin-flip picks, same geometry and costs; ${pct(sh.filter((v) => v >= Math.max(...cells.filter((c) => c.book === book).map((c) => c.sharpe))).length / sh.length)} of draws match or beat the best ${book} cell's Sharpe)`);
+}
 const survivors = cells.filter((c) => c.beatsBH && c.clearsBH);
 console.log(`\nsurvivors: ${survivors.length ? survivors.map((c) => c.id).join(", ") : "NONE"}`);
 if (!survivors.length) {

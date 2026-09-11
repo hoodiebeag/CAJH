@@ -812,3 +812,51 @@ to the point.
 
 Closed. Twelfth family, twelfth failure of the same pair of gates. Of the six manual strategies
 that survived triage into Tier A, the one with the best prior is now the one with a verdict.
+
+## Residual mean reversion (RV02 / RV03) — the thirteenth family, closed, and a calibration number worth keeping
+
+Pre-registered in `residual-run.mjs` and committed before the run. Universe `sp500-bundle/1440`:
+128 names, 920 dates, 159 rebalances, 13 names per leg, 120-day fitting window, residual path
+z-scored over 60 days, 5-day hold, `usEquityIbkr` costs, 2,000 selection-null draws per book.
+
+RV10 was dropped from the family **before** the run, correcting my own triage: its rule is a
+dynamic beta to macro drivers and the S&P bundle holds no rates, no USD, no commodities. Testing it
+with a stand-in factor would have been fitting a convenient regressor and calling it the strategy.
+
+| cell | mechanism | gross | net | Sharpe | vs B&H | null p |
+|---|---|---|---|---|---|---|
+| P-LS | PCA k=3 residual, long-short | −0.32% | −29.77% | 0.040 | −88.20 | 0.4828 |
+| P-LO | PCA k=3 residual, long only | +46.63% | +23.09% | 0.678 | −35.34 | 0.5037 |
+| M-LS | market-beta residual, long-short | +8.51% | −23.55% | 0.273 | −81.98 | 0.2539 |
+| M-LO | market-beta residual, long only | +75.81% | **+47.59%** | **0.941** | −10.84 | 0.1624 |
+
+Baseline: equal-weight buy-and-hold, **+58.43% net, Sharpe 0.366**.
+
+**M-LO is the highest Sharpe this campaign has ever produced — 0.941 against the index's 0.366 —
+and it is not an edge.** That is the finding, and it took one diagnostic to see it:
+
+> **A coin flip under the same geometry has mean Sharpe 0.734, and 23.95% of random draws match or
+> beat M-LO's 0.941.** Random selection of 13 names on the same dates also returns +25.43% net
+> against M-LO's +47.59%, at p=0.1624.
+
+So the Sharpe belongs to the rebalancing geometry — weekly-rebalanced equal-weight 13-name
+concentration — and not to the residual signal. Reported alone, "Sharpe 0.94 versus the index's
+0.37" is the most persuasive number this project has generated and it means nothing. This is the
+same lesson the entry-family work reached from the other direction (*the geometry is not an edge
+measured during a good period; it IS the good period*), now with a number attached on the equity
+side.
+
+**Keep this calibration: any future decile-rotation study on this universe must clear a null Sharpe
+of 0.734, not the index's 0.366.** Measuring against the index over-credits such a book by roughly
+0.37 of Sharpe before any signal is involved.
+
+The long-short books are a separate and simpler story: the LS null itself returns −29.55%, and both
+LS cells sit on top of it. The market-neutral form's entire loss is the cost of turning over two
+legs every five days. Nothing was hedged away that the hedge did not cost more than.
+
+Robustness, outside the family and uncorrected: PCA k=1 LO +39.11% (Sharpe 0.846), k=5 LO +12.90%
+(0.564). The pre-registered k=3 sits between its neighbours, so the k=3 number is not a lucky pick
+— it is simply not a winning one either.
+
+Closed. Thirteenth family, same two gates. Four of the six Tier-A survivors of the manual triage
+remain: MR08, CF12, T11, HX02.
