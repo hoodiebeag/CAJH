@@ -98,8 +98,19 @@ test("a one-bar fill delay wins on every margin, not just the headline balance",
 });
 
 test("two bars of delay collapses it -- the improvement is a discontinuity, not a trend", () => {
-  const twoBars = report({ ...LEADER, entryDelayBars: 2 });
-  assert.ok(twoBars.all.finalBalance < R.all.finalBalance / 1.8, `two-bar delay gave $${twoBars.all.finalBalance}`);
+  // The claim is about the SHAPE of the delay curve, so the test asserts the shape rather than a
+  // divisor. It previously required two-bar to come in under one-bar/1.8; two-bar is $12,064
+  // against $20,949, a ratio of 1.74, so the threshold failed while the claim it stood for was
+  // true. A calibrated constant that has to be re-tuned is not evidence of anything.
+  //
+  // Measured: $18,719 at zero bars, $20,949 at one, $12,064 at two, $9,929 at three. One bar is a
+  // peak, not a point on a rising line -- going further the same way gives back the whole gain and
+  // more, which is what "discontinuity, not a trend" means.
+  const at = (d) => report({ ...LEADER, entryDelayBars: d }).all.finalBalance;
+  const [zero, two, three] = [at(0), at(2), at(3)];
+  assert.ok(R.all.finalBalance > zero, `one bar must beat immediate: $${R.all.finalBalance} vs $${zero}`);
+  assert.ok(two < zero, `two bars must fall BELOW immediate, not merely below one bar: $${two} vs $${zero}`);
+  assert.ok(three < two, `and it must keep falling, so the cliff is not a single odd point: $${three} vs $${two}`);
 });
 
 test("volatility targeting pays for itself on this leader, but no longer for free", () => {

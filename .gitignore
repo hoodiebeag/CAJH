@@ -19,6 +19,13 @@ candles-upload.tar.gz*
 .assistant_snapshots/
 paper-runs/
 
-# transfer bundles -- never commit market data
-/candle-bundle/
+# Raw stores stay out of git; COMPACT BUNDLES go in. The distinction is size and
+# reproducibility, not principle. candles/ is ~1.2GB of minute bars and is regenerable
+# from the exchange; candle-bundle/ is ~9MB of daily bars and is NOT -- Kraken's public
+# OHLC endpoint returns only 720 rows, so a lost bundle cannot be re-pulled, only
+# rebuilt from a raw store that exists on one machine.
+# It was excluded here until 2026-09-10, when a container restart destroyed it along
+# with the uploads directory and took 18 tests down with it. sp500-bundle (11M),
+# candle-bundle-long (4.3M) and funding-binance (5.8M) were already tracked, so this
+# rule was the only thing standing between the crypto universe and permanence.
 candle-bundle.tar.gz

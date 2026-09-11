@@ -64,3 +64,38 @@ test("basketReturns is the equal-weight mean and is null on the first bar", () =
   assert.equal(r[0], null);
   assert.ok(Math.abs(r[1] - (Math.log(1.1) + Math.log(0.9)) / 2) < 1e-12);
 });
+
+test("illiquidity ranks a thinly-traded name above a heavily-traded one with the same path", () => {
+  const n = 300;
+  const closes = Array.from({ length: n }, (_, i) => 100 * Math.exp(0.001 * i + 0.02 * Math.sin(i)));
+  const ctx = (vol) => ({ volume: { X: new Array(n).fill(vol) }, symbol: "X" });
+  const thin = SIGNALS.illiquidity(closes, n - 1, ctx(1_000));
+  const deep = SIGNALS.illiquidity(closes, n - 1, ctx(1_000_000_000));
+  assert.ok(thin !== null && deep !== null);
+  assert.ok(thin > deep, "the same price path on less volume must score as more illiquid");
+});
+
+test("smallSize ranks the smaller dollar volume higher", () => {
+  const n = 300;
+  const closes = new Array(n).fill(50);
+  const at = (vol) => SIGNALS.smallSize(closes, n - 1, { volume: { X: new Array(n).fill(vol) }, symbol: "X" });
+  assert.ok(at(1_000) > at(1_000_000), "less dollar volume is smaller, and is held long");
+});
+
+test("both new signals refuse to score without volume or without enough history", () => {
+  const closes = Array.from({ length: 300 }, () => 100);
+  for (const name of ["illiquidity", "smallSize"]) {
+    assert.equal(SIGNALS[name](closes, 299, { symbol: "X" }), null, `${name} with no volume`);
+    assert.equal(SIGNALS[name](closes, 100, { volume: { X: new Array(300).fill(1) }, symbol: "X" }), null,
+      `${name} needs 252 bars`);
+  }
+});
+
+test("a zero-volume bar is skipped rather than dividing by zero", () => {
+  const n = 300;
+  const closes = Array.from({ length: n }, (_, i) => 100 * Math.exp(0.001 * i));
+  const vol = new Array(n).fill(1000);
+  for (let i = 0; i < n; i += 5) vol[i] = 0;              // 20% of bars did not trade
+  const v = SIGNALS.illiquidity(closes, n - 1, { volume: { X: vol }, symbol: "X" });
+  assert.ok(v !== null && Number.isFinite(v), "must be finite, not Infinity or NaN");
+});

@@ -27,7 +27,7 @@
  *   beta            sensitivity to the basket, the direct betting-against-beta test.
  */
 
-import { runRotation, randomSpreadNull, selectionP, spread } from "./xsmom.mjs";
+import { runRotation, randomSpreadNull, selectionP, spread, perYear, anchoredDrawdown } from "./xsmom.mjs";
 import { buildGrid, trailingVol } from "./multifactor.mjs";
 
 /** log return over [i-lookback, i-skip] */
@@ -82,6 +82,29 @@ export const SIGNALS = {
     for (let j = i - 125; j <= i - 63; j++) if (v[j] > 0) { older += v[j]; on++; }
     return rn > 30 && on > 30 && older > 0 ? Math.log((recent / rn) / (older / on)) : null;
   },
+  // Amihud illiquidity: average price impact per dollar traded. The premium is compensation for
+  // bearing illiquidity, not a price-continuation effect, so it is the first signal in this battery
+  // whose MECHANISM differs from the rest. Higher = more illiquid = held long.
+  illiquidity:  (c, i, ctx) => {
+    const v = ctx.volume?.[ctx.symbol];
+    if (!v || i < 252) return null;
+    let sum = 0, n = 0;
+    for (let j = i - 251; j <= i; j++) {
+      const dollar = c[j] > 0 && v[j] > 0 ? c[j] * v[j] : 0;
+      if (dollar > 0 && c[j - 1] > 0) { sum += Math.abs(Math.log(c[j] / c[j - 1])) / dollar; n++; }
+    }
+    // Scaled only to keep the numbers readable; a monotone transform cannot change a ranking.
+    return n > 200 ? Math.log(1 + (sum / n) * 1e9) : null;
+  },
+  // The size premium, proxied by dollar volume because market capitalisation is not in these
+  // bundles. Small trades less, so LOW dollar volume scores high and is held long.
+  smallSize:    (c, i, ctx) => {
+    const v = ctx.volume?.[ctx.symbol];
+    if (!v || i < 252) return null;
+    let sum = 0, n = 0;
+    for (let j = i - 251; j <= i; j++) if (c[j] > 0 && v[j] > 0) { sum += c[j] * v[j]; n++; }
+    return n > 200 && sum > 0 ? -Math.log(sum / n) : null;
+  },
   idioVol:      (c, i, ctx) => {
     if (i < 126 || !ctx.basket) return null;
     const rs = [];
@@ -123,6 +146,11 @@ export function basketReturns(grid, symbols, times) {
 /** Score one signal as a dollar-neutral long-short book, with its own random-split null. */
 export function testSignal(name, series, {
   rebalanceBars = 21, topK = 10, slipPct = 0.0005, borrow = 0.05, draws = 200, seed = 20260904,
+  // The random-split null does not depend on the signal, so a battery scoring twelve signals
+  // against it recomputes the identical draws twelve times. Pass one in to share it -- which also
+  // makes explicit that every p-value in the family is read off the SAME null sample, and so the
+  // family's p-values are dependent by construction, not merely correlated through the data.
+  nullResult = null,
 } = {}) {
   const fn = SIGNALS[name];
   if (!fn) throw new Error(`factors: unknown signal "${name}" (have: ${Object.keys(SIGNALS).join(", ")})`);
@@ -154,18 +182,35 @@ export function testSignal(name, series, {
   const n = Math.min(top.periodReturns.length, bot.periodReturns.length);
   if (n < 6) return { name, periods: n, insufficient: true };
   const returns = [];
-  for (let i = 0; i < n; i++) returns.push(0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i] - 0.5 * borrow / 12);
-  let bal = 1000, peak = 1000, maxDD = 0;
-  for (const r of returns) { bal *= Math.exp(r); peak = Math.max(peak, bal); maxDD = Math.max(maxDD, (peak - bal) / peak); }
+  // Borrow is annual; divide by this universe's own rebalances per year, not by an assumed 12.
+  const ppy = perYear(top.rebalanceLog) ?? 12;
+  // The short leg's turnover cost enters with a minus sign and would otherwise be a credit; see
+  // the note in xsmom.mjs spread().
+  for (let i = 0; i < n; i++) {
+    returns.push(0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i]
+                 + (bot.periodCosts[i] ?? 0) - 0.5 * borrow / ppy);
+  }
+  let bal = 1000;
+  for (const r of returns) bal *= Math.exp(r);
 
-  const nul = randomSpreadNull(series, { ...opts, topK }, { draws, seed, borrow });
+  const nul = nullResult ?? randomSpreadNull(series, { ...opts, topK }, { draws, seed, borrow });
   const p = selectionP(nul, +bal.toFixed(2));
-  const years = n / 12;
+  const years = n / ppy;
+  // The spread's own per-bar series, built exactly as spread() builds it, so a caller can mark this
+  // signal's book intra-period instead of only at period ends.
+  const perBarBorrow = 0.5 * borrow / (perYear(top.times) ?? 252);
+  const barReturns = top.times.map((_, k) => 0.5 * top.barReturns[k] - 0.5 * bot.barReturns[k] - perBarBorrow);
+  // Per-bar and anchored, the same way spread() does it. The period-end mark this replaced never
+  // saw an intra-period low and understated every drawdown the battery reported.
+  const maxDD = anchoredDrawdown(returns, barReturns, top.times, top.rebalanceLog);
   return {
     name, periods: n,
+    // The period returns, the two legs and the per-bar path, so a caller can combine this signal's
+    // BOOK with another rather than only compare their summary statistics.
+    returns, top, bot, periodsPerYear: +ppy.toFixed(2), times: top.times, barReturns,
     finalBalance: +bal.toFixed(2),
     cagrPct: +(((bal / 1000) ** (1 / years) - 1) * 100).toFixed(2),
-    maxDrawdownPct: +(100 * maxDD).toFixed(2),
+    maxDrawdownPct: maxDD,
     upPeriods: returns.filter((r) => r > 0).length,
     nullMedian: nul.median, p,
   };
