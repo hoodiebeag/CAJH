@@ -759,3 +759,56 @@ A random entry with the same geometry returned **+0.1637R**. The exits carry the
 entry half is interchangeable with random — so combining a "better" entry with a good exit is
 selecting a new geometry, not adding predictive content. *The geometry is not an edge measured
 during a good period. It IS the good period.*
+
+## Overnight vs intraday decomposition (MR11 / HX13) — the twelfth family, closed
+
+Pre-registered in `overnight-run.mjs` and committed before the run. Universe `sp500-bundle/1440`:
+128 US names, 920 dates, 117,760 symbol-days, 2023-01 → 2026-09. Cost model `usEquityIbkr`
+(0.5bp fee + 5bp slippage per leg). Crypto excluded — a 24/7 market has no overnight session.
+
+This mattered because **every prior result in this repository is computed close-to-close.** The
+open price sat in all four bundles the whole campaign and had never been used as a signal; its one
+appearance anywhere was gap accounting in `studies/overlay.mjs`. So it was the last unused
+information source in data we already own.
+
+**The integrity gate passed**, which is a result in its own right: 154 of 117,760 symbol-days carry
+`|overnight| > 15%` (0.13%, gate ≤ 1%) and the correlation between the two legs on those extreme
+days is −0.0173 (gate ≥ −0.5). The `sp500-bundle` opens and closes are on one adjustment basis.
+Had they not been, a 2:1 split would read as −50% overnight and +100% intraday and very nearly
+cancel in the close-to-close return every prior study used — invisible to every other check here.
+
+**The published anomaly does reproduce, descriptively.** Overnight carries 3.56bp/day against
+intraday's 2.11bp/day: **64% of the total daily return accrues while the market is shut.**
+
+**It is not an edge.** Holding only the overnight leg returns +36.16% gross over 3.65 years against
+a buy-and-hold of ~58.6% gross. Giving up the intraday 2.11bp costs more than the concentration
+gains, before a single fee.
+
+| cell | mechanism | gross | net | cost drag | vs B&H | null p |
+|---|---|---|---|---|---|---|
+| A | overnight-only book | +36.16% | −50.53% | 86.70 | −108.96 | n/a |
+| B | intraday-only book | +16.81% | −57.56% | 74.37 | −115.99 | n/a |
+| C | XS momentum on overnight component | +0.83% | −16.10% | 16.93 | −74.53 | 0.9838 |
+| D | XS momentum on intraday component | +57.96% | +31.44% | 26.52 | −26.99 | 0.4071 |
+| E | XS momentum on total return (control) | +15.25% | −4.10% | 19.35 | −62.53 | 0.9298 |
+| F | MR11 overnight-lag divergence | +23.49% | +2.75% | 20.73 | −55.68 | 0.8605 |
+
+Baseline: equal-weight buy-and-hold of the same 128 names, **+58.43% net** (CAGR 13.43%).
+
+**The line that decides it: a random selection of the same 13 names on the same dates, held the
+same way and charged the same costs, returns +27.99% net.** Three of the four selection rules lose
+to a coin flip. The pre-registered kill condition anticipated the one that does not: D beats the
+control E by 35 points, which read alone looks like the decomposition working — and D sits at the
+59th percentile of its own null, a spread a coin flip reproduces 41% of the time. Without the
+selection null that 35-point gap would have been reported as a finding.
+
+D's gross return (+57.96%) is also, to within a point, the market's own gross return. Ranking on
+the intraday component earns exactly the index and then pays 26 points of turnover for the
+privilege.
+
+**Cells A and B failed by the arithmetic written into the pre-registration**: a single-leg book
+turns over every session, 11bp a day, ~28% a year. That was stated before the run and is confirmed
+to the point.
+
+Closed. Twelfth family, twelfth failure of the same pair of gates. Of the six manual strategies
+that survived triage into Tier A, the one with the best prior is now the one with a verdict.

@@ -241,13 +241,14 @@ const withP = cells.filter((c) => c.p !== null).sort((a, b) => a.p - b.p);
 withP.forEach((c, i) => { c.bhThreshold = (Q * (i + 1)) / withP.length; c.clearsBH = c.p <= c.bhThreshold; });
 for (let i = withP.length - 2; i >= 0; i--) if (withP[i + 1].clearsBH) withP[i].clearsBH = true;
 
-console.log(`\n${"cell".padEnd(4)}${"mechanism".padEnd(40)}${"net".padStart(10)}${"vs B&H".padStart(10)}${"null p".padStart(10)}${"  verdict"}`);
+console.log(`\n${"cell".padEnd(4)}${"mechanism".padEnd(40)}${"gross".padStart(10)}${"net".padStart(10)}${"cost drag".padStart(11)}${"vs B&H".padStart(10)}${"null p".padStart(10)}${"  verdict"}`);
 for (const c of cells) {
   const gates = [];
   if (!c.beatsBH) gates.push("loses to buy-and-hold");
   if (c.selects && !c.clearsBH) gates.push("no selection skill");
   const verdict = gates.length ? `DEAD (${gates.join("; ")})` : "CLEARS BOTH GATES";
-  console.log(`${c.id.padEnd(4)}${c.name.padEnd(40)}${pct(c.net).padStart(10)}${(c.net > bh ? "+" : "") + pct(c.net - bh).padStart(9)}` +
+  console.log(`${c.id.padEnd(4)}${c.name.padEnd(40)}${pct(c.gross).padStart(10)}${pct(c.net).padStart(10)}` +
+    `${pct(c.gross - c.net).padStart(11)}${((c.net > bh ? "+" : "") + pct(c.net - bh)).padStart(10)}` +
     `${(c.p === null ? "n/a" : c.p.toFixed(4)).padStart(10)}  ${verdict}`);
 }
 
