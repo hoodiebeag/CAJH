@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-11T02:47:49.405Z",
+  "updatedAt": "2026-09-11T02:59:26.722Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -3196,5 +3196,14 @@
     "fetchOHLCworks": "501 daily bars for AAPL through 2026-09-08. Historical data is a SEPARATE entitlement from streaming quotes and it is present, so IBKR is usable as an independent third data vendor for cross-checking -- the thing that broke the momentum result.",
     "theBugThatOnlyALiveGatewayCouldFind": "parseErrorEvent read @stoqey/ib error events backwards. The library always emits (Error, code, reqId); the adapter treated a leading Error argument as proof of a socket failure, so EVERY message classified as socket with code -1, isFatal short-circuited, and isNonFatalError was unreachable dead code. Error 10167, which means delayed data is on its way, therefore killed every price request. It survived because the test mock emitted (reqId, code, message) -- arguments backwards and types wrong -- so 27 green tests certified the bug. Fixed, mock corrected, three tests added pinning the real shape.",
     "status": "Adapter functional. Long side executable on 128/128 symbols. Shortability still unknown pending a market data entitlement."
+  },
+  "LIVE_READINESS_2026_09_11": {
+    "ownerRequest": "Owner asked, before logging off for the weekend, to be ready for a seamless transition to live trading on IBKR using the highest-confidence strategy so far.",
+    "theAnswer": "There is no strategy to transition. Highest-confidence-so-far is the best of four mechanisms that were each measured and CLOSED. The best-performing cell in the entire campaign (positioning TAKER L=90 long-only, 11.1% CAGR) loses to buy-and-hold BTC by 3.4x while carrying a LARGER drawdown than holding the whole universe. Deploying it is not a calculated risk, it is deploying something already measured to lose.",
+    "readinessIsNotTheConstraint": "The plumbing is essentially done. Research-to-gate is generic (scoreCandidate takes any config, promotionGate scores it, gate-run --contract lists the ten required fields). D2 exists as paper.mjs. Both broker adapters are complete and symmetric, and IBKR is verified 4/4 against a live Gateway.",
+    "theOneRemainingGap": "monitor.js:6 imports trader.js by name and trader.js imports kraken-api, so the live path is wired to Kraken and nothing outside studies/scripts consumes a broker adapter. Rewiring touches placeSell, which is in PROTECTED_PATTERNS, so it trips the pre-commit hook. This needs an explicit owner decision. NEVER create .git/ALLOW_PROTECTED_EDIT.",
+    "executionLimits": "IBKR long side executable on 128/128 symbols. Shortability UNKNOWN pending a market data entitlement, so a long-short equities book cannot be shown executable. Live quotes unavailable; delayed work and arrive ~2.76h stale, which validateFreshPositiveSnapshot correctly refuses for orders.",
+    "whatWouldChangeThis": "A strategy that clears the gate on evidence, not more plumbing. That needs NEW DATA: survivorship-free equity history, an IBKR shortable entitlement, or a genuinely untried non-price source. Four price-and-positioning mechanisms are exhausted.",
+    "standingConstraint": "LIVE_TRADING remains off. No live order in any asset class without D1-D2-D3 and explicit human sign-off at D3. A request to BE READY for live trading is not authorization to ENABLE it."
   }
 }
