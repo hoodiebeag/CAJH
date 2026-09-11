@@ -760,51 +760,91 @@ entry half is interchangeable with random — so combining a "better" entry with
 selecting a new geometry, not adding predictive content. *The geometry is not an edge measured
 during a good period. It IS the good period.*
 
+## THE UNIVERSE SCREEN, AND THREE STUDIES THAT RAN WITHOUT IT
+
+Recorded first because it is the most instructive thing in this section and because it is my own
+error, made three times in a row on 2026-09-11.
+
+`universe.mjs` exists because PARA sits in `sp500-bundle` with closes spanning $1.06 to $113,900 —
+a 107,453x range that no listed instrument produces. The file's own header records what it cost the
+last time: removing that one symbol took the equities book from 25.0% CAGR to 9.1%. Rule 1 of every
+campaign brief is SCREEN THE UNIVERSE FIRST, before any ranking.
+
+The overnight, residual and illiquidity studies below all ranked the raw 128. The verdicts did not
+change — all three still close with zero survivors — but almost every number did, and one headline
+was wrong by a quarter:
+
+| quantity | unscreened (published first) | screened (correct) |
+|---|---|---|
+| **share of daily return accruing overnight** | **64%** | **52%** |
+| equal-weight buy-and-hold baseline | +58.43%, Sharpe 0.366 | **+68.86%, Sharpe 0.412** |
+| long-only decile null (the calibration) | +25.43% / Sharpe 0.734 | **+33.70% / Sharpe 0.850** |
+| illiquidity LEVEL cell | +0.69% | +21.91% |
+| PCA k=3 long-only cell | +23.09% | +47.08% |
+| overnight-component momentum cell | −16.10% | +9.84% |
+
+PARA was doing three separate kinds of damage at once, one per study, and each is a textbook case
+of why the screen is written the way it is. Its fake price path produced enormous phantom overnight
+gaps, so it inflated the very asymmetry the overnight study was built to measure. A series moving
+five orders of magnitude dominates a principal component outright, so the PCA was partly fitting one
+corrupted symbol. And it was reliably the least liquid name in the cross-section, so the Amihud book
+selected it nearly every rebalance — the screen's own criteria are zero-volume bars and a
+dollar-volume floor, which is precisely what that study ranks on.
+
+**The lesson is not "remember the screen".** It is that the correction moved the headline in the
+*unfavourable* direction — 64% down to 52%, a much less striking claim — which is the reassuring
+direction and the reason to trust the corrected figure. Rule 7 says to suspect a fix that improves
+a headline harder than the bug. The converse holds: a fix that deflates one is doing its job.
+
+All three studies now call `screenUniverse` before ranking, print what they exclude, and the tables
+below carry the screened numbers.
+
 ## Overnight vs intraday decomposition (MR11 / HX13) — the twelfth family, closed
 
-Pre-registered in `overnight-run.mjs` and committed before the run. Universe `sp500-bundle/1440`:
-128 US names, 920 dates, 117,760 symbol-days, 2023-01 → 2026-09. Cost model `usEquityIbkr`
-(0.5bp fee + 5bp slippage per leg). Crypto excluded — a 24/7 market has no overnight session.
+Pre-registered in `overnight-run.mjs` and committed before the run. Universe `sp500-bundle/1440`,
+screened: **127 names** (PARA excluded), 920 dates, 116,840 symbol-days, 2023-01 → 2026-09. Cost
+model `usEquityIbkr` (0.5bp fee + 5bp slippage per leg). Crypto excluded — a 24/7 market has no
+overnight session.
 
 This mattered because **every prior result in this repository is computed close-to-close.** The
 open price sat in all four bundles the whole campaign and had never been used as a signal; its one
 appearance anywhere was gap accounting in `studies/overlay.mjs`. So it was the last unused
 information source in data we already own.
 
-**The integrity gate passed**, which is a result in its own right: 154 of 117,760 symbol-days carry
-`|overnight| > 15%` (0.13%, gate ≤ 1%) and the correlation between the two legs on those extreme
-days is −0.0173 (gate ≥ −0.5). The `sp500-bundle` opens and closes are on one adjustment basis.
+**The integrity gate passed**, which is a result in its own right: 138 of 116,840 symbol-days carry
+`|overnight| > 15%` (0.12%, gate ≤ 1%) and the correlation between the two legs on those extreme
+days is +0.0467 (gate ≥ −0.5). The `sp500-bundle` opens and closes are on one adjustment basis.
 Had they not been, a 2:1 split would read as −50% overnight and +100% intraday and very nearly
 cancel in the close-to-close return every prior study used — invisible to every other check here.
 
-**The published anomaly does reproduce, descriptively.** Overnight carries 3.56bp/day against
-intraday's 2.11bp/day: **64% of the total daily return accrues while the market is shut.**
+**The published anomaly reproduces, but weakly.** Overnight carries 3.30bp/day against intraday's
+3.04bp/day: **52% of the total daily return accrues while the market is shut** — a near-even split,
+not the 64% the unscreened run reported.
 
-**It is not an edge.** Holding only the overnight leg returns +36.16% gross over 3.65 years against
-a buy-and-hold of ~58.6% gross. Giving up the intraday 2.11bp costs more than the concentration
+**It is not an edge.** Holding only the overnight leg returns +32.98% gross over 3.65 years against
+a buy-and-hold of ~69% gross. Giving up the intraday leg costs far more than the concentration
 gains, before a single fee.
 
 | cell | mechanism | gross | net | cost drag | vs B&H | null p |
 |---|---|---|---|---|---|---|
-| A | overnight-only book | +36.16% | −50.53% | 86.70 | −108.96 | n/a |
-| B | intraday-only book | +16.81% | −57.56% | 74.37 | −115.99 | n/a |
-| C | XS momentum on overnight component | +0.83% | −16.10% | 16.93 | −74.53 | 0.9838 |
-| D | XS momentum on intraday component | +57.96% | +31.44% | 26.52 | −26.99 | 0.4071 |
-| E | XS momentum on total return (control) | +15.25% | −4.10% | 19.35 | −62.53 | 0.9298 |
-| F | MR11 overnight-lag divergence | +23.49% | +2.75% | 20.73 | −55.68 | 0.8605 |
+| A | overnight-only book | +32.98% | −51.69% | 84.67 | −120.56 | n/a |
+| B | intraday-only book | +27.26% | −53.77% | 81.03 | −122.63 | n/a |
+| C | XS momentum on overnight component | +32.01% | +9.84% | 22.16 | −59.02 | 0.8830 |
+| D | XS momentum on intraday component | +57.96% | +31.44% | 26.52 | −37.43 | 0.5519 |
+| E | XS momentum on total return (control) | +15.25% | −4.10% | 19.35 | −72.97 | 0.9735 |
+| F | MR11 overnight-lag divergence | +40.32% | +16.76% | 23.56 | −52.10 | 0.7943 |
 
-Baseline: equal-weight buy-and-hold of the same 128 names, **+58.43% net** (CAGR 13.43%).
+Baseline: equal-weight buy-and-hold of the same 127 names, **+68.86% net** (CAGR 15.43%).
 
 **The line that decides it: a random selection of the same 13 names on the same dates, held the
-same way and charged the same costs, returns +27.99% net.** Three of the four selection rules lose
-to a coin flip. The pre-registered kill condition anticipated the one that does not: D beats the
-control E by 35 points, which read alone looks like the decomposition working — and D sits at the
-59th percentile of its own null, a spread a coin flip reproduces 41% of the time. Without the
-selection null that 35-point gap would have been reported as a finding.
+same way and charged the same costs, returns +36.78% net.** Every one of the four selection rules
+loses to a coin flip. The pre-registered kill condition anticipated the shape of the near miss: D
+beats the control E by 35 points, which read alone looks like the decomposition working — and D
+sits at p=0.5519 against its own null, which is to say a coin flip beats it more than half the
+time. Without the selection null that 35-point gap would have been reported as a finding.
 
-D's gross return (+57.96%) is also, to within a point, the market's own gross return. Ranking on
-the intraday component earns exactly the index and then pays 26 points of turnover for the
-privilege.
+D's gross return (+57.96%) is also, to within a few points, the market's own gross return. Ranking
+on the intraday component earns roughly the index and then pays 26 points of turnover for it.
 
 **Cells A and B failed by the arithmetic written into the pre-registration**: a single-leg book
 turns over every session, 11bp a day, ~28% a year. That was stated before the run and is confirmed
@@ -815,9 +855,9 @@ that survived triage into Tier A, the one with the best prior is now the one wit
 
 ## Residual mean reversion (RV02 / RV03) — the thirteenth family, closed, and a calibration number worth keeping
 
-Pre-registered in `residual-run.mjs` and committed before the run. Universe `sp500-bundle/1440`:
-128 names, 920 dates, 159 rebalances, 13 names per leg, 120-day fitting window, residual path
-z-scored over 60 days, 5-day hold, `usEquityIbkr` costs, 2,000 selection-null draws per book.
+Pre-registered in `residual-run.mjs` and committed before the run. Universe `sp500-bundle/1440`,
+screened: 127 names, 920 dates, 159 rebalances, 13 names per leg, 120-day fitting window, residual
+path z-scored over 60 days, 5-day hold, `usEquityIbkr` costs, 2,000 selection-null draws per book.
 
 RV10 was dropped from the family **before** the run, correcting my own triage: its rule is a
 dynamic beta to macro drivers and the S&P bundle holds no rates, no USD, no commodities. Testing it
@@ -825,70 +865,72 @@ with a stand-in factor would have been fitting a convenient regressor and callin
 
 | cell | mechanism | gross | net | Sharpe | vs B&H | null p |
 |---|---|---|---|---|---|---|
-| P-LS | PCA k=3 residual, long-short | −0.32% | −29.77% | 0.040 | −88.20 | 0.4828 |
-| P-LO | PCA k=3 residual, long only | +46.63% | +23.09% | 0.678 | −35.34 | 0.5037 |
-| M-LS | market-beta residual, long-short | +8.51% | −23.55% | 0.273 | −81.98 | 0.2539 |
-| M-LO | market-beta residual, long only | +75.81% | **+47.59%** | **0.941** | −10.84 | 0.1624 |
+| P-LS | PCA k=3 residual, long-short | +18.09% | −16.80% | 0.677 | −85.67 | 0.0910 |
+| P-LO | PCA k=3 residual, long only | +75.20% | +47.08% | 0.993 | −21.79 | 0.2619 |
+| M-LS | market-beta residual, long-short | +0.93% | −28.89% | 0.084 | −97.76 | 0.4483 |
+| M-LO | market-beta residual, long only | +77.79% | **+49.25%** | **0.963** | −19.61 | 0.2354 |
 
-Baseline: equal-weight buy-and-hold, **+58.43% net, Sharpe 0.366**.
+Baseline: equal-weight buy-and-hold, **+68.86% net, Sharpe 0.412**.
 
-**M-LO is the highest Sharpe this campaign has ever produced — 0.941 against the index's 0.366 —
-and it is not an edge.** That is the finding, and it took one diagnostic to see it:
+**The two long-only cells post Sharpes of 0.96 and 0.99 against the index's 0.41, and neither is an
+edge.** That is the finding, and it took one diagnostic to see it:
 
-> **A coin flip under the same geometry has mean Sharpe 0.734, and 23.95% of random draws match or
-> beat M-LO's 0.941.** Random selection of 13 names on the same dates also returns +25.43% net
-> against M-LO's +47.59%, at p=0.1624.
+> **A coin flip under the same geometry has mean Sharpe 0.850, and 31.10% of random draws match or
+> beat the best cell's 0.993.** Random selection also returns +33.70% net against M-LO's +49.25%,
+> at p=0.2354.
 
 So the Sharpe belongs to the rebalancing geometry — weekly-rebalanced equal-weight 13-name
-concentration — and not to the residual signal. Reported alone, "Sharpe 0.94 versus the index's
-0.37" is the most persuasive number this project has generated and it means nothing. This is the
+concentration — and not to the residual signal. Reported alone, "Sharpe 0.99 versus the index's
+0.41" is the most persuasive number this project has generated and it means nothing. This is the
 same lesson the entry-family work reached from the other direction (*the geometry is not an edge
 measured during a good period; it IS the good period*), now with a number attached on the equity
 side.
 
 **Keep this calibration: any future decile-rotation study on this universe must clear a null Sharpe
-of 0.734, not the index's 0.366.** Measuring against the index over-credits such a book by roughly
-0.37 of Sharpe before any signal is involved.
+of ~0.85, not the index's 0.41.** Measuring against the index over-credits such a book by roughly
+0.44 of Sharpe before any signal is involved.
 
-The long-short books are a separate and simpler story: the LS null itself returns −29.55%, and both
-LS cells sit on top of it. The market-neutral form's entire loss is the cost of turning over two
+The long-short books are a separate and simpler story: the LS null itself returns −29.43%, and both
+LS cells sit near it. The market-neutral form's loss is dominated by the cost of turning over two
 legs every five days. Nothing was hedged away that the hedge did not cost more than.
 
-Robustness, outside the family and uncorrected: PCA k=1 LO +39.11% (Sharpe 0.846), k=5 LO +12.90%
-(0.564). The pre-registered k=3 sits between its neighbours, so the k=3 number is not a lucky pick
-— it is simply not a winning one either.
+Robustness, outside the family and uncorrected: PCA k=1 LO +42.99% (Sharpe 0.894), k=5 LO +29.37%
+(0.790). The pre-registered k=3 sits above both neighbours here, which is worth naming plainly — on
+the unscreened data it sat *between* them. Either way it fails both gates, so the ordering decides
+nothing, but a k=3 that had cleared would need that instability reported beside it.
 
-Closed. Thirteenth family, same two gates. Four of the six Tier-A survivors of the manual triage
-remain: MR08, CF12, T11, HX02.
+Closed. Thirteenth family, same two gates.
 
 ## Amihud illiquidity (MR08) — the fourteenth family, closed, and an independent check on the calibration
 
 Pre-registered in `illiquidity-run.mjs` and committed before the run. Same universe and the same
-geometry as the residual study, held fixed on purpose: `sp500-bundle/1440`, 128 names, 169
-rebalances, 13 names, 5-day hold, `usEquityIbkr` costs, long only, 2,000 null draws. Illiquidity z
-was unavailable on 7.21% of symbol-days (warm-up plus zero-volume sessions), which the module
-returns as null rather than as an Infinity that would sort to one end of every cross-section.
+geometry as the residual study, held fixed on purpose: `sp500-bundle/1440` screened to 127 names,
+169 rebalances, 13 names, 5-day hold, `usEquityIbkr` costs, long only, 2,000 null draws.
+Illiquidity z was unavailable on 7.01% of symbol-days (warm-up plus zero-volume sessions), which
+the module returns as null rather than as an Infinity that would sort to one end of every
+cross-section.
 
 | cell | mechanism | gross | net | Sharpe | vs B&H | null p |
 |---|---|---|---|---|---|---|
-| N | MR08: illiquidity spike, then normalised | +17.85% | −2.15% | 0.364 | −60.58 | 0.8811 |
-| L | illiquidity level (premium, not signal) | +21.27% | +0.69% | 0.349 | −57.74 | 0.8501 |
-| R | 5-day reversal (control, already killed) | −91.38% | −92.84% | −2.225 | −151.27 | 1.0000 |
+| N | MR08: illiquidity spike, then normalised | +17.07% | −2.80% | 0.361 | −71.67 | 0.9550 |
+| L | illiquidity level (premium, not signal) | +46.83% | +21.91% | 0.568 | −46.96 | 0.6497 |
+| R | 5-day reversal (control, already killed) | −87.73% | −89.82% | −1.916 | −158.68 | 1.0000 |
 
-Baseline +58.43% net. **Null +24.27% net at mean Sharpe 0.706.**
+Baseline +68.86% net. **Null +33.29% net at mean Sharpe 0.827.**
 
 **The calibration replicated.** The residual study measured this geometry's coin-flip null at
-+25.43% and Sharpe 0.734; an independent run with a different rebalance count and start lands at
-+24.27% and 0.706. The number is a property of the geometry, not of either study. It can be relied
-on: **a decile-rotation book on this universe starts from roughly +25% and Sharpe 0.71 before any
++33.70% and Sharpe 0.850; an independent run with a different rebalance count and start lands at
++33.29% and 0.827. The number is a property of the geometry, not of either study. It can be relied
+on: **a decile-rotation book on this universe starts from roughly +33% and Sharpe 0.84 before any
 signal.**
 
-Both illiquidity cells are essentially flat net and sit far below that. Neither the normalisation
-shape nor the level carries anything. Volume as the ranked quantity is now tested and closed, which
-was the whole reason this one was worth a run.
+Both illiquidity cells sit far below that. Neither the normalisation shape nor the level carries
+anything — and note that the level cell's apparent +21.91% is *below* a coin flip, not above it,
+which is the whole reason the null is computed. Volume as the ranked quantity is now tested and
+closed, which was the point of running this one.
 
-**The control is the loudest number in the study.** Buying the 5-day losers returned **−91.38%
-gross** at Sharpe −2.225. B5-REVERSAL was already KILLED on its economics; this is an independent
+**The control is the loudest number in the study.** Buying the 5-day losers returned **−87.73%
+gross** at Sharpe −1.916. B5-REVERSAL was already KILLED on its economics; this is an independent
 confirmation on a different universe, a different window and a different geometry, and the margin
 is not close.
 
@@ -898,3 +940,16 @@ not antisymmetric about the null, and the overnight study's 63-day momentum cell
 null too. Short-horizon momentum on this universe is an untested cell, not a discovered edge.
 
 Closed. Fourteenth family. Three Tier-A survivors remain: CF12, T11, HX02.
+
+## The manual, answered plainly
+
+The weekend brief asked for one judgement in plain words: is the IBKR manual a genuinely new
+information source, or another framework for searching the same exhausted space?
+
+**It is another framework, plus a shopping list.** Of its 128 strategies, 45 run on data we hold
+and all but six are already closed here under our own names; three of those six are now closed too.
+The remaining 64 are gated on four data classes we would have to buy — intraday/tick, options
+surfaces, news and earnings tapes, borrow and short interest. The manual is well built and its
+eight validation gates independently match most of what this campaign learned the hard way. What it
+does not contain is a signal we can test that we have not already tested. What it does contain,
+usefully, is a ranked statement of what buying data would buy.

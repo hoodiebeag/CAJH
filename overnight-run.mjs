@@ -70,6 +70,7 @@
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { decompose, adjustmentBasis, compound } from "./overnight.mjs";
 import { seededRng, nullSummary } from "./inference.mjs";
+import { screenUniverse } from "./universe.mjs";
 import { COST_MODELS } from "./costs.mjs";
 
 const DRAWS = Number(process.argv[2] ?? 4000);
@@ -84,11 +85,19 @@ const pct = (x) => `${(x * 100).toFixed(2)}%`;
 const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0);
 
 // ---- load and decompose -------------------------------------------------
-const symbols = availablePairs(1440, ROOT);
+// SCREEN BEFORE RANKING. PARA sits in this bundle with closes spanning $1.06 to $113,900; a series
+// that falls five orders of magnitude is the strongest possible extreme in any cross-section and
+// gets selected every period. It also produces enormous fake overnight gaps, which would land
+// directly in the integrity gate below and be mistaken for an adjustment mismatch.
+const raw = {};
+for (const s of availablePairs(1440, ROOT)) raw[s] = loadBundleCandles(s, 1440, ROOT);
+const screened = screenUniverse(raw);
+for (const [sym, why] of screened.rejected) console.log(`screened out ${sym}: ${why}`);
+const symbols = Object.keys(screened.kept);
 const series = new Map();   // symbol -> Map(time -> day)
 const pooled = [];
 for (const s of symbols) {
-  const days = decompose(loadBundleCandles(s, 1440, ROOT));
+  const days = decompose(screened.kept[s]);
   if (days.length < LOOKBACK + HOLD + ZWIN) continue;
   series.set(s, new Map(days.map((d) => [d.time, d])));
   pooled.push(...days);

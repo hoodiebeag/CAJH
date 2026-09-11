@@ -52,6 +52,7 @@
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { amihud, illiquidityZ, normalisation } from "./illiquidity.mjs";
 import { seededRng, nullSummary } from "./inference.mjs";
+import { screenUniverse } from "./universe.mjs";
 import { COST_MODELS } from "./costs.mjs";
 import { compound } from "./overnight.mjs";
 
@@ -66,8 +67,15 @@ const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0);
 // ---- panel: returns, illiquidity z, per symbol ---------------------------
 const panel = new Map();     // symbol -> { times, ret[], z[] } aligned
 const allDates = new Set();
-for (const s of availablePairs(1440, ROOT)) {
-  const c = loadBundleCandles(s, 1440, ROOT);
+// SCREEN BEFORE RANKING, and this study needs it most: the screen's own criteria are zero-volume
+// bars and dollar-volume floors, which is exactly what Amihud ranks on. An unscreened corrupt
+// series would be the most illiquid name in the cross-section every single rebalance.
+const raw = {};
+for (const s of availablePairs(1440, ROOT)) raw[s] = loadBundleCandles(s, 1440, ROOT);
+const screened = screenUniverse(raw);
+for (const [sym, why] of screened.rejected) console.log(`screened out ${sym}: ${why}`);
+for (const s of Object.keys(screened.kept)) {
+  const c = screened.kept[s];
   if (c.length < ZWIN + LOOK + 20) continue;
   const times = [], rets = [], ill = [];
   for (let i = 1; i < c.length; i++) {

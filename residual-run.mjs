@@ -66,6 +66,7 @@
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { pcaResidualMatrix, betaResidualSeries, zLast } from "./residual.mjs";
 import { seededRng, nullSummary } from "./inference.mjs";
+import { screenUniverse } from "./universe.mjs";
 import { COST_MODELS } from "./costs.mjs";
 import { compound } from "./overnight.mjs";
 
@@ -79,11 +80,16 @@ const pct = (x) => `${(x * 100).toFixed(2)}%`;
 const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0);
 
 // ---- panel --------------------------------------------------------------
-const symbols = availablePairs(1440, ROOT);
+// SCREEN BEFORE RANKING: a series spanning five orders of magnitude dominates a principal
+// component outright, so PCA on the unscreened bundle would be fitting one corrupted symbol.
+const raw = {};
+for (const s of availablePairs(1440, ROOT)) raw[s] = loadBundleCandles(s, 1440, ROOT);
+const screened = screenUniverse(raw);
+for (const [sym, why] of screened.rejected) console.log(`screened out ${sym}: ${why}`);
 const ret = new Map();     // symbol -> Map(time -> close-to-close return)
 let allDates = new Set();
-for (const s of symbols) {
-  const c = loadBundleCandles(s, 1440, ROOT);
+for (const s of Object.keys(screened.kept)) {
+  const c = screened.kept[s];
   if (c.length < W + ZWIN + 20) continue;
   const m = new Map();
   for (let i = 1; i < c.length; i++) {
