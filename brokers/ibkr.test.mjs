@@ -350,3 +350,55 @@ test("getHoldings THROWS when a holding cannot be priced, never zeroes it", asyn
     runHoldings(c, [["AAPL", 10]], {}),
     /holding price for AAPL is unknown/);
 });
+
+// --- reconnection -----------------------------------------------------------
+
+test("a dropped connection clears the cached client so the next call redials", async () => {
+  // getClient() caches on first connect and returns that object forever. A Gateway that logs out
+  // on its own -- daily auto-restart, or IBKR's nightly server reset -- would otherwise leave every
+  // later call writing into a dead socket and timing out. Nothing throws at the moment of
+  // disconnection, so an unattended bot dies silently rather than reconnecting.
+  let built = 0;
+  const made = [];
+  setIBApiForTests(() => { built++; const c = mockClient(); made.push(c); return c; });
+
+  const first = IBKRBroker.getCurrentPriceSnapshot("AAPL");
+  await new Promise((r) => setTimeout(r, 0));
+  made[0].emit(EventName.tickPrice, 1, 4, 100, {});
+  await first;
+  assert.equal(built, 1);
+
+  // A second call while healthy must reuse the same client, not redial.
+  const second = IBKRBroker.getCurrentPriceSnapshot("AAPL");
+  await new Promise((r) => setTimeout(r, 0));
+  made[0].emit(EventName.tickPrice, 2, 4, 101, {});
+  await second;
+  assert.equal(built, 1, "a healthy connection must be reused");
+
+  // Now the Gateway goes away.
+  made[0].emit(EventName.disconnected);
+
+  const third = IBKRBroker.getCurrentPriceSnapshot("AAPL");
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(built, 2, "after a disconnect the next call must build a NEW client, not reuse the dead one");
+  made[1].emit(EventName.tickPrice, 3, 4, 102, {});
+  assert.equal((await third).price, 102);
+});
+
+test("connectionClosed clears the cached client too", async () => {
+  // @stoqey/ib emits both; relying on only one leaves a path where the socket is gone and the
+  // adapter still believes it is connected.
+  let built = 0;
+  const made = [];
+  setIBApiForTests(() => { built++; const c = mockClient(); made.push(c); return c; });
+  const p = IBKRBroker.getCurrentPriceSnapshot("AAPL");
+  await new Promise((r) => setTimeout(r, 0));
+  made[0].emit(EventName.tickPrice, 1, 4, 100, {});
+  await p;
+  made[0].emit(EventName.connectionClosed);
+  const next = IBKRBroker.getCurrentPriceSnapshot("AAPL");
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(built, 2);
+  made[1].emit(EventName.tickPrice, 2, 4, 103, {});
+  assert.equal((await next).price, 103);
+});

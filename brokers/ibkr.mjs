@@ -83,6 +83,20 @@ function getClient() {
     const onConnected = () => {
       cleanup();
       client = c;
+      // DROP THE CACHED CLIENT WHEN THE SOCKET DIES.
+      //
+      // Without this, getClient()'s `if (client) return` hands out the same object forever. A
+      // Gateway that logs out -- and IB Gateway does this on its own, on a daily auto-restart and
+      // during IBKR's nightly server reset -- leaves every later call writing into a dead socket
+      // and timing out, rather than reconnecting. For an unattended bot that is the difference
+      // between a blip and silent death: nothing throws at the moment of disconnection, the
+      // failure only appears later as every request timing out for no stated reason.
+      //
+      // Clearing the reference is the whole fix. The next getClient() sees null and dials again,
+      // which is the behaviour the rest of the file already assumes it has.
+      const onGone = () => { if (client === c) client = null; };
+      c.once(EventName.disconnected, onGone);
+      c.once(EventName.connectionClosed, onGone);
       resolve(c);
     };
     // NOT `once`: TWS emits 2104/2106/2158 data-farm notices around connect time,
