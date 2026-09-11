@@ -860,3 +860,41 @@ Robustness, outside the family and uncorrected: PCA k=1 LO +39.11% (Sharpe 0.846
 
 Closed. Thirteenth family, same two gates. Four of the six Tier-A survivors of the manual triage
 remain: MR08, CF12, T11, HX02.
+
+## Amihud illiquidity (MR08) — the fourteenth family, closed, and an independent check on the calibration
+
+Pre-registered in `illiquidity-run.mjs` and committed before the run. Same universe and the same
+geometry as the residual study, held fixed on purpose: `sp500-bundle/1440`, 128 names, 169
+rebalances, 13 names, 5-day hold, `usEquityIbkr` costs, long only, 2,000 null draws. Illiquidity z
+was unavailable on 7.21% of symbol-days (warm-up plus zero-volume sessions), which the module
+returns as null rather than as an Infinity that would sort to one end of every cross-section.
+
+| cell | mechanism | gross | net | Sharpe | vs B&H | null p |
+|---|---|---|---|---|---|---|
+| N | MR08: illiquidity spike, then normalised | +17.85% | −2.15% | 0.364 | −60.58 | 0.8811 |
+| L | illiquidity level (premium, not signal) | +21.27% | +0.69% | 0.349 | −57.74 | 0.8501 |
+| R | 5-day reversal (control, already killed) | −91.38% | −92.84% | −2.225 | −151.27 | 1.0000 |
+
+Baseline +58.43% net. **Null +24.27% net at mean Sharpe 0.706.**
+
+**The calibration replicated.** The residual study measured this geometry's coin-flip null at
++25.43% and Sharpe 0.734; an independent run with a different rebalance count and start lands at
++24.27% and 0.706. The number is a property of the geometry, not of either study. It can be relied
+on: **a decile-rotation book on this universe starts from roughly +25% and Sharpe 0.71 before any
+signal.**
+
+Both illiquidity cells are essentially flat net and sit far below that. Neither the normalisation
+shape nor the level carries anything. Volume as the ranked quantity is now tested and closed, which
+was the whole reason this one was worth a run.
+
+**The control is the loudest number in the study.** Buying the 5-day losers returned **−91.38%
+gross** at Sharpe −2.225. B5-REVERSAL was already KILLED on its economics; this is an independent
+confirmation on a different universe, a different window and a different geometry, and the margin
+is not close.
+
+One thing that number does *not* establish, stated so it is not misread later: the mirror book —
+long the 5-day *winners* — was not run and cannot be inferred from it. A long-only book's return is
+not antisymmetric about the null, and the overnight study's 63-day momentum cell finished below the
+null too. Short-horizon momentum on this universe is an untested cell, not a discovered edge.
+
+Closed. Fourteenth family. Three Tier-A survivors remain: CF12, T11, HX02.
