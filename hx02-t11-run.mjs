@@ -53,7 +53,7 @@
 // Usage: node hx02-t11-run.mjs [nullDraws]
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { screenUniverse } from "./universe.mjs";
-import { betaResidualSeries } from "./residual.mjs";
+import { betaResidualSeries, zLast } from "./residual.mjs";
 import { seededRng, nullSummary } from "./inference.mjs";
 import { COST_MODELS } from "./costs.mjs";
 import { compound } from "./overnight.mjs";
@@ -62,6 +62,7 @@ const DRAWS = Number(process.argv[2] ?? 2000);
 const ROOT = "sp500-bundle";
 const LEG = COST_MODELS.usEquityIbkr.feeRate + COST_MODELS.usEquityIbkr.slipPct;
 const Q = 0.05, W = 120, LOOK = 63, MOMWIN = 20, TUW = 60, HOLD = 5, DECILE = 0.10;
+const ZWIN = 60;   // must match RESIDUAL-MEAN-REVERSION exactly, or cell X is not a reproduction
 
 const pct = (x) => `${(x * 100).toFixed(2)}%`;
 const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0);
@@ -129,7 +130,7 @@ for (const idx of rebalances) {
     for (const s of names) { const r = ret.get(s).get(t); if (r !== undefined) v.push(r); }
     return v.length ? mean(v) : 0;
   });
-  const sc = { H: new Map(), T: new Map(), M: new Map(), X: new Map() };
+  const sc = { H: new Map(), T: new Map(), M: new Map(), X: new Map(), Hz: new Map() };
   const pool = [];
   for (const s of names) {
     if (!fwd.has(s)) continue;
@@ -139,9 +140,19 @@ for (const idx of rebalances) {
     // H / X: cumulative market residual over the last LOOK days of the window.
     const resid = betaResidualSeries(y, [mkt]);
     if (resid) {
-      const cum = resid.slice(-LOOK).reduce((a, b) => a + b, 0);
-      sc.H.set(s, cum);        // momentum: rising residual ranks highest
-      sc.X.set(s, -cum);       // the closed mean-reversion sign, for reproduction only
+      // H, as pre-registered: the raw cumulative residual over LOOK days, unnormalised.
+      sc.H.set(s, resid.slice(-LOOK).reduce((a, b) => a + b, 0));
+      // X and Hz: the CLOSED study's construction exactly -- z-score of the cumulative residual
+      // PATH over ZWIN days. The first run of this file computed X as a raw unnormalised sum over
+      // LOOK days instead and called it a reproduction; it reproduced -4.20% against a known
+      // +49.25%, which is what a reproduction check is for. The two differ because the z-score
+      // divides by each name's own residual volatility, so a large but typical swing does not rank
+      // while a small unusual one does -- a different ranking, not a scaled one.
+      const path = [];
+      let cum = 0;
+      for (let t = resid.length - ZWIN; t < resid.length; t++) { cum += resid[t]; path.push(cum); }
+      const z = zLast(path, ZWIN);
+      if (z !== null) { sc.X.set(s, -z); sc.Hz.set(s, z); }
     }
     // M: plain 20-day momentum.
     let eq = 1;
@@ -222,9 +233,14 @@ for (const c of cells) {
     `${c.sharpe.toFixed(3).padStart(9)}${((c.net > bh ? "+" : "") + pct(c.net - bh)).padStart(10)}${c.p.toFixed(4).padStart(9)}  ` +
     (g.length ? `DEAD (${g.join("; ")})` : "CLEARS BOTH GATES"));
 }
-const X = runCell("X");
-console.log(`\nREPRODUCTION CHECK (unscored): X, the residual MEAN-REVERSION sign already closed at +49.25% net,` +
-  ` reproduces here at ${pct(X.net)} net / Sharpe ${sharpe(X.rets).toFixed(3)}.`);
+const X = runCell("X"), Hz = runCell("Hz");
+console.log(`\nREPRODUCTION CHECK (unscored): X is RESIDUAL-MEAN-REVERSION's M-LO construction exactly` +
+  ` — z of the cumulative residual path over ${ZWIN} days, long the most depressed. That study closed it at` +
+  ` +49.25% net / Sharpe 0.963; it reproduces here at ${pct(X.net)} net / Sharpe ${sharpe(X.rets).toFixed(3)}.`);
+console.log(`DIAGNOSTIC (unscored, NOT pre-registered, cannot be promoted): Hz is X's exact mirror — the same` +
+  ` z, long the RISEN residual instead of the depressed one: ${pct(Hz.net)} net / Sharpe ${sharpe(Hz.rets).toFixed(3)}.` +
+  ` Reported because H tests residual momentum unnormalised and this is the normalised form; promoting it would` +
+  ` require its own pre-registration.`);
 console.log(`T11 vs its control: T ${pct(cells[1].net)} against plain momentum's ${pct(cells[2].net)}` +
   ` — the time-under-water conditioning ${cells[1].net > cells[2].net ? "ADDS" : "SUBTRACTS"} ${pct(Math.abs(cells[1].net - cells[2].net))}`);
 console.log(`Sharpe against the NULL's ${nullSharpe.toFixed(3)}: ` + cells.map((c) => `${c.id} ${c.sharpe > nullSharpe ? "above" : "below"}`).join(", "));

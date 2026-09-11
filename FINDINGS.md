@@ -1013,3 +1013,79 @@ Neither T nor S is executable on this account in any case: a factor spread requi
 IBKR shortability is unknown on 128/128 symbols.
 
 Closed. Fifteenth family. Two Tier-A survivors remain: T11 and HX02.
+
+## HX02 and T11 — the sixteenth family, and the Tier-A list is exhausted
+
+Pre-registered in `hx02-t11-run.mjs` and committed before the run. Universe `sp500-bundle/1440`
+screened to 127 names, 158 rebalances, 13 names, 5-day hold, `usEquityIbkr` costs, long only, 2,000
+null draws. Geometry identical to the three studies before it, so the replicated null applies.
+
+**I proposed closing both by argument last tick, and the argument failed in both halves.** It is
+recorded because a campaign fifteen negatives deep is at maximum risk of closing its remaining work
+by extrapolation:
+
+- *"HX02 duplicates the closed market-beta residual study."* **False.** That study traded residual
+  mean **reversion** — long the most depressed residual. HX02 trades residual **momentum** — long the
+  residual that has risen. Same residual, opposite sign; a failed reversal says nothing about
+  momentum on the same series.
+- *"`FACTOR_SPREAD_CEILING` closes T11."* **False as stated.** That ceiling was measured on
+  dollar-neutral long-short spreads. These are long-only decile books, a different geometry with a
+  different null. A ceiling measured on one geometry does not transfer to another.
+
+HX02 is tested in a **reduced form**: its rule names market, sector, rate, USD and commodity factors
+and this project has the market alone. A negative here does **not** close the full five-factor
+version, which stays Tier B.
+
+| cell | mechanism | gross | net | Sharpe | vs B&H | null p |
+|---|---|---|---|---|---|---|
+| H | HX02 reduced: market-residual momentum | +53.25% | +28.79% | 0.657 | −40.08 | 0.5077 |
+| T | T11: drawdown repairing + momentum > 0 | +63.23% | **+37.18%** | **0.953** | −31.69 | 0.3558 |
+| M | plain 20d momentum (control) | +23.28% | +3.60% | 0.388 | −65.27 | 0.9110 |
+
+Baseline +68.86% net. Null +31.14% net at mean Sharpe 0.822.
+
+**T11 is the best near-miss of the five studies and is worth stating precisely.** It is the first
+cell whose Sharpe (0.953) exceeds the null's (0.822) rather than merely the index's, and its
+time-under-water conditioning adds **33.58 points** over its own momentum control — which is exactly
+the comparison T11's claim requires, and it wins it. It still fails both gates: it trails
+buy-and-hold by 31.69 points and 36% of random selections beat its return. A conditioning rule that
+genuinely improves on its control, produces an above-null Sharpe, and still cannot beat holding the
+index is the cleanest illustration this project has of why both gates exist.
+
+### The reproduction check earned its place, by failing
+
+Cell X was pre-registered to recover a number already known: the residual mean-reversion book the
+previous study closed at +49.25% net. **It came back at −4.20%.**
+
+The cause was in my own pre-registration, not in the data. The closed study ranks on the **z-score
+of the cumulative residual path** over 60 days; cell X computed a **raw unnormalised sum** over 63
+days and called it the same signal. They are not the same ranking — the z-score divides by each
+name's own residual volatility, so a large but typical swing does not rank while a small unusual one
+does. Corrected to the closed study's exact construction, X reproduces at **+43.42% net / Sharpe
+0.909** against the known +49.25% / 0.963.
+
+The residual 6-point gap is mechanical and was checked rather than assumed: this study's rebalance
+grid starts at index 125 (`max(120, 60+20)+5`) against the residual study's 120, giving 158
+rebalances instead of 159 and shifting the whole grid five sessions. A one-rebalance offset
+compounding over 3.65 years accounts for it.
+
+Unscored diagnostic, reported because H tests the unnormalised form: the **normalised** residual
+momentum mirror returns +35.42% net / Sharpe 0.834 — also above the null's return, also far below
+buy-and-hold. Neither sign of the residual works. It was not pre-registered and cannot be promoted.
+
+### The Tier-A list is now exhausted
+
+All six survivors of the manual triage have been tested. **None cleared.**
+
+| # | family | outcome |
+|---|---|---|
+| 12 | MR11/HX13 overnight decomposition | closed |
+| 13 | RV02/RV03 residual mean reversion | closed |
+| 14 | MR08 Amihud illiquidity | closed |
+| 15 | CF12 factor trend-following | closed, mechanism actively harmful |
+| 16 | HX02 (reduced) + T11 | closed |
+
+The manual contributed 128 strategies. Forty-five were runnable on data already held; thirty-nine of
+those were already closed here under this project's own names; the remaining six are now closed too.
+Nothing in it was a new information source, which is what the weekend brief predicted and what
+FINDINGS now records as the answer.
