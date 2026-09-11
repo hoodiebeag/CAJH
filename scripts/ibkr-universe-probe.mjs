@@ -22,7 +22,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { IBApi, EventName, IBApiTickType, isNonFatalError } from "@stoqey/ib";
+import { IBApi, EventName, IBApiTickType, MarketDataType, isNonFatalError } from "@stoqey/ib";
 
 const ROOT = process.argv[2] ?? "./sp500-bundle";
 const HOST = process.env.IBKR_HOST ?? "127.0.0.1";
@@ -52,7 +52,23 @@ await new Promise((resolve, reject) => {
   api.once(EventName.error, (err, code) => { if (code === -1 || fatal(code, err)) { clearTimeout(t); reject(err); } });
   api.connect();
 });
-console.log("connected\n");
+console.log("connected");
+
+// ASK FOR DELAYED-FROZEN DATA BEFORE ANYTHING ELSE.
+//
+// The first run of this probe returned a price for 0 of 128 symbols and shortability "unknown" for
+// all of them, which reads like a missing entitlement and was not. It never called
+// reqMarketDataType, so it asked for REALTIME by default, and it ran four hours after the US close.
+// Outside regular hours, a realtime snapshot with no live subscription returns nothing at all --
+// indistinguishable in the output from having no entitlement, which is a completely different
+// problem with a completely different fix.
+//
+// DELAYED_FROZEN (4) is the setting that survives both conditions: delayed needs no live
+// subscription, and frozen returns the last available snapshot rather than nothing when the market
+// is shut. It is the correct choice for a research probe and the WRONG one for an order, which is
+// why brokers/ibkr.mjs deliberately does not do this -- a stale quote must never size a trade.
+api.reqMarketDataType(MarketDataType.DELAYED_FROZEN);
+console.log("requested DELAYED_FROZEN market data (no live subscription needed, works after hours)\n");
 
 const stock = (symbol) => ({ symbol, secType: "STK", exchange: "SMART", currency: "USD" });
 
@@ -140,6 +156,11 @@ console.log(`hard to borrow:      ${count(r => r.shortable === "hard-to-borrow")
 console.log(`NOT shortable:       ${count(r => r.shortable === "not shortable")}`);
 console.log(`unknown (no 236 entitlement or no data): ${count(r => r.shortable === "unknown")}`);
 console.log(`delayed price data:  ${count(r => r.delayed)}`);
+if (count(r => r.price) === 0) {
+  console.log("\nZERO prices returned even under DELAYED_FROZEN. That is no longer an after-hours");
+  console.log("artefact: it means no market data of any kind reaches this connection. Check that the");
+  console.log("Gateway account has a market data subscription and that API market data is enabled.");
+}
 fs.writeFileSync("ibkr-universe.json", JSON.stringify({ probedAt: new Date().toISOString(), host: `${HOST}:${PORT}`, root: ROOT, rows }, null, 2));
 console.log("\nwrote ibkr-universe.json");
 console.log("A universe where a large share is 'unknown' means the account lacks the shortable feed,");
