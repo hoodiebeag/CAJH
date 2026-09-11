@@ -9,7 +9,7 @@
   },
   "note": "No holdout. Owner directed 2026-09-03 to use the full period. Every balance below is in-sample.",
   "startedAt": "2026-09-03T19:00:00Z",
-  "updatedAt": "2026-09-10T23:56:01.860Z",
+  "updatedAt": "2026-09-11T00:11:40.331Z",
   "phase": "12-signal battery on two asset classes; cross-asset replication culls 6 survivors to 1 robust factor",
   "runsTested": 2446,
   "base": {
@@ -3179,5 +3179,13 @@
     "positioningIsNonPrice": "Rank correlation against trailing return -0.16 to +0.10 across all nine signal-lookback pairs. The pre-registered price-transform kill condition never fired. Like funding, a genuine non-price source that does not predict the cross-section.",
     "defectInMyOwnPreregistration": "positioning-run.mjs prints NO basket control. Six cells cleared and its output would never have revealed that two lose to holding the universe. Standing discipline caught it, the runner did not. Every future pre-registration must carry its baseline control INSIDE the registered analysis.",
     "status": "Positioning is closed. Four mechanisms now tested to exhaustion: momentum, equities, carry, positioning."
+  },
+  "IBKR_EXECUTABILITY": {
+    "when": "2026-09-11",
+    "probe": "scripts/ibkr-universe-probe.mjs, run by the owner against IB Gateway on port 4002 (paper). 128 sp500-bundle symbols.",
+    "resolves": "128/128. Every name in the universe is a valid IBKR contract, so the LONG side is executable.",
+    "shortability": "UNKNOWN for all 128 -- the shortable feed (generic tick 236) returned nothing. This is NOT the same as unborrowable, and the probe says so in its own output. Zero symbols reported delayed data either, which leaves two readings: market data works and only tick 236 is unentitled, or no market data subscription is active at all. Paper accounts do not automatically inherit live entitlements. Disambiguated by counting rows carrying a price in ibkr-universe.json.",
+    "whyItMatters": "A long-short equities book cannot be shown executable on this account today. This is the same class of constraint that closed the crypto path -- found BEFORE a strategy was built on it rather than after, which was the point of running the probe early.",
+    "status": "Long side confirmed executable. Short side unverifiable pending an IBKR market-data/shortable entitlement."
   }
 }
