@@ -12,7 +12,7 @@
  * Defaults to AAPL if no symbol given. Uses IBKR_HOST/IBKR_PORT/
  * IBKR_CLIENT_ID env vars if set, otherwise 127.0.0.1:4002 (paper).
  */
-import { IBKRBroker } from "../brokers/ibkr.mjs";
+import { IBKRBroker } from "../../brokers/ibkr.mjs";
 
 const symbol = process.argv[2] || "AAPL";
 const host = process.env.IBKR_HOST || "127.0.0.1";
