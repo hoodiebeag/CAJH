@@ -31,7 +31,7 @@
  * on submission) - same hard requirement as trader.js's confirmBuyFill/
  * confirmSellFill, for the same reason: prevents phantom positions.
  */
-import { IBApi, EventName, Stock, MarketOrder, OrderAction, WhatToShow, BarSizeSetting, isNonFatalError } from "@stoqey/ib";
+import { IBApi, EventName, Stock, MarketOrder, OrderAction, WhatToShow, BarSizeSetting, MarketDataType, isNonFatalError } from "@stoqey/ib";
 
 /**
  * The error event is OVERLOADED by @stoqey/ib: request-scoped errors arrive as
@@ -55,6 +55,19 @@ const isFatal = (e) => e.socket || !isNonFatalError(e.code, e.error);
 const HOST = process.env.IBKR_HOST || "127.0.0.1";
 const PORT = Number(process.env.IBKR_PORT) || 4002; // 4002 = paper, 4001 = live
 const CLIENT_ID = Number(process.env.IBKR_CLIENT_ID) || 0;
+
+/**
+ * Opt-in market data type. UNSET means realtime, which is the only correct default for a path that
+ * sizes orders -- a delayed quote must never fill one, which is what isQuoteStale already guards.
+ *
+ * Set IBKR_MARKET_DATA_TYPE=4 (DELAYED_FROZEN) or 3 (DELAYED) for RESEARCH and DIAGNOSTICS. This
+ * exists because a real account reported exactly this on 2026-09-11: "Requested market data
+ * requires additional subscription for API ... Delayed market data is available." Without a live
+ * subscription every price call fails, while delayed data sits there unused, so the adapter could
+ * not fetch a quote it was entitled to. Making it opt-in keeps live behaviour unchanged and lets a
+ * diagnostic ask for what the account actually has.
+ */
+const MARKET_DATA_TYPE = Number(process.env.IBKR_MARKET_DATA_TYPE) || null;
 const CONNECT_TIMEOUT_MS = 15_000;
 const ORDER_FILL_TIMEOUT_MS = 30_000;
 const MKT_DATA_TIMEOUT_MS = 10_000;
@@ -97,6 +110,9 @@ function getClient() {
       const onGone = () => { if (client === c) client = null; };
       c.once(EventName.disconnected, onGone);
       c.once(EventName.connectionClosed, onGone);
+      // Applies to every later market-data request on this connection, so it is set once here
+      // rather than per call.
+      if (MARKET_DATA_TYPE) c.reqMarketDataType(MARKET_DATA_TYPE);
       resolve(c);
     };
     // NOT `once`: TWS emits 2104/2106/2158 data-farm notices around connect time,
