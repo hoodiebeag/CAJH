@@ -953,3 +953,63 @@ surfaces, news and earnings tapes, borrow and short interest. The manual is well
 eight validation gates independently match most of what this campaign learned the hard way. What it
 does not contain is a signal we can test that we have not already tested. What it does contain,
 usefully, is a ranked statement of what buying data would buy.
+
+## Factor trend-following (CF12) — the fifteenth family, closed, with the mechanism actively harmful
+
+Pre-registered in `cf12-run.mjs` and committed before the run. Universe `sp500-bundle/1440`
+screened to 127 names, 133 rebalances, 13 per leg, 5-day hold, `usEquityIbkr` costs charged on both
+legs of every active factor, 2,000 matched timing-null draws.
+
+CF12's claim is narrow and was worth isolating: not that any factor works — several of its inputs
+are already killed here individually — but that **timing a portfolio of them adds value even though
+none works alone.** The object being trended is a factor's long-short spread return, not a price.
+
+| cell | mechanism | net | mean active | vs B&H | null p |
+|---|---|---|---|---|---|
+| T | hold rising factors, sit out falling | −35.74% | 6.3 | −104.60 | 0.9950 |
+| S | CF12 literal: long rising, short falling | −34.18% | 12.7 | −103.05 | 0.9825 |
+| A | **always on, no timing (control)** | −26.55% | 14.0 | −95.41 | 0.7116 |
+
+Baseline +68.86% net. Matched timing null (T's own on-rate per factor, periods placed at random):
+**−23.28%.**
+
+**The timing rule has negative value, which is a stronger result than no value.** T returns −35.74%
+against the always-on control's −26.55%: **trend-following the factor spread subtracts 9.19 points
+versus simply holding every factor all the time.** It is also worse than timing at random (−23.28%)
+at p=0.9950 — 99.5% of coin-flip timings beat it. Factor spreads on this universe do not merely
+fail to persist; their recent direction is mildly *anti*-predictive of the next.
+
+### The factor spreads themselves, which are the more useful output
+
+Fourteen dollar-neutral decile books, gross, no timing, over the same 133 rebalances. Descriptive
+only — these are not scored and not corrected, they are reported because the campaign has tested
+several of them separately and this puts them side by side on one window:
+
+| positive | | negative | |
+|---|---|---|---|
+| volumeTrend | +24.09% | illiquidity | −25.32% |
+| reversal1m | +18.09% | lowVol | −22.06% |
+| highVol | +15.38% | smallSize | −19.08% |
+| lowSkew | +7.06% | acceleration | −17.12% |
+| trendQuality | +0.53% | beta | −14.07% |
+| | | nearHigh | −8.96% |
+| | | idioVol | −3.89% |
+| | | momentum | −2.89% |
+| | | reversal1w | −0.65% |
+
+**Three documented anomalies carry the wrong sign in this window.** Low-volatility is −22.06% while
+its mirror high-volatility is +15.38%; illiquidity is −25.32%, so the premium is negative; small-size
+is −19.08%. Betting-against-beta is −14.07%. That is not a claim that the anomalies are false — a
+3.65-year window on 127 large caps is short and survivorship-biased — but it is a direct measurement
+that they did not pay here, which is the only thing that matters for this account.
+
+**And the ceiling is the point.** The single best factor spread returns +24.09% *gross* over 3.65
+years, against buy-and-hold's +68.86% net and against the long-only decile null's +33.70% net. Not
+one of the fourteen, before costs, beats picking 13 names at random and holding them. There is no
+combination rule that rescues a set of ingredients with that ceiling, which is the real reason CF12
+was never going to work and is worth stating more plainly than the p-value does.
+
+Neither T nor S is executable on this account in any case: a factor spread requires shorting and
+IBKR shortability is unknown on 128/128 symbols.
+
+Closed. Fifteenth family. Two Tier-A survivors remain: T11 and HX02.
