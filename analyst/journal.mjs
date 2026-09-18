@@ -196,22 +196,53 @@ export function readJournal(file = DEFAULT_JOURNAL) {
 }
 
 /**
+ * Modes a decision can be recorded under. THE DISTINCTION IS LOAD-BEARING, NOT BOOKKEEPING.
+ *
+ *   paper       forward, real model, decision date is today. THE ONLY MODE THAT IS EVIDENCE.
+ *   dry-run     the wiring exercised on historical data to prove it works end to end.
+ *   anonymised  reasoning checked on historical data with identities stripped.
+ *
+ * Why the last two can never count: this agent cannot be backtested. A model asked what it would
+ * do on a past date already knows what happened -- market history is in the weights, and the
+ * contamination flatters it exactly where the pull to deploy is strongest. See
+ * docs/ANALYST-DESIGN.md. So a historical run is a plumbing test or a reasoning probe, never a
+ * track record, and `scoreJournal` refuses to blend them rather than trusting a future reader to
+ * remember the difference.
+ */
+export const MODE = Object.freeze({
+  PAPER: "paper",
+  DRY_RUN: "dry-run",
+  ANONYMISED: "anonymised",
+});
+
+/** Only this mode may be cited as evidence of edge. */
+export const EVIDENCE_MODES = Object.freeze([MODE.PAPER]);
+
+/**
  * The readout that matters: is the analyst beating its own coin flip?
  *
  * Reports the agent and its matched control SIDE BY SIDE and refuses to editorialise beyond that.
  * `edge` is the difference, and it is the number this whole design is trying to establish is
- * positive. `decided` counts sized decisions, not records, because that is the unit the standing
- * minimum in ALPHA_DEFINITION.md is denominated in.
+ * positive.
+ *
+ * SCORES ONE MODE AT A TIME, DEFAULTING TO PAPER. Blending a dry run into a forward record would
+ * quietly convert contaminated decisions into a track record, which is the single worst thing this
+ * file could do. `contaminatedRecords` counts what was excluded so the exclusion is visible rather
+ * than silent -- a number that has been dropped should say so.
  *
  * NO SIGNIFICANCE TEST IS COMPUTED HERE, DELIBERATELY. With a handful of outcomes any p-value is
  * noise with a decimal point, and this project's own rule is that a p-value without its baseline
  * beside it is misleading. The baselines are printed instead. A test belongs at the point the
  * standing minimum is met, not before.
  */
-export function scoreJournal(file = DEFAULT_JOURNAL) {
+export function scoreJournal(file = DEFAULT_JOURNAL, { mode = MODE.PAPER } = {}) {
   const { records, malformed } = readJournal(file);
-  const decisions = records.filter((r) => r.kind === KIND.DECISION);
-  const outcomes = records.filter((r) => r.kind === KIND.OUTCOME);
+  const allDecisions = records.filter((r) => r.kind === KIND.DECISION);
+  const decisions = allDecisions.filter((r) => (r.mode ?? MODE.PAPER) === mode);
+  const keptBatches = new Set(decisions.map((d) => d.batchId));
+  // An outcome belongs to the mode of the decision that produced it.
+  const outcomes = records.filter((r) => r.kind === KIND.OUTCOME && keptBatches.has(r.batchId));
+  const contaminatedRecords = allDecisions.length - decisions.length;
 
   const agentNet = outcomes.map((o) => o.netReturn).filter((v) => typeof v === "number");
   const ctrlNet = outcomes.map((o) => o.controlReturn).filter((v) => typeof v === "number");
@@ -225,10 +256,15 @@ export function scoreJournal(file = DEFAULT_JOURNAL) {
   const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null);
 
   return {
+    mode,
+    isEvidence: EVIDENCE_MODES.includes(mode),
     batches: decisions.length,
     decisions: sized,
     outcomes: outcomes.length,
     malformed,
+    // Records from other modes, excluded from every number above. Reported so the exclusion is
+    // visible: a figure that has dropped data should say how much.
+    contaminatedRecords,
     agentMeanNet: mean(agentNet),
     controlMeanNet: mean(ctrlNet),
     edge: agentNet.length && ctrlNet.length ? mean(agentNet) - mean(ctrlNet) : null,
