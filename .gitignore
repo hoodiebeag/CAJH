@@ -29,3 +29,8 @@ paper-runs/
 # candle-bundle-long (4.3M) and funding-binance (5.8M) were already tracked, so this
 # rule was the only thing standing between the crypto universe and permanence.
 candle-bundle.tar.gz
+
+# Analyst journals are decision records, not source. They are per-deployment and
+# append-only; committing one would mix a run's history into the repository's.
+analyst-journal.jsonl
+*.jsonl
