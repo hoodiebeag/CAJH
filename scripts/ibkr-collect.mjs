@@ -58,7 +58,8 @@ if (!conn.status.connected) {
   console.error(`\nno Gateway: ${conn.status.error}\n`);
   console.error("Checks, in the order they usually fail:");
   console.error("  1. IB Gateway or TWS is running and logged in");
-  console.error("  2. Configure > API > Settings > 'Enable ActiveX and Socket Clients' is ON");
+  console.error("  2. in TWS only, Configure > API > Settings > 'Enable ActiveX and Socket Clients' is ON.");
+  console.error("     IB GATEWAY HAS NO SUCH CHECKBOX -- it is API-only by design, so nothing to enable.");
   console.error("  3. the port matches (Gateway paper 4002, live 4001; TWS paper 7497, live 7496)");
   console.error("  4. this machine is in Trusted IPs, or 'Allow connections from localhost only' is OFF");
   console.error("\nNothing was written.");
