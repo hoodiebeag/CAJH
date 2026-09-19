@@ -92,6 +92,44 @@ export function listProviders({ api, ib }, timeoutMs = 15000) {
 }
 
 /**
+ * Split IBKR's metadata envelope off a headline.
+ *
+ * MEASURED, NOT REMEMBERED. Every headline the Gateway actually returned on 2026-09-19 arrives as
+ * `{A:800015:L:en}Apple Bites Into Record Q3...` or, on three of ten,
+ * `{A:800015:L:en:K:n/a:C:0.9775911569595337}!Rosenblatt reiterated Apple (AAPL) coverage...`.
+ * Without this the analyst reads the braces as content -- forty tokens of vendor bookkeeping at
+ * the front of every headline, in a context that is explicitly a budget.
+ *
+ * The leading `!` is stripped too. It appeared on the BRFUPDN analyst-action headlines and not on
+ * the BRFG prose ones, so it is a provider marker rather than emphasis, and `providerCode` already
+ * carries that information in a form the analyst can use.
+ *
+ * `C:` IS PARSED AND DELIBERATELY NOT INTERPRETED. It looks like a relevance or confidence score
+ * and it would be easy to surface as one. Three samples, all above 0.77, is not a basis for
+ * telling an analyst what a number means, and a misread score is worse than no score because it
+ * arrives wearing the authority of the vendor. It is exposed under `meta` for a later probe to
+ * settle against a larger sample or IBKR's own documentation. Nothing reads it today.
+ *
+ * An unrecognised shape is returned UNCHANGED rather than guessed at: a provider that stops
+ * sending the envelope must not have its first characters eaten.
+ */
+export function parseHeadlineText(raw) {
+  const s = String(raw ?? "");
+  const m = /^\{([^}]*)\}\s*(!)?\s*([\s\S]*)$/.exec(s);
+  if (!m) return { text: s.trim(), meta: {}, raw: s };
+  const meta = {};
+  const parts = m[1].split(":");
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    const k = parts[i].trim(), v = parts[i + 1].trim();
+    if (k) meta[k] = v;
+  }
+  const text = m[3].trim();
+  // An envelope with nothing after it is not a headline; keep the original so the emptiness is
+  // visible rather than silently becoming "".
+  return text ? { text, meta, raw: s } : { text: s.trim(), meta, raw: s };
+}
+
+/**
  * Historical headlines for one contract.
  *
  * `conId` is required and is NOT derivable from a ticker here -- it comes from
@@ -124,7 +162,9 @@ export function fetchHeadlines({ api, ib }, {
       // A headline whose timestamp will not parse is DROPPED, not stamped with "now". An
       // unparseable time on a decision input is exactly the thing that must never be guessed.
       if (at === null) return;
-      headlines.push({ at, atIso: new Date(at * 1000).toISOString(), providerCode, articleId, headline });
+      const parsed = parseHeadlineText(headline);
+      headlines.push({ at, atIso: new Date(at * 1000).toISOString(), providerCode, articleId,
+                       headline, text: parsed.text, meta: parsed.meta });
     };
     // historicalNewsEnd(reqId, hasMore)
     const onEnd = (rid, hasMore) => { if (rid === reqId) finish({ ok: true, headlines, hasMore: !!hasMore }); };
@@ -173,7 +213,9 @@ export function toNewsMap(bySymbol, { perSymbol = 3 } = {}) {
       .slice(0, perSymbol)
       .map((h) => ({
         at: h.atIso ?? new Date(h.at * 1000).toISOString(),
-        headline: h.headline,
+        // `text` for caches written since the envelope parser landed; older caches and any
+        // hand-built fixture fall back through the parser rather than leaking braces into context.
+        headline: h.text ?? parseHeadlineText(h.headline).text,
         source: h.providerCode ?? null,
       }));
   }

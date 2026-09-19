@@ -1,9 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import {
-  parseNewsTime, listProviders, fetchHeadlines, fetchArticle, assertNotAfter, toNewsMap,
-} from "./news.mjs";
+import { parseNewsTime, listProviders, fetchHeadlines, fetchArticle, assertNotAfter, toNewsMap, parseHeadlineText } from "./news.mjs";
 
 /**
  * THE FAKE EMITS WHAT @stoqey/ib EMITS. Signatures read out of
@@ -307,4 +305,53 @@ test("a cache with an unparseable fetchedAt is treated as infinitely stale", asy
   const c = loadNewsCache(f);
   assert.equal(c.stale, true);
   assert.equal(c.ageMs, Infinity);
+});
+
+// ---- the metadata envelope ---------------------------------------------------------------------
+// Every one of these strings is a headline IB Gateway actually returned on 2026-09-19, copied from
+// data/news-cache.json rather than invented. Rule 6: a fixture is only evidence if it is what the
+// real thing emits.
+test("parseHeadlineText strips the envelope IBKR actually sends", () => {
+  const r = parseHeadlineText("{A:800015:L:en}Apple Bites Into Record Q3, but Supply Crunch Takes a Bite Out of Guidance");
+  assert.equal(r.text, "Apple Bites Into Record Q3, but Supply Crunch Takes a Bite Out of Guidance");
+  assert.deepEqual(r.meta, { A: "800015", L: "en" });
+  assert.ok(!r.text.includes("{"), "no brace may reach the analyst as content");
+});
+
+test("parseHeadlineText handles the K/C variant and the leading bang", () => {
+  const r = parseHeadlineText("{A:800015:L:en:K:n/a:C:0.9775911569595337}!Rosenblatt reiterated Apple (AAPL) coverage with Neutral and target $268");
+  assert.equal(r.text, "Rosenblatt reiterated Apple (AAPL) coverage with Neutral and target $268");
+  assert.equal(r.meta.C, "0.9775911569595337");
+  assert.equal(r.meta.K, "n/a");
+  assert.ok(!r.text.startsWith("!"));
+});
+
+test("parseHeadlineText leaves an unrecognised shape alone rather than eating its first characters", () => {
+  const plain = "Fed holds rates steady";
+  assert.equal(parseHeadlineText(plain).text, plain);
+  assert.deepEqual(parseHeadlineText(plain).meta, {});
+  // An unterminated brace is not an envelope and must survive intact.
+  assert.equal(parseHeadlineText("{unterminated headline").text, "{unterminated headline");
+});
+
+test("parseHeadlineText keeps the original when the envelope is all there is", () => {
+  const only = "{A:800015:L:en}";
+  assert.equal(parseHeadlineText(only).text, only, "an empty result would hide that the headline was empty");
+});
+
+test("toNewsMap hands the analyst cleaned text, including for a cache written before the parser", () => {
+  const legacy = { AAPL: [{ at: 1000, atIso: "2026-09-01T00:00:00.000Z", providerCode: "BRFG",
+                            headline: "{A:800015:L:en}!BofA Securities reiterated Apple (AAPL) coverage with Buy" }] };
+  const out = toNewsMap(legacy);
+  assert.equal(out.AAPL[0].headline, "BofA Securities reiterated Apple (AAPL) coverage with Buy");
+  assert.ok(!out.AAPL[0].headline.includes("{"));
+});
+
+test("the C field is carried but nothing consumes it as a score", () => {
+  const r = parseHeadlineText("{A:1:L:en:K:n/a:C:0.42}!Something happened");
+  assert.equal(r.meta.C, "0.42");
+  assert.equal(typeof r.meta.C, "string", "kept as sent; interpreting it needs a larger sample");
+  const mapped = toNewsMap({ X: [{ at: 1, atIso: "2026-01-01T00:00:00.000Z", headline: r.raw }] });
+  assert.deepEqual(Object.keys(mapped.X[0]).sort(), ["at", "headline", "source"],
+    "no score leaks into the analyst's context under an unverified meaning");
 });
