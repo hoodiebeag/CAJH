@@ -37,7 +37,7 @@
  * Usage:
  *   npm install @stoqey/ib
  *   node scripts/ibkr-panel.mjs
- *   git add -f ibkr-bundle/ && git commit -m "panel refresh" && git push
+ *   git add ibkr-bundle/ && git commit -m "panel refresh" && git push
  *
  * Options:
  *   --host H --port P    default 127.0.0.1:4002
@@ -169,4 +169,4 @@ fs.writeFileSync(path.join(OUT, "PROVENANCE.json"), JSON.stringify({
 }, null, 2) + "\n");
 console.log(`\nwrote ${path.join(OUT, "PROVENANCE.json")}`);
 console.log("\nCommit and push so the agent can decide on it:");
-console.log(`  git add -f ${OUT}/ && git commit -m "panel refresh ${newest ? iso(newest) : ""}" && git push`);
+console.log(`  git add ${OUT}/ && git commit -m "panel refresh ${newest ? iso(newest) : ""}" && git push`);

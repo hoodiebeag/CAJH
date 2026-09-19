@@ -21,7 +21,7 @@
 
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { screenUniverse } from "./universe.mjs";
-import { runOnce, realisedOutcomes } from "./analyst/loop.mjs";
+import { runOnce, realisedOutcomes, sessionWeekdays, missedSessions } from "./analyst/loop.mjs";
 import { loadNewsCache, toNewsMap, assertNotAfter } from "./analyst/news.mjs";
 import { scoreJournal, MODE, DEFAULT_JOURNAL } from "./analyst/journal.mjs";
 import { COST_MODELS } from "./costs.mjs";
@@ -94,11 +94,14 @@ if (cmd === "dry-run" || cmd === "paper") {
   // first error a user sees, and they conclude paper mode merely needs credentials when the real
   // blocker is that there is no current data to decide on.
   if (mode === MODE.PAPER) {
-    const ageDays = (Date.now() - dates.at(-1) * 1000) / 86400000;
-    if (ageDays > 1.5) {
-      console.error(`\npanel's last bar is ${ageDays.toFixed(1)} days old. Paper mode needs current data:`);
-      console.error("a model asked what it would do on a past date already knows what happened.");
-      console.error("Fix the data feed first — a key will not help. Use dry-run to exercise wiring.");
+    const missed = missedSessions(dates.at(-1), Date.now(), sessionWeekdays(dates));
+    if (missed > 1) {
+      console.error(`\npanel is ${missed} sessions behind its own calendar (last bar ` +
+                    `${new Date(dates.at(-1) * 1000).toISOString().slice(0, 10)}). Paper mode needs`);
+      console.error("current data: a model asked what it would do on a past date already knows what");
+      console.error("happened. Refresh the panel first — a key will not help:");
+      console.error("  node scripts/ibkr-panel.mjs      (on a machine that can reach IB Gateway)");
+      console.error("Use dry-run to exercise the wiring in the meantime.");
       process.exit(3);
     }
   }

@@ -130,10 +130,19 @@ test("buildVerdictsDigest reports an honest empty state when no meaningful verdi
 
 test("C3: buildLiveContext's verdict digest is a real multi-hypothesis digest pulled live from VERDICTS.md, not just the single latest bare verdict word", () => {
   const context = buildLiveContext({ watchlist: [] }, { maxChars: 20000 });
-  const match = context.match(/recent verdicts: (.+?)\./);
+  // Capture to end of line, not to the first period. Deciding metrics carry decimals ("+68.86%"),
+  // so a non-greedy stop at "." truncated the digest to its first few characters and made this
+  // assertion depend on which row happened to sort first -- it failed the moment a row whose
+  // metric began with a number entered the window, which is a property of the corpus, not of the
+  // digest. The intent is that several distinct hypotheses are named, so assert that directly.
+  const match = context.match(/recent verdicts: (.+)/);
   assert.ok(match, context);
-  assert.ok(match[1].length > 40, `expected a multi-hypothesis digest, got: ${JSON.stringify(match[1])}`);
-  assert.match(match[1], /:/);
+  const digest = match[1];
+  const entries = digest.split(";").filter((x) => x.includes(":"));
+  assert.ok(entries.length >= 2,
+    `expected several hypotheses named, got ${entries.length}: ${JSON.stringify(digest.slice(0, 200))}`);
+  assert.ok(digest.length > 40, `expected a multi-hypothesis digest, got: ${JSON.stringify(digest)}`);
+  assert.match(digest, /:/);
   assert.match(context, /Current strategy: anticipation swing-low trigger/);
   assert.match(context, /research-first market-intelligence system/);
 });

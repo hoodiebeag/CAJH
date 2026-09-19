@@ -34,6 +34,45 @@ import { recordDecision, MODE, DEFAULT_JOURNAL } from "./journal.mjs";
 export const PAPER_FRESHNESS_MS = 36 * 60 * 60 * 1000;   // a weekend gap is fine; last month is not
 
 /**
+ * Which weekdays this panel actually trades, read off the panel instead of assumed.
+ *
+ * Discipline rule 4 says derive calendars from the data and never from a constant. A hardcoded
+ * Monday-to-Friday is wrong for crypto and wrong for any venue with a different week, and it is
+ * wrong silently.
+ */
+export function sessionWeekdays(dates, lookback = 250) {
+  const days = new Set();
+  for (const t of dates.slice(-lookback)) days.add(new Date(t * 1000).getUTCDay());
+  return days;
+}
+
+/**
+ * How many sessions the panel is missing: trading weekdays strictly after its last bar, up to now.
+ *
+ * WHY NOT ELAPSED HOURS. The wall-clock rule this replaces refused whenever the last bar was over
+ * 36 hours old, which is every Monday and every day after a holiday -- a correct panel reading as
+ * a broken feed. The opposite error, a tolerance wide enough to cover a long holiday weekend, lets
+ * a genuinely stale panel through in the middle of a normal week, and THAT error is the dangerous
+ * one: it produces contaminated evidence that looks like a track record.
+ *
+ * So this counts sessions rather than time. A holiday the panel has not seen yet counts as a
+ * missed session and makes the check too STRICT by one day, which fails safe -- it refuses to
+ * trade. Being too loose would fail dangerous.
+ */
+export function missedSessions(lastBarEpoch, nowMs, weekdays) {
+  if (!weekdays || !weekdays.size) return 0;
+  const dayOf = (ms) => Math.floor(ms / 86400000);
+  const last = dayOf(lastBarEpoch * 1000);
+  const today = dayOf(nowMs);
+  let n = 0;
+  for (let d = last + 1; d <= today; d++) {
+    if (weekdays.has(new Date(d * 86400000).getUTCDay())) n++;
+    if (n > 400) break;                       // a panel years out of date needs no exact count
+  }
+  return n;
+}
+
+/**
  * Run one decision batch.
  *
  * @returns {{ context, contextIssues, decision, gate, record, skipped }}
@@ -53,13 +92,14 @@ export async function runOnce({
 
   // ---- the mode guard --------------------------------------------------------------------------
   if (mode === MODE.PAPER) {
-    const ageMs = now - asOfTime * 1000;
-    if (ageMs > PAPER_FRESHNESS_MS) {
+    const missed = missedSessions(asOfTime, now, sessionWeekdays(dates));
+    if (missed > 1) {
       throw new Error(
         `loop: refusing to run paper mode on ${new Date(asOfTime * 1000).toISOString().slice(0, 10)}, ` +
-        `which is ${Math.round(ageMs / 86400000)} days old. A model asked what it would do on a past ` +
-        `date already knows what happened. Use mode "dry-run" for a plumbing check or "anonymised" ` +
-        `for a reasoning probe; neither counts as evidence. See docs/ANALYST-DESIGN.md.`,
+        `which is ${missed} sessions behind on this panel's own calendar. A model asked what it ` +
+        `would do on a past date already knows what happened. Use mode "dry-run" for a plumbing ` +
+        `check or "anonymised" for a reasoning probe; neither counts as evidence. ` +
+        `See docs/ANALYST-DESIGN.md.`,
       );
     }
   }

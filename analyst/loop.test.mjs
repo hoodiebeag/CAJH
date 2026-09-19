@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { runOnce, realisedOutcomes, instrumentsFromContext, PAPER_FRESHNESS_MS } from "./loop.mjs";
+import { runOnce, realisedOutcomes, instrumentsFromContext, PAPER_FRESHNESS_MS,
+         sessionWeekdays, missedSessions } from "./loop.mjs";
 import { readJournal, scoreJournal, recordOutcome, MODE } from "./journal.mjs";
 
 const DAY = 86400;
@@ -272,4 +273,50 @@ test("instrument facts are derived from the panel rather than assumed", () => {
   assert.ok(inst.AAA.price > 0);
   assert.equal(inst.AAA.medianDollarVolume, 123);
   assert.ok(inst.AAA.quoteAgeMs < 2 * 86400000);
+});
+
+// ---- the panel-calendar freshness guard --------------------------------------------------------
+// The wall-clock rule these replace refused on every Monday, which reads as a broken feed when the
+// panel is in fact correct. These pin the behaviour in both directions: a normal weekend must pass,
+// and a genuinely stale panel mid-week must not.
+const MONDAY_PANEL = (() => {
+  const start = Date.UTC(2026, 8, 14) / 1000;          // 2026-09-14 is a Monday
+  const out = [];
+  for (let d = 0; d < 20; d++) {
+    const t = start + d * DAY;
+    const dow = new Date(t * 1000).getUTCDay();
+    if (dow !== 0 && dow !== 6) out.push(t);
+  }
+  return out;
+})();
+
+test("sessionWeekdays reads the trading week off the panel rather than assuming one", () => {
+  assert.deepEqual([...sessionWeekdays(MONDAY_PANEL)].sort(), [1, 2, 3, 4, 5]);
+  const everyDay = [];
+  for (let d = 0; d < 20; d++) everyDay.push(Date.UTC(2026, 8, 14) / 1000 + d * DAY);
+  assert.equal(sessionWeekdays(everyDay).size, 7, "a 7-day panel must not be forced into a 5-day week");
+});
+
+test("a Monday holding Friday's bar is current — the case the wall-clock rule got wrong", () => {
+  const friday = Date.UTC(2026, 8, 18) / 1000;
+  const mondayMidday = Date.UTC(2026, 8, 21) + 14 * 3600000;
+  assert.equal(missedSessions(friday, mondayMidday, sessionWeekdays(MONDAY_PANEL)), 1);
+});
+
+test("a missed mid-week session is counted", () => {
+  const monday = Date.UTC(2026, 8, 14) / 1000;
+  const wednesdayMidday = Date.UTC(2026, 8, 16) + 14 * 3600000;
+  assert.equal(missedSessions(monday, wednesdayMidday, sessionWeekdays(MONDAY_PANEL)), 2);
+});
+
+test("a weeks-old panel counts as many sessions behind, not one long gap", () => {
+  const stale = Date.UTC(2026, 8, 3) / 1000;
+  const now = Date.UTC(2026, 8, 19) + 14 * 3600000;
+  assert.ok(missedSessions(stale, now, sessionWeekdays(MONDAY_PANEL)) >= 10);
+});
+
+test("weekend days are not missed sessions on a weekday panel", () => {
+  const friday = Date.UTC(2026, 8, 18) / 1000;
+  const saturdayMidday = Date.UTC(2026, 8, 19) + 14 * 3600000;
+  assert.equal(missedSessions(friday, saturdayMidday, sessionWeekdays(MONDAY_PANEL)), 0);
 });
