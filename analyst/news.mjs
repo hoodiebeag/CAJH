@@ -30,6 +30,9 @@
  * from memory would almost certainly have added one and then quietly never matched.
  */
 
+import fs from "node:fs";
+import path from "node:path";
+
 /** IBKR returns "YYYY-MM-DD HH:MM:SS.0" for historical news. Epoch seconds, or null if unparseable. */
 export function parseNewsTime(raw) {
   if (raw === null || raw === undefined) return null;
@@ -175,6 +178,57 @@ export function toNewsMap(bySymbol, { perSymbol = 3 } = {}) {
       }));
   }
   return out;
+}
+
+/**
+ * Persist headlines to disk, and read them back.
+ *
+ * WHY A CACHE FILE RATHER THAN FETCHING INSIDE THE DECISION LOOP. Three reasons, and the third is
+ * the one that matters.
+ *
+ * Fetching needs a Gateway; deciding does not. Coupling them means no news integration exists
+ * until the Gateway does, and then it gets written under time pressure at the worst moment.
+ *
+ * Historical news costs a `reqContractDetails` round trip per symbol to resolve a conId plus a
+ * `reqHistoricalNews` per symbol on top. Doing that inside every decision batch would make the
+ * analyst's latency a function of TWS pacing limits, which are documented badly and enforced
+ * strictly.
+ *
+ * AND MOST IMPORTANTLY: a cache is a point-in-time record. Every headline carries the timestamp
+ * the broker released it at, so a decision made from the cache can be replayed against exactly the
+ * headlines that existed then. Fetching live inside the loop would silently give a replay TODAY'S
+ * news for YESTERDAY'S decision -- the precise contamination this whole design exists to prevent,
+ * arriving through the back door of a convenience.
+ *
+ * The file records `fetchedAt` so staleness is visible: news that is a week old is not news, and
+ * the caller is told rather than left to infer it from the headlines.
+ */
+export function saveNewsCache(file, bySymbol, { fetchedAt = new Date().toISOString(), providers = [] } = {}) {
+  const dir = path.dirname(file);
+  if (dir && dir !== "." && !fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ fetchedAt, providers, headlines: bySymbol }, null, 2) + "\n");
+  return { fetchedAt, providers, symbols: Object.keys(bySymbol ?? {}).length };
+}
+
+/**
+ * Read a news cache. Returns null when absent -- a missing cache is a normal state, not an error:
+ * the analyst runs without news and the context simply carries none.
+ *
+ * `maxAgeMs` is checked and REPORTED rather than enforced. Whether week-old headlines should block
+ * a decision is a judgement for the caller, but it must be a judgement made knowingly.
+ */
+export function loadNewsCache(file, { maxAgeMs = 24 * 3600 * 1000, now = Date.now() } = {}) {
+  if (!fs.existsSync(file)) return null;
+  const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+  const fetchedMs = Date.parse(raw.fetchedAt ?? "");
+  const ageMs = Number.isFinite(fetchedMs) ? now - fetchedMs : Infinity;
+  return {
+    fetchedAt: raw.fetchedAt ?? null,
+    providers: raw.providers ?? [],
+    headlines: raw.headlines ?? {},
+    ageMs,
+    stale: ageMs > maxAgeMs,
+  };
 }
 
 /**

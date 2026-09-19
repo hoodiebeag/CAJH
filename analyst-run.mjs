@@ -22,6 +22,7 @@
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { screenUniverse } from "./universe.mjs";
 import { runOnce, realisedOutcomes } from "./analyst/loop.mjs";
+import { loadNewsCache, toNewsMap, assertNotAfter } from "./analyst/news.mjs";
 import { scoreJournal, MODE, DEFAULT_JOURNAL } from "./analyst/journal.mjs";
 import { COST_MODELS } from "./costs.mjs";
 
@@ -114,10 +115,40 @@ if (cmd === "dry-run" || cmd === "paper") {
   }
 
   const asOf = flag("asOf", null) === null ? dates.length - 1 : Number(flag("asOf"));
+
+  // ---- news, from the cache rather than the wire ----------------------------------------------
+  // Fetching live inside the decision would hand a replay TODAY'S news for YESTERDAY'S decision --
+  // the exact contamination this design exists to prevent, arriving through a convenience. The
+  // cache is a point-in-time record, and every headline is re-checked against the decision
+  // boundary here even though context.mjs filters again. Two filters, because a provider stamping
+  // articles forward is the failure that would look most like skill.
+  let news = {};
+  const cache = loadNewsCache(flag("news", "data/news-cache.json"));
+  if (cache) {
+    const boundary = dates[asOf];
+    const filtered = {}, dropCount = {};
+    let totalDropped = 0;
+    for (const [sym, headlines] of Object.entries(cache.headlines)) {
+      const { kept, dropped } = assertNotAfter(headlines, boundary);
+      filtered[sym] = kept;
+      if (dropped.length) { dropCount[sym] = dropped.length; totalDropped += dropped.length; }
+    }
+    news = toNewsMap(filtered);
+    const withNews = Object.values(news).filter((v) => v.length).length;
+    console.log(`news cache: fetched ${cache.fetchedAt}, ${withNews} symbol(s) with headlines` +
+                `${cache.stale ? `  [STALE: ${(cache.ageMs / 3600000).toFixed(1)}h old]` : ""}`);
+    if (totalDropped) {
+      console.log(`  ${totalDropped} headline(s) dated at/after the decision were dropped: ` +
+                  Object.entries(dropCount).map(([s, n]) => `${s}x${n}`).join(", "));
+    }
+  } else {
+    console.log("no news cache; running on price and indicators alone.");
+  }
+
   let r;
   try {
     r = await runOnce({
-      series, dates, asOf, client, mode, journalFile: JOURNAL,
+      series, dates, asOf, client, mode, journalFile: JOURNAL, news,
       nav: Number(flag("nav", 100000)), slate: Number(flag("slate", 40)),
     });
   } catch (err) {

@@ -254,3 +254,57 @@ test("the news event signatures still match the installed @stoqey/ib", async () 
   assert.deepEqual(sig("historicalNewsEnd"), ["reqId", "hasMore"]);
   assert.deepEqual(sig("newsArticle"), ["reqId", "articleType", "articleText"]);
 });
+
+// ---- the cache ------------------------------------------------------------------------------------
+
+test("a cache round-trips and records when it was fetched", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const p = await import("node:path");
+  const { saveNewsCache, loadNewsCache } = await import("./news.mjs");
+  const f = p.join(fs.mkdtempSync(p.join(os.tmpdir(), "news-")), "cache.json");
+
+  const at = Date.UTC(2026, 8, 18, 9, 30, 0) / 1000;
+  saveNewsCache(f, { AAPL: [{ at, atIso: new Date(at * 1000).toISOString(), headline: "Guidance raised", providerCode: "BRFG" }] },
+    { fetchedAt: "2026-09-18T12:00:00.000Z", providers: [{ code: "BRFG" }] });
+
+  const c = loadNewsCache(f, { now: Date.parse("2026-09-18T13:00:00.000Z") });
+  assert.equal(c.fetchedAt, "2026-09-18T12:00:00.000Z");
+  assert.equal(c.headlines.AAPL[0].headline, "Guidance raised");
+  assert.equal(c.providers[0].code, "BRFG");
+  assert.equal(c.stale, false);
+  assert.ok(Math.abs(c.ageMs - 3600000) < 1000);
+});
+
+test("a missing cache is null, not an error — running without news is normal", async () => {
+  const os = await import("node:os");
+  const p = await import("node:path");
+  const { loadNewsCache } = await import("./news.mjs");
+  assert.equal(loadNewsCache(p.join(os.tmpdir(), `absent-${Date.now()}`, "c.json")), null);
+});
+
+test("staleness is reported, not enforced", async () => {
+  // Whether week-old headlines should block a decision is the caller's judgement — but it must be
+  // a judgement made knowingly rather than by not noticing.
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const p = await import("node:path");
+  const { saveNewsCache, loadNewsCache } = await import("./news.mjs");
+  const f = p.join(fs.mkdtempSync(p.join(os.tmpdir(), "news-")), "cache.json");
+  saveNewsCache(f, {}, { fetchedAt: "2026-09-01T00:00:00.000Z" });
+  const c = loadNewsCache(f, { now: Date.parse("2026-09-18T00:00:00.000Z") });
+  assert.equal(c.stale, true);
+  assert.ok(c.headlines, "still returns the payload; the caller decides what to do");
+});
+
+test("a cache with an unparseable fetchedAt is treated as infinitely stale", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const p = await import("node:path");
+  const { loadNewsCache } = await import("./news.mjs");
+  const f = p.join(fs.mkdtempSync(p.join(os.tmpdir(), "news-")), "cache.json");
+  fs.writeFileSync(f, JSON.stringify({ fetchedAt: "whenever", headlines: {} }));
+  const c = loadNewsCache(f);
+  assert.equal(c.stale, true);
+  assert.equal(c.ageMs, Infinity);
+});

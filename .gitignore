@@ -34,3 +34,7 @@ candle-bundle.tar.gz
 # append-only; committing one would mix a run's history into the repository's.
 analyst-journal.jsonl
 *.jsonl
+
+# The news cache is fetched per-deployment from a Gateway, and a committed one would be
+# both stale and a point-in-time record of somebody else's run.
+data/news-cache.json
