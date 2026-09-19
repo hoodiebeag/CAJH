@@ -88,7 +88,37 @@ export function scoreCandidate(config = LEADER, {
   };
 }
 
+/**
+ * What a candidate object must carry for every gate condition to be ASKED.
+ *
+ * Derived by handing promotionGate an empty candidate and reading back what it says it is missing,
+ * so it cannot drift from promotion.mjs the way a hand-written list would. This exists because the
+ * failure it prevents already happened once, and this file's own header records it: the first
+ * attempt at scoring a candidate used wrong field names, every condition came back BLOCKED, and
+ * BLOCKED reads like "not proven" when it actually meant "never asked". Anyone assembling a
+ * candidate by hand can hit that silently.
+ *
+ * BLOCKED is not a soft FAIL and must never be read as one. A blocked condition is a question
+ * nobody put to the data.
+ */
+export function gateContract() {
+  return promotionGate({}).conditions.map((c) => ({
+    id: c.id,
+    // needs() formats as "<label>: missing a, b, c" -- take the field list back off it.
+    requires: /missing (.+)$/.exec(c.reason ?? "")?.[1]?.split(", ") ?? [],
+  }));
+}
+
+function printContract() {
+  const rows = gateContract();
+  console.log("What a candidate must carry for each condition to be ASKED rather than BLOCKED.\n");
+  for (const r of rows) console.log("  " + r.id.padEnd(26) + (r.requires.join(", ") || "(no direct fields)"));
+  console.log(`\n${rows.length} conditions. BLOCKED means the question was never put to the data;`);
+  console.log("it is not a weaker FAIL, and a candidate that leaves fields absent has not been tested.");
+}
+
 function main() {
+  if (process.argv.includes("--contract")) return printContract();
   const to = process.env.GATE_TO || "2026-09-02";
   const from = process.env.GATE_FROM || "2023-01-01";
   const { shape, nul, cost, candidate } = scoreCandidate(LEADER, { from, to });

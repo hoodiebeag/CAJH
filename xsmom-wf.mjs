@@ -15,7 +15,7 @@
  * makes this finding different from the 2,446 configurations that preceded it.
  */
 
-import { runRotation } from "./xsmom.mjs";
+import { runRotation, perYear } from "./xsmom.mjs";
 
 export const GRID = { lookbackBars: [126, 252], topK: [5, 10, 20] };
 
@@ -43,8 +43,14 @@ export function fit(series, until, { grid = GRID, slipPct = 0.0005, borrow = 0 }
       const bot = runRotation({ ...base, pick: "bottom" });
       const n = Math.min(top.periodReturns.length, bot.periodReturns.length);
       if (n < 6) continue;                       // too few rebalances to have chosen on
+      // Borrow is annual; the universe's own rebalance calendar sets how often it is charged.
+      const ppy = perYear(top.rebalanceLog) ?? 12;
       let logSum = 0;
-      for (let i = 0; i < n; i++) logSum += 0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i] - 0.5 * borrow / 12;
+      // The short leg's turnover cost would arrive as a credit; see xsmom.mjs spread().
+      for (let i = 0; i < n; i++) {
+        logSum += 0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i]
+                  + (bot.periodCosts[i] ?? 0) - 0.5 * borrow / ppy;
+      }
       if (!best || logSum > best.logSum) best = { lookbackBars, topK, logSum, periods: n };
     }
   }
@@ -63,6 +69,9 @@ export function walkForward(series, {
   const steps = [];
   let bal = 1000, peak = 1000, maxDD = 0, up = 0, total = 0;
   const allReturns = [];
+  // Set once from the universe's own calendar: crypto's daily bundle carries 365 bars a year, US
+  // equities 252, so a 21-bar rebalance is 17.4 periods a year in one and 12 in the other.
+  let periodsPerYear = 12;
 
   let y = Number(testFrom.slice(0, 4)), q = Math.floor((Number(testFrom.slice(5, 7)) - 1) / 3);
   for (;;) {
@@ -77,6 +86,7 @@ export function walkForward(series, {
                      topK: chosen.topK, slipPct };
       const top = runRotation({ ...base, pick: "top" });
       const bot = runRotation({ ...base, pick: "bottom" });
+      periodsPerYear = perYear(top.rebalanceLog) ?? periodsPerYear;
       // Keep only the periods whose rebalance falls inside this quarter.
       const lo = sec(from), hi = sec(to);
       const idx = top.rebalanceLog
@@ -85,7 +95,8 @@ export function walkForward(series, {
       for (const i of idx) {
         const a = top.periodReturns[i - 1], b = bot.periodReturns[i - 1];
         if (a === undefined || b === undefined) continue;
-        const r = 0.5 * a - 0.5 * b - 0.5 * borrow / 12;
+        const r = 0.5 * a - 0.5 * b + (bot.periodCosts[i - 1] ?? 0)
+                  - 0.5 * borrow / (perYear(top.rebalanceLog) ?? 12);
         qr += r; allReturns.push(r); total++; if (r > 0) up++;
         bal *= Math.exp(r);
         count++;
@@ -98,7 +109,7 @@ export function walkForward(series, {
           for (let k = 0; k < top.times.length; k++) {
             const t = top.times[k];
             if (t <= lo || t > hi) continue;
-            sub *= Math.exp(0.5 * top.barReturns[k] - 0.5 * bot.barReturns[k] - 0.5 * borrow / 252);
+            sub *= Math.exp(0.5 * top.barReturns[k] - 0.5 * bot.barReturns[k] - 0.5 * borrow / (perYear(top.times) ?? 252));
             peak = Math.max(peak, sub);
             maxDD = Math.max(maxDD, (peak - sub) / peak);
           }
@@ -113,7 +124,7 @@ export function walkForward(series, {
     y = nextY; q = nextQ;
   }
 
-  const yrs = allReturns.length / 12;
+  const yrs = allReturns.length / periodsPerYear;
   return {
     steps, periods: total, upPeriods: up,
     finalBalance: +bal.toFixed(2),

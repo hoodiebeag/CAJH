@@ -797,9 +797,28 @@ test("SHORT-SIDE-ENGINE-CAPABILITY: direction \"short\" is rejected for entryMod
   }));
 });
 
-test("SHORT-SIDE-ENGINE-CAPABILITY: direction \"short\" is rejected when lockBreakeven is left at its true default", () => {
+test("SHORT-SIDE-ENGINE-CAPABILITY: lockBreakeven at its default is ACCEPTED for shorts", () => {
+  // This used to assert the opposite. It was written when the short path had no exit mirroring, so
+  // lockBreakeven was refused rather than silently ignored. The exit path was then deliberately
+  // mirrored -- trailR, partialAtR, trailingTpPct, lockBreakeven and exitOnSwingHigh all work for
+  // shorts now -- and the assertion was left describing the old capability table.
   const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
-  assert.throws(() => backtestMultiTF({ series }, { entryTf: "1h", entryMode: "bos", direction: "short" }));
+  assert.doesNotThrow(() => backtestMultiTF({ series }, { entryTf: "1h", entryMode: "bos", direction: "short" }));
+});
+
+test("SHORT-SIDE-ENGINE-CAPABILITY: the two ENTRY-side options that are genuinely unwritten still throw", () => {
+  // The capability boundary moved, so it needs pinning at its new place. requireHigherLow asks for
+  // a rising sequence of swing lows, whose mirror is a falling sequence of swing highs; minRoomR
+  // measures clear air ABOVE entry via nearestResAbove, whose mirror needs a nearestSupportBelow
+  // that does not exist. Both are unwritten rather than merely untested, and a short that silently
+  // ignored either would be logged under a restriction it never applied.
+  const series = buildSeries([[96, 97.8, 96, 97.7]], 97.7);
+  for (const opt of [{ requireHigherLow: true }, { minRoomR: 2 }]) {
+    assert.throws(
+      () => backtestMultiTF({ series }, { entryTf: "1h", entryMode: "bos", direction: "short", ...opt }),
+      /does not implement requireHigherLow or minRoomR/,
+      `short + ${Object.keys(opt)[0]} must throw`);
+  }
 });
 
 test('stopMode "atr" throws for an entryMode that would ignore it', () => {
@@ -840,15 +859,32 @@ test("the trend gate is inverted for shorts -- an uninverted gate is worse than 
 });
 
 test("the trend gate still requires an uptrend for longs", () => {
-  const bar = (t, px, hi = px, lo = px) => ({ time: t, open: px, high: hi, low: lo, close: px, volume: 1 });
+  // The previous scenario for this was a monotone 500-to-200 decline, which produces NO bos
+  // candidate at all -- every reason bucket comes back empty, so "a long must not be admitted" was
+  // vacuously true and "attributed to the gate" had nothing to count. A falling market needs local
+  // structure before a long candidate exists to be refused.
+  //
+  // Downward drift with a sawtooth on top: the swings create pivot lows below each entry, so risk
+  // is positive and the candidate survives as far as the gate, while the 50-bar MA stays above
+  // price throughout because the drift dominates the wave.
+  const bar = (t, px, hi, lo) => ({ time: t, open: px, high: hi, low: lo, close: px, volume: 1 });
   const day = 86400;
-  const falling = Array.from({ length: 300 }, (_, i) => bar(i * day, 500 - i, 500 - i + 2, 500 - i - 2));
-  const series = [{ label: "1440", mins: 1440, candles: falling }];
+  const candles = Array.from({ length: 300 }, (_, i) => {
+    const px = 500 - i * 1.2 + 18 * Math.sin(i / 8);
+    return bar(i * day, px, px + 3, px - 3);
+  });
+  const series = [{ label: "1440", mins: 1440, candles }];
   const opts = { entryMode: "bos", alignMode: "none", trendGateMode: "ma", trendMa: 50,
-                 minStopPct: 0, maxStopPct: 1, entryTf: "1440" };
+                 minStopPct: 0, maxStopPct: 1, entryTf: "1440", lockBreakeven: false };
   const gated = backtestMultiTF({ series }, { ...opts, trendGate: true });
-  assert.ok(!gated.reasons.taken, "a long must not be admitted into a downtrend");
-  assert.ok(gated.reasons.trendGate > 0, "and the refusals must be attributed to the gate");
+  const ungated = backtestMultiTF({ series }, { ...opts, trendGate: false });
+
+  assert.ok(ungated.reasons.taken > 0, "the scenario has to produce long candidates to mean anything");
+  assert.ok(!gated.reasons.taken, "no long may be admitted while price is below its MA");
+  // Stronger than "some were refused": EVERY candidate the ungated run took must be refused, and
+  // refused BY THE GATE rather than by a stop-distance rule that happened to bite first.
+  assert.equal(gated.reasons.trendGate, ungated.reasons.taken,
+    "every entry the ungated run took must be the gate's refusal, not another rule's");
 });
 
 test("entryGate is honoured by every entry mode, not just two of them", () => {

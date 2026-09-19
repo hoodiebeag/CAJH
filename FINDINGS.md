@@ -393,3 +393,699 @@ never be filled in retrospectively.
 
 Runners: `xsmom.mjs`, `xsmom-wf.mjs`, `xsmom-gate.mjs`. Universes in `candle-bundle/`,
 `equity-bundle/`, `sp500-bundle/`, deliberately separate roots.
+
+## Block bootstrap: the independence assumption, measured (2026-09-05)
+
+Every interval this campaign has quoted treated its period returns as independent draws. They are
+not, and the sub-period tables always said so. `bootstrap.mjs` resamples contiguous blocks instead
+of single periods, at n^(1/3) block length, on the same data and seed as the i.i.d. version.
+
+**The prediction was wrong. The bands got narrower, not wider.**
+
+| book | n | lag-1 acf (se) | 5-95 CAGR, i.i.d. | 5-95 CAGR, blocks of n^(1/3) | band ratio | P(lose) |
+|---|---|---|---|---|---|---|
+| crypto momentum | 50 | -0.140 (0.14) | 12.6% .. 73.8% | 16.6% .. 71.2% | 0.89x | 0.5% -> 0.0% |
+| equities momentum | 31 | -0.323 (0.18) | -9.8% .. 31.4% | -4.3% .. 24.4% | 0.70x | 22.1% -> 14.0% |
+
+Both books mean-revert period to period, so a replicate built from contiguous runs varies *less*
+than one built from independent draws. Dependence does not automatically widen an interval; it
+widens it when the dependence is positive, and these are negative.
+
+**The narrowing is the data, not the scheme.** A moving-block bootstrap under-weights the ends of
+the series — period 0 sits in one block where an interior period sits in `blockLen` — and equities'
+fourth largest move *is* period 0, so the artefact was a live candidate. The circular version, which
+wraps the series so every period carries equal weight, gives 0.89x and 0.70x against the moving
+scheme's 0.92x and 0.72x. The gap is negligible; the effect is real.
+
+**What this does and does not establish.** It is the strongest form of the crypto claim so far: a
+test built to attack it, whose result could have taken it down, left the 5th percentile of annual
+return *above* where the i.i.d. assumption had put it. It does not make 39% a forecast. The
+bootstrap resamples realised period returns, so it carries sampling variation in those returns and
+nothing else — not the choice of topK, not the canonical lookback, not regime change, and not the
+momentum crash the sample has never contained. Its median is centred on the realised sample by
+construction and is an in-sample number.
+
+For equities the narrower band changes nothing: the book is closed on out-of-sample grounds
+(0/5 and 2/5 on disjoint halves, no signal on a second universe), and a median of 8.9% with a 14%
+chance of losing money is not an argument against that.
+
+## Short-horizon momentum in crypto: closed (2026-09-05)
+
+The campaign had tested short-horizon *reversal* and long-horizon *momentum*, never short-horizon
+momentum. Pre-registered grid: lookback in {4, 8, 15, 30, 60} x skip in {0, 1}, rebalance = lookback,
+topK 3. Ten cells, Benjamini-Hochberg at q=0.05 over a family of ten.
+
+**The ranking carries information at short horizons. It does not survive to the account.**
+
+Gross (zero-cost) final balance beats $1000 at every horizon but 60 bars — $2050 at 4 bars, $2851 at
+8. Seven of ten cells clear BH. But at 4 bars the book rebalances 91 times a year against the
+canonical book's 17.4, and the standing 0.8% crypto slippage — calibrated for a 21-bar rebalance —
+is then charged five times as often. Cost eats 99% of the 4-bar result, 88% of the 8-bar, 47% of the
+30-bar.
+
+**A p-value at the floor beside a net of $29 is not evidence of anything tradeable.** The 4/0 cell's
+p is 0.0020 and the random-selection null's median final balance is **$10**. Beating random selection
+at the same ruinous turnover says the ranking works; it says nothing about the book. Both numbers are
+now printed side by side because the p alone invites the wrong read.
+
+Swept across execution cost, canonical 252/21/21 wins at every column — $3147 gross, $3111 at 0.05%,
+$3076 at 0.10%, $2623 at 0.80% — against the best short-horizon cell's $3034 / $2933 / $2836 / $1759.
+No short horizon replaces it at any cost anyone could achieve.
+
+### The diversification claim, and why it was wrong
+
+30/1/30 looked decorrelated from canonical (rho 0.10) and a 50/50 blend beat both legs on Sharpe at
+every cost level. That result was an artefact of my own code. `alignReturns` compounds the faster
+book onto the slower one's clock and the faster book must be passed first — and 30/1/30 rebalances
+**12.2 times a year against canonical's 17.4**, so canonical is the faster one. Hard-coding the order
+aligned them backwards.
+
+Corrected, the correlation is **0.55, not 0.10**, and the blend beats both legs at **0 of 4** cost
+levels. Sweeping every horizon rather than the cherry-picked one: 4/1, 8/1, 15/1, 30/1 and 60/1 all
+score 0/4. There is no horizon diversification benefit here.
+
+This is the fourth time in this project that a misalignment has read as decorrelation. It is worth
+stating as a rule: **misalignment destroys covariance and nothing else, so a surprisingly low
+correlation is a bug report until proven otherwise.** It was caught only because extending the test
+to horizons I had not selected forced the ordering logic to become explicit.
+
+## Funding rates: analysis pre-registered 2026-09-06, before the data existed
+
+Written while every exchange host is blocked from this container and no funding series is
+obtainable. Nothing in it was chosen by looking at a result, because there was nothing to look at.
+Every prior failure in this project came from choosing after seeing — the PARA symbol, the blend
+weight, the 30-bar horizon picked out of a grid that had just been run. `carry-run.mjs` is fixed
+before the data lands and runs once, unchanged, when it does.
+
+**Why funding.** It is the first non-price input this project has had. All fourteen signals tested
+so far are transforms of the same OHLCV. Funding is a payment stream between longs and shorts and
+carries positioning information price does not.
+
+**Three hypotheses, directions fixed in advance.** H1 carry: short highest-funding, long lowest,
+return = price spread **plus** funding collected; needs perpetuals, so it is not tradeable by this
+account, but it establishes whether the premium exists. H2 crowding, long-short spot: identical
+positions, price return only — persistent positive funding means crowded longs, so the registered
+direction is that high trailing funding predicts **lower** subsequent spot return. H3 crowding,
+long-only spot: the only one this account can hold today.
+
+**H1 and H2 are the same book measured two ways** and are therefore not independent tests. Family
+of 9 per venue for Benjamini-Hochberg; genuinely independent groups are closer to 3, one per
+lookback. Both counts are printed.
+
+Parameters fixed and not to be swept: lookbacks {7, 30, 90} bars, rebalance 21, topK 3 a side,
+slippage 0.80%, borrow 5%/yr, 252-bar warmup for every lookback so all three start on the same date.
+Kraken and OKX analysed separately and never averaged; a cell counts only if it survives on **both**.
+
+**Kill conditions, registered now:** if no H2 or H3 cell clears BH on both venues, funding-as-signal
+is closed. A result at one lookback only, or one venue only, is noise.
+
+### What validation showed, before any real data
+
+| check | result |
+|---|---|
+| power — planted crowding signal | all 9 cells clear BH, p at the floor |
+| false positives — both venues pure noise, 8 independent draws | **0 of 8** confirmed |
+| funding actually flows into H1 | H1 $5,410 vs H2 $2,015 on a planted 0.1%/day, correct sign |
+| no-lookahead | pinned by test: ranking at bar i uses funding through i−1 only |
+
+Three defects were found and fixed by building it this way rather than after the fact:
+
+**`Number("")` is 0, not NaN.** An empty `fundingTime` passed a `Number.isFinite` guard and became
+1970-01-01 — a row silently wrong rather than loudly absent.
+
+**BH was pooled across venues** into a family of 18, contradicting the registration's own "family
+size 9, venues analysed independently". On the adversarial validation (one venue signal, one noise)
+the pooled procedure passed two **noise** cells: nine strong true positives dragged the threshold up
+until marginal noise cleared it. Per venue, every noise cell is correctly rejected.
+
+**`anchoredDrawdown` was called with the rotation objects** rather than `(periodReturns, barReturns,
+times, rebalanceLog)`. It would have reported a drawdown built from garbage without erroring.
+
+**Known limitation, stated rather than discovered later.** Cross-venue confirmation protects against
+a fluke when both venues are clean — 0 of 8 above. It is weaker when one venue carries genuine
+signal, because the requirement then collapses to whether the other venue flukes at the same cell;
+in the adversarial synthetic, one cell did. Both venues measure the same underlying quantity in the
+real case, which is the case the 0-of-8 covers.
+
+## The data arrived, and it broke the surviving result (2026-09-06)
+
+The owner ran the pull in Colab, routing around a container egress policy that denies exchange
+hosts. Three datasets landed: Binance daily bars back to 2017-08, Kraken funding, OKX funding.
+
+### Carry: untestable, not negative
+
+`carry-run.mjs` ran **exactly as pre-registered**, unchanged. It scored nothing.
+
+Kraken funding covers **25.2%** of the price window against the registered 80% screen; OKX covers
+**4.4%**, which is 2 rebalance periods against a registered minimum of 6. Kraken's history begins
+2025-09 and OKX's endpoint serves roughly three months. The registration requires cross-venue
+confirmation and states that one venue "is one measurement, and the pre-registration does not
+accept it as a finding" — so the verdict was fixed before the run.
+
+This is a data limitation, not a result. Carry remains untested. It needs a venue serving several
+years of funding history.
+
+### The result that matters: momentum is source-fragile
+
+The control row failed, which is why it was there. On identical names and dates, the Kraken bundle
+returns $2,910 and the Binance bundle $1,915 — a **34% gap** between two sources whose daily returns
+correlate 0.997 to 0.9999 on every name used. The Kraken run reproduces the published $2,623 exactly,
+so the plumbing is sound and the discrepancy is real.
+
+The two sources select **different names at 65% of rebalances** — 2.47 of 3 in common on average.
+Concentration is the mechanism, and it was measured rather than asserted:
+
+| topK | Kraken | Binance | gap | identical picks | names shared |
+|---|---|---|---|---|---|
+| 3 | $2,910 | $1,915 | **34%** | 53% | 2.47 of 3 |
+| 6 | $1,860 | $1,485 | 20% | 34% | 4.86 of 6 |
+| 9 | $1,399 | $1,242 | 11% | 25% | 7.58 of 9 |
+
+At 3 names a side, one flipped rank is a third of a leg. **The published 39.9% CAGR was measured at
+the most source-sensitive configuration available**, and returns fall as the configuration becomes
+reproducible. No amount of testing against one data source could have revealed this.
+
+### Out of sample, on longer history, it fails
+
+Within a single consistent source, so the comparison is like for like:
+
+| window | periods | final | CAGR | maxDD | basket | p |
+|---|---|---|---|---|---|---|
+| 2023-01..2026-09 (the original window) | 51 | $1,861 | 23.6% | 32.7% | $992 | <0.0025 |
+| **pre-2023, strictly out of sample** | **75** | **$1,116** | **2.6%** | **47.8%** | **$1,147** | <0.0025 |
+| full 2017-08..2026-09 | 139 | $1,706 | 6.9% | 61.8% | $1,114 | <0.0025 |
+| 2018 collapse | 14 | $899 | −12.4% | 19.6% | $929 | <0.0025 |
+
+**Out of sample it returns 2.6% a year with a 47.8% drawdown and loses to simply holding the
+universe.** Over the full nine years, 6.9% with a 61.8% drawdown.
+
+**The predicted failure mode is confirmed.** Through the 2018 collapse the book returned −12.4% a
+year. This document named that exact scenario as the untested one and called the 10% drawdown "the
+least trustworthy number above." It was right.
+
+**Every window is still significant at p < 0.0025, including the ones that lose to the basket.**
+The ranking beats random selection everywhere. That is selection skill and it is not tradeable
+return, and quoting the p without the basket column would misrepresent all four rows.
+
+### Where this leaves the campaign
+
+Crypto momentum was the surviving claim, held through a random-selection null at 3,000 draws, five
+disjoint-half splits, a twelvefold frequency range, a cost stress, and a block bootstrap built to
+break it. It does not survive a second data source or a longer sample. The 2023–2026 window was not
+representative and 3 names a side was not reproducible.
+
+Excluded on integrity grounds before any of this: ALGO, ETC, TAO and ZEC, whose two sources
+disagree on daily returns (correlation below 0.99, TAO at 0.922 with a 45% maximum discrepancy),
+and XMR, delisted from Binance in 2024-02 while the Kraken bundle starts 2025-01 — no overlap, so
+nothing to reconcile.
+
+## Carry: tested properly, and closed (2026-09-06)
+
+`data.binance.vision` — reachable where `fapi.binance.com` returns 451 — yielded monthly funding
+archives for 29 symbols spanning **2020-01 to 2026-08**, roughly 7,300 settlements each. That is
+6.7 years against Kraken's one, and it clears the pre-registered 80% coverage screen: 25 of 28
+symbols usable, 51 rebalance periods.
+
+`carry-run.mjs` ran with its hypotheses, directions, parameters, family size and thresholds exactly
+as registered. Adding `funding-binance` to the venue list adds a data source; it changes nothing the
+registration fixed.
+
+### The result: nothing, and not narrowly
+
+| L | hypothesis | final | CAGR | maxDD | Sharpe | p |
+|---|---|---|---|---|---|---|
+| 90 | H1 carry (price+funding) | $820 | −6.7% | 44.3% | −0.32 | 0.0495 |
+| 90 | H2 spot long-short | $697 | −11.8% | 51.0% | −0.57 | 0.1179 |
+| 7 | H1 carry | $656 | −13.7% | 46.1% | −0.82 | 0.1579 |
+| 7 | H2 spot long-short | $566 | −18.0% | 51.0% | −1.10 | 0.2794 |
+| 30 | H1 carry | $457 | −23.9% | 58.1% | −1.61 | 0.5192 |
+| 90 | H3 spot long-only | $420 | −26.0% | 88.4% | −0.35 | 0.6092 |
+| 7 | H3 spot long-only | $394 | −27.7% | 87.7% | −0.43 | 0.6802 |
+| 30 | H2 spot long-short | $391 | −27.9% | 63.7% | −1.87 | 0.6882 |
+| 30 | H3 spot long-only | $295 | −34.6% | 89.6% | −0.56 | 0.9100 |
+
+**Nothing clears Benjamini-Hochberg.** Best p is 0.0495 against a rank-1 threshold of 0.0056. Every
+cell loses money and every Sharpe is negative. Under the pre-registered kill condition,
+funding-as-signal is **closed**.
+
+### Funding really is non-price information — which is what makes this negative worth something
+
+The registered direction was crowding: high trailing funding predicts lower subsequent spot return.
+Every book lost, which implies the inverse would have gained. The obvious suspicion is that the
+inverse is just momentum — high funding follows a price rise — and that funding therefore carries
+nothing price does not.
+
+Measured, not assumed. Cross-sectional rank correlation between trailing funding and trailing
+return over the same window: **0.017 at L=7, 0.055 at L=30, 0.089 at L=90**. Funding ranks the
+universe almost independently of price.
+
+So this was a genuine test of a genuine non-price source — the thing the campaign was told it had
+never attempted — and the source does not predict the cross-section. The inverse direction would
+have made money, is **not** momentum, is unregistered, and cannot be claimed. What it is, I do not
+know.
+
+### An unexplained cross-venue disagreement, reported rather than resolved
+
+Kraken and Binance overlap for a year. Their **daily funding correlates at a median of 0.514**, with
+14 of 28 symbols below 0.50 (LTC −0.05, SUI 0.007, UNI 0.058) and outright sign disagreement on the
+year's mean for ADA, ETC, LTC, NEAR and UNI. Compare the candle cross-check, where the same two
+vendors agreed on returns at 0.997–0.9999.
+
+This triggers the registered kill condition independently of the BH result.
+
+Two explanations were proposed and both refuted:
+
+**Liquidity** — that major perps arbitrage across venues while thin alts have local positioning.
+Top half by dollar volume, mean correlation 0.432; bottom half, 0.471. If anything backwards.
+
+**Timezone** — the Kraken pull used Python's `time.mktime`, which reads a struct as local rather
+than UTC. Checked: the first CSV record is `2025-09-03T08:00:00Z`, exactly matching the API probe,
+and every settlement lands on an exact UTC hour. No shift.
+
+The disagreement is real and I have no confirmed mechanism for it.
+
+### Three mechanisms proposed today, three refuted by measurement
+
+Liquidity explaining the venue split. Timezone explaining the venue split. Momentum explaining the
+inverse carry book. Each was plausible, each was measured, each was wrong. The one before them —
+dispersion explaining the Kraken-14 ranking — was also wrong. **In this project a proposed mechanism
+has a worse than even record, and the only ones that survived were the ones that got measured.**
+
+## Derivatives positioning: tested, and closed (2026-09-10)
+
+Binance daily `metrics` archives, 29 symbols, 2022-01 to 2026-09, ~1,712 days each — open
+interest, top-trader long/short ratio, taker buy/sell volume ratio. `positioning-run.mjs` ran
+**exactly as pre-registered**: three signals with directions fixed in advance, family of 18,
+Benjamini-Hochberg at q=0.05, and a kill condition labelling any cell that ranks like price a
+price transform.
+
+**Six of eighteen cells cleared BH. None is tradeable.**
+
+Against the controls the runner did not print — equal-weight basket **$1,091 / 3.1% / 75.3% DD**,
+buy-and-hold BTC **$2,498 / 37.3%** over the same 1,055 bars:
+
+| cell | final | CAGR | maxDD | Sharpe | p | vs basket |
+|---|---|---|---|---|---|---|
+| TAKER 90 long-only | $1,355 | 11.1% | 81.2% | 0.12 | 0.0020 | beats, *worse* DD |
+| TAKER 7 long-only | $1,188 | 6.2% | 74.4% | 0.08 | 0.0055 | marginal |
+| TAKER 30 long-only | $1,126 | 4.2% | 73.8% | 0.06 | 0.0060 | ≈ basket |
+| TAKER 30 long-short | $1,094 | 3.2% | 19.0% | 0.19 | 0.0065 | ≈ basket, quarter the DD |
+| OI 7 long-only | $1,068 | 2.3% | 85.0% | 0.03 | 0.0080 | **loses** |
+| TAKER 90 long-short | $992 | **−0.3%** | 23.3% | −0.01 | 0.0115 | **loses** |
+
+One survivor loses to the basket. One has a negative CAGR and still clears BH at p=0.0115 — the
+clearest illustration yet that **beating random selection is selection skill, not return**. The
+best cell loses to buy-and-hold BTC by 3.4× while carrying a larger drawdown than holding
+everything. Every Sharpe lies between −0.01 and 0.19.
+
+**The one cell worth naming.** `TAKER 30 long-short` returns what the basket returns at a 19.0%
+drawdown against its 75.3%. That is a real risk reduction rather than a return, and its Sharpe of
+0.19 over under three years carries a standard error near 0.6 — indistinguishable from zero. It is
+a direction worth remembering, not a result.
+
+**Positioning IS non-price information.** Rank correlation against trailing return ran −0.16 to
++0.10 across all nine signal-lookback pairs, so the pre-registered price-transform kill condition
+never fired. As with funding, this was a genuine test of a genuine non-price source, and the source
+does not produce a tradeable cross-sectional edge.
+
+**A defect in the pre-registration, recorded rather than quietly fixed.** `positioning-run.mjs`
+prints no basket control. Six cells cleared BH and nothing in its output would have revealed that
+two of them lose to simply holding the universe. Standing discipline caught it; the runner did not.
+Any future pre-registration in this project must carry its baseline control inside the registered
+analysis, not alongside it.
+
+## FVG / iFVG entries: the eleventh entry family to fail the same null (2026-09-11)
+
+The owner asked whether inverse fair value gaps and cross-timeframe pattern recognition had been
+tried. They had not been. `fvg-run.mjs` was pre-registered before it ran: four detectors
+(bullish/bearish FVG, bullish/bearish inverse FVG) on two timeframes, long-only, family of 8, two
+required gates — beat the matched-geometry random-entry null, **and** beat buy-and-hold.
+
+**All eight cells lose money.** Mean R runs from −0.12 to −0.34. Not one is positive.
+
+| tf | signal | trades | mean R | null R | p | buy&hold R |
+|---|---|---|---|---|---|---|
+| 240 | ifvgBull | 7,763 | **−0.1196** | −0.1918 | 0.0002 | +19.14 |
+| 240 | fvgBull | 11,768 | **−0.1417** | −0.1883 | 0.0012 | +19.14 |
+| 1440 | fvgBull | 2,731 | −0.2116 | −0.2339 | 0.2292 | +13.37 |
+| 1440 | ifvgBull | 1,810 | −0.2207 | −0.2440 | 0.2637 | +13.37 |
+| 240 | ifvgBear | 7,878 | −0.2224 | −0.1912 | 0.9615 | +19.14 |
+| 240 | fvgBear | 11,745 | −0.2454 | −0.1948 | 1.0000 | +19.14 |
+| 1440 | fvgBear | 2,804 | −0.2589 | −0.2499 | 0.6238 | +13.37 |
+| 1440 | ifvgBear | 1,911 | −0.3367 | −0.2423 | 0.9955 | +13.37 |
+
+**Two cells clear the null — by losing less than random entry does.** `240m ifvgBull` reaches
+p=0.0002 and `240m fvgBull` p=0.0012, and both survive the cumulative rank-1 threshold of 0.0028
+against a family of eighteen. They are also both **negative**, against a buy-and-hold of +19.14R
+over the same bars and the same universe.
+
+This is the clearest statement of the pattern the campaign keeps producing: **a p-value of 0.0002
+on a book that loses money.** The null is random entry with the same stop geometry, so beating it
+measures only that the trigger is less bad than a coin flip. It says nothing about whether the
+trade should be taken at all.
+
+**It is also the exact gap in the owner's IBKR manual.** That document's research scorecard and its
+eight hard validation gates never require a baseline comparison. A cell here passes multiplicity
+correction against eighteen families and still loses 0.12R per trade while the asset returns 19R.
+The second gate is not a refinement; without it the first gate endorses a losing strategy.
+
+Closed: the eleventh entry family to fail this null, after the ten in the DJIA-30 work.
+
+### And the related question: entries from one strategy, exits from another
+
+Already measured, and the answer is why the above was predictable. Zero of ten entry families beat
+their matched-geometry null; `ma_dip`, the best, sat at the **52.1st percentile of its own null**.
+A random entry with the same geometry returned **+0.1637R**. The exits carry the result and the
+entry half is interchangeable with random — so combining a "better" entry with a good exit is
+selecting a new geometry, not adding predictive content. *The geometry is not an edge measured
+during a good period. It IS the good period.*
+
+## THE UNIVERSE SCREEN, AND THREE STUDIES THAT RAN WITHOUT IT
+
+Recorded first because it is the most instructive thing in this section and because it is my own
+error, made three times in a row on 2026-09-11.
+
+`universe.mjs` exists because PARA sits in `sp500-bundle` with closes spanning $1.06 to $113,900 —
+a 107,453x range that no listed instrument produces. The file's own header records what it cost the
+last time: removing that one symbol took the equities book from 25.0% CAGR to 9.1%. Rule 1 of every
+campaign brief is SCREEN THE UNIVERSE FIRST, before any ranking.
+
+The overnight, residual and illiquidity studies below all ranked the raw 128. The verdicts did not
+change — all three still close with zero survivors — but almost every number did, and one headline
+was wrong by a quarter:
+
+| quantity | unscreened (published first) | screened (correct) |
+|---|---|---|
+| **share of daily return accruing overnight** | **64%** | **52%** |
+| equal-weight buy-and-hold baseline | +58.43%, Sharpe 0.366 | **+68.86%, Sharpe 0.412** |
+| long-only decile null (the calibration) | +25.43% / Sharpe 0.734 | **+33.70% / Sharpe 0.850** |
+| illiquidity LEVEL cell | +0.69% | +21.91% |
+| PCA k=3 long-only cell | +23.09% | +47.08% |
+| overnight-component momentum cell | −16.10% | +9.84% |
+
+PARA was doing three separate kinds of damage at once, one per study, and each is a textbook case
+of why the screen is written the way it is. Its fake price path produced enormous phantom overnight
+gaps, so it inflated the very asymmetry the overnight study was built to measure. A series moving
+five orders of magnitude dominates a principal component outright, so the PCA was partly fitting one
+corrupted symbol. And it was reliably the least liquid name in the cross-section, so the Amihud book
+selected it nearly every rebalance — the screen's own criteria are zero-volume bars and a
+dollar-volume floor, which is precisely what that study ranks on.
+
+**The lesson is not "remember the screen".** It is that the correction moved the headline in the
+*unfavourable* direction — 64% down to 52%, a much less striking claim — which is the reassuring
+direction and the reason to trust the corrected figure. Rule 7 says to suspect a fix that improves
+a headline harder than the bug. The converse holds: a fix that deflates one is doing its job.
+
+All three studies now call `screenUniverse` before ranking, print what they exclude, and the tables
+below carry the screened numbers.
+
+## Overnight vs intraday decomposition (MR11 / HX13) — the twelfth family, closed
+
+Pre-registered in `overnight-run.mjs` and committed before the run. Universe `sp500-bundle/1440`,
+screened: **127 names** (PARA excluded), 920 dates, 116,840 symbol-days, 2023-01 → 2026-09. Cost
+model `usEquityIbkr` (0.5bp fee + 5bp slippage per leg). Crypto excluded — a 24/7 market has no
+overnight session.
+
+This mattered because **every prior result in this repository is computed close-to-close.** The
+open price sat in all four bundles the whole campaign and had never been used as a signal; its one
+appearance anywhere was gap accounting in `studies/overlay.mjs`. So it was the last unused
+information source in data we already own.
+
+**The integrity gate passed**, which is a result in its own right: 138 of 116,840 symbol-days carry
+`|overnight| > 15%` (0.12%, gate ≤ 1%) and the correlation between the two legs on those extreme
+days is +0.0467 (gate ≥ −0.5). The `sp500-bundle` opens and closes are on one adjustment basis.
+Had they not been, a 2:1 split would read as −50% overnight and +100% intraday and very nearly
+cancel in the close-to-close return every prior study used — invisible to every other check here.
+
+**The published anomaly reproduces, but weakly.** Overnight carries 3.30bp/day against intraday's
+3.04bp/day: **52% of the total daily return accrues while the market is shut** — a near-even split,
+not the 64% the unscreened run reported.
+
+**It is not an edge.** Holding only the overnight leg returns +32.98% gross over 3.65 years against
+a buy-and-hold of ~69% gross. Giving up the intraday leg costs far more than the concentration
+gains, before a single fee.
+
+| cell | mechanism | gross | net | cost drag | vs B&H | null p |
+|---|---|---|---|---|---|---|
+| A | overnight-only book | +32.98% | −51.69% | 84.67 | −120.56 | n/a |
+| B | intraday-only book | +27.26% | −53.77% | 81.03 | −122.63 | n/a |
+| C | XS momentum on overnight component | +32.01% | +9.84% | 22.16 | −59.02 | 0.8830 |
+| D | XS momentum on intraday component | +57.96% | +31.44% | 26.52 | −37.43 | 0.5519 |
+| E | XS momentum on total return (control) | +15.25% | −4.10% | 19.35 | −72.97 | 0.9735 |
+| F | MR11 overnight-lag divergence | +40.32% | +16.76% | 23.56 | −52.10 | 0.7943 |
+
+Baseline: equal-weight buy-and-hold of the same 127 names, **+68.86% net** (CAGR 15.43%).
+
+**The line that decides it: a random selection of the same 13 names on the same dates, held the
+same way and charged the same costs, returns +36.78% net.** Every one of the four selection rules
+loses to a coin flip. The pre-registered kill condition anticipated the shape of the near miss: D
+beats the control E by 35 points, which read alone looks like the decomposition working — and D
+sits at p=0.5519 against its own null, which is to say a coin flip beats it more than half the
+time. Without the selection null that 35-point gap would have been reported as a finding.
+
+D's gross return (+57.96%) is also, to within a few points, the market's own gross return. Ranking
+on the intraday component earns roughly the index and then pays 26 points of turnover for it.
+
+**Cells A and B failed by the arithmetic written into the pre-registration**: a single-leg book
+turns over every session, 11bp a day, ~28% a year. That was stated before the run and is confirmed
+to the point.
+
+Closed. Twelfth family, twelfth failure of the same pair of gates. Of the six manual strategies
+that survived triage into Tier A, the one with the best prior is now the one with a verdict.
+
+## Residual mean reversion (RV02 / RV03) — the thirteenth family, closed, and a calibration number worth keeping
+
+Pre-registered in `residual-run.mjs` and committed before the run. Universe `sp500-bundle/1440`,
+screened: 127 names, 920 dates, 159 rebalances, 13 names per leg, 120-day fitting window, residual
+path z-scored over 60 days, 5-day hold, `usEquityIbkr` costs, 2,000 selection-null draws per book.
+
+RV10 was dropped from the family **before** the run, correcting my own triage: its rule is a
+dynamic beta to macro drivers and the S&P bundle holds no rates, no USD, no commodities. Testing it
+with a stand-in factor would have been fitting a convenient regressor and calling it the strategy.
+
+| cell | mechanism | gross | net | Sharpe | vs B&H | null p |
+|---|---|---|---|---|---|---|
+| P-LS | PCA k=3 residual, long-short | +18.09% | −16.80% | 0.677 | −85.67 | 0.0910 |
+| P-LO | PCA k=3 residual, long only | +75.20% | +47.08% | 0.993 | −21.79 | 0.2619 |
+| M-LS | market-beta residual, long-short | +0.93% | −28.89% | 0.084 | −97.76 | 0.4483 |
+| M-LO | market-beta residual, long only | +77.79% | **+49.25%** | **0.963** | −19.61 | 0.2354 |
+
+Baseline: equal-weight buy-and-hold, **+68.86% net, Sharpe 0.412**.
+
+**The two long-only cells post Sharpes of 0.96 and 0.99 against the index's 0.41, and neither is an
+edge.** That is the finding, and it took one diagnostic to see it:
+
+> **A coin flip under the same geometry has mean Sharpe 0.850, and 31.10% of random draws match or
+> beat the best cell's 0.993.** Random selection also returns +33.70% net against M-LO's +49.25%,
+> at p=0.2354.
+
+So the Sharpe belongs to the rebalancing geometry — weekly-rebalanced equal-weight 13-name
+concentration — and not to the residual signal. Reported alone, "Sharpe 0.99 versus the index's
+0.41" is the most persuasive number this project has generated and it means nothing. This is the
+same lesson the entry-family work reached from the other direction (*the geometry is not an edge
+measured during a good period; it IS the good period*), now with a number attached on the equity
+side.
+
+**Keep this calibration: any future decile-rotation study on this universe must clear a null Sharpe
+of ~0.85, not the index's 0.41.** Measuring against the index over-credits such a book by roughly
+0.44 of Sharpe before any signal is involved.
+
+The long-short books are a separate and simpler story: the LS null itself returns −29.43%, and both
+LS cells sit near it. The market-neutral form's loss is dominated by the cost of turning over two
+legs every five days. Nothing was hedged away that the hedge did not cost more than.
+
+Robustness, outside the family and uncorrected: PCA k=1 LO +42.99% (Sharpe 0.894), k=5 LO +29.37%
+(0.790). The pre-registered k=3 sits above both neighbours here, which is worth naming plainly — on
+the unscreened data it sat *between* them. Either way it fails both gates, so the ordering decides
+nothing, but a k=3 that had cleared would need that instability reported beside it.
+
+Closed. Thirteenth family, same two gates.
+
+## Amihud illiquidity (MR08) — the fourteenth family, closed, and an independent check on the calibration
+
+Pre-registered in `illiquidity-run.mjs` and committed before the run. Same universe and the same
+geometry as the residual study, held fixed on purpose: `sp500-bundle/1440` screened to 127 names,
+169 rebalances, 13 names, 5-day hold, `usEquityIbkr` costs, long only, 2,000 null draws.
+Illiquidity z was unavailable on 7.01% of symbol-days (warm-up plus zero-volume sessions), which
+the module returns as null rather than as an Infinity that would sort to one end of every
+cross-section.
+
+| cell | mechanism | gross | net | Sharpe | vs B&H | null p |
+|---|---|---|---|---|---|---|
+| N | MR08: illiquidity spike, then normalised | +17.07% | −2.80% | 0.361 | −71.67 | 0.9550 |
+| L | illiquidity level (premium, not signal) | +46.83% | +21.91% | 0.568 | −46.96 | 0.6497 |
+| R | 5-day reversal (control, already killed) | −87.73% | −89.82% | −1.916 | −158.68 | 1.0000 |
+
+Baseline +68.86% net. **Null +33.29% net at mean Sharpe 0.827.**
+
+**The calibration replicated.** The residual study measured this geometry's coin-flip null at
++33.70% and Sharpe 0.850; an independent run with a different rebalance count and start lands at
++33.29% and 0.827. The number is a property of the geometry, not of either study. It can be relied
+on: **a decile-rotation book on this universe starts from roughly +33% and Sharpe 0.84 before any
+signal.**
+
+Both illiquidity cells sit far below that. Neither the normalisation shape nor the level carries
+anything — and note that the level cell's apparent +21.91% is *below* a coin flip, not above it,
+which is the whole reason the null is computed. Volume as the ranked quantity is now tested and
+closed, which was the point of running this one.
+
+**The control is the loudest number in the study.** Buying the 5-day losers returned **−87.73%
+gross** at Sharpe −1.916. B5-REVERSAL was already KILLED on its economics; this is an independent
+confirmation on a different universe, a different window and a different geometry, and the margin
+is not close.
+
+One thing that number does *not* establish, stated so it is not misread later: the mirror book —
+long the 5-day *winners* — was not run and cannot be inferred from it. A long-only book's return is
+not antisymmetric about the null, and the overnight study's 63-day momentum cell finished below the
+null too. Short-horizon momentum on this universe is an untested cell, not a discovered edge.
+
+Closed. Fourteenth family. Three Tier-A survivors remain: CF12, T11, HX02.
+
+## The manual, answered plainly
+
+The weekend brief asked for one judgement in plain words: is the IBKR manual a genuinely new
+information source, or another framework for searching the same exhausted space?
+
+**It is another framework, plus a shopping list.** Of its 128 strategies, 45 run on data we hold
+and all but six are already closed here under our own names; three of those six are now closed too.
+The remaining 64 are gated on four data classes we would have to buy — intraday/tick, options
+surfaces, news and earnings tapes, borrow and short interest. The manual is well built and its
+eight validation gates independently match most of what this campaign learned the hard way. What it
+does not contain is a signal we can test that we have not already tested. What it does contain,
+usefully, is a ranked statement of what buying data would buy.
+
+## Factor trend-following (CF12) — the fifteenth family, closed, with the mechanism actively harmful
+
+Pre-registered in `cf12-run.mjs` and committed before the run. Universe `sp500-bundle/1440`
+screened to 127 names, 133 rebalances, 13 per leg, 5-day hold, `usEquityIbkr` costs charged on both
+legs of every active factor, 2,000 matched timing-null draws.
+
+CF12's claim is narrow and was worth isolating: not that any factor works — several of its inputs
+are already killed here individually — but that **timing a portfolio of them adds value even though
+none works alone.** The object being trended is a factor's long-short spread return, not a price.
+
+| cell | mechanism | net | mean active | vs B&H | null p |
+|---|---|---|---|---|---|
+| T | hold rising factors, sit out falling | −35.74% | 6.3 | −104.60 | 0.9950 |
+| S | CF12 literal: long rising, short falling | −34.18% | 12.7 | −103.05 | 0.9825 |
+| A | **always on, no timing (control)** | −26.55% | 14.0 | −95.41 | 0.7116 |
+
+Baseline +68.86% net. Matched timing null (T's own on-rate per factor, periods placed at random):
+**−23.28%.**
+
+**The timing rule has negative value, which is a stronger result than no value.** T returns −35.74%
+against the always-on control's −26.55%: **trend-following the factor spread subtracts 9.19 points
+versus simply holding every factor all the time.** It is also worse than timing at random (−23.28%)
+at p=0.9950 — 99.5% of coin-flip timings beat it. Factor spreads on this universe do not merely
+fail to persist; their recent direction is mildly *anti*-predictive of the next.
+
+### The factor spreads themselves, which are the more useful output
+
+Fourteen dollar-neutral decile books, gross, no timing, over the same 133 rebalances. Descriptive
+only — these are not scored and not corrected, they are reported because the campaign has tested
+several of them separately and this puts them side by side on one window:
+
+| positive | | negative | |
+|---|---|---|---|
+| volumeTrend | +24.09% | illiquidity | −25.32% |
+| reversal1m | +18.09% | lowVol | −22.06% |
+| highVol | +15.38% | smallSize | −19.08% |
+| lowSkew | +7.06% | acceleration | −17.12% |
+| trendQuality | +0.53% | beta | −14.07% |
+| | | nearHigh | −8.96% |
+| | | idioVol | −3.89% |
+| | | momentum | −2.89% |
+| | | reversal1w | −0.65% |
+
+**Three documented anomalies carry the wrong sign in this window.** Low-volatility is −22.06% while
+its mirror high-volatility is +15.38%; illiquidity is −25.32%, so the premium is negative; small-size
+is −19.08%. Betting-against-beta is −14.07%. That is not a claim that the anomalies are false — a
+3.65-year window on 127 large caps is short and survivorship-biased — but it is a direct measurement
+that they did not pay here, which is the only thing that matters for this account.
+
+**And the ceiling is the point.** The single best factor spread returns +24.09% *gross* over 3.65
+years, against buy-and-hold's +68.86% net and against the long-only decile null's +33.70% net. Not
+one of the fourteen, before costs, beats picking 13 names at random and holding them. There is no
+combination rule that rescues a set of ingredients with that ceiling, which is the real reason CF12
+was never going to work and is worth stating more plainly than the p-value does.
+
+Neither T nor S is executable on this account in any case: a factor spread requires shorting and
+IBKR shortability is unknown on 128/128 symbols.
+
+Closed. Fifteenth family. Two Tier-A survivors remain: T11 and HX02.
+
+## HX02 and T11 — the sixteenth family, and the Tier-A list is exhausted
+
+Pre-registered in `hx02-t11-run.mjs` and committed before the run. Universe `sp500-bundle/1440`
+screened to 127 names, 158 rebalances, 13 names, 5-day hold, `usEquityIbkr` costs, long only, 2,000
+null draws. Geometry identical to the three studies before it, so the replicated null applies.
+
+**I proposed closing both by argument last tick, and the argument failed in both halves.** It is
+recorded because a campaign fifteen negatives deep is at maximum risk of closing its remaining work
+by extrapolation:
+
+- *"HX02 duplicates the closed market-beta residual study."* **False.** That study traded residual
+  mean **reversion** — long the most depressed residual. HX02 trades residual **momentum** — long the
+  residual that has risen. Same residual, opposite sign; a failed reversal says nothing about
+  momentum on the same series.
+- *"`FACTOR_SPREAD_CEILING` closes T11."* **False as stated.** That ceiling was measured on
+  dollar-neutral long-short spreads. These are long-only decile books, a different geometry with a
+  different null. A ceiling measured on one geometry does not transfer to another.
+
+HX02 is tested in a **reduced form**: its rule names market, sector, rate, USD and commodity factors
+and this project has the market alone. A negative here does **not** close the full five-factor
+version, which stays Tier B.
+
+| cell | mechanism | gross | net | Sharpe | vs B&H | null p |
+|---|---|---|---|---|---|---|
+| H | HX02 reduced: market-residual momentum | +53.25% | +28.79% | 0.657 | −40.08 | 0.5077 |
+| T | T11: drawdown repairing + momentum > 0 | +63.23% | **+37.18%** | **0.953** | −31.69 | 0.3558 |
+| M | plain 20d momentum (control) | +23.28% | +3.60% | 0.388 | −65.27 | 0.9110 |
+
+Baseline +68.86% net. Null +31.14% net at mean Sharpe 0.822.
+
+**T11 is the best near-miss of the five studies and is worth stating precisely.** It is the first
+cell whose Sharpe (0.953) exceeds the null's (0.822) rather than merely the index's, and its
+time-under-water conditioning adds **33.58 points** over its own momentum control — which is exactly
+the comparison T11's claim requires, and it wins it. It still fails both gates: it trails
+buy-and-hold by 31.69 points and 36% of random selections beat its return. A conditioning rule that
+genuinely improves on its control, produces an above-null Sharpe, and still cannot beat holding the
+index is the cleanest illustration this project has of why both gates exist.
+
+### The reproduction check earned its place, by failing
+
+Cell X was pre-registered to recover a number already known: the residual mean-reversion book the
+previous study closed at +49.25% net. **It came back at −4.20%.**
+
+The cause was in my own pre-registration, not in the data. The closed study ranks on the **z-score
+of the cumulative residual path** over 60 days; cell X computed a **raw unnormalised sum** over 63
+days and called it the same signal. They are not the same ranking — the z-score divides by each
+name's own residual volatility, so a large but typical swing does not rank while a small unusual one
+does. Corrected to the closed study's exact construction, X reproduces at **+43.42% net / Sharpe
+0.909** against the known +49.25% / 0.963.
+
+The residual 6-point gap is mechanical and was checked rather than assumed: this study's rebalance
+grid starts at index 125 (`max(120, 60+20)+5`) against the residual study's 120, giving 158
+rebalances instead of 159 and shifting the whole grid five sessions. A one-rebalance offset
+compounding over 3.65 years accounts for it.
+
+Unscored diagnostic, reported because H tests the unnormalised form: the **normalised** residual
+momentum mirror returns +35.42% net / Sharpe 0.834 — also above the null's return, also far below
+buy-and-hold. Neither sign of the residual works. It was not pre-registered and cannot be promoted.
+
+### The Tier-A list is now exhausted
+
+All six survivors of the manual triage have been tested. **None cleared.**
+
+| # | family | outcome |
+|---|---|---|
+| 12 | MR11/HX13 overnight decomposition | closed |
+| 13 | RV02/RV03 residual mean reversion | closed |
+| 14 | MR08 Amihud illiquidity | closed |
+| 15 | CF12 factor trend-following | closed, mechanism actively harmful |
+| 16 | HX02 (reduced) + T11 | closed |
+
+The manual contributed 128 strategies. Forty-five were runnable on data already held; thirty-nine of
+those were already closed here under this project's own names; the remaining six are now closed too.
+Nothing in it was a new information source, which is what the weekend brief predicted and what
+FINDINGS now records as the answer.

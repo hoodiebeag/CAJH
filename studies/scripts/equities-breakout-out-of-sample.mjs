@@ -66,7 +66,7 @@
  */
 import fs from "fs";
 import path from "path";
-import { IBKRBroker } from "../brokers/ibkr.mjs";
+import { IBKRBroker } from "../../brokers/ibkr.mjs";
 import { backtestMultiTF } from "../../backtest.js";
 import { blockBootstrapCI } from "../momentum.mjs";
 import { saveExperiment } from "../../researchlab.mjs";

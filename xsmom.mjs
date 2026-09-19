@@ -77,6 +77,7 @@ export function runRotation({
   let held = [];
   const curve = [], rebalances = [];
   let periodReturns = [];
+  const periodCosts = [];
   // Per-BAR returns, aligned to `times`. A spread built from monthly period returns cannot see
   // intra-month lows and understated this book's drawdown by 44% -- 10.09% reported against a real
   // 14.57%. Any drawdown must be computed from these.
@@ -113,10 +114,22 @@ export function runRotation({
     // Turnover cost: only the names actually swapped pay, on both the sale and the purchase.
     const keep = chosen.filter((s) => held.includes(s)).length;
     const turnover = held.length ? (chosen.length - keep) / chosen.length : 1;
-    balance *= 1 - 2 * slipPct * turnover;
+    const costMult = 1 - 2 * slipPct * turnover;
+    balance *= costMult;
 
-    rebalances.push({ at: times[i], chosen, turnover: +turnover.toFixed(3) });
-    if (curve.length) periodReturns.push(Math.log(balance / curve[curve.length - 1].balance));
+    // Closes are recorded here so a trade ledger can be derived without a second copy of the
+    // shared-calendar grid logic -- the place where a duplicate would silently diverge. Names being
+    // DROPPED are priced too, or every exit would be unpriced and the ledger would be empty.
+    const priced = [...new Set([...chosen, ...held])];
+    rebalances.push({ at: times[i], chosen, turnover: +turnover.toFixed(3),
+                      closes: Object.fromEntries(priced.map((s) => [s, grid[s][i]])) });
+    if (curve.length) {
+      periodReturns.push(Math.log(balance / curve[curve.length - 1].balance));
+      // The period's cost, separated from its return. A SHORT leg's return enters a spread with a
+      // minus sign, so a cost buried inside that return arrives as a CREDIT -- the short book gets
+      // paid for trading. Keeping it separate is the only way spread() can charge both legs.
+      periodCosts.push(Math.log(costMult));
+    }
     held = chosen;
     curve.push({ at: times[i], balance });
   }
@@ -131,7 +144,7 @@ export function runRotation({
     rebalances: rebalances.length,
     avgTurnover: rebalances.length ? +(rebalances.reduce((a, r) => a + r.turnover, 0) / rebalances.length).toFixed(3) : 0,
     years: +years.toFixed(2),
-    curve, rebalanceLog: rebalances, periodReturns,
+    curve, rebalanceLog: rebalances, periodReturns, periodCosts,
   };
 }
 
@@ -178,14 +191,73 @@ export function selectionP(nullResult, observedFinal) {
  * in whether borrow was charged on half the book or all of it. It is half: the short leg is half
  * the capital.
  */
+/**
+ * Periods (or bars) per year, measured from the timestamps rather than assumed.
+ *
+ * The earlier code hardcoded 12 periods and 252 bars a year, which is right for a 21-bar rebalance
+ * on US equities and wrong for crypto: crypto trades weekends, so its daily bundle carries 365
+ * bars a year and a 21-bar rebalance comes round 17.4 times, not 12. Everything downstream that
+ * divides an annual rate by a period count -- borrow, and the CAGR annualisation -- was therefore
+ * off by that factor on every crypto result. It is derived here so a universe's own calendar
+ * decides, and so a non-monthly rebalance is handled without a second constant.
+ */
+export function perYear(timestamps) {
+  if (!timestamps || timestamps.length < 2) return null;
+  const first = Number(timestamps[0].at ?? timestamps[0]);
+  const last = Number(timestamps[timestamps.length - 1].at ?? timestamps[timestamps.length - 1]);
+  const years = (last - first) / (365.25 * 86400);
+  return years > 0 ? (timestamps.length - 1) / years : null;
+}
+
+/**
+ * Max drawdown of a book whose BALANCE comes from a costed per-period path but whose PATH between
+ * those points is per bar. Marking only at period ends never sees an intra-period low and
+ * understated one spread's drawdown by 44%; walking the bars alone drops the turnover charged at
+ * each rebalance. So the bars are walked and re-anchored to the costed balance every period.
+ *
+ * Returned as a percentage. Shared rather than reimplemented: the two copies of this walk that
+ * existed drifted, and the battery's copy was a period-end mark that understated every drawdown.
+ */
+export function anchoredDrawdown(periodReturns, barReturns, times, rebalanceLog) {
+  let peak = 1000, maxDD = 0, anchor = 1000;
+  for (let m = 0; m < periodReturns.length; m++) {
+    const lo = rebalanceLog[m]?.at, hi = rebalanceLog[m + 1]?.at;
+    let sub = anchor;
+    if (lo && hi) {
+      for (let k = 0; k < times.length; k++) {
+        const t = times[k];
+        if (t <= lo || t > hi) continue;
+        sub *= Math.exp(barReturns[k]);
+        peak = Math.max(peak, sub);
+        maxDD = Math.max(maxDD, (peak - sub) / peak);
+      }
+    }
+    anchor *= Math.exp(periodReturns[m]);      // re-anchor on the costed per-period balance
+    peak = Math.max(peak, anchor);
+    maxDD = Math.max(maxDD, (peak - anchor) / peak);
+  }
+  return +(100 * maxDD).toFixed(2);
+}
+
 export function spread(series, opts = {}, { borrow = 0 } = {}) {
   const top = runRotation({ ...opts, series, pick: "top" });
   const bot = runRotation({ ...opts, series, pick: "bottom" });
   const n = Math.min(top.periodReturns.length, bot.periodReturns.length);
 
-  // Monthly returns, for the gate and the null, which reason per rebalance.
+  // Per-rebalance returns, for the gate and the null, which reason per rebalance. Borrow is an
+  // ANNUAL rate, so it is divided by this universe's own rebalances per year, not by 12.
+  const ppy = perYear(top.rebalanceLog) ?? 12;
   const returns = [];
-  for (let i = 0; i < n; i++) returns.push(0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i] - 0.5 * borrow / 12);
+  for (let i = 0; i < n; i++) {
+    // Each leg's period return already carries its own turnover cost. The short leg enters with a
+    // MINUS sign, so that cost arrives as a credit -- the short book being paid to trade. Both legs
+    // turn over at almost the same rate here (0.248 against 0.235 on crypto), so the two costs very
+    // nearly cancelled and a 0.8% slippage assumption was charging about 0.5% over fifty
+    // rebalances instead of roughly 20%. Add the short leg's cost back twice: once to undo the
+    // credit, once to charge it. Caught by disagreeing with multifactor.mjs's runBook.
+    returns.push(0.5 * top.periodReturns[i] - 0.5 * bot.periodReturns[i]
+                 + (bot.periodCosts[i] ?? 0) - 0.5 * borrow / ppy);
+  }
 
   // BALANCE comes from the monthly path, because that is where turnover and slippage are charged
   // -- taking it from the per-bar path silently dropped those costs and inflated the result by 9%.
@@ -195,30 +267,18 @@ export function spread(series, opts = {}, { borrow = 0 } = {}) {
   // DRAWDOWN comes from a per-bar walk anchored to those monthly balances. Measuring it monthly
   // never saw an intra-month low and understated this book's risk by 44% -- 10.09% against a real
   // 14.55%. Both paths end at the same balance; only the path between them differs.
-  let peak = 1000, maxDD = 0, anchor = 1000;
-  const perBarBorrow = 0.5 * borrow / 252;
-  for (let m = 0; m < n; m++) {
-    const lo = top.rebalanceLog[m]?.at, hi = top.rebalanceLog[m + 1]?.at;
-    let sub = anchor;
-    if (lo && hi) {
-      for (let k = 0; k < top.times.length; k++) {
-        const t = top.times[k];
-        if (t <= lo || t > hi) continue;
-        sub *= Math.exp(0.5 * top.barReturns[k] - 0.5 * bot.barReturns[k] - perBarBorrow);
-        peak = Math.max(peak, sub);
-        maxDD = Math.max(maxDD, (peak - sub) / peak);
-      }
-    }
-    anchor *= Math.exp(returns[m]);          // re-anchor on the costed monthly balance
-    peak = Math.max(peak, anchor);
-    maxDD = Math.max(maxDD, (peak - anchor) / peak);
-  }
-  const years = n / 12;
+  const perBarBorrow = 0.5 * borrow / (perYear(top.times) ?? 252);
+  // The spread's own per-bar return series, kept so callers that need an intra-period mark do not
+  // re-derive it and get the borrow or the halving wrong.
+  const barReturns = top.times.map((_, k) => 0.5 * top.barReturns[k] - 0.5 * bot.barReturns[k] - perBarBorrow);
+  const maxDD = anchoredDrawdown(returns, barReturns, top.times, top.rebalanceLog);
+  const years = n / ppy;
   return {
-    returns, periods: n,
+    returns, periods: n, periodsPerYear: +ppy.toFixed(2),
+    times: top.times, barReturns,
     finalBalance: +bal.toFixed(2),
     cagrPct: years > 0 ? +(((bal / 1000) ** (1 / years) - 1) * 100).toFixed(2) : null,
-    maxDrawdownPct: +(100 * maxDD).toFixed(2),
+    maxDrawdownPct: maxDD,
     upPeriods: returns.filter((r) => r > 0).length,
     top, bot,
   };
@@ -247,8 +307,13 @@ export function randomSpreadNull(series, opts = {}, { draws = 200, seed = 202609
     const a = runRotation({ ...opts, series, select: pickHalf("a") });
     const b = runRotation({ ...opts, series, select: pickHalf("b") });
     const n = Math.min(a.periodReturns.length, b.periodReturns.length);
+    const ppy = perYear(a.rebalanceLog) ?? 12;
     let bal = 1000;
-    for (let i = 0; i < n; i++) bal *= Math.exp(0.5 * a.periodReturns[i] - 0.5 * b.periodReturns[i] - 0.5 * borrow / 12);
+    // Same short-leg cost credit as in spread(); see the note there.
+    for (let i = 0; i < n; i++) {
+      bal *= Math.exp(0.5 * a.periodReturns[i] - 0.5 * b.periodReturns[i]
+                      + (b.periodCosts[i] ?? 0) - 0.5 * borrow / ppy);
+    }
     finals.push(+bal.toFixed(2));
   }
   finals.sort((x, y) => x - y);

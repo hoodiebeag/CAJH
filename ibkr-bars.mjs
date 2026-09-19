@@ -61,11 +61,28 @@ export async function connect() {
 }
 
 /**
- * One daily-bar request. Resolves `{ ok, bars, reason }` where each bar is `{ date, time, close }`.
- * Never throws on a request-level failure — the caller decides what an incomplete series means.
+ * One historical-bar request at any bar size. Resolves `{ ok, bars, reason }` where each bar is
+ * `{ date, time, open, high, low, close, volume }`. Never throws on a request-level failure — the
+ * caller decides what an incomplete series means.
+ *
+ * WHY THE BAR SIZE IS A PARAMETER. It was hard-coded to DAYS_ONE, which made an open question
+ * unanswerable: the strategy manual's largest gated data class is intraday, 275 mentions against
+ * 205 for options, and whether that is a PURCHASE or a PULL depends entirely on what this call
+ * returns under the entitlement already held. Nothing else about the transport changes.
+ *
+ * TWO THINGS THAT DIFFER AT INTRADAY SIZES, both already handled but worth naming here because
+ * neither is visible from the call site:
+ *  - DATE FORMAT. TWS ignores `formatDate=2` for daily bars and returns "YYYYMMDD" strings, but
+ *    honours it for intraday and returns epoch seconds. `barTimeToEpoch` accepts both, which is why
+ *    this function needs no branch on bar size.
+ *  - PACING. TWS rejects duration/barSize combinations it considers too large — "1 Y" of one-minute
+ *    bars is refused outright. This function does NOT validate the pair, deliberately: guessing the
+ *    limits is how a wrong constant gets written down as fact. `scripts/ibkr-intraday-probe.mjs`
+ *    asks the Gateway instead and reports what it actually serves.
  */
-export function fetchDailyBars({ api, ib }, contract, duration, whatToShow, reqId) {
+export function fetchBars({ api, ib }, contract, duration, whatToShow, reqId, barSize = null) {
   const { EventName, BarSizeSetting, isNonFatalError } = ib;
+  const size = barSize ?? BarSizeSetting.DAYS_ONE;
   return new Promise((resolve) => {
     const bars = [];
     let settled = false;
@@ -77,13 +94,19 @@ export function fetchDailyBars({ api, ib }, contract, duration, whatToShow, reqI
       clearTimeout(timer);
       resolve(v);
     };
-    const onBar = (rid, time, open, high, low, close) => {
+    const onBar = (rid, time, open, high, low, close, volume) => {
       if (rid !== reqId) return;
       if (String(time).startsWith("finished")) return finish({ ok: true, bars });
       const epoch = barTimeToEpoch(time);
       const c = Number(close);
       if (epoch === null || !Number.isFinite(c)) return; // a malformed row is skipped, not guessed at
-      bars.push({ date: barDateKey(time), time: epoch, close: c });
+      // OHLCV is carried through rather than dropped. The existing callers read `close` alone, but
+      // a probe that answers "is intraday available" with close-only bars answers a question nobody
+      // asked -- any study built on the result needs the full bar.
+      bars.push({
+        date: barDateKey(time), time: epoch, close: c,
+        open: Number(open), high: Number(high), low: Number(low), volume: Number(volume),
+      });
     };
     const onErr = (a, b, c) => {
       const e = (a instanceof Error)
@@ -96,8 +119,19 @@ export function fetchDailyBars({ api, ib }, contract, duration, whatToShow, reqI
     const timer = setTimeout(() => finish({ ok: false, reason: "timeout", bars }), TIMEOUT_MS);
     api.on(EventName.historicalData, onBar);
     api.on(EventName.error, onErr);
-    api.reqHistoricalData(reqId, contract, "", duration, BarSizeSetting.DAYS_ONE, whatToShow, 1, 2, false);
+    api.reqHistoricalData(reqId, contract, "", duration, size, whatToShow, 1, 2, false);
   });
+}
+
+/**
+ * Daily bars: the original signature, unchanged.
+ *
+ * Kept as a wrapper rather than updating the three call sites (vrp-run, iv-tenor, iv-tenor-run).
+ * Those are proven against a live Gateway and this change has not been; rewriting working transport
+ * calls to remove one default argument would risk them for nothing.
+ */
+export function fetchDailyBars(conn, contract, duration, whatToShow, reqId) {
+  return fetchBars(conn, contract, duration, whatToShow, reqId, null);
 }
 
 /**
