@@ -143,6 +143,80 @@ key or billing, one integration already required for the sector map, and headlin
 publication time, not availability time, and articles get silently revised; using them for
 a timestamped decision log imports a lookahead bug that looks exactly like alpha.
 
+## What the owner is actually asking for, and what it costs
+
+Refined by the owner on 2026-09-19: catch large winners **far in advance** — the names
+given were MRNA, ORKA, WDC, RVMD and MU — from close reading of current events,
+prediction-market odds, and the model's own judgment.
+
+This is recorded here rather than left in a conversation because every tick prompt
+names this file as the source of truth, and a goal that lives only in chat gets
+re-derived from scratch by whoever reads next.
+
+### The evidence, from the one named ticker that is in the panel
+
+MRNA is in `sp500-bundle`. It is worth looking at before designing for it:
+
+| | | |
+|---|---|---|
+| 2025-11-20 | low | $22.36 |
+| 2026-08-19 | event day | $62.96 → $174.38 (+177%, volume 199M vs 4.3M) |
+| 2023-01 → 2026-09 | whole window | $178.99 → $148.87 (**−16.8%**) |
+
+**The catalyst day was the smallest opportunity in the name.** Low to peak is **7.8x**;
+the event day was 2.77x of it. The money was in being positioned nine months earlier —
+which is exactly what "far in advance" means, so the owner's instinct matches the data
+better than a catalyst-prediction framing would.
+
+That reframes the target. The skill is not predicting a readout date. It is recognising
+a beaten-down name that is turning.
+
+### Which is uncomfortable, and the discomfort is the point
+
+Recognising a turn in a beaten-down name **is cross-sectional reversal**, and this
+project has closed it twice on price alone — `B5-REVERSAL` (killed, −89.82% net on the
+control leg) and `RESIDUAL-MEAN-REVERSION-RV02-RV03`. Re-opening it on price would be a
+seventeenth study and is refused.
+
+What makes it a genuinely new question is the input those studies did not have: pipeline
+news, event calendars, and prediction-market odds on the underlying outcome. **That is
+the whole bet.** If the analyst's edge here does not come from the non-price input, it
+does not exist, because the price half is already closed. This points the build at the
+news and events layer, not at another transform.
+
+### Three constraints, all measured
+
+1. **The universe is binding, and it was the real blocker.** Of the five named tickers
+   only MRNA is in the panel — ORKA, WDC, RVMD and MU are not. The agent cannot find a
+   setup in a name it cannot see. Fixed: `scripts/ibkr-panel.mjs` takes `--symbols FILE`,
+   so the universe is a text file rather than a property of a tarball somebody sent.
+   **Awaiting a ticker list from the owner.**
+
+2. **The base rate is low and the payoff is skewed.** 5 of 128 names had a single day
+   above +50% in 3.65 years (AAP, CHPT, LUMN, MRNA, PARA — and PARA is the corrupted
+   series `screenUniverse` rejects). The standing minimum of 60 days and 50 trades was
+   written for a diversified book. **It cannot distinguish skill from luck on a payoff
+   distribution this skewed**, and no p-value computed on 50 outcomes of this shape means
+   anything. What replaces it is an open question, not a settled one. Naming a number
+   here before the forward record exists would be inventing a gate to pass.
+
+3. **Prediction markets have two readings with very different costs.** As an *input* to
+   equity decisions they are additive to `context.mjs` and need no entitlement. *Trading*
+   event contracts needs a verified cost model and verified executability first, which is
+   why `risk.mjs` holds `eventContract` at `paper`. The build assumes the first reading
+   until the owner says otherwise.
+
+### An unresolved tension, stated rather than quietly resolved
+
+`DEFAULT_LIMITS` was written for a diversified book: `maxPositionPct` 0.10,
+`maxDrawdownPct` 0.15. A strategy whose thesis is "hold a beaten-down name through a
+nine-month turn" will sit at a loss for months, and a portfolio drawdown brake is the
+mechanism most likely to close exactly the position the thesis depends on. **This is not
+resolved here.** Loosening a risk limit to let a thesis survive is how a risk layer stops
+being one, and tightening the thesis to fit the limit may be the correct answer instead.
+It is the owner's call, and it should be made with the forward record in hand rather than
+in advance of it.
+
 ## Standing constraints, unchanged by this pivot
 
 - `LIVE_TRADING` stays off. D1 → D2 → D3 is unchanged and a document in this repository
