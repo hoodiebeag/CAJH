@@ -4,6 +4,10 @@
  *
  * THREE SUBCOMMANDS, AND THE DIFFERENCE BETWEEN THEM IS THE WHOLE POINT:
  *
+ *   settle    compute outcomes for decisions whose holding period has finished, and append them.
+ *             Without this nothing ever calls recordOutcome, so `score` reads zero outcomes
+ *             forever and the measurement instrument measures nothing. Idempotent: a decision
+ *             already settled is skipped, never written twice.
  *   dry-run   exercise context -> decide -> risk -> journal on a historical date. Proves the
  *             plumbing works. NOT EVIDENCE OF ANYTHING ELSE, and recorded under its own mode so
  *             `score` cannot blend it into a track record.
@@ -21,7 +25,7 @@
 
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { screenUniverse } from "./universe.mjs";
-import { runOnce, realisedOutcomes, sessionWeekdays, missedSessions } from "./analyst/loop.mjs";
+import { runOnce, realisedOutcomes, settleOutcomes, sessionWeekdays, missedSessions } from "./analyst/loop.mjs";
 import { loadNewsCache, toNewsMap, assertNotAfter } from "./analyst/news.mjs";
 import { scoreJournal, MODE, DEFAULT_JOURNAL } from "./analyst/journal.mjs";
 import { COST_MODELS } from "./costs.mjs";
@@ -196,6 +200,35 @@ if (cmd === "dry-run" || cmd === "paper") {
     }
   }
 
+} else if (cmd === "settle") {
+  // CLOSES THE LOOP BETWEEN A DECISION AND WHAT HAPPENED TO IT.
+  //
+  // recordOutcome existed and nothing called it. Decisions were journalled, `realisedOutcomes`
+  // could compute results, and the two were never connected -- so `score` reported "outcomes 0"
+  // no matter how long the agent ran. A measurement instrument that cannot record a measurement
+  // is not one.
+  //
+  // It is a SEPARATE command rather than a step inside `paper` because the holding period has not
+  // elapsed when the decision is made. Settlement happens days later, on a later run, which is
+  // also why it must be idempotent.
+  const { series, dates } = loadPanel();
+  const holdDays = Number(flag("hold", 5));
+  const mode = flag("mode", MODE.PAPER);
+  const r = settleOutcomes({
+    series, dates, journalFile: JOURNAL, mode, holdDays,
+    costPerLeg: COST_MODELS.usEquityIbkr.feeRate + COST_MODELS.usEquityIbkr.slipPct,
+  });
+  console.log(`settle mode "${mode}", hold ${holdDays}d, journal ${JOURNAL}`);
+  if (r.malformed) console.log(`  ${r.malformed} malformed line(s) skipped`);
+  console.log(`  ${r.decisions} decision batch(es) in this mode`);
+  console.log(`  wrote ${r.wrote} outcome(s)`);
+  if (r.already) console.log(`  ${r.already} already settled, left alone`);
+  if (r.pending) console.log(`  ${r.pending} decision(s) still inside the holding period — nothing recorded`);
+  if (r.unknownBar) {
+    console.log(`  ${r.unknownBar} batch(es) carry no decision bar this panel knows; skipped, not guessed at.`);
+    console.log("    (records written before asOfTime was stored, or a panel that no longer covers them)");
+  }
+
 } else if (cmd === "score") {
   const mode = flag("mode", MODE.PAPER);
   const s = scoreJournal(JOURNAL, { mode });
@@ -228,6 +261,7 @@ if (cmd === "dry-run" || cmd === "paper") {
 } else {
   console.log(`usage:
   node analyst-run.mjs dry-run [--asOf N] [--slate 40] [--stub] [--journal FILE]
+  node analyst-run.mjs settle  [--mode paper|dry-run] [--hold 5] [--journal FILE]
   node analyst-run.mjs paper   [--journal FILE]
   node analyst-run.mjs score   [--mode paper|dry-run|anonymised] [--journal FILE]
 

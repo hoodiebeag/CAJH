@@ -28,7 +28,7 @@
 import { buildContext, contextIsPointInTime } from "./context.mjs";
 import { decide } from "./decide.mjs";
 import { applyRiskGate, DEFAULT_LIMITS } from "./risk.mjs";
-import { recordDecision, MODE, DEFAULT_JOURNAL } from "./journal.mjs";
+import { recordDecision, recordOutcome, readJournal, KIND, MODE, DEFAULT_JOURNAL } from "./journal.mjs";
 
 /** How stale a decision date may be and still count as "now", for the paper-mode guard. */
 export const PAPER_FRESHNESS_MS = 36 * 60 * 60 * 1000;   // a weekend gap is fine; last month is not
@@ -277,4 +277,49 @@ function forwardReturn(bars, dates, entryIdx, holdDays) {
 function round(v, dp) {
   const f = 10 ** dp;
   return Math.round(v * f) / f;
+}
+
+/**
+ * Compute and append outcomes for every decision whose holding period has finished.
+ *
+ * WHY THIS EXISTS AT ALL. `recordOutcome` was written and nothing ever called it. Decisions were
+ * journalled and `realisedOutcomes` could compute results, but the two were never connected, so
+ * `scoreJournal` reported "outcomes 0" however long the agent ran. A measurement instrument that
+ * cannot record a measurement is not one.
+ *
+ * SEPARATE FROM THE DECISION, because the holding period has not elapsed when the decision is
+ * made. Settlement happens on a later run, days after, which is exactly why it must be idempotent:
+ * the journal is append-only, so a duplicate outcome cannot be taken back and would be counted
+ * twice by every figure `scoreJournal` produces.
+ *
+ * A decision whose entry bar this panel does not contain is SKIPPED AND COUNTED, never settled
+ * against a nearby bar. Guessing an entry price is how a track record stops describing the trades
+ * that were actually proposed.
+ */
+export function settleOutcomes({ series, dates, journalFile = DEFAULT_JOURNAL, mode = MODE.PAPER,
+                                 holdDays = 5, costPerLeg = 0, now = Date.now() } = {}) {
+  const { records, malformed } = readJournal(journalFile);
+  const decisions = records.filter((r) => r.kind === KIND.DECISION && r.mode === mode);
+  const key = (batchId, symbol) => `${batchId}\u0000${symbol}`;
+  const settled = new Set(records.filter((r) => r.kind === KIND.OUTCOME)
+    .map((r) => key(r.batchId, r.symbol)));
+
+  const idxOf = new Map(dates.map((t, i) => [t, i]));
+  let wrote = 0, already = 0, pending = 0, unknownBar = 0;
+
+  for (const d of decisions) {
+    const entryIdx = Number.isFinite(d.asOfTime) ? idxOf.get(d.asOfTime) : undefined;
+    if (entryIdx === undefined) { unknownBar++; continue; }
+    const rows = realisedOutcomes({ record: d, series, dates, entryIdx, holdDays, costPerLeg });
+    const sized = (d.allowed ?? []).filter((a) => a.action !== "hold" && (a.targetPct ?? 0) > 0);
+    pending += Math.max(0, sized.length - rows.length);
+    for (const row of rows) {
+      const k = key(row.batchId, row.symbol);
+      if (settled.has(k)) { already++; continue; }
+      recordOutcome({ ...row, at: new Date(now).toISOString() }, journalFile);
+      settled.add(k);
+      wrote++;
+    }
+  }
+  return { decisions: decisions.length, wrote, already, pending, unknownBar, malformed };
 }

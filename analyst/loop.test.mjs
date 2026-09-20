@@ -3,9 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { runOnce, realisedOutcomes, instrumentsFromContext, PAPER_FRESHNESS_MS,
-         sessionWeekdays, missedSessions } from "./loop.mjs";
-import { readJournal, scoreJournal, recordOutcome, MODE } from "./journal.mjs";
+import { runOnce, realisedOutcomes, instrumentsFromContext, PAPER_FRESHNESS_MS, sessionWeekdays, missedSessions, settleOutcomes } from "./loop.mjs";
+import { readJournal, scoreJournal, recordOutcome, MODE, KIND } from "./journal.mjs";
 
 const DAY = 86400;
 const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "loop-")), "j.jsonl");
@@ -377,4 +376,69 @@ test("a completed hold is returned and marked complete", () => {
   assert.equal(rows[0].complete, true);
   assert.equal(rows[0].sessionsHeld, 5);
   assert.equal(typeof rows[0].grossReturn, "number");
+});
+
+// ---- settlement --------------------------------------------------------------------------------
+// recordOutcome existed and nothing called it, so scoreJournal reported "outcomes 0" however long
+// the agent ran. These pin the two properties that make settlement safe on an append-only file:
+// each outcome is written exactly once, and an entry bar that cannot be found is never invented.
+const settleBatch = async (j, now, p, asOf) => runOnce({
+  series: p.series, dates: p.dates, asOf, client: clientProposing([buy("AAA"), buy("BBB")]),
+  mode: MODE.DRY_RUN, now, nav: 1e5, journalFile: j,
+});
+
+test("settleOutcomes writes outcomes and is idempotent on a second run", async () => {
+  const j = tmp();
+  const now = Date.now();
+  const p = panel(SYMS, 400, now, 0);
+  const r = await settleBatch(j, now, p, 380);
+  assert.equal(r.gate.allowed.length, 2, "setup: the batch must reach the journal with a book");
+
+  const first = settleOutcomes({ series: p.series, dates: p.dates, journalFile: j,
+                                 mode: MODE.DRY_RUN, holdDays: 5, now });
+  assert.equal(first.wrote, 2, "a finished hold must produce an outcome per sized decision");
+  assert.equal(first.already, 0);
+
+  const second = settleOutcomes({ series: p.series, dates: p.dates, journalFile: j,
+                                  mode: MODE.DRY_RUN, holdDays: 5, now });
+  assert.equal(second.wrote, 0, "an append-only journal cannot take a duplicate back");
+  assert.equal(second.already, 2);
+
+  const outcomes = readJournal(j).records.filter((x) => x.kind === KIND.OUTCOME);
+  assert.equal(outcomes.length, 2, "exactly one outcome per settled decision");
+});
+
+test("settleOutcomes leaves a decision inside its holding period alone", async () => {
+  const j = tmp();
+  const now = Date.now();
+  const p = panel(SYMS, 400, now, 0);
+  await settleBatch(j, now, p, p.dates.length - 1);
+  const r = settleOutcomes({ series: p.series, dates: p.dates, journalFile: j,
+                             mode: MODE.DRY_RUN, holdDays: 5, now });
+  assert.equal(r.wrote, 0);
+  assert.equal(r.pending, 2, "the unfinished decisions are counted, not silently absent");
+});
+
+test("settleOutcomes skips a decision whose entry bar this panel does not contain", async () => {
+  const j = tmp();
+  const now = Date.now();
+  const p = panel(SYMS, 400, now, 0);
+  await settleBatch(j, now, p, 380);
+  // Settling against a nearby bar would invent an entry price, so the batch is skipped and counted.
+  const other = panel(SYMS, 400, now - 700 * 86400000, 0);
+  const r = settleOutcomes({ series: other.series, dates: other.dates, journalFile: j,
+                             mode: MODE.DRY_RUN, holdDays: 5, now });
+  assert.equal(r.wrote, 0);
+  assert.equal(r.unknownBar, 1);
+});
+
+test("settleOutcomes only settles the mode it was asked for", async () => {
+  const j = tmp();
+  const now = Date.now();
+  const p = panel(SYMS, 400, now, 0);
+  await settleBatch(j, now, p, 380);
+  const r = settleOutcomes({ series: p.series, dates: p.dates, journalFile: j,
+                             mode: MODE.PAPER, holdDays: 5, now });
+  assert.equal(r.decisions, 0, "a dry run must never be settled into the paper record");
+  assert.equal(r.wrote, 0);
 });

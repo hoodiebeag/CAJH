@@ -125,6 +125,10 @@ export function recordDecision({
     mode: mode ?? "paper",
     model: model ?? null,
     contextHash,
+    // THE DECISION BAR, stored explicitly. Without it an outcome cannot be computed later without
+    // parsing it back out of `batchId`, and a derived string is not a schema. Older records predate
+    // this field; `settle` counts them rather than guessing at their entry bar.
+    asOfTime: Number.isFinite(context?.asOfTime) ? context.asOfTime : null,
     // The thesis is kept verbatim. It is the part that can be reviewed independently of P&L.
     proposals: (proposals ?? []).map((p) => ({
       symbol: p.symbol, action: p.action, targetPct: p.targetPct ?? null,

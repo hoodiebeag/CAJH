@@ -176,6 +176,9 @@ export function buildContext({
 
   const out = {
     asOf: new Date(asOfTime * 1000).toISOString().slice(0, 10),
+    // The decision bar as an epoch, so a later settlement can find it without parsing a formatted
+    // string back into a date. Stripped by anonymiseContext along with every other date.
+    asOfTime,
     mode: anonymise ? "anonymised" : "named",
     portfolio: {
       nav, peakNav, dayStartNav,
@@ -225,6 +228,7 @@ export function anonymiseContext(ctx) {
   return {
     ...ctx,
     asOf: null,
+    asOfTime: null,          // an epoch is a date; leaving it would undo the anonymisation above
     candidates,
     anonymisationNote:
       "Tickers, dates, sectors and news removed. This mode tests reasoning quality only and is " +

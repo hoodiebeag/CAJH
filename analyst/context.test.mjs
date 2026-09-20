@@ -193,3 +193,16 @@ test("aliases are unique across a slate larger than the alphabet", () => {
   const names = ctx.candidates.map((c) => c.symbol);
   assert.equal(new Set(names).size, names.length);
 });
+
+test("anonymiseContext strips the epoch decision bar as well as the formatted date", () => {
+  const p = panel(["AAA", "BBB", "CCC"], 200);
+  const named = buildContext({ series: p.series, dates: p.dates, asOf: 150 });
+  assert.equal(typeof named.asOfTime, "number", "a settlement needs the decision bar");
+  assert.equal(named.asOfTime, p.dates[150]);
+
+  const anon = buildContext({ series: p.series, dates: p.dates, asOf: 150, anonymise: true });
+  assert.equal(anon.asOf, null);
+  assert.equal(anon.asOfTime, null, "an epoch is a date; leaving it would undo the anonymisation");
+  assert.ok(!JSON.stringify(anon).includes(String(p.dates[150])),
+    "the decision epoch must not survive anywhere in an anonymised context");
+});
