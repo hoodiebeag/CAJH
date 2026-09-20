@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   hashContext, matchedRandomControl, recordDecision, recordOutcome, recordNote,
-  readJournal, scoreJournal, KIND,
+  readJournal, scoreJournal, KIND, MODE,
 } from "./journal.mjs";
 
 const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "journal-")), "j.jsonl");
@@ -212,4 +212,61 @@ test("a decision defaults to paper mode", () => {
   const f = tmp();
   recordDecision({ batchId: "b1", proposals: [], gate: {}, pool: [] }, f);
   assert.equal(readJournal(f).records[0].mode, "paper");
+});
+
+// ---- the split that tests the design's one claim -----------------------------------------------
+// The pivot's argument is that the edge comes from the non-price input, since the price half is
+// closed. That is only testable by comparing names bought WITH a headline against names bought
+// without, so the per-name flag has to survive into the readout rather than sit in the file.
+test("scoreJournal splits outcomes by whether the NAME had news", () => {
+  const j = tmp();
+  const ctx = { asOfTime: 1_700_000_000, candidates: [{ symbol: "AAA" }, { symbol: "BBB" }] };
+  recordDecision({
+    batchId: "b1", context: ctx, proposals: [], mode: MODE.PAPER, pool: ["AAA", "BBB"],
+    gate: { allowed: [{ symbol: "AAA", action: "buy", targetPct: 0.05 },
+                      { symbol: "BBB", action: "buy", targetPct: 0.05 }], rejected: [] },
+    newsSymbols: new Set(["AAA"]),
+  }, j);
+  recordOutcome({ batchId: "b1", symbol: "AAA", netReturn: 0.10, controlReturn: 0.01 }, j);
+  recordOutcome({ batchId: "b1", symbol: "BBB", netReturn: -0.04, controlReturn: 0.02 }, j);
+
+  const s = scoreJournal(j, { mode: MODE.PAPER });
+  assert.equal(s.newsSplit.withNews.n, 1);
+  assert.equal(s.newsSplit.withoutNews.n, 1);
+  assert.equal(s.newsSplit.unknown, 0);
+  assert.ok(Math.abs(s.newsSplit.withNews.meanNet - 0.10) < 1e-9);
+  assert.ok(Math.abs(s.newsSplit.withoutNews.meanNet + 0.04) < 1e-9);
+  assert.ok(Math.abs(s.newsSplit.withNews.edge - 0.09) < 1e-9, "the edge is against its own control");
+  assert.equal(s.newsSplit.comparable, false, "two outcomes is not a comparison");
+});
+
+test("a per-name flag, not a per-batch one", () => {
+  // A batch with news on one of many candidates must not mark every name in it as informed.
+  const j = tmp();
+  const ctx = { asOfTime: 1_700_000_000, candidates: [{ symbol: "AAA" }, { symbol: "BBB" }, { symbol: "CCC" }] };
+  recordDecision({
+    batchId: "b1", context: ctx, proposals: [], mode: MODE.PAPER, pool: ["AAA", "BBB", "CCC"],
+    gate: { allowed: [{ symbol: "AAA", action: "buy", targetPct: 0.05 },
+                      { symbol: "BBB", action: "buy", targetPct: 0.05 },
+                      { symbol: "CCC", action: "buy", targetPct: 0.05 }], rejected: [] },
+    newsSymbols: new Set(["BBB"]),
+  }, j);
+  const { records } = readJournal(j);
+  const allowed = records[0].allowed;
+  assert.deepEqual(allowed.map((a) => a.hadNews), [false, true, false]);
+});
+
+test("decisions written before the flag existed are counted as unknown, not as 'no news'", () => {
+  const j = tmp();
+  const ctx = { asOfTime: 1_700_000_000, candidates: [{ symbol: "AAA" }] };
+  // No newsSymbols passed: the caller predates the flag, so the answer is unknown, not false.
+  recordDecision({
+    batchId: "b1", context: ctx, proposals: [], mode: MODE.PAPER, pool: ["AAA"],
+    gate: { allowed: [{ symbol: "AAA", action: "buy", targetPct: 0.05 }], rejected: [] },
+  }, j);
+  recordOutcome({ batchId: "b1", symbol: "AAA", netReturn: 0.10, controlReturn: 0.01 }, j);
+  const s = scoreJournal(j, { mode: MODE.PAPER });
+  assert.equal(s.newsSplit.unknown, 1);
+  assert.equal(s.newsSplit.withNews.n, 0);
+  assert.equal(s.newsSplit.withoutNews.n, 0, "absent provenance is not evidence of absent news");
 });

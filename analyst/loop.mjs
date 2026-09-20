@@ -258,6 +258,7 @@ export async function runOnce({
     at: new Date(now).toISOString(),
     context: named, proposals, gate, pool, seed,
     model: model ?? null, mode, news: newsSummary,
+    newsSymbols: new Set(withNews.map((c) => String(c.symbol).toUpperCase())),
   }, journalFile);
 
   return { context, contextIssues, decision, gate, record, unmappedAliases, skipped: null };

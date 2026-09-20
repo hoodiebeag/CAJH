@@ -280,6 +280,21 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
   console.log(`  beat control       ${s.beatControlRate === null ? "—" : `${(s.beatControlRate * 100).toFixed(1)}%`} of decisions`);
   console.log(`  hit rate           ${s.hitRate === null ? "—" : `${(s.hitRate * 100).toFixed(1)}%`}`);
   console.log("");
+  // The split that tests the design's one claim. Printed with both counts and no verdict: this
+  // pivot's argument is that the edge comes from the non-price input, and the only way to read
+  // that is names bought WITH a headline against names bought without.
+  const ns = s.newsSplit;
+  if (ns && (ns.withNews.n || ns.withoutNews.n || ns.unknown)) {
+    console.log("did the news matter? (the claim this design rests on)");
+    console.log(`  with a headline     n=${String(ns.withNews.n).padStart(4)}   net ${pct(ns.withNews.meanNet).padStart(8)}   control ${pct(ns.withNews.controlMeanNet).padStart(8)}   edge ${pct(ns.withNews.edge)}`);
+    console.log(`  without             n=${String(ns.withoutNews.n).padStart(4)}   net ${pct(ns.withoutNews.meanNet).padStart(8)}   control ${pct(ns.withoutNews.controlMeanNet).padStart(8)}   edge ${pct(ns.withoutNews.edge)}`);
+    if (ns.unknown) console.log(`  unrecorded          n=${String(ns.unknown).padStart(4)}   (decisions written before the flag existed)`);
+    console.log(ns.comparable
+      ? "  both arms have enough outcomes to be worth comparing. Compare the EDGES, not the nets."
+      : "  NOT YET COMPARABLE — needs 20+ outcomes in each arm. Splitting a small sample makes two");
+    if (!ns.comparable) console.log("  smaller ones, and a skewed payoff needs more outcomes than a symmetric one, not fewer.");
+    console.log("");
+  }
   if (Object.keys(s.rejectCounts).length) {
     console.log("risk gate rejections:");
     for (const [code, n] of Object.entries(s.rejectCounts).sort((a, b) => b[1] - a[1])) {

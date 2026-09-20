@@ -115,7 +115,7 @@ function mulberry32(a) {
  * decisions worth reviewing. Validation belongs upstream in the risk gate.
  */
 export function recordDecision({
-  batchId, at, context, proposals, gate, pool, seed, model, mode, news,
+  batchId, at, context, proposals, gate, pool, seed, model, mode, news, newsSymbols,
 }, file = DEFAULT_JOURNAL) {
   const contextHash = hashContext(context ?? {});
   const record = {
@@ -138,7 +138,13 @@ export function recordDecision({
       symbol: p.symbol, action: p.action, targetPct: p.targetPct ?? null,
       confidence: p.confidence ?? null, thesis: p.thesis ?? null,
     })),
-    allowed: (gate?.allowed ?? []).map((p) => ({ symbol: p.symbol, action: p.action, targetPct: p.targetPct ?? null })),
+    // `hadNews` is per NAME, not per batch. The claim under test is that a headline on the name
+    // being bought is what carries the edge, and a batch-level flag cannot answer it: a batch with
+    // news on two of forty candidates would mark all forty as informed.
+    allowed: (gate?.allowed ?? []).map((p) => ({
+      symbol: p.symbol, action: p.action, targetPct: p.targetPct ?? null,
+      hadNews: newsSymbols ? newsSymbols.has(String(p.symbol).toUpperCase()) : null,
+    })),
     rejected: (gate?.rejected ?? []).map((r) => ({ symbol: r.proposal?.symbol ?? null, code: r.code, detail: r.detail })),
     exposure: gate?.exposure ?? null,
     halted: gate?.halted ?? false,
@@ -255,6 +261,30 @@ export function scoreJournal(file = DEFAULT_JOURNAL, { mode = MODE.PAPER } = {})
   const agentNet = outcomes.map((o) => o.netReturn).filter((v) => typeof v === "number");
   const ctrlNet = outcomes.map((o) => o.controlReturn).filter((v) => typeof v === "number");
 
+  // THE SPLIT THAT TESTS THE DESIGN'S ONE CLAIM.
+  //
+  // This pivot exists because the price half is closed: the argument is that the edge comes from
+  // the non-price input. That is only testable by comparing the names bought WITH a headline
+  // against the names bought without, so the flag recorded per name is read here rather than
+  // sitting in the file unused.
+  //
+  // IT IS REPORTED WITH BOTH COUNTS AND NO VERDICT. Splitting a small sample makes two smaller
+  // ones, and a skewed payoff needs more outcomes than a symmetric one, not fewer. `comparable`
+  // says whether the split is worth reading at all; nothing here decides that it is.
+  const hadNewsFor = new Map();
+  for (const d of decisions) {
+    for (const a of d.allowed ?? []) {
+      if (a.hadNews === null || a.hadNews === undefined) continue;
+      hadNewsFor.set(`${d.batchId}\u0000${String(a.symbol).toUpperCase()}`, a.hadNews);
+    }
+  }
+  const bucket = { withNews: [], withoutNews: [], unknown: [] };
+  for (const o of outcomes) {
+    if (typeof o.netReturn !== "number") continue;
+    const flag = hadNewsFor.get(`${o.batchId}\u0000${String(o.symbol).toUpperCase()}`);
+    (flag === true ? bucket.withNews : flag === false ? bucket.withoutNews : bucket.unknown).push(o);
+  }
+
   const rejectCounts = {};
   for (const d of decisions) for (const r of d.rejected ?? []) {
     rejectCounts[r.code] = (rejectCounts[r.code] ?? 0) + 1;
@@ -281,12 +311,31 @@ export function scoreJournal(file = DEFAULT_JOURNAL, { mode = MODE.PAPER } = {})
       ? outcomes.filter((o) => typeof o.netReturn === "number" && typeof o.controlReturn === "number"
           && o.netReturn > o.controlReturn).length / outcomes.length
       : null,
+    newsSplit: {
+      withNews: summariseBucket(bucket.withNews),
+      withoutNews: summariseBucket(bucket.withoutNews),
+      unknown: bucket.unknown.length,
+      // A threshold that says "do not read this yet", not one that blesses it when passed.
+      comparable: bucket.withNews.length >= 20 && bucket.withoutNews.length >= 20,
+    },
     rejectCounts,
     halts: decisions.filter((d) => d.halted).length,
     brakes: decisions.filter((d) => d.braked).length,
     // ALPHA_DEFINITION.md §3: 60 days and 50 trades. A floor reached in real time, not a target.
     meetsStandingMinimum: sized >= 50 && spanDays(decisions) >= 60,
     spanDays: spanDays(decisions),
+  };
+}
+
+function summariseBucket(rows) {
+  const net = rows.map((o) => o.netReturn).filter((v) => typeof v === "number");
+  const ctrl = rows.map((o) => o.controlReturn).filter((v) => typeof v === "number");
+  const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null);
+  return {
+    n: rows.length,
+    meanNet: mean(net),
+    controlMeanNet: mean(ctrl),
+    edge: net.length && ctrl.length ? mean(net) - mean(ctrl) : null,
   };
 }
 
