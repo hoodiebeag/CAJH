@@ -13,6 +13,11 @@
  *             `score` cannot blend it into a track record.
  *   paper     one forward decision at today's date. The only mode that is evidence. Refuses to run
  *             on a stale panel, because a model asked about a past date already knows the answer.
+ *   anonymised  the reasoning probe. Same path, identities stripped: no tickers, no dates, no
+ *               sectors, no news. It answers "is the reasoning coherent on evidence alone?", which
+ *               is the only question a historical run CAN answer honestly, because with identities
+ *               present the model recalls what happened instead of reasoning. Recorded under its
+ *               own mode and NEVER evidence of edge.
  *   score     print the journal readout: the analyst beside its own matched random control.
  *
  * THIS FILE CANNOT PLACE AN ORDER. It composes modules none of which can reach a venue.
@@ -88,8 +93,10 @@ function loadPanel() {
 
 // ---------------------------------------------------------------------------------------------
 
-if (cmd === "dry-run" || cmd === "paper") {
-  const mode = cmd === "paper" ? MODE.PAPER : MODE.DRY_RUN;
+if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
+  const mode = cmd === "paper" ? MODE.PAPER
+             : cmd === "anonymised" ? MODE.ANONYMISED
+             : MODE.DRY_RUN;
   const { series, dates } = loadPanel();
   console.log(`panel: ${Object.keys(series).length} symbols, ${dates.length} dates, ` +
               `last ${new Date(dates.at(-1) * 1000).toISOString().slice(0, 10)}`);
@@ -119,6 +126,16 @@ if (cmd === "dry-run" || cmd === "paper") {
     console.error("refusing --stub in paper mode: a stub's picks are not decisions and must never");
     console.error("enter the record that is read as evidence. Use dry-run.");
     process.exit(2);
+  }
+  if (has("stub") && mode === MODE.ANONYMISED) {
+    console.log("note: --stub picks mechanically off the slate, so it probes the WIRING of this");
+    console.log("mode and tells you nothing about reasoning, which is the only thing it is for.");
+  }
+  if (mode === MODE.ANONYMISED) {
+    console.log("anonymised: tickers, dates, sectors and news are stripped before the model sees");
+    console.log("anything; the risk gate still prices the real instruments behind the labels, and");
+    console.log("proposals are translated back before the journal. So these ARE settleable — and");
+    console.log("still NOT evidence of edge, because the anonymisation cannot be proven complete.");
   }
 
   const asOf = flag("asOf", null) === null ? dates.length - 1 : Number(flag("asOf"));
@@ -260,12 +277,14 @@ if (cmd === "dry-run" || cmd === "paper") {
 
 } else {
   console.log(`usage:
-  node analyst-run.mjs dry-run [--asOf N] [--slate 40] [--stub] [--journal FILE]
-  node analyst-run.mjs settle  [--mode paper|dry-run] [--hold 5] [--journal FILE]
+  node analyst-run.mjs dry-run    [--asOf N] [--slate 40] [--stub] [--journal FILE]
+  node analyst-run.mjs anonymised [--asOf N] [--slate 40] [--journal FILE]
+  node analyst-run.mjs settle     [--mode paper|dry-run] [--hold 5] [--journal FILE]
   node analyst-run.mjs paper   [--journal FILE]
   node analyst-run.mjs score   [--mode paper|dry-run|anonymised] [--journal FILE]
 
 dry-run exercises the wiring on a historical date and is NOT evidence.
+anonymised probes reasoning with identities stripped and is NOT evidence.
 paper is the only mode that counts, and refuses to run on a stale panel.`);
   process.exit(cmd ? 1 : 0);
 }

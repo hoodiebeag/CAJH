@@ -207,13 +207,33 @@ export function buildContext({
  * The date goes too. A named ticker on a known date lets a model retrieve what happened; so does an
  * unnamed one if the date is distinctive enough to pin the regime.
  */
+export function aliasName(i) {
+  let s = "", n = i;
+  do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } while (n >= 0);
+  return `Asset ${s}`;
+}
+
+/**
+ * The alias -> real symbol mapping for a NAMED context, recomputed rather than smuggled.
+ *
+ * The risk gate is deterministic code, not the model, so it may legitimately know which instrument
+ * an anonymised label refers to -- it has to, or it cannot price anything. The mapping is purely
+ * positional, so it is recomputed from the named context instead of being hidden on the anonymised
+ * one. A hidden field would be one `JSON.stringify` away from leaking every identity this mode
+ * exists to remove.
+ */
+export function aliasToSymbol(namedCtx) {
+  const out = new Map();
+  // KEYED UPPERCASE. `decide` normalises every proposed symbol to upper case, so a map keyed on
+  // "Asset A" misses the "ASSET A" that actually comes back -- which reads exactly like the model
+  // inventing a label, and silently dropped every proposal the first time this ran.
+  (namedCtx?.candidates ?? []).forEach((c, i) => out.set(aliasName(i).toUpperCase(), c.symbol));
+  return out;
+}
+
 export function anonymiseContext(ctx) {
   const alias = new Map();
-  const nameFor = (i) => {
-    let s = "", n = i;
-    do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } while (n >= 0);
-    return `Asset ${s}`;
-  };
+  const nameFor = aliasName;
   const candidates = ctx.candidates.map((c, i) => {
     alias.set(c.symbol, nameFor(i));
     return {

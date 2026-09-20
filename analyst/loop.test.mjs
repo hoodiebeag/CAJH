@@ -442,3 +442,86 @@ test("settleOutcomes only settles the mode it was asked for", async () => {
   assert.equal(r.decisions, 0, "a dry run must never be settled into the paper record");
   assert.equal(r.wrote, 0);
 });
+
+// ---- anonymised mode ---------------------------------------------------------------------------
+// This mode was documented, unit-tested and UNREACHABLE: no CLI path produced it. The first real
+// run rejected every proposal with `no_usable_price`, because instrumentsFromContext looked up a
+// price series under the name "Asset A". The model must see labels; the risk gate must see
+// instruments. These pin both halves and the boundary between them.
+test("anonymised mode produces a real book instead of pricing nothing", async () => {
+  const j = tmp();
+  const now = Date.now();
+  const p = panel(SYMS, 400, now, 0);
+  let sentToModel = null;
+  const client = {
+    messages: {
+      create: async ({ messages }) => {
+        sentToModel = messages[0].content[0].text;
+        const ctx = JSON.parse(sentToModel);
+        const picks = ctx.candidates.slice(0, 2).map((c) => ({
+          symbol: c.symbol, action: "buy", targetPct: 0.05, confidence: 0.6,
+          thesis: "momentum and breadth both confirm here",
+        }));
+        return fakeMessage(JSON.stringify({ decisions: picks }));
+      },
+    },
+  };
+  const r = await runOnce({ series: p.series, dates: p.dates, asOf: 380, client,
+                            mode: MODE.ANONYMISED, journalFile: j, now, nav: 1e5 });
+  assert.equal(r.skipped, null);
+  assert.equal(r.gate.allowed.length, 2, "the gate must be able to price what the model picked");
+  for (const a of r.gate.allowed) {
+    assert.ok(SYMS.includes(a.symbol), `expected a real symbol in the book, got ${a.symbol}`);
+  }
+
+  // The other half: nothing identifying may have reached the model.
+  for (const sym of SYMS) {
+    assert.ok(!new RegExp(`"${sym}"`).test(sentToModel), `real ticker ${sym} leaked to the model`);
+  }
+  assert.ok(!/\d{4}-\d{2}-\d{2}/.test(sentToModel), "a date leaked to the model");
+});
+
+test("an alias the context never issued is dropped and counted, not passed through", async () => {
+  const j = tmp();
+  const now = Date.now();
+  const p = panel(SYMS, 400, now, 0);
+  const client = {
+    messages: {
+      create: async () => fakeMessage(JSON.stringify({
+        decisions: [{ symbol: "Asset ZZZZ", action: "buy", targetPct: 0.05, confidence: 0.6,
+                      thesis: "momentum and breadth both confirm here" }],
+      })),
+    },
+  };
+  const r = await runOnce({ series: p.series, dates: p.dates, asOf: 380, client,
+                            mode: MODE.ANONYMISED, journalFile: j, now, nav: 1e5 });
+  // `decide` already refuses a symbol that is not in the context it was given, so the invented
+  // label never reaches the translation step -- unmappedAliases stays empty and that is the
+  // correct result, not a miss. The translation is the second line of the same defence, and this
+  // records which line caught it so a later change to either one is visible.
+  assert.equal(r.gate.allowed.length, 0, "a label with no instrument behind it is not a proposal");
+  assert.deepEqual(r.unmappedAliases, [], "decide caught it first; translation never saw it");
+  assert.ok(r.decision.dropped.length > 0, "and it was counted rather than silently discarded");
+  assert.match(JSON.stringify(r.decision.dropped), /ZZZZ/);
+});
+
+test("an anonymised decision is journalled with real symbols and a decision bar", async () => {
+  const j = tmp();
+  const now = Date.now();
+  const p = panel(SYMS, 400, now, 0);
+  const client = {
+    messages: {
+      create: async ({ messages }) => {
+        const ctx = JSON.parse(messages[0].content[0].text);
+        return fakeMessage(JSON.stringify({ decisions: [{
+          symbol: ctx.candidates[0].symbol, action: "buy", targetPct: 0.05, confidence: 0.6,
+          thesis: "momentum and breadth both confirm here" }] }));
+      },
+    },
+  };
+  await runOnce({ series: p.series, dates: p.dates, asOf: 380, client,
+                  mode: MODE.ANONYMISED, journalFile: j, now, nav: 1e5 });
+  const rec = readJournal(j).records.find((x) => x.kind === KIND.DECISION);
+  assert.equal(rec.asOfTime, p.dates[380], "a settlement needs the bar, and the gate already knew it");
+  assert.ok(SYMS.includes(rec.allowed[0].symbol));
+});

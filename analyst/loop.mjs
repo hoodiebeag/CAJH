@@ -25,7 +25,7 @@
  * sequence impossible rather than discouraged.
  */
 
-import { buildContext, contextIsPointInTime } from "./context.mjs";
+import { buildContext, contextIsPointInTime, anonymiseContext, aliasToSymbol } from "./context.mjs";
 import { decide } from "./decide.mjs";
 import { applyRiskGate, DEFAULT_LIMITS } from "./risk.mjs";
 import { recordDecision, recordOutcome, readJournal, KIND, MODE, DEFAULT_JOURNAL } from "./journal.mjs";
@@ -107,10 +107,18 @@ export async function runOnce({
   const L = { ...DEFAULT_LIMITS, ...limits };
   const anonymise = mode === MODE.ANONYMISED;
 
-  const context = buildContext({
+  // ANONYMISED MODE NEEDS BOTH VIEWS, AND ONLY ONE OF THEM REACHES THE MODEL.
+  //
+  // The model must see hashed labels or the mode is pointless. The RISK GATE must see real
+  // instruments or it cannot price anything -- the first time this mode was actually run it
+  // rejected every proposal with `no_usable_price`, because `instrumentsFromContext` looked up a
+  // series under the name "Asset A". The gate is deterministic code, not the model, so it may
+  // know the identities; the model never does.
+  const named = buildContext({
     series, dates, asOf: idx, positions, nav, peakNav, dayStartNav,
-    slate, rankBy, anonymise, news, sectors,
+    slate, rankBy, anonymise: false, news, sectors,
   });
+  const context = anonymise ? anonymiseContext(named) : named;
 
   // The point-in-time property is structural, but this project's standing lesson is that a claim of
   // that shape gets tested or it gets believed until it is expensively wrong. Checked every batch,
@@ -153,26 +161,44 @@ export async function runOnce({
   // them against today would make every historical batch fail on staleness and reduce the plumbing
   // check to a test that the staleness rule exists. What a dry run must exercise is the whole path.
   const referenceMs = mode === MODE.PAPER ? now : asOfTime * 1000;
-  const inst = instruments ?? instrumentsFromContext(context, series, asOfTime, referenceMs);
+  const inst = instruments ?? instrumentsFromContext(named, series, asOfTime, referenceMs);
+
+  // Translate the model's aliases back before the gate. An alias that maps to nothing is DROPPED
+  // AND COUNTED, never passed through -- the same rule the named path applies to a hallucinated
+  // ticker, for the same reason: a proposal naming an instrument that does not exist is not a
+  // proposal that can be repaired into one.
+  let proposals = decision.proposals;
+  const unmappedAliases = [];
+  if (anonymise) {
+    const back = aliasToSymbol(named);
+    proposals = [];
+    for (const p of decision.proposals) {
+      const real = back.get(String(p.symbol).toUpperCase());
+      if (!real) { unmappedAliases.push(p.symbol); continue; }
+      proposals.push({ ...p, symbol: real, alias: p.symbol });
+    }
+  }
 
   const gate = applyRiskGate(
-    decision.proposals,
+    proposals,
     { nav, peakNav, dayStartNav, positions, shortingPermitted },
     inst, limits,
   );
 
   // The control is drawn from what the analyst could actually have chosen, not the whole universe:
   // a control drawn from names never shown measures universe selection, not stock selection.
-  const pool = (context.candidates ?? []).map((c) => c.symbol);
+  // Drawn from the NAMED candidates: a control has to be a real instrument to be priced, and in
+  // anonymised mode the shown candidates carry hashed labels.
+  const pool = (named.candidates ?? []).map((c) => c.symbol);
 
   const record = recordDecision({
     batchId: batchId ?? defaultBatchId(asOfTime, mode),
     at: new Date(now).toISOString(),
-    context, proposals: decision.proposals, gate, pool, seed,
+    context: named, proposals, gate, pool, seed,
     model: model ?? null, mode,
   }, journalFile);
 
-  return { context, contextIssues, decision, gate, record, skipped: null };
+  return { context, contextIssues, decision, gate, record, unmappedAliases, skipped: null };
 }
 
 function defaultBatchId(asOfTime, mode) {
