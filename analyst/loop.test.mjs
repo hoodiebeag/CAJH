@@ -320,3 +320,61 @@ test("weekend days are not missed sessions on a weekday panel", () => {
   const saturdayMidday = Date.UTC(2026, 8, 19) + 14 * 3600000;
   assert.equal(missedSessions(friday, saturdayMidday, sessionWeekdays(MONDAY_PANEL)), 0);
 });
+
+// ---- an unfinished hold is not a flat trade ----------------------------------------------------
+// Found by running a dry run at the end of the panel: three different names and the matched control
+// all returned exactly -0.11%, which is the round trip charged on a gross return of zero. The exit
+// index was clamped to the last bar, so a hold of zero sessions looked like a completed flat trade.
+// These rows are documented as ready for recordOutcome, and paper scoring necessarily runs while
+// the newest decisions are still inside their holding period, so this would have packed the track
+// record with fabricated zeroes.
+test("a hold the panel cannot cover is dropped, not recorded as 0%", () => {
+  const now = Date.now();
+  const p = panel(["AAA", "BBB"], 300, now, 0);
+  const record = {
+    batchId: "b1",
+    allowed: [{ symbol: "AAA", action: "buy", targetPct: 0.05 }],
+    control: [{ symbol: "BBB" }],
+  };
+  const last = p.dates.length - 1;
+
+  const atEnd = realisedOutcomes({ record, series: p.series, dates: p.dates, entryIdx: last, holdDays: 5 });
+  assert.equal(atEnd.length, 0, "no outcome exists yet, so none may be returned for recording");
+
+  const shown = realisedOutcomes({ record, series: p.series, dates: p.dates, entryIdx: last,
+                                   holdDays: 5, requireComplete: false });
+  assert.equal(shown.length, 1);
+  assert.equal(shown[0].complete, false);
+  assert.equal(shown[0].sessionsHeld, 0, "the truth about the hold is carried, not hidden");
+});
+
+test("a partial hold is still incomplete", () => {
+  const now = Date.now();
+  const p = panel(["AAA", "BBB"], 300, now, 0);
+  const record = {
+    batchId: "b2",
+    allowed: [{ symbol: "AAA", action: "buy", targetPct: 0.05 }],
+    control: [{ symbol: "BBB" }],
+  };
+  const entry = p.dates.length - 3;                 // only 2 of 5 sessions available
+  assert.equal(realisedOutcomes({ record, series: p.series, dates: p.dates, entryIdx: entry, holdDays: 5 }).length, 0);
+  const shown = realisedOutcomes({ record, series: p.series, dates: p.dates, entryIdx: entry,
+                                   holdDays: 5, requireComplete: false });
+  assert.equal(shown[0].sessionsHeld, 2);
+  assert.equal(shown[0].complete, false);
+});
+
+test("a completed hold is returned and marked complete", () => {
+  const now = Date.now();
+  const p = panel(["AAA", "BBB"], 300, now, 0);
+  const record = {
+    batchId: "b3",
+    allowed: [{ symbol: "AAA", action: "buy", targetPct: 0.05 }],
+    control: [{ symbol: "BBB" }],
+  };
+  const rows = realisedOutcomes({ record, series: p.series, dates: p.dates, entryIdx: 100, holdDays: 5 });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].complete, true);
+  assert.equal(rows[0].sessionsHeld, 5);
+  assert.equal(typeof rows[0].grossReturn, "number");
+});

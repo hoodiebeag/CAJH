@@ -220,7 +220,8 @@ export function instrumentsFromContext(context, series, asOfTime, referenceMs) {
  * Returns rows ready for `recordOutcome`. Does not write them -- the caller decides when a holding
  * period is actually over, because only the caller knows what calendar the book trades on.
  */
-export function realisedOutcomes({ record, series, dates, entryIdx, holdDays = 5, costPerLeg = 0 }) {
+export function realisedOutcomes({ record, series, dates, entryIdx, holdDays = 5, costPerLeg = 0,
+                                   requireComplete = true }) {
   const rows = [];
   const fwd = (symbol) => forwardReturn(series?.[symbol], dates, entryIdx, holdDays);
 
@@ -230,28 +231,47 @@ export function realisedOutcomes({ record, series, dates, entryIdx, holdDays = 5
   for (let i = 0; i < sized.length; i++) {
     const a = sized[i];
     const agent = fwd(a.symbol);
-    const ctrl = controlBySlot[i] ? fwd(controlBySlot[i].symbol) : null;
     if (agent === null) continue;
+    const complete = agent.sessions >= holdDays;
+    if (requireComplete && !complete) continue;      // dropped, never recorded as a flat trade
+    const ctrl = controlBySlot[i] ? fwd(controlBySlot[i].symbol) : null;
     const charge = 2 * costPerLeg;    // in and out, the same on both sides
     rows.push({
       batchId: record.batchId,
       symbol: a.symbol,
       holdDays,
-      grossReturn: round(agent, 6),
-      netReturn: round(agent - charge, 6),
-      controlReturn: ctrl === null ? null : round(ctrl - charge, 6),
+      sessionsHeld: agent.sessions,
+      complete,
+      grossReturn: round(agent.ret, 6),
+      netReturn: round(agent.ret - charge, 6),
+      controlReturn: ctrl === null ? null : round(ctrl.ret - charge, 6),
     });
   }
   return rows;
 }
 
+/**
+ * Forward return AND how many sessions were actually available for it.
+ *
+ * THE SESSION COUNT IS NOT DECORATION. This used to clamp the exit to the last available bar and
+ * return a number, so a decision made at the end of the panel "held" for zero sessions and came
+ * back as exactly 0% gross -- which, charged a round trip, reads as a realised -0.11% trade. Three
+ * different names and the matched control all landing on the identical figure is what exposed it.
+ *
+ * It matters well beyond a dry run. These rows are documented as ready for `recordOutcome`, and
+ * paper scoring necessarily runs while the newest decisions are still inside their holding period.
+ * Writing those as completed flat trades would pack the track record with fabricated zeroes, drag
+ * the measured edge toward nothing, and make the agent look consistent while doing it -- a
+ * contamination of the one instrument this design has.
+ */
 function forwardReturn(bars, dates, entryIdx, holdDays) {
   if (!bars?.length) return null;
   const byTime = new Map(bars.map((b) => [Number(b.time), Number(b.close)]));
   const a = byTime.get(dates[entryIdx]);
   const exitIdx = Math.min(entryIdx + holdDays, dates.length - 1);
   const b = byTime.get(dates[exitIdx]);
-  return a > 0 && b > 0 ? b / a - 1 : null;
+  if (!(a > 0 && b > 0)) return null;
+  return { ret: b / a - 1, sessions: exitIdx - entryIdx };
 }
 
 function round(v, dp) {

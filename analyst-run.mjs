@@ -174,13 +174,22 @@ if (cmd === "dry-run" || cmd === "paper") {
 
   // In a dry run the outcome is already knowable, so the full path including scoring can be shown.
   if (mode === MODE.DRY_RUN && r.record && !r.skipped) {
+    // requireComplete:false so a hold the panel cannot cover is SHOWN as incomplete rather than
+    // silently absent. The default drops them, which is what a journal writer must do; a human
+    // reading a dry run should see that the panel ran out, not an empty section.
     const rows = realisedOutcomes({
       record: r.record, series, dates, entryIdx: asOf, holdDays: 5,
       costPerLeg: COST_MODELS.usEquityIbkr.feeRate + COST_MODELS.usEquityIbkr.slipPct,
+      requireComplete: false,
     });
     if (rows.length) {
       console.log("\nrealised over the next 5 sessions (DRY RUN — not evidence):");
       for (const x of rows) {
+        if (!x.complete) {
+          console.log(`  ${x.symbol.padEnd(8)} INCOMPLETE — ${x.sessionsHeld}/${x.holdDays} sessions ` +
+                      `available after this date; no outcome exists yet and none is recorded`);
+          continue;
+        }
         console.log(`  ${x.symbol.padEnd(8)} net ${pct(x.netReturn).padStart(8)}   ` +
                     `control ${pct(x.controlReturn).padStart(8)}`);
       }
