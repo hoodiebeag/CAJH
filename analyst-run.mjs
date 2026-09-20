@@ -30,7 +30,8 @@
 
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { screenUniverse } from "./universe.mjs";
-import { runOnce, realisedOutcomes, settleOutcomes, sessionWeekdays, missedSessions } from "./analyst/loop.mjs";
+import { runOnce, realisedOutcomes, settleOutcomes, sessionWeekdays, missedSessions,
+         sessionsAhead } from "./analyst/loop.mjs";
 import { loadNewsCache, toNewsMap, assertNotAfter } from "./analyst/news.mjs";
 import { scoreJournal, MODE, DEFAULT_JOURNAL } from "./analyst/journal.mjs";
 import { COST_MODELS } from "./costs.mjs";
@@ -105,6 +106,15 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
   // first error a user sees, and they conclude paper mode merely needs credentials when the real
   // blocker is that there is no current data to decide on.
   if (mode === MODE.PAPER) {
+    const ahead = sessionsAhead(dates.at(-1), Date.now());
+    if (ahead > 0) {
+      console.error(`\npanel's last bar is dated ${new Date(dates.at(-1) * 1000).toISOString().slice(0, 10)}, ` +
+                    `${ahead} day(s) in the FUTURE.`);
+      console.error("That is corrupt input, not a stale panel — a timezone mis-parse, a wrong clock,");
+      console.error("or a vendor stamping forward. Deciding on bars that have not happened is the");
+      console.error("exact contamination paper mode exists to prevent. Fix the panel.");
+      process.exit(3);
+    }
     const missed = missedSessions(dates.at(-1), Date.now(), sessionWeekdays(dates));
     if (missed > 0) {
       console.error(`\npanel is ${missed} completed session(s) behind its own calendar (last bar ` +

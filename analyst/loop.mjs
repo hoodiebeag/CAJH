@@ -83,6 +83,27 @@ export function missedSessions(lastBarEpoch, nowMs, weekdays) {
 }
 
 /**
+ * How many days ahead of now the panel's last bar is dated. Zero unless something is wrong.
+ *
+ * THE FRESHNESS GUARD ONLY LOOKED BACKWARDS, and a panel can be wrong in the other direction. A
+ * bar dated four days from now passed it cleanly: nothing was missing, so nothing was refused.
+ * That is the worst failure available to this design -- the context would be built from bars that
+ * have not happened, in the one mode that counts as evidence, and it would look like a clean run.
+ *
+ * It is not hypothetical. Bar timestamps arrive in the account's timezone and get parsed; a clock
+ * can be wrong; a vendor can stamp forward. This project already wrote down the same risk for news
+ * ("a provider stamping articles forward is the failure that would look most like skill") and then
+ * left the price panel unguarded against it.
+ *
+ * COMPARED AT DAY GRANULARITY, because a daily bar is stamped at the start of its session while
+ * `now` is somewhere inside it. Comparing instants would call every mid-session bar the future.
+ */
+export function sessionsAhead(lastBarEpoch, nowMs) {
+  const dayOf = (ms) => Math.floor(ms / 86400000);
+  return Math.max(0, dayOf(lastBarEpoch * 1000) - dayOf(nowMs));
+}
+
+/**
  * Run one decision batch.
  *
  * @returns {{ context, contextIssues, decision, gate, record, skipped }}
@@ -102,6 +123,18 @@ export async function runOnce({
 
   // ---- the mode guard --------------------------------------------------------------------------
   if (mode === MODE.PAPER) {
+    // Forwards first. A future-dated bar is corrupt input, not a stale panel, and saying "stale"
+    // about it would send whoever reads the error looking in exactly the wrong direction.
+    const ahead = sessionsAhead(dates.at(-1), now);
+    if (ahead > 0) {
+      throw new Error(
+        `loop: refusing to run paper mode on a panel whose last bar is dated ` +
+        `${new Date(dates.at(-1) * 1000).toISOString().slice(0, 10)}, ${ahead} day(s) in the FUTURE. ` +
+        `That is not staleness, it is corrupt input -- a timezone mis-parse, a wrong clock, or a ` +
+        `vendor stamping forward. Deciding on bars that have not happened is the exact ` +
+        `contamination this mode exists to prevent. Fix the panel; do not widen this check.`,
+      );
+    }
     const missed = missedSessions(asOfTime, now, sessionWeekdays(dates));
     if (missed > 0) {
       throw new Error(

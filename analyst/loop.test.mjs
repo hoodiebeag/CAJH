@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { runOnce, realisedOutcomes, instrumentsFromContext, PAPER_FRESHNESS_MS, sessionWeekdays, missedSessions, settleOutcomes } from "./loop.mjs";
+import { runOnce, realisedOutcomes, instrumentsFromContext, PAPER_FRESHNESS_MS, sessionWeekdays, missedSessions, settleOutcomes, sessionsAhead } from "./loop.mjs";
 import { readJournal, scoreJournal, recordOutcome, MODE, KIND } from "./journal.mjs";
 
 const DAY = 86400;
@@ -540,4 +540,44 @@ test("an anonymised decision is journalled with real symbols and a decision bar"
   const rec = readJournal(j).records.find((x) => x.kind === KIND.DECISION);
   assert.equal(rec.asOfTime, p.dates[380], "a settlement needs the bar, and the gate already knew it");
   assert.ok(SYMS.includes(rec.allowed[0].symbol));
+});
+
+// ---- the panel can be wrong in the other direction ---------------------------------------------
+// The freshness guard only looked backwards. A bar dated in the future passed it cleanly, because
+// nothing was missing — the worst failure available here, since the context would then be built
+// from bars that have not happened, in the one mode that counts as evidence.
+test("sessionsAhead is zero for a normal panel and positive for a future-dated one", () => {
+  const now = Date.UTC(2026, 8, 20) + 14 * 3600000;
+  assert.equal(sessionsAhead(Date.UTC(2026, 8, 18) / 1000, now), 0);
+  assert.equal(sessionsAhead(Date.UTC(2026, 8, 20) / 1000, now), 0,
+    "today's bar is stamped at the start of its session, not in the future");
+  assert.equal(sessionsAhead(Date.UTC(2026, 8, 24) / 1000, now), 4);
+});
+
+test("paper mode refuses a future-dated panel, and says it is corrupt rather than stale", async () => {
+  const now = Date.now();
+  // endingDaysAgo negative puts the last bar ahead of now.
+  const p = panel(SYMS, 400, now, -4);
+  await assert.rejects(
+    () => runOnce({ series: p.series, dates: p.dates, client: clientProposing([buy("AAA")]),
+                    mode: MODE.PAPER, now, nav: 1e5, journalFile: tmp() }),
+    (err) => {
+      assert.match(err.message, /FUTURE/);
+      assert.match(err.message, /corrupt input/);
+      assert.ok(!/sessions behind/.test(err.message),
+        "calling this staleness would send the reader looking the wrong way");
+      return true;
+    },
+  );
+});
+
+test("a dry run is not blocked by a future-dated panel", async () => {
+  // Only paper mode claims to be deciding at now. A dry run names its own decision bar, so a panel
+  // extending past today is not a contradiction there.
+  const now = Date.now();
+  const p = panel(SYMS, 400, now, -4);
+  const r = await runOnce({ series: p.series, dates: p.dates, asOf: 380,
+                            client: clientProposing([buy("AAA")]), mode: MODE.DRY_RUN,
+                            now, nav: 1e5, journalFile: tmp() });
+  assert.equal(r.skipped, null);
 });
