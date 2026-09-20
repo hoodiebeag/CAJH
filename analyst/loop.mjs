@@ -47,25 +47,35 @@ export function sessionWeekdays(dates, lookback = 250) {
 }
 
 /**
- * How many sessions the panel is missing: trading weekdays strictly after its last bar, up to now.
+ * How many COMPLETED sessions the panel is missing.
  *
  * WHY NOT ELAPSED HOURS. The wall-clock rule this replaces refused whenever the last bar was over
  * 36 hours old, which is every Monday and every day after a holiday -- a correct panel reading as
- * a broken feed. The opposite error, a tolerance wide enough to cover a long holiday weekend, lets
- * a genuinely stale panel through in the middle of a normal week, and THAT error is the dangerous
- * one: it produces contaminated evidence that looks like a track record.
+ * a broken feed. The opposite error, a tolerance wide enough to span a long holiday weekend, lets
+ * a genuinely stale panel through mid-week, and THAT error is the dangerous one: it produces
+ * contaminated evidence that looks like a track record.
  *
- * So this counts sessions rather than time. A holiday the panel has not seen yet counts as a
- * missed session and makes the check too STRICT by one day, which fails safe -- it refuses to
- * trade. Being too loose would fail dangerous.
+ * TODAY IS EXCUSED, AND ONLY TODAY. If today is a trading day its bar may legitimately not exist
+ * yet, because the session is not over. Every EARLIER session is over, so a missing bar for one
+ * means a stale panel.
+ *
+ * A first version counted every session after the last bar and allowed one, which is the same
+ * thing ONLY while today is a trading day. Walking the paper path on a Sunday holding Thursday's
+ * bar exposed the difference: Friday's session had closed, its bar was absent, and the guard
+ * passed the panel anyway. Excusing "one session" excuses the wrong one on any non-trading day.
+ *
+ * A holiday the panel has not seen yet still counts as missed, so the check runs one day too
+ * STRICT across holidays. That fails safe -- it refuses to trade. Too loose would fail dangerous.
  */
 export function missedSessions(lastBarEpoch, nowMs, weekdays) {
   if (!weekdays || !weekdays.size) return 0;
   const dayOf = (ms) => Math.floor(ms / 86400000);
   const last = dayOf(lastBarEpoch * 1000);
   const today = dayOf(nowMs);
+  const todayTrades = weekdays.has(new Date(today * 86400000).getUTCDay());
+  const lastCompleted = todayTrades ? today - 1 : today;
   let n = 0;
-  for (let d = last + 1; d <= today; d++) {
+  for (let d = last + 1; d <= lastCompleted; d++) {
     if (weekdays.has(new Date(d * 86400000).getUTCDay())) n++;
     if (n > 400) break;                       // a panel years out of date needs no exact count
   }
@@ -93,10 +103,10 @@ export async function runOnce({
   // ---- the mode guard --------------------------------------------------------------------------
   if (mode === MODE.PAPER) {
     const missed = missedSessions(asOfTime, now, sessionWeekdays(dates));
-    if (missed > 1) {
+    if (missed > 0) {
       throw new Error(
         `loop: refusing to run paper mode on ${new Date(asOfTime * 1000).toISOString().slice(0, 10)}, ` +
-        `which is ${missed} sessions behind on this panel's own calendar. A model asked what it ` +
+        `which is ${missed} completed session(s) behind on this panel's own calendar. A model asked what it ` +
         `would do on a past date already knows what happened. Use mode "dry-run" for a plumbing ` +
         `check or "anonymised" for a reasoning probe; neither counts as evidence. ` +
         `See docs/ANALYST-DESIGN.md.`,

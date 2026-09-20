@@ -106,8 +106,8 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
   // blocker is that there is no current data to decide on.
   if (mode === MODE.PAPER) {
     const missed = missedSessions(dates.at(-1), Date.now(), sessionWeekdays(dates));
-    if (missed > 1) {
-      console.error(`\npanel is ${missed} sessions behind its own calendar (last bar ` +
+    if (missed > 0) {
+      console.error(`\npanel is ${missed} completed session(s) behind its own calendar (last bar ` +
                     `${new Date(dates.at(-1) * 1000).toISOString().slice(0, 10)}). Paper mode needs`);
       console.error("current data: a model asked what it would do on a past date already knows what");
       console.error("happened. Refresh the panel first — a key will not help:");

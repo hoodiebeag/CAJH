@@ -299,13 +299,29 @@ test("sessionWeekdays reads the trading week off the panel rather than assuming 
 test("a Monday holding Friday's bar is current — the case the wall-clock rule got wrong", () => {
   const friday = Date.UTC(2026, 8, 18) / 1000;
   const mondayMidday = Date.UTC(2026, 8, 21) + 14 * 3600000;
-  assert.equal(missedSessions(friday, mondayMidday, sessionWeekdays(MONDAY_PANEL)), 1);
+  assert.equal(missedSessions(friday, mondayMidday, sessionWeekdays(MONDAY_PANEL)), 0,
+    "today's bar may not exist yet; the session is not over");
 });
 
 test("a missed mid-week session is counted", () => {
   const monday = Date.UTC(2026, 8, 14) / 1000;
   const wednesdayMidday = Date.UTC(2026, 8, 16) + 14 * 3600000;
-  assert.equal(missedSessions(monday, wednesdayMidday, sessionWeekdays(MONDAY_PANEL)), 2);
+  assert.equal(missedSessions(monday, wednesdayMidday, sessionWeekdays(MONDAY_PANEL)), 1,
+    "Tuesday closed without a bar; Wednesday is excused as today");
+});
+
+test("a Sunday holding Thursday's bar is STALE — Friday closed and is missing", () => {
+  // The case that exposed the first version of this rule. It allowed one missed session, which is
+  // the same as excusing today only while today trades. On a Sunday it excused Friday instead.
+  const thursday = Date.UTC(2026, 8, 17) / 1000;
+  const sundayMidday = Date.UTC(2026, 8, 20) + 14 * 3600000;
+  assert.equal(missedSessions(thursday, sundayMidday, sessionWeekdays(MONDAY_PANEL)), 1);
+});
+
+test("a Sunday holding Friday's bar is current", () => {
+  const friday = Date.UTC(2026, 8, 18) / 1000;
+  const sundayMidday = Date.UTC(2026, 8, 20) + 14 * 3600000;
+  assert.equal(missedSessions(friday, sundayMidday, sessionWeekdays(MONDAY_PANEL)), 0);
 });
 
 test("a weeks-old panel counts as many sessions behind, not one long gap", () => {
