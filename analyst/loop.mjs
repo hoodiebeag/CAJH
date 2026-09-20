@@ -112,7 +112,7 @@ export function sessionsAhead(lastBarEpoch, nowMs) {
 export async function runOnce({
   series, dates, asOf, client,
   positions = {}, nav = null, peakNav = null, dayStartNav = null,
-  instruments = null, sectors = null, news = {},
+  instruments = null, sectors = null, news = {}, newsMeta = null,
   mode = MODE.DRY_RUN, model, limits = {}, slate = 40, rankBy = "momentum",
   shortingPermitted = false, journalFile = DEFAULT_JOURNAL, now = Date.now(),
   batchId = null, seed = null,
@@ -234,11 +234,30 @@ export async function runOnce({
   // anonymised mode the shown candidates carry hashed labels.
   const pool = (named.candidates ?? []).map((c) => c.symbol);
 
+  // WHAT THE ANALYST COULD SEE, RECORDED BESIDE WHAT IT DID.
+  //
+  // The design argument for this whole pivot is that the edge, if any, comes from the non-price
+  // input -- the price half is already closed in VERDICTS.md. A track record that cannot separate
+  // "decided with news" from "decided with none" cannot test that claim: it measures a blend and
+  // then credits the mechanism. The journal recorded nothing about news at all, so every batch
+  // looked alike afterwards.
+  //
+  // RECORDED, NOT ENFORCED. Refusing to run without news would be the wrong fix -- an analyst
+  // working on price alone is a legitimate analyst and, more to the point, it is the CONTROL
+  // population the news thesis has to beat. Both are needed, so both are kept and labelled.
+  const withNews = (named.candidates ?? []).filter((c) => (c.news ?? []).length);
+  const newsSummary = {
+    ...(newsMeta ?? {}),
+    candidates: (named.candidates ?? []).length,
+    candidatesWithNews: withNews.length,
+    headlines: withNews.reduce((n, c) => n + c.news.length, 0),
+  };
+
   const record = recordDecision({
     batchId: batchId ?? defaultBatchId(asOfTime, mode),
     at: new Date(now).toISOString(),
     context: named, proposals, gate, pool, seed,
-    model: model ?? null, mode,
+    model: model ?? null, mode, news: newsSummary,
   }, journalFile);
 
   return { context, contextIssues, decision, gate, record, unmappedAliases, skipped: null };

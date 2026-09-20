@@ -581,3 +581,47 @@ test("a dry run is not blocked by a future-dated panel", async () => {
                             now, nav: 1e5, journalFile: tmp() });
   assert.equal(r.skipped, null);
 });
+
+// ---- what the analyst could see, recorded beside what it did -----------------------------------
+// The design argument for this pivot is that the edge comes from the non-price input; the price
+// half is already closed. A journal that cannot separate "decided with news" from "decided with
+// none" measures a blend and credits the mechanism. Nothing about news was recorded at all.
+test("a decision records how much news it actually had", async () => {
+  const j = tmp();
+  const now = Date.now();
+  const p = panel(SYMS, 400, now, 0);
+  const news = {
+    AAA: [{ at: new Date(p.dates[378] * 1000).toISOString(), headline: "AAA guides higher", source: "BRFG" }],
+    BBB: [{ at: new Date(p.dates[379] * 1000).toISOString(), headline: "BBB downgraded", source: "BRFUPDN" },
+          { at: new Date(p.dates[377] * 1000).toISOString(), headline: "BBB names a CFO", source: "BRFG" }],
+  };
+  const r = await runOnce({
+    series: p.series, dates: p.dates, asOf: 380, client: clientProposing([buy("AAA")]),
+    mode: MODE.DRY_RUN, now, nav: 1e5, journalFile: j, news,
+    newsMeta: { source: "data/news-cache.json", fetchedAt: "2026-09-20T06:00:00.000Z",
+                ageHours: 0.2, stale: false, droppedAtBoundary: 3 },
+  });
+  assert.equal(r.skipped, null);
+
+  const rec = readJournal(j).records.find((x) => x.kind === KIND.DECISION);
+  assert.equal(rec.news.candidatesWithNews, 2);
+  assert.equal(rec.news.headlines, 3);
+  assert.equal(rec.news.candidates, r.context.candidates.length);
+  assert.equal(rec.news.droppedAtBoundary, 3, "boundary drops are part of the provenance");
+  assert.equal(rec.news.stale, false);
+  assert.equal(rec.news.fetchedAt, "2026-09-20T06:00:00.000Z");
+});
+
+test("a decision made on price alone says so rather than staying silent", async () => {
+  const j = tmp();
+  const now = Date.now();
+  const p = panel(SYMS, 400, now, 0);
+  await runOnce({ series: p.series, dates: p.dates, asOf: 380,
+                  client: clientProposing([buy("AAA")]), mode: MODE.DRY_RUN,
+                  now, nav: 1e5, journalFile: j });
+  const rec = readJournal(j).records.find((x) => x.kind === KIND.DECISION);
+  assert.equal(rec.news.candidatesWithNews, 0);
+  assert.equal(rec.news.headlines, 0);
+  assert.ok(rec.news.candidates > 0,
+    "the denominator matters: 0 of 40 is a different fact from 0 of 0");
+});

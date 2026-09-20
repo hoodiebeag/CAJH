@@ -46,10 +46,13 @@ if (flag("port", null)) process.env.IBKR_PORT = flag("port");
 
 const SYMBOL = flag("symbol", "AAPL");
 const DELAY = Number(flag("delay", 200));
+const NEWS_DELAY = Number(flag("news-delay", 600));   // TWS paces historical news harder than details
+const PER_SYMBOL = Number(flag("per-symbol", 8));     // a context budget, not a dump
 const ROOT = flag("root", "sp500-bundle");
 const OUT = flag("out", "data");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const conIds = {};
 const report = { collectedAt: new Date().toISOString(), host: process.env.IBKR_HOST ?? "127.0.0.1", port: Number(process.env.IBKR_PORT ?? 4002) };
 
 console.log(`connecting to ${report.host}:${report.port} ...`);
@@ -69,9 +72,13 @@ console.log("connected. read-only.\n");
 
 fs.mkdirSync(OUT, { recursive: true });
 
-// ---- 1. news entitlement + a sample fetch ------------------------------------------------------
+// ---- 1. news entitlement -----------------------------------------------------------------------
+// Entitlement only here. The HEADLINES are fetched after the sector pass, because that pass already
+// pays for a reqContractDetails per symbol and historical news needs the conId it returns --
+// resolving them twice would double the slowest part of this script for nothing.
+let providerCodes = null;
 if (!has("skip-news")) {
-  console.log("[1/3] news providers ...");
+  console.log("[1/4] news providers ...");
   const prov = await listProviders(conn);
   report.news = { ok: prov.ok, providers: prov.providers ?? [], reason: prov.reason ?? null };
   if (!prov.ok) {
@@ -80,25 +87,9 @@ if (!has("skip-news")) {
     console.log("  NO PROVIDERS ENTITLED. The analyst's news slot cannot be filled from IBKR.");
     console.log("  That is an account setting, not a code problem — and knowing it is the result.");
   } else {
-    console.log(`  ${prov.providers.length} entitled: ${prov.providers.map((p) => p.code).join(", ")}`);
-    const conId = await resolveConId(conn, SYMBOL, 9000);
-    if (!conId) {
-      console.log(`  could not resolve ${SYMBOL} to a conId; skipping the sample fetch.`);
-    } else {
-      const codes = prov.providers.map((p) => p.code).join("+");
-      const r = await fetchHeadlines(conn, { conId, providerCodes: codes, total: 10, reqId: 9001 });
-      report.news.sample = { symbol: SYMBOL, ok: r.ok, count: r.headlines?.length ?? 0, reason: r.reason ?? null };
-      if (r.ok && r.headlines.length) {
-        console.log(`  ${r.headlines.length} headline(s) for ${SYMBOL}; newest ${r.headlines.at(-1).atIso}`);
-        saveNewsCache(path.join(OUT, "news-cache.json"), { [SYMBOL]: r.headlines },
-          { providers: prov.providers });
-        console.log(`  wrote ${path.join(OUT, "news-cache.json")}`);
-        const future = r.headlines.filter((h) => h.at > Date.now() / 1000);
-        if (future.length) console.log(`  WARNING: ${future.length} headline(s) dated in the FUTURE`);
-      } else {
-        console.log(`  no headlines: ${r.reason ?? "empty result"}`);
-      }
-    }
+    providerCodes = prov.providers.map((x) => x.code).join("+");
+    report.news.providers = prov.providers;
+    console.log(`  ${prov.providers.length} entitled: ${prov.providers.map((x) => x.code).join(", ")}`);
   }
   console.log("");
 }
@@ -106,7 +97,7 @@ if (!has("skip-news")) {
 // ---- 2. sector map -------------------------------------------------------------------------------
 if (!has("skip-sectors")) {
   const symbols = availablePairs(1440, ROOT);
-  console.log(`[2/3] classifying ${symbols.length} symbols (about ${Math.ceil(symbols.length * DELAY / 1000)}s) ...`);
+  console.log(`[2/4] classifying ${symbols.length} symbols (about ${Math.ceil(symbols.length * DELAY / 1000)}s) ...`);
   const sectors = {}, unclassified = [], ambiguous = [];
   let reqId = 9100;
   for (const sym of symbols) {
@@ -117,6 +108,8 @@ if (!has("skip-sectors")) {
     if (!labels.length) { unclassified.push([sym, "no industry field"]); continue; }
     if (labels.length > 1) { ambiguous.push([sym, labels]); continue; }
     sectors[sym] = labels[0].trim();
+    const cid = d.details[0]?.contract?.conId;
+    if (Number.isFinite(cid)) conIds[sym] = cid;      // already paid for; the news pass reuses it
   }
   // IBKR's `industry` is IBKR's taxonomy, NOT GICS. It is recorded as its own scheme rather than
   // crosswalked -- see analyst/sector-map.mjs for why a hand-written crosswalk is refused.
@@ -137,9 +130,48 @@ if (!has("skip-sectors")) {
   console.log("");
 }
 
-// ---- 3. intraday ladder --------------------------------------------------------------------------
+// ---- 3. headlines for the whole universe --------------------------------------------------------
+// THE SAMPLE WAS THE PROBLEM. The first version fetched headlines for ONE symbol as proof the path
+// worked. It did work -- and it meant the analyst ran with news on 0 of its 40 candidates, which is
+// only visible now that the journal records news coverage per batch. A news input covering 1 of 127
+// names is not a news input; it is a plumbing test left in place.
+if (!has("skip-news") && providerCodes) {
+  const syms = Object.keys(conIds);
+  if (!syms.length) {
+    console.log("[3/4] no conIds available (sectors skipped?), so no headlines. Nothing invented.");
+  } else {
+    console.log(`[3/4] headlines for ${syms.length} symbols (about ${Math.ceil(syms.length * NEWS_DELAY / 1000)}s) ...`);
+    const bySymbol = {};
+    const failed = [];
+    let reqId = 9200, total = 0, future = 0;
+    for (const sym of syms) {
+      const r = await fetchHeadlines(conn, { conId: conIds[sym], providerCodes, total: PER_SYMBOL, reqId: reqId++ });
+      await sleep(NEWS_DELAY);
+      if (!r.ok) { failed.push([sym, r.reason]); process.stdout.write("x"); continue; }
+      if (!r.headlines.length) { process.stdout.write("."); continue; }
+      bySymbol[sym] = r.headlines;
+      total += r.headlines.length;
+      future += r.headlines.filter((h) => h.at > Date.now() / 1000).length;
+      process.stdout.write("+");
+    }
+    process.stdout.write("\n");
+    saveNewsCache(path.join(OUT, "news-cache.json"), bySymbol, { providers: report.news?.providers ?? [] });
+    console.log(`  ${Object.keys(bySymbol).length}/${syms.length} symbols carry headlines, ${total} in total`);
+    if (failed.length) console.log(`  ${failed.length} request(s) failed: ${failed.slice(0, 5).map(([a, b]) => `${a} (${b})`).join(", ")}`);
+    // Absence is not evidence of a quiet day -- the free bundle covers what Briefing.com chose to
+    // write about. Recorded so the analyst's coverage can be read rather than assumed.
+    console.log(`  ${syms.length - Object.keys(bySymbol).length} symbol(s) returned nothing; that is COVERAGE, not calm.`);
+    if (future) console.log(`  WARNING: ${future} headline(s) dated in the FUTURE`);
+    console.log(`  wrote ${path.join(OUT, "news-cache.json")}`);
+    report.news.coverage = { symbols: syms.length, withHeadlines: Object.keys(bySymbol).length,
+                             headlines: total, failed: failed.length, future };
+  }
+  console.log("");
+}
+
+// ---- 4. intraday ladder --------------------------------------------------------------------------
 if (!has("skip-intraday")) {
-  console.log(`[3/3] intraday ladder on ${SYMBOL} ...`);
+  console.log(`[4/4] intraday ladder on ${SYMBOL} ...`);
   const LADDER = [
     { duration: "1 D", barSize: "1 min" },
     { duration: "2 D", barSize: "1 min" },
@@ -199,9 +231,4 @@ function detailsFor({ api, ib }, symbol, reqId, timeoutMs = 15000) {
     try { api.reqContractDetails(reqId, { symbol, secType: "STK", exchange: "SMART", currency: "USD" }); }
     catch (e) { finish({ ok: false, details: [], reason: String(e?.message ?? e) }); }
   });
-}
-
-async function resolveConId(conn, symbol, reqId) {
-  const d = await detailsFor(conn, symbol, reqId);
-  return d.ok ? (d.details[0]?.contract?.conId ?? null) : null;
 }

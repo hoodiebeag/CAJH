@@ -115,7 +115,7 @@ function mulberry32(a) {
  * decisions worth reviewing. Validation belongs upstream in the risk gate.
  */
 export function recordDecision({
-  batchId, at, context, proposals, gate, pool, seed, model, mode,
+  batchId, at, context, proposals, gate, pool, seed, model, mode, news,
 }, file = DEFAULT_JOURNAL) {
   const contextHash = hashContext(context ?? {});
   const record = {
@@ -129,6 +129,10 @@ export function recordDecision({
     // parsing it back out of `batchId`, and a derived string is not a schema. Older records predate
     // this field; `settle` counts them rather than guessing at their entry bar.
     asOfTime: Number.isFinite(context?.asOfTime) ? context.asOfTime : null,
+    // What the analyst could SEE, kept beside what it did. Without this, a batch decided on price
+    // alone and a batch decided with a full news panel are indistinguishable afterwards, and the
+    // one claim this design rests on cannot be tested against its own control population.
+    news: news ?? null,
     // The thesis is kept verbatim. It is the part that can be reviewed independently of P&L.
     proposals: (proposals ?? []).map((p) => ({
       symbol: p.symbol, action: p.action, targetPct: p.targetPct ?? null,

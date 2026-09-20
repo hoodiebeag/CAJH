@@ -157,6 +157,7 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
   // boundary here even though context.mjs filters again. Two filters, because a provider stamping
   // articles forward is the failure that would look most like skill.
   let news = {};
+  let newsMeta = { source: null, fetchedAt: null, ageHours: null, stale: null, droppedAtBoundary: 0 };
   const cache = loadNewsCache(flag("news", "data/news-cache.json"));
   if (cache) {
     const boundary = dates[asOf];
@@ -168,6 +169,13 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
       if (dropped.length) { dropCount[sym] = dropped.length; totalDropped += dropped.length; }
     }
     news = toNewsMap(filtered);
+    newsMeta = {
+      source: flag("news", "data/news-cache.json"),
+      fetchedAt: cache.fetchedAt ?? null,
+      ageHours: Number.isFinite(cache.ageMs) ? Math.round(cache.ageMs / 36000) / 100 : null,
+      stale: !!cache.stale,
+      droppedAtBoundary: totalDropped,
+    };
     const withNews = Object.values(news).filter((v) => v.length).length;
     console.log(`news cache: fetched ${cache.fetchedAt}, ${withNews} symbol(s) with headlines` +
                 `${cache.stale ? `  [STALE: ${(cache.ageMs / 3600000).toFixed(1)}h old]` : ""}`);
@@ -183,7 +191,7 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
   try {
     r = await runOnce({
       series, dates, asOf, client, mode, journalFile: JOURNAL, news,
-      nav: Number(flag("nav", 100000)), slate: Number(flag("slate", 40)),
+      nav: Number(flag("nav", 100000)), slate: Number(flag("slate", 40)), newsMeta,
     });
   } catch (err) {
     console.error(String(err.message));
