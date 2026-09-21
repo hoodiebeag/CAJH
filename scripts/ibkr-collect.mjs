@@ -104,12 +104,21 @@ if (!has("skip-sectors")) {
     const d = await detailsFor(conn, sym, reqId++);
     await sleep(DELAY);
     if (!d.ok) { unclassified.push([sym, d.reason]); continue; }
+
+    // THE conId IS CAPTURED BEFORE ANY CLASSIFICATION BRANCH, and that ordering is the whole point.
+    // It used to sit after the `continue`s below, so a name that resolved fine but carried no
+    // industry label got no conId and therefore no news. That silently excluded every ETF -- SPY,
+    // QQQ and the seven XL* sector funds -- from the news pass. They are not companies, so they
+    // have no industry; they emphatically do have news, and market-level commentary is the macro
+    // backdrop the analyst is least able to infer from price. "Can I identify this instrument" and
+    // "does this instrument have a sector" are different questions and must not share a branch.
+    const cid = d.details[0]?.contract?.conId;
+    if (Number.isFinite(cid)) conIds[sym] = cid;      // already paid for; the news pass reuses it
+
     const labels = [...new Set(d.details.map((x) => x?.industry).filter((v) => typeof v === "string" && v.trim()))];
     if (!labels.length) { unclassified.push([sym, "no industry field"]); continue; }
     if (labels.length > 1) { ambiguous.push([sym, labels]); continue; }
     sectors[sym] = labels[0].trim();
-    const cid = d.details[0]?.contract?.conId;
-    if (Number.isFinite(cid)) conIds[sym] = cid;      // already paid for; the news pass reuses it
   }
   // IBKR's `industry` is IBKR's taxonomy, NOT GICS. It is recorded as its own scheme rather than
   // crosswalked -- see analyst/sector-map.mjs for why a hand-written crosswalk is refused.
@@ -163,8 +172,17 @@ if (!has("skip-news") && providerCodes) {
     console.log(`  ${syms.length - Object.keys(bySymbol).length} symbol(s) returned nothing; that is COVERAGE, not calm.`);
     if (future) console.log(`  WARNING: ${future} headline(s) dated in the FUTURE`);
     console.log(`  wrote ${path.join(OUT, "news-cache.json")}`);
+    // atCap matters: if most symbols return exactly PER_SYMBOL headlines then the cap is binding
+    // and coverage is being limited by this script, not by the provider. That is a different fact
+    // from "the feed is thin" and leads somewhere different.
+    const atCap = Object.values(bySymbol).filter((h) => h.length >= PER_SYMBOL).length;
     report.news.coverage = { symbols: syms.length, withHeadlines: Object.keys(bySymbol).length,
-                             headlines: total, failed: failed.length, future };
+                             headlines: total, failed: failed.length, future,
+                             perSymbolCap: PER_SYMBOL, atCap };
+    if (atCap) {
+      console.log(`  ${atCap} symbol(s) hit the ${PER_SYMBOL}-headline cap — more news exists than was pulled`);
+      console.log(`  (raise it with --per-symbol N; the context is a budget, so this is a tradeoff)`);
+    }
   }
   console.log("");
 }
