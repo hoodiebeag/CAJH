@@ -23,7 +23,7 @@
  * THIS FILE CANNOT PLACE AN ORDER. It composes modules none of which can reach a venue.
  *
  * Usage:
- *   node analyst-run.mjs dry-run [--asOf N] [--slate 40] [--journal FILE] [--stub]
+ *   node analyst-run.mjs dry-run [--asOf N] [--slate 300] [--journal FILE] [--stub]
  *   node analyst-run.mjs paper   [--journal FILE]
  *   node analyst-run.mjs score   [--journal FILE] [--mode paper|dry-run|anonymised]
  */
@@ -191,7 +191,7 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
   try {
     r = await runOnce({
       series, dates, asOf, client, mode, journalFile: JOURNAL, news,
-      nav: Number(flag("nav", 100000)), slate: Number(flag("slate", 40)), newsMeta,
+      nav: Number(flag("nav", 100000)), slate: Number(flag("slate", 300)), newsMeta,
     });
   } catch (err) {
     console.error(String(err.message));
@@ -310,8 +310,8 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
 
 } else {
   console.log(`usage:
-  node analyst-run.mjs dry-run    [--asOf N] [--slate 40] [--stub] [--journal FILE]
-  node analyst-run.mjs anonymised [--asOf N] [--slate 40] [--journal FILE]
+  node analyst-run.mjs dry-run    [--asOf N] [--slate 300] [--stub] [--journal FILE]
+  node analyst-run.mjs anonymised [--asOf N] [--slate 300] [--journal FILE]
   node analyst-run.mjs settle     [--mode paper|dry-run] [--hold 5] [--journal FILE]
   node analyst-run.mjs paper   [--journal FILE]
   node analyst-run.mjs score   [--mode paper|dry-run|anonymised] [--journal FILE]

@@ -56,6 +56,13 @@ export const DEFAULT_INDICATORS = Object.freeze([
  *   positions     { SYM: {pct, avgPrice, sector, class} }
  *   nav, peakNav, dayStartNav
  *   slate         number                 how many non-held candidates to show
+ *
+ * THE SLATE IS WHERE THE DECISION ACTUALLY GETS MADE, so its size is a policy choice rather than a
+ * performance knob. Whatever the universe holds, the analyst only ever sees the slate: a wider
+ * universe behind a narrow slate means the RANKER chooses and the analyst ratifies, which is the
+ * mechanical rule this project pivoted away from. Set to 300 by the owner on 2026-09-21 against a
+ * ~1,000-name universe, at a measured ~365 bytes per candidate (~27K tokens). Held positions are
+ * always shown on top of that, so the real count can exceed `slate`.
  *   rankBy        string                 which indicator orders the slate
  *   indicators    string[]
  *   anonymise     boolean
@@ -64,7 +71,7 @@ export const DEFAULT_INDICATORS = Object.freeze([
  */
 export function buildContext({
   series, asOf, dates, positions = {}, nav = null, peakNav = null, dayStartNav = null,
-  slate = 40, rankBy = "momentum", indicators = DEFAULT_INDICATORS,
+  slate = 300, rankBy = "momentum", indicators = DEFAULT_INDICATORS,
   anonymise = false, news = {}, sectors = null,
 } = {}) {
   if (!Number.isInteger(asOf) || asOf < 0) throw new Error("context: asOf must be a non-negative integer index");
@@ -191,7 +198,13 @@ export function buildContext({
       rankedBy: rankBy,
       // Recorded so the analyst knows the shape of what it is NOT seeing.
       omitted: rows.length - shown.length,
-      note: `held positions always shown; remaining slate is the top and bottom ${half} by ${rankBy}`,
+      // The note tells the analyst the shape of what it is NOT seeing, so it has to be true when
+      // it is seeing everything. With a slate wider than the universe the slices simply return the
+      // whole cross-section, and telling the model it was handed "the top and bottom 150" of 127
+      // names invites it to reason about a selection that was never applied.
+      note: shown.length >= rows.length
+        ? `the entire cross-section is shown; nothing was ranked away`
+        : `held positions always shown; remaining slate is the top and bottom ${half} by ${rankBy}`,
     },
     market: marketSummary(rows),
     candidates: shown,

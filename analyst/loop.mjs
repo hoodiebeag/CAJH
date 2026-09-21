@@ -113,7 +113,7 @@ export async function runOnce({
   series, dates, asOf, client,
   positions = {}, nav = null, peakNav = null, dayStartNav = null,
   instruments = null, sectors = null, news = {}, newsMeta = null,
-  mode = MODE.DRY_RUN, model, limits = {}, slate = 40, rankBy = "momentum",
+  mode = MODE.DRY_RUN, model, limits = {}, slate = 300, rankBy = "momentum",
   shortingPermitted = false, journalFile = DEFAULT_JOURNAL, now = Date.now(),
   batchId = null, seed = null,
 } = {}) {

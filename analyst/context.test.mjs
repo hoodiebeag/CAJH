@@ -206,3 +206,19 @@ test("anonymiseContext strips the epoch decision bar as well as the formatted da
   assert.ok(!JSON.stringify(anon).includes(String(p.dates[150])),
     "the decision epoch must not survive anywhere in an anonymised context");
 });
+
+test("a slate wider than the universe says so instead of claiming a selection", () => {
+  // Sized like the other tests in this file: below the indicator lookback nothing is rankable and
+  // the slate is empty for reasons that have nothing to do with its width.
+  const { series, dates } = panel(["AAA", "BBB", "CCC", "DDD"]);
+  const wide = buildContext({ series, dates, asOf: 300, slate: 300 });
+  assert.equal(wide.universe.shown, wide.universe.total, "everything fits, so everything is shown");
+  assert.equal(wide.universe.omitted, 0);
+  assert.match(wide.universe.note, /entire cross-section/);
+  assert.ok(!/top and bottom/.test(wide.universe.note),
+    "describing a ranking that was never applied invites the model to reason about it");
+
+  const narrow = buildContext({ series, dates, asOf: 300, slate: 2 });
+  assert.ok(narrow.universe.omitted > 0);
+  assert.match(narrow.universe.note, /top and bottom/);
+});
