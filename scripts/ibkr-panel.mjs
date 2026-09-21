@@ -44,7 +44,10 @@
  *   --duration "1 Y"     how much history to request
  *   --out ibkr-bundle    destination root (refuses to be pointed at a research bundle)
  *   --delay MS           between requests, default 1200 (TWS paces historical data strictly)
- *   --symbols FILE       one ticker per line; otherwise the symbol list is taken from a bundle
+ *   --symbols FILE       one ticker per line; # comments allowed; otherwise taken from a bundle
+ *   --skip-fresh         skip symbols already current (resumes an interrupted pull)
+ *   --fresh-days N       what "current" means for --skip-fresh, default 2
+ *   --write-resolved F   where to write the IBKR-verified universe (default <out>/universe-resolved.txt)
  *   --symbols-from ROOT  bundle to take the symbol list from, default sp500-bundle
  *
  * THE UNIVERSE IS AN ARGUMENT BECAUSE IT IS THE BINDING CONSTRAINT. sp500-bundle is 128 large-cap
@@ -85,8 +88,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SYMFILE = flag("symbols", null);
 let symbols, symSource;
 if (SYMFILE) {
-  symbols = [...new Set(fs.readFileSync(SYMFILE, "utf8").split(/[\s,]+/)
-    .map((x) => x.trim().toUpperCase()).filter((x) => /^[A-Z][A-Z.\-]{0,9}$/.test(x)))].sort();
+  // COMMENTS ARE STRIPPED PER LINE, BEFORE TOKENISING, and that is not a nicety. The ticker
+  // pattern accepts any 1-10 letter word, so "# Semis and memory" contributed SEMIS, AND and
+  // MEMORY as tickers -- three symbols nobody asked for, arriving as unresolvable names in a
+  // report that also lists genuine delistings. A universe file is the natural place for a human
+  // to write headings, so the file format has to survive one.
+  symbols = [...new Set(
+    fs.readFileSync(SYMFILE, "utf8")
+      .split("\n")
+      .map((line) => line.split("#")[0])
+      .join(" ")
+      .split(/[\s,]+/)
+      .map((x) => x.trim().toUpperCase())
+      .filter((x) => /^[A-Z][A-Z.\-]{0,9}$/.test(x)),
+  )].sort();
   symSource = `${SYMFILE} (${symbols.length} tickers)`;
 } else {
   symbols = availablePairs(1440, SRC);
@@ -108,9 +123,30 @@ console.log(`(about ${Math.ceil(symbols.length * DELAY / 1000 / 60)} min at ${DE
 const dir = path.join(OUT, "1440");
 fs.mkdirSync(dir, { recursive: true });
 
-const ok = [], failed = [];
+// RESUMABILITY, because a large universe cannot be pulled in one sitting. IBKR paces historical
+// data requests hard, so a thousand-name pull runs for hours and WILL be interrupted -- by a
+// throttle, a disconnect, or somebody closing the laptop. --skip-fresh skips any symbol whose CSV
+// already reaches within `--fresh-days` of the newest bar seen so far, so re-running continues
+// rather than starting over. It also makes the daily refresh cheap.
+const SKIP_FRESH = args.includes("--skip-fresh");
+const FRESH_DAYS = Number(flag("fresh-days", 2));
+const freshCutoff = Math.floor(Date.now() / 1000) - FRESH_DAYS * 86400;
+
+const ok = [], failed = [], skipped = [];
 let reqId = 7000;
 for (const sym of symbols) {
+  if (SKIP_FRESH) {
+    const f = path.join(dir, `${sym}.csv`);
+    if (fs.existsSync(f)) {
+      const lines = fs.readFileSync(f, "utf8").trim().split("\n");
+      const last = Number(lines.at(-1)?.split(",")[0]);
+      if (Number.isFinite(last) && last >= freshCutoff) {
+        skipped.push({ sym, bars: lines.length - 1, last });
+        process.stdout.write("=");
+        continue;
+      }
+    }
+  }
   const r = await fetchBars(conn, { symbol: sym, secType: "STK", exchange: "SMART", currency: "USD" },
                             DURATION, conn.ib.WhatToShow.TRADES, reqId++, "1 day");
   await sleep(DELAY);
@@ -143,7 +179,8 @@ const newest = lasts.at(-1) ?? 0;
 const iso = (t) => new Date(t * 1000).toISOString().slice(0, 10);
 const behind = ok.filter((x) => x.last < newest);
 
-console.log(`\n${ok.length}/${symbols.length} symbols written to ${dir}`);
+console.log(`\n${ok.length}/${symbols.length} symbols written to ${dir}` +
+            `${skipped.length ? `, ${skipped.length} already current and skipped` : ""}`);
 if (ok.length) {
   console.log(`newest bar across the panel: ${iso(newest)}`);
   console.log(`bars per symbol: min ${Math.min(...ok.map((x) => x.bars))}, max ${Math.max(...ok.map((x) => x.bars))}`);
@@ -168,5 +205,19 @@ fs.writeFileSync(path.join(OUT, "PROVENANCE.json"), JSON.stringify({
   newestBar: newest ? iso(newest) : null,
 }, null, 2) + "\n");
 console.log(`\nwrote ${path.join(OUT, "PROVENANCE.json")}`);
+
+// THE FIRST RUN IS THE CLEANING PASS. A hand-written universe carries names that were acquired,
+// renamed or delisted, and no list assembled away from the broker can know which. IBKR is the
+// authority, so the symbols it actually resolved are written back out as a verified universe --
+// use that file from then on and the failures stop repeating every run.
+if (SYMFILE) {
+  const resolvedFile = flag("write-resolved", path.join(OUT, "universe-resolved.txt"));
+  const live = [...ok.map((x) => x.sym), ...skipped.map((x) => x.sym)].sort();
+  fs.writeFileSync(resolvedFile,
+    `# Resolved against IBKR ${new Date().toISOString().slice(0, 10)} from ${SYMFILE}\n` +
+    `# ${live.length} of ${symbols.length} resolved; ${failed.length} did not and are left out.\n` +
+    live.join("\n") + "\n");
+  console.log(`wrote ${resolvedFile} — ${live.length} verified tickers. Use this file from now on.`);
+}
 console.log("\nCommit and push so the agent can decide on it:");
 console.log(`  git add ${OUT}/ && git commit -m "panel refresh ${newest ? iso(newest) : ""}" && git push`);

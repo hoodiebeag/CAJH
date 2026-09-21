@@ -1,0 +1,122 @@
+# CAJH candidate universe — broad, deliberately over-inclusive.
+#
+# UNVERIFIED BY CONSTRUCTION. This list was assembled from knowledge, not from a broker, so it
+# certainly contains names that have been acquired, renamed or delisted. That is not a defect to
+# apologise for — it is why scripts/ibkr-panel.mjs reports every symbol it cannot resolve and
+# writes the ones it can to universe-resolved.txt. IBKR is the authority; the first pull is the
+# cleaning pass. Use the resolved file afterwards.
+#
+# Comments are stripped per line. Blank lines are fine.
+
+# ---- mega / large-cap technology ----------------------------------------------------------------
+AAPL MSFT GOOGL GOOG AMZN META NVDA TSLA AVGO ORCL CRM ADBE IBM ACN TXN QCOM NOW INTU CSCO
+AMD INTC MU ADI AMAT LRCX KLAC SNPS CDNS PANW CRWD FTNT ANET DELL HPQ HPE NTAP STX WDC SMCI
+
+# ---- semiconductors, broad and deep (the cycle the owner named) ---------------------------------
+MRVL ON MCHP SWKS QRVO TER ENTG MPWR ALGM AMKR WOLF LSCC POWI SLAB SITM RMBS CRUS DIOD
+ACLS UCTT ICHR AEIS ONTO CAMT NVMI KLIC AOSL FORM COHU AXTI NVEC SGH PI SYNA VSH
+
+# ---- software, internet, platforms ---------------------------------------------------------------
+UBER LYFT DASH ABNB BKNG EXPE PINS SNAP RBLX U TTD APP DUOL COIN HOOD PYPL SHOP SPOT
+WDAY TEAM ZS OKTA DDOG NET SNOW MDB HUBS ZM DOCU TWLO ESTC CFLT GTLB PATH AI BILL TOST
+PCTY PAYC ADP PAYX SAP INFY WIT CTSH EPAM IT DXC VEEV TYL MANH APPF SPSC QLYS TENB VRNS
+S RPD CYBR OSPN SAIC CACI LDOS BAH KBR PSN
+
+# ---- communication services ----------------------------------------------------------------------
+NFLX DIS CMCSA T VZ TMUS CHTR WBD PARA FOX FOXA NYT NWSA SIRI EA TTWO MTCH BMBL IAC LYV
+
+# ---- pharma and large biotech --------------------------------------------------------------------
+JNJ PFE MRK ABBV LLY BMY AMGN GILD BIIB REGN VRTX MRNA BNTX NVAX ZTS VTRS OGN
+EXEL HALO INCY JAZZ NBIX ALKS UTHR BPMC DNLI IOVA RCKT ABCL RXRX SDGR
+
+# ---- small and mid-cap biotech — where the asymmetric moves live ---------------------------------
+ALNY BMRN IONS SRPT RARE FOLD ARWR NTLA CRSP EDIT BEAM VERV PRME SANA ALLO FATE CRBU
+KYMR NUVL RVMD ORKA DAWN ERAS VERA KRYS APLS ARQT AXSM SAGE ACAD SUPN HRMY PTCT AGIO
+MIRM MDGL VKTX AKRO ETNB TERN LXRX CORT PCVX VXRT OCGN INO SRRK ITCI TARS EYPT
+ARDX ANAB APGE ATAI AURA AVXL CELC CGON CLDX CRNX CYTK DYN FDMT GERN IDYA IMVT INSM
+JANX KURA LEGN MLYS MRUS NRIX NVAX OABI OLMA PHAT PRTA PTGX RAPT RCUS RLAY RNA RYTM
+SNDX SWTX SYRE TGTX TVTX TWST VCEL VIR VRDN XENE ZLAB ZNTL
+
+# ---- diagnostics, tools, medical devices ----------------------------------------------------------
+TMO DHR A ILMN PACB NVTA MYGN NTRA EXAS GH VCYT CDNA FLGT TXG QGEN WAT MTD BRKR RVTY
+ABT MDT SYK BSX EW ISRG ZBH BAX BDX HOLX RMD DXCM PODD TFX ICUI XRAY ALGN GMED OFIX
+TMDX PEN NVCR INSP IRTC ANGO ATRC CNMD LMAT AXNX SILK
+
+# ---- healthcare services and payers ----------------------------------------------------------------
+UNH ELV CI CVS HUM CNC MOH HCA THC UHS EHC ACHC ENSG ADUS AMED CHE PNTG DVA MCK COR CAH
+
+# ---- banks, brokers, exchanges, payments -----------------------------------------------------------
+JPM BAC WFC C GS MS USB PNC TFC COF SCHW BLK BX KKR APO ARES CG OWL TPG AMP RJF SF LPLA IBKR
+V MA AXP DFS SYF FIS GPN JKHY BR MCO SPGI MSCI ICE CME NDAQ CBOE TW MKTX VIRT
+MTB FITB HBAN RF KEY CFG ZION CMA WAL PB SNV FHN ONB UMBF BOKF WTFC CBSH FFIN PNFP SSB
+BPOP EWBC CATY HOPE COLB GBCI HOMB UBSI FIBK INDB WSFS AUB TOWN SFNC RNST
+
+# ---- insurance -------------------------------------------------------------------------------------
+BRK.B PGR ALL TRV CB AIG MET PRU AFL LNC PFG GL UNM CINF WRB RLI AIZ ACGL RNR EG HIG
+KNSL PLMR SIGI THG AFG ORI MCY KMPR ERIE
+
+# ---- consumer discretionary and retail ---------------------------------------------------------------
+HD LOW TJX ROST BURL DG DLTR TGT WMT COST BJ KR ACI SFM CASY
+MCD SBUX CMG YUM QSR DPZ WING SHAK CAVA DRI TXRH EAT BLMN CAKE PZZA JACK WEN
+NKE LULU DECK ONON CROX SKX VFC RL PVH GPS ANF AEO URBN BOOT DKS ASO FL JWN M KSS DDS
+GM F RIVN LCID STLA HMC TM RACE LEA APTV BWA ALV MGA GT GPC AZO ORLY AAP LKQ KMX CVNA CARG
+MAR HLT H WH CHH RCL CCL NCLH LVS WYNN MGM CZR PENN DKNG BYD CHDN
+
+# ---- consumer staples ---------------------------------------------------------------------------------
+PG KO PEP PM MO STZ TAP SAM KDP MNST CELH KHC GIS K CPB CAG SJM HRL TSN HSY MKC CHD CL KMB
+EL COTY ULTA ADM BG INGR DAR LW POST FLO THS
+
+# ---- aerospace, defence, industrials ---------------------------------------------------------------------
+BA LMT RTX NOC GD LHX TDG HWM TXT HEI CW
+CAT DE CMI PCAR EMR ETN PH ROK DOV ITW MMM HON GE IR XYL FLS PNR AOS GGG NDSN RRX AME FTV
+TT CARR JCI LII WSO WM RSG WCN CWST CLH
+UPS FDX UNP CSX NSC ODFL SAIA XPO CHRW EXPD JBHT KNX WERN SNDR HUBG LSTR MATX ZIM
+DAL UAL AAL LUV ALK JBLU
+
+# ---- construction, building products, homebuilders -------------------------------------------------------
+MAS FBIN AWI TREX AZEK BLDR BLD IBP OC MLM VMC EXP
+DHI LEN PHM NVR TOL KBH MTH TMHC MHO CCS GRBK LGIH
+
+# ---- energy: producers, services, midstream, refining ------------------------------------------------------
+XOM CVX COP EOG OXY DVN FANG APA CTRA MTDR SM MUR CHRD PR CIVI CRC GPOR AR RRC SWN EQT CNX
+SLB HAL BKR NOV FTI WFRD CHX LBRT PTEN HP NBR RIG VAL DO TDW
+KMI WMB OKE TRGP LNG ET EPD MPLX PAA ENB TRP PBA
+MPC VLO PSX DINO DK PARR CVI
+
+# ---- uranium, coal, and the power-demand complex -------------------------------------------------------------
+CCJ UEC UUUU DNN NXE LEU BTU AMR HCC ARLP
+
+# ---- chemicals and materials -----------------------------------------------------------------------------------
+LIN APD SHW PPG RPM AXTA ECL DD DOW LYB EMN CE CC HUN OLN WLK ASH FUL ALB SQM MOS CF NTR FMC
+NUE STLD CLF X RS CMC ATI CRS MP FCX SCCO TECK AA CENX KALU
+HL PAAS AG CDE EXK FSM GOLD NEM AEM KGC AU GFI HMY SSRM EGO BTG OR RGLD WPM FNV
+IP PKG SW SON GPK BERY SEE AMCR CCK BALL ATR SLGN
+
+# ---- utilities and independent power -------------------------------------------------------------------------------
+NEE DUK SO D AEP EXC XEL SRE PEG ED WEC ES DTE AEE CMS CNP NI LNT EVRG PNW POR AVA BKH NWE
+OGE IDA ALE MGEE VST CEG NRG TLN AES BEP BEPC CWEN ORA
+RUN NOVA FSLR ENPH ARRY SHLS NXT CSIQ JKS
+
+# ---- REITs ---------------------------------------------------------------------------------------------------------
+PLD AMT CCI EQIX DLR SBAC PSA EXR CUBE LSI NSA
+O SPG SKT MAC KIM REG FRT BRX AKR PECO IVT
+AVB EQR MAA CPT ESS UDR INVH AMH ELS SUI
+BXP VNO SLG KRC HIW DEI CUZ HPP JBGS
+WELL VTR OHI CTRE SBRA DOC ARE IRM WY PCH RYN LAMR
+
+# ---- crypto-adjacent equities (price behaviour unlike anything else here) -----------------------------------------------
+COIN MSTR MARA RIOT CLSK HUT BITF CIFR WULF IREN HIVE BTBT BTDR
+
+# ---- broad-market and factor ETFs ---------------------------------------------------------------------------------------
+SPY VOO IVV VTI QQQ DIA IWM IWB IWV VTV VUG VB VO MDY RSP SPLV SPHB USMV QUAL MTUM VLUE
+
+# ---- sector and industry ETFs -------------------------------------------------------------------------------------------
+XLK XLF XLV XLE XLI XLY XLP XLU XLB XLRE XLC SMH SOXX IGV IHI IBB XBI XOP OIH XME XRT ITB XHB
+KRE KBE IAI KIE PAVE GDX GDXJ SIL URA LIT REMX COPX TAN ICLN JETS HACK CIBR SKYY BOTZ ARKK ARKG
+
+# ---- international ---------------------------------------------------------------------------------------------------------
+EFA IEFA VEA EEM IEMG VWO ACWI VXUS EWJ EWG EWU EWC EWA EWZ EWW EWY EWT MCHI FXI KWEB INDA EPI VGK VPL
+
+# ---- rates, credit, and commodities: the macro backdrop the analyst can actually see -----------------------------------------
+AGG BND TLT IEF SHY IEI GOVT LQD HYG JNK BKLN EMB TIP MUB SHV BIL
+GLD IAU SLV PPLT PALL USO UNG DBC DBA CORN WEAT UGA
