@@ -1,64 +1,79 @@
 # Runs the protected-logic check where it cannot be skipped.
 #
-# WHY. The check was built to run from a local pre-commit hook, and a local hook lives
-# in .git/, which is not version controlled. A fresh clone, a new container or a cloud
-# session therefore starts with no hook and no sign that anything is missing. Measured
-# on 2026-09-24: one such container had an empty hooks directory and every commit made
-# in it went unchecked for weeks. A guard that silently vanishes when the repository is
-# copied is not a guard.
+# WHY. The check was built to run from a local pre-commit hook, and a local hook lives in
+# .git/, which is not version controlled. A fresh clone, a new container or a cloud session
+# starts with no hook and no sign anything is missing. Measured 2026-09-24: one such container
+# had an empty hooks directory and every commit made in it went unchecked for weeks. A guard
+# that vanishes when the repository is copied is not a guard.
 #
-# This does not replace the local hook, which is worth having because it fails in
-# seconds instead of after a push. It replaces trusting the local hook.
+# PER COMMIT, NOT PER BRANCH -- and this is the whole design, learned by getting it wrong.
+# The first version diffed the cumulative range. On a pull request that means the entire branch
+# against its base, which includes every prose mention of the protected functions added since
+# the branch started: design documents, a protocol, a broker interface note. None of them touch
+# the logic; all of them discuss it. That diff never shrinks, so the check would have been
+# permanently red, and a check that is always red gets ignored exactly like one that never runs.
 #
-# THE SCRIPT IS RUN UNMODIFIED, on purpose. It reads the STAGED diff, so rather than
-# teach it a second way to find its input -- and risk the two drifting, or the CI path
-# quietly becoming weaker than the local one -- the workflow stages the range under
-# review with `git reset --soft` and lets the script see exactly what it always sees.
-# The safety logic has one implementation and both callers exercise it.
+# Checking each commit on its own reproduces the local hook's semantics precisely: the same
+# commit, the same diff, the same verdict, whether it was made on a laptop or in a container.
 #
-# THERE IS DELIBERATELY NO OVERRIDE HERE. The local check has a single-use,
-# human-created, ten-minute marker for the rare legitimate case. That marker lives in
-# .git/ and cannot exist in a fresh CI checkout, which is the correct outcome: adding a
-# CI bypass -- a label, a magic commit trailer -- would recreate exactly the
-# skippable-guard problem this workflow exists to close. If a change genuinely must
-# touch the protected code, a human with merge rights approves it through branch
-# protection, which is a decision made by a person outside this check rather than a
-# flag inside it.
+# PUSH ONLY. Every commit reaching a pull request was pushed first, so push coverage is complete
+# for this repository's workflow. Adding pull_request as well would re-examine the branch's whole
+# history on every update, which is the failure described above.
+#
+# THE SCRIPT RUNS UNMODIFIED. It reads the staged diff, so rather than teach it a second way to
+# find its input -- and risk the CI path drifting from the local one, or quietly becoming weaker
+# -- each commit is staged with `git reset --soft` and the script sees what it always sees. One
+# implementation, two callers. This also sidesteps a catch-22: the script contains the pattern
+# literals, so editing it trips its own check.
+#
+# NO OVERRIDE HERE, DELIBERATELY. The local check has a single-use, human-created, ten-minute
+# marker for the rare legitimate case. It lives in .git/ and cannot exist in a fresh checkout,
+# which is correct: a CI bypass -- a label, a magic trailer -- would recreate the skippable-guard
+# problem this exists to close. A change that genuinely must touch the protected code gets a
+# human with merge rights approving it through branch protection: a person outside the check,
+# not a flag inside it.
 name: protected-logic
 
-on:
-  push:
-  pull_request:
+on: push
 
 jobs:
-  check:
+  protected-logic:
+    name: protected-logic
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0        # the check needs history to diff against a base
+          fetch-depth: 0
 
-      - name: Work out what to diff against
-        id: base
+      - name: Check each pushed commit on its own
         run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.event.pull_request.base.sha }}"
+          set -uo pipefail
+          BEFORE="${{ github.event.before }}"
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            # A new branch, or a force-push whose old tip is gone. Fall back to the commits this
+            # branch has that the default branch does not, rather than to the whole of history.
+            git fetch --no-tags --quiet origin "${{ github.event.repository.default_branch }}" || true
+            RANGE="$(git merge-base HEAD FETCH_HEAD 2>/dev/null || echo '')..HEAD"
+            [ "$RANGE" = "..HEAD" ] && RANGE="HEAD~1..HEAD"
           else
-            BASE="${{ github.event.before }}"
-            # A brand-new branch reports an all-zero "before". Falling back to the root
-            # commit would present the entire repository as one diff and flag every
-            # historical mention, so compare against the default branch instead.
-            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
-              git fetch --no-tags origin "${{ github.event.repository.default_branch }}" || true
-              BASE="$(git merge-base HEAD FETCH_HEAD 2>/dev/null || git rev-list --max-parents=0 HEAD | tail -1)"
-            fi
+            RANGE="$BEFORE..HEAD"
           fi
-          echo "base=$BASE" >> "$GITHUB_OUTPUT"
-          echo "diffing against $BASE"
+          echo "checking commits in $RANGE"
 
-      - name: Stage the range so the check sees its usual input
-        run: git reset --soft "${{ steps.base.outputs.base }}"
-
-      - name: Protected-logic check
-        run: node scripts/check-protected-logic.cjs
+          FAILED=0
+          for SHA in $(git rev-list --reverse "$RANGE"); do
+            if ! git rev-parse --verify --quiet "$SHA^" >/dev/null; then
+              echo "skipping root commit $SHA"
+              continue
+            fi
+            git checkout --quiet --detach "$SHA"
+            git reset --quiet --soft "$SHA^"
+            if node scripts/check-protected-logic.cjs; then
+              echo "ok   $(git log -1 --format='%h %s' "$SHA")"
+            else
+              echo "FAIL $(git log -1 --format='%h %s' "$SHA")"
+              FAILED=1
+            fi
+          done
+          exit "$FAILED"
