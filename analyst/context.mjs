@@ -32,7 +32,7 @@
  * They are not evidence of edge and the mode says so in the context it emits.
  */
 
-import { SIGNALS } from "../factors.mjs";
+import { SIGNALS } from "../indicators.mjs";
 
 /** The indicators the analyst gets per name. A subset of factors.mjs, chosen for spread not count. */
 export const DEFAULT_INDICATORS = Object.freeze([
