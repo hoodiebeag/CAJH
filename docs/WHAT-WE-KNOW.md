@@ -110,3 +110,24 @@ seven times in seven days: **the suite being green is not evidence the path work
 found — an unfinished hold recorded as a completed 0% trade, a freshness guard passing a panel
 dated four days in the future, a mode that was documented and unreachable — was found by running
 the path, not by testing it.
+
+## Still open, and nobody has answered them
+
+1. **MR04 is VOID, not closed.** Its actual claim — that sector-neutralising a residual adds
+   something — was never tested, because the run stopped at its own control. Re-running needs an
+   amended pre-registration that separates the factor set from the ranking set and does not carry
+   `C_EXPECTED_NET` over. Writing that amendment after seeing the numbers is a real hazard and
+   must be labelled as one.
+2. **The standing minimum does not fit the goal.** 60 days and 50 trades was written for a
+   diversified book. The owner is aiming at a skewed payoff — 5 of 128 names had a single day
+   above +50% in 3.65 years — and no p-value on 50 outcomes of that shape means anything. What
+   replaces it is genuinely open. Naming a number before the forward record exists would be
+   inventing a gate to pass.
+3. **The drawdown brake versus the thesis.** `DEFAULT_LIMITS` carries a 15% portfolio drawdown
+   halt. A thesis that says "hold a beaten-down name through a nine-month turn" sits at a loss for
+   months, and that brake is the mechanism most likely to close exactly the position the thesis
+   depends on. Loosening a risk limit so a thesis survives is how a risk layer stops being one;
+   tightening the thesis to fit may be the right answer instead. Owner's call, with the forward
+   record in hand.
+4. **The `C:` field** in IBKR headlines is parsed and deliberately not interpreted. Three samples
+   above 0.77 is not a basis for telling an analyst what a number means.
