@@ -9,22 +9,26 @@ Written for whoever picks this up next, including me.
 data until it is pushed.
 
 ```
-cd CAJH
-git pull                                   # picks up the ETF conId fix below
-node scripts/ibkr-collect.mjs              # re-run: the last run missed ETF news
-git add -f data/ && git commit -m "collection" && git push
+cd CAJH && bash scripts/refresh.sh
 ```
+
+That is pull, collect, pull the panel, commit and push in one command, and it is safe to re-run.
+Stages if you want them separately: `refresh.sh collect` (~3 min) or `refresh.sh panel` (hours).
+
+The push is inside the command on purpose. This collection has been run twice on the owner's
+machine and reached this repository zero times — once the wrong file was sent, once it ran and was
+never pushed. The work was done both times; the last step is the one that gets dropped, and it is
+the only step that makes the data usable from anywhere else.
 
 The re-run matters. The previous run captured conIds only for symbols that carried an industry
 label, so SPY, QQQ and the seven XL* sector funds got no news — the market-level commentary an
 analyst is least able to infer from price. Fixed in `b643659`; the fix only takes effect on a
 fresh run.
 
-## Then the panel
+## The panel, if you run it separately
 
 ```
-node scripts/ibkr-panel.mjs --symbols universe/candidates.txt --skip-fresh
-git add ibkr-bundle/ && git commit -m "panel" && git push
+bash scripts/refresh.sh panel
 ```
 
 Expect hours, not minutes — IBKR paces historical data requests hard. `--skip-fresh` makes it
