@@ -34,6 +34,7 @@ import { runOnce, realisedOutcomes, settleOutcomes, sessionWeekdays, missedSessi
          sessionsAhead } from "./analyst/loop.mjs";
 import { loadNewsCache, toNewsMap, assertNotAfter } from "./analyst/news.mjs";
 import { scoreJournal, MODE, DEFAULT_JOURNAL } from "./analyst/journal.mjs";
+import { tier1 } from "./analyst/protocol.mjs";
 import { COST_MODELS } from "./costs.mjs";
 
 const argv = process.argv.slice(2);
@@ -47,6 +48,18 @@ const has = (name) => argv.includes(`--${name}`);
 const JOURNAL = flag("journal", DEFAULT_JOURNAL);
 const ROOT = flag("root", "sp500-bundle");
 const pct = (v) => (typeof v === "number" ? `${(v * 100).toFixed(2)}%` : "—");
+
+/** Soft-wrap prose for the terminal. The Tier-1 details are paragraphs, not labels. */
+const wrap = (text, width) => {
+  const out = [];
+  let line = "";
+  for (const word of String(text).split(/\s+/)) {
+    if (line && line.length + 1 + word.length > width) { out.push(line); line = word; }
+    else line = line ? `${line} ${word}` : word;
+  }
+  if (line) out.push(line);
+  return out;
+};
 
 /**
  * A stub client, for proving the wiring without a key or a network.
@@ -316,6 +329,34 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
     : `Standing minimum NOT met (needs 60 days and 50 trades; have ${s.spanDays}d and ${s.decisions}). ` +
       "No p-value is computed before then: with this few outcomes it would be noise with a decimal point.");
 
+} else if (cmd === "protocol") {
+  // The pre-registered Tier-1 criteria, computed rather than read. See analyst/protocol.mjs for
+  // why three of the ten report "manual" instead of a number.
+  const mode = flag("mode", MODE.PAPER);
+  const r = tier1(JOURNAL, { mode });
+  console.log(`journal ${JOURNAL}, mode "${r.mode}", ${r.batches} batch(es)`);
+  console.log("docs/PAPER-PROTOCOL.md Tier-1 — pre-registered 2026-09-24, before any paper decision\n");
+  const mark = { pass: "PASS", fail: "FAIL", manual: "MANUAL" };
+  for (const c of r.criteria) {
+    const stop = c.stops ? "  [STOPS THE RUN]" : "";
+    console.log(`${String(c.n).padStart(2)}. ${mark[c.status].padEnd(6)} ${c.name}${stop}`);
+    for (const line of wrap(c.detail, 92)) console.log(`      ${line}`);
+    if (c.n === 9 && c.numbers.sample?.length) {
+      console.log("      first few, for the spot-check:");
+      for (const t of c.numbers.sample.slice(0, 3)) console.log(`        ${t.symbol}: ${t.thesis}`);
+    }
+    console.log("");
+  }
+  if (r.verdict === "STOP") {
+    console.log(`STOP: ${r.stops.map((c) => c.n).join(", ")} failed. These are integrity failures, not`);
+    console.log("performance ones; continuing past them produces a record that means nothing.");
+  } else if (r.verdict === "FAIL") {
+    console.log("Criteria failed, none of them stopping ones. Reported and judged, per the protocol.");
+  } else {
+    console.log("No computable criterion failed. The manual ones are still owed a human.");
+  }
+  console.log("\nAnd none of this is evidence of edge. See the table in docs/PAPER-PROTOCOL.md.");
+
 } else {
   console.log(`usage:
   node analyst-run.mjs dry-run    [--asOf N] [--slate 300] [--stub] [--journal FILE]
@@ -323,6 +364,7 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
   node analyst-run.mjs settle     [--mode paper|dry-run] [--hold 5] [--journal FILE]
   node analyst-run.mjs paper   [--journal FILE]
   node analyst-run.mjs score   [--mode paper|dry-run|anonymised] [--journal FILE]
+  node analyst-run.mjs protocol   [--mode paper] [--journal FILE]
 
 dry-run exercises the wiring on a historical date and is NOT evidence.
 anonymised probes reasoning with identities stripped and is NOT evidence.

@@ -27,6 +27,7 @@ Then, anywhere:
 node analyst-run.mjs paper        # one forward decision. The only mode that is evidence.
 node analyst-run.mjs settle       # score decisions whose holding period has finished
 node analyst-run.mjs score        # the readout: the analyst beside its own random control
+node analyst-run.mjs protocol     # the ten pre-registered Tier-1 criteria, computed
 node analyst-run.mjs dry-run --stub   # exercise the wiring on a past date. NOT evidence.
 node analyst-run.mjs anonymised       # reasoning probe, identities stripped. NOT evidence.
 ```

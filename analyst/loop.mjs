@@ -215,7 +215,7 @@ export async function runOnce({
       batchId: batchId ?? defaultBatchId(asOfTime, mode),
       at: new Date(now).toISOString(), context, proposals: [],
       gate: { allowed: [], rejected: [], exposure: null },
-      pool: [], seed, model: model ?? null, mode,
+      pool: [], seed, model: model ?? null, mode, failure: decision.failure,
     }, journalFile);
     return { context, contextIssues, decision, gate: null, record, skipped: { reason: decision.failure.code, detail: decision.failure.detail } };
   }

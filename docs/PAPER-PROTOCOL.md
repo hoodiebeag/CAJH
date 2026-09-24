@@ -64,6 +64,11 @@ the pre-registered pass criteria.
 | 9 | Theses are reviewable by a human | spot-check 20 theses: each states a reason that could be wrong |
 | 10 | Nothing halts for a reason we did not anticipate | any halt or brake has an explanation in the journal |
 
+`node analyst-run.mjs protocol` computes this table from the journal. Seven of the ten are answered
+from the record; 6, 9 and 10 report MANUAL rather than substituting a proxy, because a check that
+decided whether the gate was right would just be the gate again and would agree with itself.
+Criterion 2's pass has a narrower meaning than it looks, and the readout says so in place.
+
 **A failure in 2, 3, 6 or 7 stops the run.** Those are integrity failures, not performance ones,
 and continuing past them produces a record that means nothing. The others are reported and judged.
 

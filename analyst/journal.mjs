@@ -130,7 +130,7 @@ function mulberry32(a) {
  * decisions worth reviewing. Validation belongs upstream in the risk gate.
  */
 export function recordDecision({
-  batchId, at, context, proposals, gate, pool, seed, model, mode, news, newsSymbols,
+  batchId, at, context, proposals, gate, pool, seed, model, mode, news, newsSymbols, failure = null,
 }, file = DEFAULT_JOURNAL) {
   const contextHash = hashContext(context ?? {});
   const record = {
@@ -148,6 +148,11 @@ export function recordDecision({
     // alone and a batch decided with a full news panel are indistinguishable afterwards, and the
     // one claim this design rests on cannot be tested against its own control population.
     news: news ?? null,
+    // WHY THE BATCH PRODUCED NOTHING, WHEN IT PRODUCED NOTHING. A refusal, a truncation and a
+    // batch where the model simply saw no trade all journalled identically -- empty proposals,
+    // empty allowed -- so "under 10% of batches lost to refusal, truncation or malformed JSON" was
+    // not answerable from the record. null means the batch ran; a code means it did not.
+    failure: failure ? { code: failure.code, detail: failure.detail ?? null } : null,
     // The thesis is kept verbatim. It is the part that can be reviewed independently of P&L.
     proposals: (proposals ?? []).map((p) => ({
       symbol: p.symbol, action: p.action, targetPct: p.targetPct ?? null,
