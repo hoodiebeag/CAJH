@@ -6,7 +6,20 @@ import {
   percentileRank, nullSummary, matchedGeometryNull,
   alwaysFlatControl, buyAndHoldControl,
 } from "./inference.mjs";
-import { makeTradeRecord } from "./evallib.mjs";
+// Inlined rather than imported: evallib.mjs was research scaffolding and is gone. Only the
+// fields clusteredBootstrapCITrades actually reads are constructed here, so this records what
+// the function depends on instead of hiding it behind a general-purpose builder.
+const makeTradeRecord = ({ symbol, timeframe, entryTime, exitTime, entryPrice, exitPrice, risk, grossR }) => ({
+  symbol, timeframe, entryTime, exitTime, entryPrice, exitPrice, risk, grossR,
+  // clusteredBootstrapCITrades reads netR, which the real builder derived as grossR minus fee
+  // and slippage in R units. This caller passes neither, so the two coincide here — stated
+  // rather than left to look incidental, because it would not hold for a costed record.
+  netR: grossR,
+  // The clustering unit is the UTC DAY ALONE, not the symbol — that is the whole point of the
+  // assertion below: three different names traded on one day are one observation, not three.
+  // Scoping it by symbol (my first guess) silently turned the test into a tautology.
+  exposureId: new Date(entryTime).toISOString().slice(0, 10),
+});
 
 // momentum.mjs's `seeded` and classifier.mjs's `seededRandom`, copied verbatim as the
 // reference. Neither is exported, so equivalence is pinned here rather than asserted by import.
