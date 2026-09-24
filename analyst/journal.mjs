@@ -321,7 +321,7 @@ export function scoreJournal(file = DEFAULT_JOURNAL, { mode = MODE.PAPER } = {})
     rejectCounts,
     halts: decisions.filter((d) => d.halted).length,
     brakes: decisions.filter((d) => d.braked).length,
-    // ALPHA_DEFINITION.md §3: 60 days and 50 trades. A floor reached in real time, not a target.
+    // 60 days and 50 trades (docs/PAPER-PROTOCOL.md re-derives why this floor does not fit a skewed payoff). A floor reached in real time, not a target.
     meetsStandingMinimum: sized >= 50 && spanDays(decisions) >= 60,
     spanDays: spanDays(decisions),
   };

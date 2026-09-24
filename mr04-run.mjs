@@ -454,7 +454,7 @@ if (!survivors.length) {
 }
 
 // One line per cell for the verdict table, so transcription cannot drift from what ran.
-console.log("\n--- for VERDICTS.md ---");
+console.log("\n--- for the record ---");
 for (const r of rows) {
   console.log(`${r.id}: net ${pct(r.net)}, Sharpe ${r.sharpe.toFixed(3)}, p=${r.p.toFixed(4)}, ` +
               `null ${pct(r.nullMeanNet)}/${r.nullMeanSharpe.toFixed(3)}, ` +

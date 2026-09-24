@@ -2,7 +2,7 @@
  * overnight.mjs — split a daily bar's return into its overnight and intraday components.
  *
  * The only new information source left in the data this project already holds. Every result in
- * VERDICTS.md is computed close-to-close; the open price sits unused in all four bundles, and its
+ * The closed studies computed close-to-close; the open price sits unused in all four bundles, and its
  * only appearance anywhere in the repo is gap accounting inside `studies/overlay.mjs`.
  *
  * ONE HAZARD DOMINATES THIS FILE. The overnight leg is the ONLY quantity in this project that

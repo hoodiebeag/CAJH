@@ -34,20 +34,19 @@ function latestRoadmapVerdict(maxBytes = 120000) {
   } catch { return "not available"; }
 }
 
-// VERDICTS.md is the repo's own curated one-row-per-hypothesis index (updated in the
-// same commit as each verdict it records, per that file's own header), so reading it
-// live gives a short multi-hypothesis digest instead of just the single latest
-// ROADMAP.md verdict line, which names no hypothesis.
-export function buildVerdictsDigest(maxBytes = 60000, limit = 6) {
+// The bot's chat context carries what this project has already settled, so it does not
+// cheerfully re-propose a mechanism that was measured and killed.
+//
+// THIS USED TO SCRAPE THE LAST SIX ROWS OF A 36,000-WORD VERDICTS TABLE. That gave a digest whose
+// content depended on which rows happened to sort last, and which broke whenever a metric began
+// with a decimal point. It now reads ONE declared line from docs/WHAT-WE-KNOW.md -- an explicit
+// marker rather than parsed prose, so the contract between the document and this function is
+// visible in both places instead of being inferred from formatting.
+export function buildVerdictsDigest() {
   try {
-    const text = fs.readFileSync(path.join(process.cwd(), "VERDICTS.md"), "utf8").slice(-maxBytes);
-    const rows = text.split("\n")
-      .filter((line) => line.startsWith("|") && !/^\|\s*-+\s*\|/.test(line) && !/^\|\s*ID\s*\|/i.test(line))
-      .map((line) => line.split("|").map((cell) => cell.trim()).filter((cell) => cell.length));
-    const meaningful = rows.filter((cols) => cols.length >= 3 && !/^(pending|done\s*—)/i.test(cols[2]));
-    const chosen = meaningful.slice(-limit);
-    if (!chosen.length) return "no recorded verdicts yet";
-    return chosen.map((cols) => `${cols[0]}: ${cols[2]}`).join("; ");
+    const text = fs.readFileSync(path.join(process.cwd(), "docs/WHAT-WE-KNOW.md"), "utf8");
+    const m = /<!--\s*digest:\s*([\s\S]*?)-->/.exec(text);
+    return m ? m[1].trim().replace(/\s+/g, " ") : "no recorded verdicts yet";
   } catch { return "not available"; }
 }
 

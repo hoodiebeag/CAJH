@@ -237,7 +237,7 @@ export async function runOnce({
   // WHAT THE ANALYST COULD SEE, RECORDED BESIDE WHAT IT DID.
   //
   // The design argument for this whole pivot is that the edge, if any, comes from the non-price
-  // input -- the price half is already closed in VERDICTS.md. A track record that cannot separate
+  // input -- the price half is already closed (docs/WHAT-WE-KNOW.md). A track record that cannot separate
   // "decided with news" from "decided with none" cannot test that claim: it measures a blend and
   // then credits the mechanism. The journal recorded nothing about news at all, so every batch
   // looked alike afterwards.

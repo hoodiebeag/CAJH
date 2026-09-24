@@ -89,63 +89,8 @@ test("C3 mission digest states what cajh is, its current strategy, and why tradi
   assert.match(digest, /Momentum M7: KILLED; Classifier P5: KILLED \(economic lift fails cost\)/);
 });
 
-test("buildVerdictsDigest reads VERDICTS.md live, drops pending/folded-in rows, and keeps the most recent meaningful ones", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-verdicts-"));
-  fs.writeFileSync(path.join(dir, "VERDICTS.md"), [
-    "| ID | Hypothesis | Verdict | Deciding metric | Holdout n | Date | Commit |",
-    "|---|---|---|---|---|---|---|",
-    "| A | first hypothesis | KILLED | x | 1 | d | c |",
-    "| B | second hypothesis | pending | x | 1 | d | c |",
-    "| C | third hypothesis | done — result folded into A above | x | 1 | d | c |",
-    "| D | fourth hypothesis | FAIL | x | 1 | d | c |"
-  ].join("\n"));
-  const cwd = process.cwd();
-  try {
-    process.chdir(dir);
-    const digest = buildVerdictsDigest();
-    assert.match(digest, /A: KILLED/);
-    assert.doesNotMatch(digest, /B: pending/);
-    assert.doesNotMatch(digest, /C: done/);
-    assert.match(digest, /D: FAIL/);
-  } finally {
-    process.chdir(cwd);
-  }
-});
 
-test("buildVerdictsDigest reports an honest empty state when no meaningful verdict rows exist", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-verdicts-empty-"));
-  fs.writeFileSync(path.join(dir, "VERDICTS.md"), [
-    "| ID | Hypothesis | Verdict | Deciding metric | Holdout n | Date | Commit |",
-    "|---|---|---|---|---|---|---|",
-    "| A | only hypothesis | pending | x | 1 | d | c |"
-  ].join("\n"));
-  const cwd = process.cwd();
-  try {
-    process.chdir(dir);
-    assert.equal(buildVerdictsDigest(), "no recorded verdicts yet");
-  } finally {
-    process.chdir(cwd);
-  }
-});
 
-test("C3: buildLiveContext's verdict digest is a real multi-hypothesis digest pulled live from VERDICTS.md, not just the single latest bare verdict word", () => {
-  const context = buildLiveContext({ watchlist: [] }, { maxChars: 20000 });
-  // Capture to end of line, not to the first period. Deciding metrics carry decimals ("+68.86%"),
-  // so a non-greedy stop at "." truncated the digest to its first few characters and made this
-  // assertion depend on which row happened to sort first -- it failed the moment a row whose
-  // metric began with a number entered the window, which is a property of the corpus, not of the
-  // digest. The intent is that several distinct hypotheses are named, so assert that directly.
-  const match = context.match(/recent verdicts: (.+)/);
-  assert.ok(match, context);
-  const digest = match[1];
-  const entries = digest.split(";").filter((x) => x.includes(":"));
-  assert.ok(entries.length >= 2,
-    `expected several hypotheses named, got ${entries.length}: ${JSON.stringify(digest.slice(0, 200))}`);
-  assert.ok(digest.length > 40, `expected a multi-hypothesis digest, got: ${JSON.stringify(digest)}`);
-  assert.match(digest, /:/);
-  assert.match(context, /Current strategy: anticipation swing-low trigger/);
-  assert.match(context, /research-first market-intelligence system/);
-});
 
 test("C2 exposes an open position's R and entry reason from strategyReason", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-ctx-pos-"));
@@ -196,4 +141,53 @@ test("C2's halt-cause heuristic returns null when trading is not halted", () => 
 test("C2 threads the halt-cause label into the live context's halt state field", () => {
   const context = buildLiveContext({ watchlist: [] }, { maxChars: 20000 });
   assert.match(context, /"likelyCause":null/);
+});
+
+// ---- the knowledge digest --------------------------------------------------------------------
+// This used to scrape the last six rows of a 36,000-word verdicts table, which made its content
+// depend on which rows happened to sort last. It now reads one DECLARED marker from
+// docs/WHAT-WE-KNOW.md, so these pin the contract between that document and the reader.
+test("buildVerdictsDigest reads the declared digest marker, not surrounding prose", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-know-"));
+  fs.mkdirSync(path.join(dir, "docs"));
+  fs.writeFileSync(path.join(dir, "docs/WHAT-WE-KNOW.md"),
+    "# Heading that must not appear\n\n<!-- digest: the one line that should\nbe returned -->\n\nBody prose that must not appear.\n");
+  const cwd = process.cwd();
+  try {
+    process.chdir(dir);
+    const d = buildVerdictsDigest();
+    assert.equal(d, "the one line that should be returned", "newlines inside the marker collapse to spaces");
+    assert.doesNotMatch(d, /Heading|Body prose/, "only the marker is read");
+  } finally { process.chdir(cwd); }
+});
+
+test("a knowledge file with no marker says so rather than inventing a digest", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-know-"));
+  fs.mkdirSync(path.join(dir, "docs"));
+  fs.writeFileSync(path.join(dir, "docs/WHAT-WE-KNOW.md"), "# Nothing declared here\n");
+  const cwd = process.cwd();
+  try {
+    process.chdir(dir);
+    assert.equal(buildVerdictsDigest(), "no recorded verdicts yet");
+  } finally { process.chdir(cwd); }
+});
+
+test("a missing knowledge file degrades to 'not available', it does not throw into the bot", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cajh-know-"));
+  const cwd = process.cwd();
+  try {
+    process.chdir(dir);
+    assert.equal(buildVerdictsDigest(), "not available");
+  } finally { process.chdir(cwd); }
+});
+
+test("the real knowledge file carries a marker, and it reaches the live context", () => {
+  // Guards the actual coupling: the repo's own document must satisfy the contract, and the
+  // digest must survive into what the bot is told. A marker that parses but never reaches the
+  // model is the same defect as no marker at all.
+  const digest = buildVerdictsDigest();
+  assert.ok(digest.length > 80, `repo's own WHAT-WE-KNOW.md must declare a digest, got: ${digest}`);
+  assert.doesNotMatch(digest, /^(not available|no recorded)/);
+  const context = buildLiveContext({ watchlist: [] }, { maxChars: 20000 });
+  assert.ok(context.includes(digest.slice(0, 60)), "the digest must reach the context the bot sends");
 });
