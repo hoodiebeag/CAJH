@@ -43,6 +43,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { clusteredBootstrapCI } from "../inference.mjs";
 
 export const DEFAULT_JOURNAL = "analyst-journal.jsonl";
 
@@ -288,7 +289,45 @@ export const EVIDENCE_MODES = Object.freeze([MODE.PAPER]);
  * beside it is misleading. The baselines are printed instead. A test belongs at the point the
  * standing minimum is met, not before.
  */
-export function scoreJournal(file = DEFAULT_JOURNAL, { mode = MODE.PAPER } = {}) {
+/**
+ * Which non-overlapping holding period each outcome belongs to.
+ *
+ * THE INDEPENDENT UNIT IS THE PERIOD, NOT THE TRADE, AND THE DIFFERENCE IS ABOUT AN ORDER OF
+ * MAGNITUDE. Twenty trading days of daily decisions on a five-day hold looks like a hundred trades
+ * and is four observations: the holds overlap, every name in a batch shares one market, and one
+ * bad week contaminates every decision inside it. Counting trades overstates the evidence in the
+ * flattering direction, which is why the protocol requires the period count printed beside the edge.
+ *
+ * KEYED ON THE ENTRY SESSION'S RANK, NOT ON THE CALENDAR DAY. Bucketing by decision day would give
+ * about twenty clusters for a month rather than four -- the same overstatement in a new hat. The
+ * rank is taken over the distinct entry times actually present, so `floor(rank / holdDays)` groups
+ * each run of `holdDays` consecutive decision sessions into one period.
+ *
+ * WHERE THIS IS WRONG, IT IS WRONG CONSERVATIVELY. If sessions were missed, the rank understates
+ * elapsed sessions and two genuinely non-overlapping decisions can land in one period. That loses
+ * a period, widening the interval. The opposite error -- inventing periods -- would narrow it, and
+ * every mistake this project has made about evidence has been in that direction.
+ *
+ * Outcomes whose decision is not in the journal go into a single shared bucket for the same reason:
+ * one cluster of unknowns is conservative, one cluster each would manufacture independence.
+ */
+export function holdPeriodKeys(decisions, outcomes, holdDays) {
+  const entryOf = new Map(decisions.map((d) => [d.batchId, d.asOfTime]));
+  const times = [...new Set(decisions.map((d) => d.asOfTime).filter(Number.isFinite))].sort((a, b) => a - b);
+  const rankOf = new Map(times.map((t, i) => [t, i]));
+  return outcomes.map((o) => {
+    const rank = rankOf.get(entryOf.get(o.batchId));
+    return rank === undefined ? "period:unknown" : `period:${Math.floor(rank / holdDays)}`;
+  });
+}
+
+/** The hold the outcomes were actually settled on. The longest wins: fewest periods, widest interval. */
+function holdDaysOf(outcomes, fallback = 5) {
+  const holds = outcomes.map((o) => o.holdDays).filter((h) => Number.isFinite(h) && h > 0);
+  return holds.length ? Math.max(...holds) : fallback;
+}
+
+export function scoreJournal(file = DEFAULT_JOURNAL, { mode = MODE.PAPER, holdDays = null } = {}) {
   const { records, malformed } = readJournal(file);
   const allDecisions = records.filter((r) => r.kind === KIND.DECISION);
   const decisions = allDecisions.filter((r) => (r.mode ?? MODE.PAPER) === mode);
@@ -332,6 +371,17 @@ export function scoreJournal(file = DEFAULT_JOURNAL, { mode = MODE.PAPER } = {})
   const sized = decisions.reduce((n, d) => n + (d.allowed ?? []).filter((a) => a.action !== "hold").length, 0);
   const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null);
 
+  // THE PAIRED DIFFERENCE, RESAMPLED BY PERIOD RATHER THAN BY TRADE.
+  //
+  // The quantity under test is the analyst minus its own matched control on the same slate at the
+  // same instant, and its interval has to be drawn over whole periods or it describes a sample size
+  // the run does not have. `outcomes` is the trade count and stays reported beside it; the two
+  // numbers differing by roughly ten times IS the point, not a discrepancy to reconcile.
+  const hold = holdDays ?? holdDaysOf(outcomes);
+  const paired = outcomes.filter((o) => Number.isFinite(o.netReturn) && Number.isFinite(o.controlReturn));
+  const pairedKeys = holdPeriodKeys(decisions, paired, hold);
+  const edgeCI = clusteredBootstrapCI(paired.map((o) => o.netReturn - o.controlReturn), { keys: pairedKeys });
+
   return {
     mode,
     isEvidence: EVIDENCE_MODES.includes(mode),
@@ -345,6 +395,10 @@ export function scoreJournal(file = DEFAULT_JOURNAL, { mode = MODE.PAPER } = {})
     agentMeanNet: mean(agentNet),
     controlMeanNet: mean(ctrlNet),
     edge: agentNet.length && ctrlNet.length ? mean(agentNet) - mean(ctrlNet) : null,
+    // The sample size that governs the claim. `outcomes` above is the trade count and is not it.
+    holdDays: hold,
+    periods: edgeCI.clusters,
+    edgeCI,
     hitRate: agentNet.length ? agentNet.filter((v) => v > 0).length / agentNet.length : null,
     beatControlRate: outcomes.length
       ? outcomes.filter((o) => typeof o.netReturn === "number" && typeof o.controlReturn === "number"

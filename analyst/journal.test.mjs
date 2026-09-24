@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   hashContext, matchedRandomControl, recordDecision, recordOutcome, recordNote, recordSkip,
-  readJournal, scoreJournal, KIND, MODE, SKIP_REASON,
+  readJournal, scoreJournal, holdPeriodKeys, KIND, MODE, SKIP_REASON,
 } from "./journal.mjs";
 
 const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "journal-")), "j.jsonl");
@@ -301,4 +301,101 @@ test("skips do not become decisions or outcomes in the score", () => {
   assert.equal(s.decisions, 0);
   assert.equal(s.outcomes, 0);
   assert.equal(s.malformed, 0, "a skip is valid JSON and must not be counted as a malformed line");
+});
+
+// ---- the independent unit ----------------------------------------------------------------------
+//
+// The protocol's entire arithmetic turns on this: twenty trading days of daily decisions on a
+// five-day hold is FOUR observations, not a hundred trades. Counting trades overstates the
+// evidence by roughly an order of magnitude, in the flattering direction.
+
+const DAY = 86400;
+
+/** `sessions` consecutive daily batches, `perBatch` names each, all settled at `holdDays`. */
+function syntheticRun(j, { sessions, perBatch, holdDays, t0 = 1_760_000_000 }) {
+  for (let s = 0; s < sessions; s++) {
+    const asOfTime = t0 + s * DAY;
+    const batchId = `paper-${s}`;
+    const allowed = [];
+    for (let k = 0; k < perBatch; k++) allowed.push({ symbol: `S${k}`, action: "buy", targetPct: 0.05 });
+    recordDecision({
+      batchId, at: new Date(asOfTime * 1000).toISOString(), mode: MODE.PAPER,
+      context: { asOfTime }, proposals: allowed, gate: { allowed, rejected: [] }, pool: [],
+    }, j);
+    for (let k = 0; k < perBatch; k++) {
+      recordOutcome({ batchId, symbol: `S${k}`, holdDays, grossReturn: 0.01, netReturn: 0.01, controlReturn: 0.004 }, j);
+    }
+  }
+}
+
+test("twenty daily sessions on a five-day hold are four periods, not a hundred trades", () => {
+  const j = tmp();
+  syntheticRun(j, { sessions: 20, perBatch: 5, holdDays: 5 });
+
+  const s = scoreJournal(j, { mode: MODE.PAPER });
+  assert.equal(s.outcomes, 100, "the trade count is still reported");
+  assert.equal(s.periods, 4, "but the independent unit is the non-overlapping holding period");
+  assert.equal(s.holdDays, 5);
+});
+
+test("the hold length moves the period count and nothing else about the sample", () => {
+  for (const [holdDays, expected] of [[1, 20], [2, 10], [5, 4], [10, 2], [21, 1]]) {
+    const j = tmp();
+    syntheticRun(j, { sessions: 20, perBatch: 3, holdDays });
+    const s = scoreJournal(j, { mode: MODE.PAPER });
+    assert.equal(s.periods, expected, `hold ${holdDays} should give ${expected} periods`);
+    assert.equal(s.outcomes, 60, "the trade count does not depend on the hold");
+  }
+});
+
+test("the edge interval is drawn over periods, so it is wider than one drawn over trades", () => {
+  // The whole reason the period count is load-bearing. Same numbers, two cluster definitions.
+  const j = tmp();
+  const t0 = 1_760_000_000;
+  for (let s = 0; s < 20; s++) {
+    const asOfTime = t0 + s * DAY;
+    const batchId = `paper-${s}`;
+    const allowed = [{ symbol: "AAA", action: "buy", targetPct: 0.05 }, { symbol: "BBB", action: "buy", targetPct: 0.05 }];
+    recordDecision({ batchId, at: new Date(asOfTime * 1000).toISOString(), mode: MODE.PAPER,
+      context: { asOfTime }, proposals: allowed, gate: { allowed, rejected: [] }, pool: [] }, j);
+    // A whole-period shock: every name in a five-day block shares it. That is exactly the
+    // dependence that resampling by trade assumes away.
+    const shock = Math.floor(s / 5) % 2 === 0 ? 0.03 : -0.03;
+    for (const sym of ["AAA", "BBB"]) {
+      recordOutcome({ batchId, symbol: sym, holdDays: 5, grossReturn: shock, netReturn: shock, controlReturn: 0 }, j);
+    }
+  }
+
+  const s = scoreJournal(j, { mode: MODE.PAPER });
+  assert.equal(s.periods, 4);
+  assert.equal(s.edgeCI.nominalN, 40, "forty trades went in");
+  assert.equal(s.edgeCI.clusters, 4, "four clusters came out");
+  assert.ok(s.edgeCI.hi - s.edgeCI.lo > 0.02,
+    `an interval over four correlated periods should be wide; got ${s.edgeCI.lo}..${s.edgeCI.hi}`);
+});
+
+test("an outcome whose decision is missing does not manufacture a period", () => {
+  // One shared bucket for unknowns. One bucket each would invent independence, and every mistake
+  // this project has made about evidence has been in that direction.
+  const j = tmp();
+  syntheticRun(j, { sessions: 5, perBatch: 2, holdDays: 5 });
+  recordOutcome({ batchId: "paper-orphan-1", symbol: "ZZZ", holdDays: 5, netReturn: 0.5, controlReturn: 0 }, j);
+  recordOutcome({ batchId: "paper-orphan-2", symbol: "YYY", holdDays: 5, netReturn: 0.5, controlReturn: 0 }, j);
+
+  const { records } = readJournal(j);
+  const decisions = records.filter((r) => r.kind === KIND.DECISION);
+  const outcomes = records.filter((r) => r.kind === KIND.OUTCOME);
+  const keys = holdPeriodKeys(decisions, outcomes, 5);
+  assert.equal(new Set(keys.filter((k) => k === "period:unknown")).size, 1);
+  assert.equal(keys.filter((k) => k === "period:unknown").length, 2, "both orphans share one bucket");
+});
+
+test("a run with no outcomes reports no periods rather than a spurious one", () => {
+  const j = tmp();
+  recordDecision({ batchId: "paper-0", mode: MODE.PAPER, context: { asOfTime: 1_760_000_000 },
+    proposals: [], gate: { allowed: [], rejected: [] }, pool: [] }, j);
+  const s = scoreJournal(j, { mode: MODE.PAPER });
+  assert.equal(s.outcomes, 0);
+  assert.equal(s.periods, 0);
+  assert.equal(s.edgeCI.lo, null);
 });

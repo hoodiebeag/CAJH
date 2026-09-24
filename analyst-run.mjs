@@ -277,6 +277,14 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
   console.log(`  analyst mean net   ${pct(s.agentMeanNet)}`);
   console.log(`  control mean net   ${pct(s.controlMeanNet)}   <- a coin flip from the same slate`);
   console.log(`  edge               ${pct(s.edge)}`);
+  // THE PERIOD COUNT BELONGS BESIDE THE EDGE, NOT IN A FOOTNOTE. The protocol's whole arithmetic
+  // turns on it: 20 trading days at a 5-day hold is four independent observations, not a hundred
+  // trades, and the interval drawn over trades would be about three times too narrow.
+  console.log(`  95% CI             ${s.edgeCI.lo === null ? "—" : `${pct(s.edgeCI.lo)} .. ${pct(s.edgeCI.hi)}`}` +
+              `   over ${s.periods} independent period(s) at a ${s.holdDays}-day hold`);
+  if (s.periods && s.periods < 12) {
+    console.log(`                     ${s.periods} period(s) resolves almost nothing — docs/PAPER-PROTOCOL.md`);
+  }
   console.log(`  beat control       ${s.beatControlRate === null ? "—" : `${(s.beatControlRate * 100).toFixed(1)}%`} of decisions`);
   console.log(`  hit rate           ${s.hitRate === null ? "—" : `${(s.hitRate * 100).toFixed(1)}%`}`);
   console.log("");
