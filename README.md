@@ -18,6 +18,7 @@ that keeps getting dropped:
 bash scripts/refresh.sh          # pull, collect, fetch the panel, commit, push
 bash scripts/refresh.sh collect  # just entitlements, sectors and news  (~3 min)
 bash scripts/refresh.sh panel    # just the price panel                 (hours, resumable)
+bash scripts/refresh.sh commit   # commit and push what is already on disk
 ```
 
 Then, anywhere:

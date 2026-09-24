@@ -14,6 +14,7 @@
 #   bash scripts/refresh.sh                 # everything (the panel takes hours the first time)
 #   bash scripts/refresh.sh collect         # entitlements, sectors, news only (~3 min)
 #   bash scripts/refresh.sh panel           # the price panel only
+#   bash scripts/refresh.sh commit          # commit and push whatever is already on disk
 set -euo pipefail
 
 STAGE="${1:-all}"
@@ -21,12 +22,23 @@ UNIVERSE="${UNIVERSE:-universe/candidates.txt}"
 
 say() { printf '\n=== %s ===\n' "$1"; }
 
-say "pulling latest"
-git pull --ff-only
+# A MISTYPED STAGE MUST NOT LOOK LIKE A SUCCESSFUL RUN. Every stage below is opt-in, so
+# `refresh.sh collectt` would skip the collection, skip the panel, find nothing to commit and
+# exit 0 -- the same output as a run with nothing to do. This script exists because work gets
+# done and silently not pushed; a silent no-op is the failure it is guarding against.
+case "$STAGE" in
+  all|collect|panel|commit) ;;
+  *) echo "refresh.sh: unknown stage '$STAGE' (expected: all, collect, panel, commit)" >&2; exit 2 ;;
+esac
 
-if [ ! -f node_modules/@stoqey/ib/package.json ]; then
-  say "installing @stoqey/ib (the only dependency these scripts need)"
-  npm install @stoqey/ib
+if [ "$STAGE" != "commit" ]; then
+  say "pulling latest"
+  git pull --ff-only
+
+  if [ ! -f node_modules/@stoqey/ib/package.json ]; then
+    say "installing @stoqey/ib (the only dependency these scripts need)"
+    npm install @stoqey/ib
+  fi
 fi
 
 if [ "$STAGE" = "all" ] || [ "$STAGE" = "collect" ]; then
@@ -42,7 +54,21 @@ if [ "$STAGE" = "all" ] || [ "$STAGE" = "panel" ]; then
 fi
 
 say "committing and pushing"
-git add -f data/ ibkr-bundle/ 2>/dev/null || true
+
+# STAGE THE PATHS ONE AT A TIME, AND ONLY THE ONES THAT EXIST.
+#
+# This was `git add -f data/ ibkr-bundle/ 2>/dev/null || true`, and it staged NOTHING whenever
+# ibkr-bundle/ was absent: git aborts the whole `add` on an unmatched pathspec rather than adding
+# the paths that did match, the error went to /dev/null, and `|| true` swallowed the exit code.
+# The run then reported "nothing changed -- already up to date" and exited 0.
+#
+# So `refresh.sh collect` -- the three-minute stage, the one most likely to be run first, and the
+# one that runs BEFORE ibkr-bundle/ can possibly exist -- did the collection and pushed none of it,
+# while printing success. That is the exact failure this script was written to prevent.
+for path in data ibkr-bundle; do
+  if [ -d "$path" ]; then git add -f "$path"; fi
+done
+
 if git diff --cached --quiet; then
   echo "nothing changed — already up to date, nothing to push."
   exit 0
