@@ -51,6 +51,20 @@ export const KIND = Object.freeze({
   DECISION: "decision",
   OUTCOME: "outcome",
   NOTE: "note",
+  SKIP: "skip",
+});
+
+/**
+ * Why a session produced no decision. Structured, because these get COUNTED, not read.
+ *
+ * Three of the paper protocol's ten Tier-1 criteria are assertions about batches that did NOT
+ * happen -- zero point-in-time skips, zero batches on a stale or future-dated panel -- and two of
+ * those stop the run if they fail. A free-text note cannot answer them; a reason code can.
+ */
+export const SKIP_REASON = Object.freeze({
+  CONTEXT_NOT_POINT_IN_TIME: "context_not_point_in_time",
+  PANEL_STALE: "panel_stale",
+  PANEL_FUTURE_DATED: "panel_future_dated",
 });
 
 /**
@@ -173,6 +187,31 @@ export function recordOutcome({ batchId, symbol, at, holdDays, grossReturn, netR
     netReturn: netReturn ?? null,
     controlReturn: controlReturn ?? null,
     note: note ?? null,
+  };
+  append(file, record);
+  return record;
+}
+
+/**
+ * Append a record of a session that produced no decision, and why.
+ *
+ * A SILENT REFUSAL AND A RUNNER THAT NEVER FIRED LOOK IDENTICAL A MONTH LATER. The guards that
+ * refuse a stale or future-dated panel are the system working, and the point-in-time check is the
+ * single most important thing this design asserts -- but all three used to leave nothing behind
+ * except a line on somebody's terminal. The reasoning is already written down twenty lines below
+ * the first of them, for the model-failure path: a journal that only records the days it worked
+ * describes a different agent than the one running. It applies here unchanged.
+ *
+ * `detail` is free-form and for a human. `reason` is what gets counted.
+ */
+export function recordSkip({ batchId = null, at, mode, reason, detail = null }, file = DEFAULT_JOURNAL) {
+  const record = {
+    kind: KIND.SKIP,
+    batchId,
+    at: at ?? new Date().toISOString(),
+    mode: mode ?? MODE.PAPER,
+    reason: String(reason),
+    detail,
   };
   append(file, record);
   return record;

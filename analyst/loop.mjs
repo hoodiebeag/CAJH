@@ -28,7 +28,7 @@
 import { buildContext, contextIsPointInTime, anonymiseContext, aliasToSymbol } from "./context.mjs";
 import { decide } from "./decide.mjs";
 import { applyRiskGate, DEFAULT_LIMITS } from "./risk.mjs";
-import { recordDecision, recordOutcome, readJournal, KIND, MODE, DEFAULT_JOURNAL } from "./journal.mjs";
+import { recordDecision, recordOutcome, recordSkip, readJournal, KIND, MODE, SKIP_REASON, DEFAULT_JOURNAL } from "./journal.mjs";
 
 /** How stale a decision date may be and still count as "now", for the paper-mode guard. */
 export const PAPER_FRESHNESS_MS = 36 * 60 * 60 * 1000;   // a weekend gap is fine; last month is not
@@ -107,7 +107,8 @@ export function sessionsAhead(lastBarEpoch, nowMs) {
  * Run one decision batch.
  *
  * @returns {{ context, contextIssues, decision, gate, record, skipped }}
- *   `skipped` is set with a reason when the batch did not reach the journal at all.
+ *   `skipped` is set with a reason when no decision was made. The batch still reaches the journal
+ *   in that case -- as a `skip` record rather than a `decision`, which is what `record` then holds.
  */
 export async function runOnce({
   series, dates, asOf, client,
@@ -127,6 +128,15 @@ export async function runOnce({
     // about it would send whoever reads the error looking in exactly the wrong direction.
     const ahead = sessionsAhead(dates.at(-1), now);
     if (ahead > 0) {
+      // Journalled BEFORE the throw. The refusal is correct and the run must still stop; the
+      // record exists so that a month later the journal can tell "the guard refused" apart from
+      // "the runner never fired", which are the same absence otherwise.
+      recordSkip({
+        batchId: batchId ?? defaultBatchId(asOfTime, mode),
+        at: new Date(now).toISOString(), mode,
+        reason: SKIP_REASON.PANEL_FUTURE_DATED,
+        detail: { lastBar: new Date(dates.at(-1) * 1000).toISOString().slice(0, 10), sessionsAhead: ahead },
+      }, journalFile);
       throw new Error(
         `loop: refusing to run paper mode on a panel whose last bar is dated ` +
         `${new Date(dates.at(-1) * 1000).toISOString().slice(0, 10)}, ${ahead} day(s) in the FUTURE. ` +
@@ -137,6 +147,12 @@ export async function runOnce({
     }
     const missed = missedSessions(asOfTime, now, sessionWeekdays(dates));
     if (missed > 0) {
+      recordSkip({
+        batchId: batchId ?? defaultBatchId(asOfTime, mode),
+        at: new Date(now).toISOString(), mode,
+        reason: SKIP_REASON.PANEL_STALE,
+        detail: { lastBar: new Date(asOfTime * 1000).toISOString().slice(0, 10), missedSessions: missed },
+      }, journalFile);
       throw new Error(
         `loop: refusing to run paper mode on ${new Date(asOfTime * 1000).toISOString().slice(0, 10)}, ` +
         `which is ${missed} completed session(s) behind on this panel's own calendar. A model asked what it ` +
@@ -169,9 +185,18 @@ export async function runOnce({
   // synthetic panel does not.
   const contextIssues = contextIsPointInTime(context, asOfTime);
   if (contextIssues.length) {
+    // Criterion 2 of the paper protocol is "zero context_not_point_in_time skips", and it stops
+    // the run. An assertion of that shape has to be countable from the record, not inferred from
+    // the absence of a batch.
+    const skip = recordSkip({
+      batchId: batchId ?? defaultBatchId(asOfTime, mode),
+      at: new Date(now).toISOString(), mode,
+      reason: SKIP_REASON.CONTEXT_NOT_POINT_IN_TIME,
+      detail: contextIssues,
+    }, journalFile);
     return {
-      context, contextIssues, decision: null, gate: null, record: null,
-      skipped: { reason: "context_not_point_in_time", detail: contextIssues },
+      context, contextIssues, decision: null, gate: null, record: skip,
+      skipped: { reason: SKIP_REASON.CONTEXT_NOT_POINT_IN_TIME, detail: contextIssues },
     };
   }
 

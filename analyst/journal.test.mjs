@@ -4,8 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  hashContext, matchedRandomControl, recordDecision, recordOutcome, recordNote,
-  readJournal, scoreJournal, KIND, MODE,
+  hashContext, matchedRandomControl, recordDecision, recordOutcome, recordNote, recordSkip,
+  readJournal, scoreJournal, KIND, MODE, SKIP_REASON,
 } from "./journal.mjs";
 
 const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "journal-")), "j.jsonl");
@@ -269,4 +269,36 @@ test("decisions written before the flag existed are counted as unknown, not as '
   assert.equal(s.newsSplit.unknown, 1);
   assert.equal(s.newsSplit.withNews.n, 0);
   assert.equal(s.newsSplit.withoutNews.n, 0, "absent provenance is not evidence of absent news");
+});
+
+// ---- skips ------------------------------------------------------------------------------------
+
+test("a skip is a countable record, not a sentence in a log", () => {
+  // Criteria 2 and 3 of the paper protocol are assertions about sessions that produced nothing,
+  // and both stop the run. They are answered by counting reason codes, so the reason has to be a
+  // field. recordNote exists beside this and is deliberately not the tool for the job.
+  const j = tmp();
+  recordSkip({ batchId: "paper-2026-09-24", mode: MODE.PAPER, reason: SKIP_REASON.PANEL_STALE, detail: { missedSessions: 4 } }, j);
+  recordSkip({ batchId: "paper-2026-09-25", mode: MODE.PAPER, reason: SKIP_REASON.PANEL_STALE, detail: { missedSessions: 5 } }, j);
+  recordSkip({ batchId: "paper-2026-09-26", mode: MODE.PAPER, reason: SKIP_REASON.CONTEXT_NOT_POINT_IN_TIME }, j);
+
+  const skips = readJournal(j).records.filter((r) => r.kind === KIND.SKIP);
+  assert.equal(skips.length, 3);
+  assert.equal(skips.filter((r) => r.reason === SKIP_REASON.PANEL_STALE).length, 2);
+  assert.equal(skips.filter((r) => r.reason === SKIP_REASON.CONTEXT_NOT_POINT_IN_TIME).length, 1);
+  assert.equal(skips[0].batchId, "paper-2026-09-24");
+  assert.equal(skips[2].detail, null);
+  assert.ok(Date.parse(skips[0].at), "a skip without a timestamp cannot be tied to a session");
+});
+
+test("skips do not become decisions or outcomes in the score", () => {
+  // A skip is the absence of a decision. If it leaked into the numerator the record would improve
+  // every time the system refused to run, which is the wrong direction for a guard to push.
+  const j = tmp();
+  recordSkip({ mode: MODE.PAPER, reason: SKIP_REASON.PANEL_STALE }, j);
+  const s = scoreJournal(j, { mode: MODE.PAPER });
+  assert.equal(s.batches, 0);
+  assert.equal(s.decisions, 0);
+  assert.equal(s.outcomes, 0);
+  assert.equal(s.malformed, 0, "a skip is valid JSON and must not be counted as a malformed line");
 });

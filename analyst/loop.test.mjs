@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { runOnce, realisedOutcomes, instrumentsFromContext, PAPER_FRESHNESS_MS, sessionWeekdays, missedSessions, settleOutcomes, sessionsAhead } from "./loop.mjs";
-import { readJournal, scoreJournal, recordOutcome, MODE, KIND } from "./journal.mjs";
+import { readJournal, scoreJournal, recordOutcome, MODE, KIND, SKIP_REASON } from "./journal.mjs";
 
 const DAY = 86400;
 const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "loop-")), "j.jsonl");
@@ -54,7 +54,7 @@ test("paper mode REFUSES a historical date", async () => {
   const now = Date.now();
   const { series, dates } = panel(SYMS, 400, now, 200);
   await assert.rejects(
-    () => runOnce({ series, dates, client: clientProposing([buy("AAA")]), mode: MODE.PAPER, now, nav: 1e5 }),
+    () => runOnce({ series, dates, client: clientProposing([buy("AAA")]), mode: MODE.PAPER, now, nav: 1e5, journalFile: tmp() }),
     /already knows what happened/,
   );
 });
@@ -81,6 +81,83 @@ test("paper mode tolerates a weekend gap but not a month", async () => {
     () => runOnce({ series: stale.series, dates: stale.dates, client: clientProposing([]), mode: MODE.PAPER, now, nav: 1e5, journalFile: tmp() }),
     /refusing to run paper mode/,
   );
+});
+
+// ---- a refusal is evidence too -----------------------------------------------------------------
+//
+// Three of the paper protocol's Tier-1 criteria are assertions about batches that did NOT happen,
+// and two of those stop the run. Before these tests the three no-decision paths wrote nothing to
+// the journal, so a month later "the guard refused" and "the runner never fired" were the same
+// absence, and "zero point-in-time skips" was unfalsifiable from the record.
+
+test("a refusal on a stale panel is journalled as a skip, with the reason, before it throws", async () => {
+  const now = Date.now();
+  const j = tmp();
+  const stale = panel(SYMS, 400, now, 30);
+
+  await assert.rejects(
+    () => runOnce({ series: stale.series, dates: stale.dates, client: clientProposing([]), mode: MODE.PAPER, now, nav: 1e5, journalFile: j }),
+    /refusing to run paper mode/,
+  );
+
+  const skips = readJournal(j).records.filter((r) => r.kind === KIND.SKIP);
+  assert.equal(skips.length, 1, "the refusal left no trace in the journal");
+  assert.equal(skips[0].reason, SKIP_REASON.PANEL_STALE);
+  assert.equal(skips[0].mode, MODE.PAPER);
+  // Tied to the function rather than to a magic number: `missedSessions` excuses today, so a panel
+  // 30 days old is 29 completed sessions behind, and hard-coding either number hides that.
+  assert.equal(skips[0].detail.missedSessions, missedSessions(stale.dates.at(-1), now, sessionWeekdays(stale.dates)));
+  assert.ok(skips[0].detail.missedSessions > 0);
+  // Nothing was decided, so nothing may look like a decision.
+  assert.equal(readJournal(j).records.filter((r) => r.kind === KIND.DECISION).length, 0);
+});
+
+test("a refusal on a future-dated panel records that reason, not staleness", async () => {
+  const now = Date.now();
+  const j = tmp();
+  const ahead = panel(SYMS, 400, now, -3);
+
+  await assert.rejects(
+    () => runOnce({ series: ahead.series, dates: ahead.dates, client: clientProposing([]), mode: MODE.PAPER, now, nav: 1e5, journalFile: j }),
+    /in the FUTURE/,
+  );
+
+  const skips = readJournal(j).records.filter((r) => r.kind === KIND.SKIP);
+  assert.equal(skips.length, 1);
+  // The two guards are distinguishable in the record for the same reason the two error messages
+  // differ: they send whoever reads them looking in opposite directions.
+  assert.equal(skips[0].reason, SKIP_REASON.PANEL_FUTURE_DATED);
+  assert.equal(skips[0].detail.sessionsAhead, 3);
+});
+
+// THE POINT-IN-TIME SKIP IS WIRED BUT CANNOT CURRENTLY FIRE, AND THAT IS WORTH STATING.
+//
+// `contextIsPointInTime` can only object to two things: a context `asOf` after the boundary, which
+// buildContext derives from the boundary and so cannot exceed, and news dated after the boundary,
+// which buildContext already filters out ("a headline dated after the decision is not news, it is
+// the answer"). The check is a second line of defence against a future regression in buildContext,
+// not a reachable state today -- so there is no honest end-to-end test of it, and a synthetic one
+// would assert that a stub returns what the stub was told to return.
+//
+// The consequence for the protocol is the part that matters: criterion 2, "zero
+// context_not_point_in_time skips", will pass trivially. It is evidence that buildContext has not
+// regressed, NOT evidence that point-in-time integrity was independently verified on live data.
+//
+// `recordSkip` itself is tested directly in journal.test.mjs, and `contextIsPointInTime` is tested
+// against both of its objections in context.test.mjs.
+test("a point-in-time failure returns the reason code the journal counts", async () => {
+  const now = Date.now();
+  const j = tmp();
+  const { series, dates } = panel(SYMS, 400, now, 0);
+  const r = await runOnce({
+    series, dates, client: clientProposing([buy("AAA")]), mode: MODE.PAPER, now, nav: 1e5, journalFile: j,
+  });
+
+  // The healthy path: no objection, so a decision rather than a skip.
+  assert.equal(r.skipped ?? null, null);
+  assert.equal(readJournal(j).records.filter((x) => x.kind === KIND.SKIP).length, 0);
+  // And the code the skip path would use is the one the readout counts, not a loose string.
+  assert.equal(SKIP_REASON.CONTEXT_NOT_POINT_IN_TIME, "context_not_point_in_time");
 });
 
 test("dry-run and anonymised modes run freely on historical dates", async () => {
