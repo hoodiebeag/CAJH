@@ -31,16 +31,42 @@
  * on submission) - same hard requirement as trader.js's confirmBuyFill/
  * confirmSellFill, for the same reason: prevents phantom positions.
  */
-import { IBApi, EventName, Stock, MarketOrder, OrderAction, WhatToShow, BarSizeSetting, isNonFatalError } from "@stoqey/ib";
+import { IBApi, EventName, Stock, MarketOrder, OrderAction, WhatToShow, BarSizeSetting, MarketDataType, ErrorCode, isNonFatalError } from "@stoqey/ib";
 
 /**
  * The error event is OVERLOADED by @stoqey/ib: request-scoped errors arrive as
  * (id, errorCode, errorMsg), but socket-level failures arrive as (error: Error).
  * Filtering on a numeric id silently swallows the latter. Normalizes both shapes.
  */
+/**
+ * Unpack @stoqey/ib's error event, which is ALWAYS (Error, code, reqId).
+ *
+ * controller.js does `emitError(errMsg, code, reqId)` ->
+ *   emitEvent(EventName.error, new Error(errMsg), code, reqId ?? NO_VALID_ID)
+ * for every error it raises, transport failures included.
+ *
+ * THIS WAS WRONG UNTIL 2026-09-11 AND 27 GREEN TESTS CERTIFIED IT. The previous version read
+ * "first argument is an Error" as proof of a socket failure. Since the first argument is always an
+ * Error, EVERY message was classified socket:true with code -1, isFatal short-circuited on
+ * `e.socket`, and the isNonFatalError call below it became unreachable. The whole non-fatal band
+ * the comment describes was never once consulted against a real Gateway.
+ *
+ * Two consequences, both observed on a live account: 10167 ("Displaying delayed market data" --
+ * data IS on its way) killed every price request, and reqId matching never worked, so one
+ * request's error aborted all of them.
+ *
+ * It survived because brokers/ibkr.test.mjs's mock emitted (reqId, code, message) -- the arguments
+ * backwards and the types wrong. The tests encoded the bug and then confirmed it. A mock is only
+ * evidence about the real decoder if it emits what the real decoder emits.
+ *
+ * A genuine transport failure is not guessed at either: socket.js's onError calls
+ * `emitError(err.message, ErrorCode.CONNECT_FAIL)`, so code 502 is the discriminator.
+ */
 function parseErrorEvent(a, b, c) {
-  if (a instanceof Error) return { id: -1, code: -1, message: a.message, error: a, socket: true };
-  return { id: a, code: b, message: String(c ?? ""), error: new Error(String(c ?? "")), socket: false };
+  const error = a instanceof Error ? a : new Error(String(a ?? ""));
+  const code = Number.isFinite(Number(b)) ? Number(b) : -1;
+  const id = Number.isFinite(Number(c)) ? Number(c) : -1;
+  return { id, code, message: error.message, error, socket: code === ErrorCode.CONNECT_FAIL };
 }
 
 /**
@@ -55,6 +81,19 @@ const isFatal = (e) => e.socket || !isNonFatalError(e.code, e.error);
 const HOST = process.env.IBKR_HOST || "127.0.0.1";
 const PORT = Number(process.env.IBKR_PORT) || 4002; // 4002 = paper, 4001 = live
 const CLIENT_ID = Number(process.env.IBKR_CLIENT_ID) || 0;
+
+/**
+ * Opt-in market data type. UNSET means realtime, which is the only correct default for a path that
+ * sizes orders -- a delayed quote must never fill one, which is what isQuoteStale already guards.
+ *
+ * Set IBKR_MARKET_DATA_TYPE=4 (DELAYED_FROZEN) or 3 (DELAYED) for RESEARCH and DIAGNOSTICS. This
+ * exists because a real account reported exactly this on 2026-09-11: "Requested market data
+ * requires additional subscription for API ... Delayed market data is available." Without a live
+ * subscription every price call fails, while delayed data sits there unused, so the adapter could
+ * not fetch a quote it was entitled to. Making it opt-in keeps live behaviour unchanged and lets a
+ * diagnostic ask for what the account actually has.
+ */
+const MARKET_DATA_TYPE = Number(process.env.IBKR_MARKET_DATA_TYPE) || null;
 const CONNECT_TIMEOUT_MS = 15_000;
 const ORDER_FILL_TIMEOUT_MS = 30_000;
 const MKT_DATA_TIMEOUT_MS = 10_000;
@@ -83,6 +122,23 @@ function getClient() {
     const onConnected = () => {
       cleanup();
       client = c;
+      // DROP THE CACHED CLIENT WHEN THE SOCKET DIES.
+      //
+      // Without this, getClient()'s `if (client) return` hands out the same object forever. A
+      // Gateway that logs out -- and IB Gateway does this on its own, on a daily auto-restart and
+      // during IBKR's nightly server reset -- leaves every later call writing into a dead socket
+      // and timing out, rather than reconnecting. For an unattended bot that is the difference
+      // between a blip and silent death: nothing throws at the moment of disconnection, the
+      // failure only appears later as every request timing out for no stated reason.
+      //
+      // Clearing the reference is the whole fix. The next getClient() sees null and dials again,
+      // which is the behaviour the rest of the file already assumes it has.
+      const onGone = () => { if (client === c) client = null; };
+      c.once(EventName.disconnected, onGone);
+      c.once(EventName.connectionClosed, onGone);
+      // Applies to every later market-data request on this connection, so it is set once here
+      // rather than per call.
+      if (MARKET_DATA_TYPE) c.reqMarketDataType(MARKET_DATA_TYPE);
       resolve(c);
     };
     // NOT `once`: TWS emits 2104/2106/2158 data-farm notices around connect time,
@@ -308,12 +364,95 @@ async function placeSell({ symbol, volume }) {
  * rather than relying on this. This exists as the interface's required
  * display-id shape, not a functionally complete native identifier.
  */
+/**
+ * Positions held at the broker, for monitor.js's reconciliation against tracked trades.
+ *
+ * Matches trader.js's Kraken `getHoldings` contract exactly -- `{ holdings: [{asset, qty, price,
+ * value}], totalUsd }`, sorted by value descending -- because monitor.js destructures it and hands
+ * `holdings` straight to `reconcile`, which reads `asset`, `qty` and `value`.
+ *
+ * THROWS rather than defaulting an unknown price to zero. That is the Kraken adapter's behaviour
+ * and it is deliberate: a holding priced at zero silently drops below `reconcile`'s dust threshold
+ * and the position vanishes from reconciliation instead of raising an orphan. A reconciliation that
+ * cannot price a position must fail loudly; monitor.js already halts new entries when it does.
+ *
+ * TWO DIFFERENCES FROM KRAKEN, both real rather than incidental:
+ *
+ *  1. `reqPositions` is account-wide and carries NO reqId, unlike every other request in this file.
+ *     Errors therefore cannot be matched to it, so only socket-level failures are treated as ours.
+ *  2. IBKR positions can be SHORT. Kraken spot cannot, so trader.js never had to represent one.
+ *     A short is reported with negative qty and negative value rather than being dropped or made
+ *     absolute -- `reconcile` then sees it as a ghost against a long-only tracker, which is the
+ *     correct reading and not something this adapter should quietly paper over.
+ *
+ * CASH IS NOT INCLUDED. Kraken's version lists stablecoin balances because on a spot venue cash and
+ * positions are the same kind of thing. On IBKR they are not, and cash already has its own accessor
+ * in getAccountBalanceSnapshot. `totalUsd` here is therefore the market value of POSITIONS, and
+ * `reconcile` never reads it.
+ */
+async function getHoldings() {
+  const c = await getClient();
+  const raw = await new Promise((resolve, reject) => {
+    const found = [];
+    let settled = false;
+    const finish = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      c.off(EventName.position, onPosition);
+      c.off(EventName.positionEnd, onEnd);
+      c.off(EventName.error, onError);
+      try { c.cancelPositions(); } catch { /* the subscription may already be gone */ }
+      fn(arg);
+    };
+    const onPosition = (_account, contract, pos) => {
+      const qty = Number(pos);
+      if (!Number.isFinite(qty) || Math.abs(qty) < 1e-8) return;   // closed or dust
+      const sym = contract?.symbol;
+      if (!sym) return;
+      found.push({ asset: String(sym).toUpperCase(), qty });
+    };
+    const onEnd = () => finish(resolve, found);
+    const onError = (a, b, cc) => {
+      const e = parseErrorEvent(a, b, cc);
+      // No reqId exists for reqPositions, so only a socket failure can be attributed here.
+      // isFatal is redundant after that test: it returns true for every socket error by definition.
+      if (!e.socket) return;
+      finish(reject, new Error(`IBKR getHoldings: ${e.message}`));
+    };
+    const timer = setTimeout(
+      () => finish(reject, new Error("IBKR getHoldings: timed out waiting for positionEnd")),
+      MKT_DATA_TIMEOUT_MS);
+    c.on(EventName.position, onPosition);
+    c.on(EventName.positionEnd, onEnd);
+    c.on(EventName.error, onError);
+    c.reqPositions();
+  });
+
+  const holdings = [];
+  let totalUsd = 0;
+  for (const h of raw) {
+    let price;
+    try {
+      ({ price } = await getCurrentPriceSnapshot(h.asset));
+    } catch (err) {
+      throw new Error(`holding price for ${h.asset} is unknown: ${err.message}`);
+    }
+    const value = h.qty * price;
+    holdings.push({ asset: h.asset, qty: h.qty, price, value });
+    totalUsd += value;
+  }
+  holdings.sort((a, b) => b.value - a.value);
+  return { holdings, totalUsd };
+}
+
 const symbolToNativeId = (symbol) => symbol;
 
 export const IBKRBroker = {
   fetchOHLC,
   getCurrentPriceSnapshot,
   getAccountBalanceSnapshot,
+  getHoldings,
   placeBuy,
   placeSell,
   symbolToNativeId,

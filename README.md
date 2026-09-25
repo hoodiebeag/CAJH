@@ -1,74 +1,79 @@
-# cajh
+# CAJH
 
-A research engine for finding and honestly validating trading strategies, with a live-trading
-wrapper that is currently off.
+A discretionary trading analyst. It reads indicators, news and price action for a universe of
+around a thousand names, decides its own positions inside a deterministic risk envelope, and
+writes down why — before it knows whether it was right.
 
-**Start with [`FINDINGS.md`](FINDINGS.md).** It states what this project has established: a
-coherent negative result -- no entry-timing edge has been demonstrated in either market tested.
-Read it before proposing work, because most obvious directions are already closed and listed
-there with their outcomes.
+It is not a strategy. Sixteen mechanical strategies were tested here and every one of them lost
+to a coin flip drawing from the same slate. `docs/WHAT-WE-KNOW.md` is the six-page residue of
+that programme and is the first thing to read; it exists so the same ground is not re-walked.
 
-## The pipeline
+## Run it
 
-Ten modules at the root are the canonical chain; everything else supports them.
-
-| Module | Responsibility |
-|---|---|
-| `data.js` | candle loading, resampling, gap validation |
-| `strategy.js` | swing structure, pivots, bias, entry/exit primitives |
-| `backtest.js` | simulation with fees, slippage and risk scaling |
-| `researchlib.mjs` | universe, train/holdout splits, walk-forward windows |
-| `evallib.mjs` | canonical per-trade record, cost decomposition, summaries |
-| `inference.mjs` | clustered CIs, matched-geometry nulls, baseline controls |
-| `promotion.mjs` | the ten-condition gate: PASS / FAIL / BLOCKED |
-| `registry.mjs` | pre-registration and sealed-holdout ledger (append-only, hash-chained) |
-| `researchlab.mjs` | run persistence with provenance |
-| `paper.mjs` | D2 log-only paper trading; imports no broker |
-
-Intended flow: load data -> split -> generate candidates -> backtest on train -> validate on
-holdout -> score through `promotionGate()` -> persist the run.
-
-## Running things
+Everything that talks to a broker runs on a machine that can reach IB Gateway, which is not this
+container. One command does the whole cycle and ends with the push, because the push is the step
+that keeps getting dropped:
 
 ```
-npm test                                    # 675 tests
-node scripts/c1-c3-entitlement-probe.mjs    # what market data this account can reach
+bash scripts/refresh.sh          # pull, collect, fetch the panel, commit, push
+bash scripts/refresh.sh collect  # just entitlements, sectors and news  (~3 min)
+bash scripts/refresh.sh panel    # just the price panel                 (hours, resumable)
+bash scripts/refresh.sh commit   # commit and push what is already on disk
 ```
 
-## Directories
+Then, anywhere:
 
-- **`studies/`** -- 43 archived research modules and 62 one-off scripts: the evidence trail behind
-  `VERDICTS.md`'s 68 rows. Closed to new work; see `studies/README.md`.
-- **`docs/archive/`** -- ~14,000 lines of dated per-study narrative, superseded by `FINDINGS.md`.
-- **`brokers/`** -- Kraken and IBKR adapters.
+```
+node analyst-run.mjs paper        # one forward decision. The only mode that is evidence.
+node analyst-run.mjs settle       # score decisions whose holding period has finished
+node analyst-run.mjs score        # the readout: the analyst beside its own random control
+node analyst-run.mjs protocol     # the ten pre-registered Tier-1 criteria, computed
+node analyst-run.mjs dry-run --stub   # exercise the wiring on a past date. NOT evidence.
+node analyst-run.mjs anonymised       # reasoning probe, identities stripped. NOT evidence.
+```
 
-## Rules
+`paper` refuses to run on a stale or future-dated panel. That refusal is the measurement
+instrument, not an obstacle — see below.
 
-`CONSTRAINTS.md` binds any future work: closed programs, the live-trading gate, evidence
-discipline. `ALPHA_DEFINITION.md` defines what would count as an edge.
-`MULTIPLE_COMPARISONS_AUDIT.md` is the correction-family register.
+## The one thing that must not be forgotten
 
-The bot files (`bot.js`, `trader.js`, `monitor.js`, `scanner.js`, `commands.js`) stay in place
-with their safety interlocks intact. A dormant guarded path is safer than a deleted one while
-account credentials still exist; to remove the capability, revoke the API keys.
+**This agent cannot be backtested.** Not "it is hard": the evaluation is structurally invalid. A
+model asked what it would do on a historical date already knows what happened, because market
+history is in its weights, and no holdout split removes that — the contamination is in the
+decider, not the pipeline. It fails in the flattering direction, exactly where the pull to deploy
+is strongest.
 
-## Configuration and live controls
+Forward paper trading is therefore the only measurement that means anything, and
+`docs/PAPER-PROTOCOL.md` shows what it can and cannot establish. The short version, measured off
+the real panel: **a month of paper resolves only an edge around 170% annualised**, so it can
+confirm the system runs correctly and can tell you almost nothing about whether it works. Even a
+full year only reaches ~48%.
 
-- **Active live + research:** `SWING_WINDOW`, `RECENT_BARS`, `PENDING_MAX_AGE`,
-  `RISK_PCT`, `MAX_POSITION_PCT`, `MAX_STOP_PCT_BY_TF`, `MIN_STOP_PCT`, `TP_R`,
-  `LOCK_BREAKEVEN`, `BE_TRIGGER_R`, `BE_LOCK_R`, `FEE_BUFFER_PCT`, and `FEE_RATE`.
-- **Active research only:** `MAX_STOP_PCT`, `REQUIRE_TF_ALIGNMENT`, `CHOP_FILTER`,
-  `TREND_GATE`, `TREND_GATE_MODE`, `TREND_MA`, plus backtest-only exit options like
-  ATR stops, partial exits, trailing stops, and max hold. These are swept by research
-  commands but are **not live entry gates** unless scanner imports them.
+Read that before treating any number from this system as a result.
+
+## What is here
+
+```
+analyst/       risk.mjs      deterministic veto layer — no model, no I/O, pure
+               journal.mjs   append-only record; draws the matched random control at decision time
+               context.mjs   point-in-time by construction, plus a test of that claim
+               decide.mjs    the model call; its output is treated as untrusted input
+               loop.mjs      the wiring, and the guard that refuses a stale panel
+               news.mjs      IBKR headlines, broker-timestamped
+analyst-run.mjs              the command line above
+indicators.mjs               fourteen signals. Inputs, not a strategy: nothing ranks or sizes.
+universe.mjs bundle-loader.mjs costs.mjs inference.mjs      panel, screening, costs, statistics
+paper-power.mjs              how long the paper run has to be. Cited by the protocol.
+analyst-journal.jsonl        the record. Tracked in git on purpose; `CAJH_JOURNAL` moves it.
+scripts/                     IBKR collectors, refresh.sh, the protected-logic check
+bot.js commands.js ...       the Discord bot, deployed. Trading and comms only.
+brokers/                     PROTECTED. Live-trading logic. Do not edit.
+```
+
 - **Live environment controls:** `LIVE_TRADING=true` and an explicit, writable
   `DATA_DIR` are both required before `!resume` can enable orders. Backtests/research
   can run with `DATA_DIR` unset, but live trading cannot: open positions, halt state,
   stats, config, and structural-level cooldowns must survive restart/redeploy.
-
-Current live scanner truth: anticipation entries on 1h/4h/1d, no alignment gate, no
-trend gate, per-timeframe stop caps, risk-based sizing, six-position cap with winner
-rotation, software-polled exits.
 
 ## Autonomous trading
 
@@ -78,6 +83,34 @@ placed. This default exists because the current strategy backtests net-negative 
 "Does it work?" below. `!resume` only enables trading when `LIVE_TRADING=true`, monitor
 health is good, and storage preflight proves `DATA_DIR` is explicit and writable.
 
-Once enabled, cajh places trades itself — there is **no confirmation step**. On a valid
-setup it buys immediately, posts the trade, and pings you (`BEAG_USER_ID`). Use `!stop`
-to halt new entries at any time, and `!sell <asset>` to exit a position you don't want.
+## Does it work?
+
+No, and that is the most useful thing this repository knows. Sixteen mechanisms were tested and
+every one lost to a coin flip drawing from the same slate; the best of them was *worse* than
+random on losing names. `docs/WHAT-WE-KNOW.md` has the numbers and the traps that made a dead
+strategy look alive. Whether the analyst does better is unknown and, per
+`docs/PAPER-PROTOCOL.md`, will stay largely unknown for a long time.
+
+## Hard limits
+
+- **No live order in any asset class** without D1 → D2 → D3 and explicit human sign-off at D3
+  (`SELF_AWARENESS_SPEC.md`). A document in this repository is not a human at that gate, and
+  neither is an agent.
+- **Never create the protected-edit override marker.** If the pre-commit check blocks a change,
+  that is the system working: exclude the offending file, or stop and report. The same check runs
+  in CI on every pushed commit, where it cannot be skipped. Wire it locally with
+  `git config core.hooksPath .githooks`.
+- **An asset class trades only with a verified cost model and verified executability.** See
+  `CLASS_STATUS` in `analyst/risk.mjs`. Shorting is unavailable: IBKR returned shortability
+  unknown on 128 of 128 symbols.
+- **Screen the universe before ranking anything.** One corrupted series with a 107,453× close
+  range was reliably selected by a liquidity screen and carried a whole result.
+
+## How to not fool yourself here
+
+The green suite is not evidence the path works. Seven defects were found in seven days — an
+unfinished holding period recorded as a completed 0% trade, a freshness guard that passed a panel
+dated four days in the future, a mode that was documented, tested and unreachable — and every one
+was found by **running the path**, not by testing it. The suite was green throughout.
+
+So: run it. Then look at what it actually did.
