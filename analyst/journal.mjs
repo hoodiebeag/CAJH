@@ -43,9 +43,26 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { clusteredBootstrapCI } from "../inference.mjs";
 
-export const DEFAULT_JOURNAL = "analyst-journal.jsonl";
+/**
+ * WHERE THE EVIDENCE LIVES. ABSOLUTE, BECAUSE A RELATIVE PATH SILENTLY FORKS THE RECORD.
+ *
+ * This was the bare string "analyst-journal.jsonl", resolved against the working directory. Run
+ * `paper` from a subdirectory and it starts a SECOND journal: no error, no warning, and `settle`
+ * then finds nothing to settle because the decisions it is looking for are in the other file. That
+ * is criterion 7 -- one of the four that stop the run -- failing for a reason that has nothing to
+ * do with the system under test.
+ *
+ * Anchored to the repository root rather than the process's idea of "here". `CAJH_JOURNAL`
+ * overrides it, and is itself resolved to an absolute path so the same hazard cannot come back in
+ * through the override.
+ */
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+export const DEFAULT_JOURNAL = process.env.CAJH_JOURNAL
+  ? path.resolve(process.env.CAJH_JOURNAL)
+  : path.join(REPO_ROOT, "analyst-journal.jsonl");
 
 /** Record kinds. Stable strings; the file is read by line type, not by position. */
 export const KIND = Object.freeze({

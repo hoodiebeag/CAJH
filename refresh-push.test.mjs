@@ -109,6 +109,35 @@ test("an ignored bundle is force-added rather than silently dropped", () => {
   } finally { sb.cleanup(); }
 });
 
+test("the paper journal reaches the remote too, since this is the tested push path", () => {
+  // The journal is the deliverable of the paper month and dies with the container that wrote it.
+  // Tracking it is only half the fix; something has to actually push it.
+  const sb = makeSandbox();
+  try {
+    writeFileSync(path.join(sb.repo, "analyst-journal.jsonl"), '{"kind":"note","text":"first batch"}\n');
+
+    const r = runRefresh(sb.repo, "commit");
+
+    assert.equal(r.status, 0, `refresh.sh exited ${r.status}\n${r.stderr}`);
+    assert.equal(remoteFile(sb.remote, "analyst-journal.jsonl"), '{"kind":"note","text":"first batch"}\n');
+  } finally { sb.cleanup(); }
+});
+
+test("an ignored journal is force-added, so a stale ignore rule cannot silence the record", () => {
+  const sb = makeSandbox();
+  try {
+    writeFileSync(path.join(sb.repo, ".gitignore"), "*.jsonl\n");
+    git(sb.repo, "add", ".gitignore");
+    git(sb.repo, "commit", "--quiet", "-m", "ignore jsonl");
+    writeFileSync(path.join(sb.repo, "analyst-journal.jsonl"), '{"kind":"note","text":"batch"}\n');
+
+    const r = runRefresh(sb.repo, "commit");
+
+    assert.equal(r.status, 0, `refresh.sh exited ${r.status}\n${r.stderr}`);
+    assert.ok(remoteHas(sb.remote, "analyst-journal.jsonl"), "the journal never reached the remote");
+  } finally { sb.cleanup(); }
+});
+
 test("with nothing on disk changed, it says so and leaves the remote alone", () => {
   const sb = makeSandbox();
   try {

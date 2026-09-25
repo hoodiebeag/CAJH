@@ -65,8 +65,10 @@ say "committing and pushing"
 # So `refresh.sh collect` -- the three-minute stage, the one most likely to be run first, and the
 # one that runs BEFORE ibkr-bundle/ can possibly exist -- did the collection and pushed none of it,
 # while printing success. That is the exact failure this script was written to prevent.
-for path in data ibkr-bundle; do
-  if [ -d "$path" ]; then git add -f "$path"; fi
+# The paper journal rides along, because this is the only push path that is tested and the record
+# is worthless on a machine nobody else can reach. `-e` rather than `-d`: it is a file, not a tree.
+for path in data ibkr-bundle analyst-journal.jsonl; do
+  if [ -e "$path" ]; then git add -f "$path"; fi
 done
 
 if git diff --cached --quiet; then

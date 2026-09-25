@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   hashContext, matchedRandomControl, recordDecision, recordOutcome, recordNote, recordSkip,
-  readJournal, scoreJournal, holdPeriodKeys, KIND, MODE, SKIP_REASON,
+  readJournal, scoreJournal, holdPeriodKeys, KIND, MODE, SKIP_REASON, DEFAULT_JOURNAL,
 } from "./journal.mjs";
 
 const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "journal-")), "j.jsonl");
@@ -398,4 +398,28 @@ test("a run with no outcomes reports no periods rather than a spurious one", () 
   assert.equal(s.outcomes, 0);
   assert.equal(s.periods, 0);
   assert.equal(s.edgeCI.lo, null);
+});
+
+// ---- where the journal lives -------------------------------------------------------------------
+
+test("the default journal path is absolute and anchored to the repository, not the cwd", () => {
+  // The defect: as a bare relative name, running `paper` from a subdirectory started a SECOND
+  // journal with no error, and `settle` then found nothing to settle because the decisions were in
+  // the other file. Criterion 7 is one of the four that stop the run; it must not fail for this.
+  assert.ok(path.isAbsolute(DEFAULT_JOURNAL), `not absolute: ${DEFAULT_JOURNAL}`);
+  assert.equal(path.basename(DEFAULT_JOURNAL), "analyst-journal.jsonl");
+  // journal.mjs lives in analyst/, so the repository root is its parent.
+  assert.equal(path.dirname(DEFAULT_JOURNAL), path.resolve(import.meta.dirname, ".."));
+});
+
+test("the default path does not move when the process changes directory", () => {
+  const before = DEFAULT_JOURNAL;
+  const cwd = process.cwd();
+  try {
+    process.chdir(os.tmpdir());
+    // Re-resolving from the same module must give the same answer; a cwd-relative default would
+    // not, and that difference is the whole bug.
+    assert.equal(DEFAULT_JOURNAL, before);
+    assert.equal(path.resolve(DEFAULT_JOURNAL), before);
+  } finally { process.chdir(cwd); }
 });

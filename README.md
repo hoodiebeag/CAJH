@@ -64,6 +64,7 @@ analyst-run.mjs              the command line above
 indicators.mjs               fourteen signals. Inputs, not a strategy: nothing ranks or sizes.
 universe.mjs bundle-loader.mjs costs.mjs inference.mjs      panel, screening, costs, statistics
 paper-power.mjs              how long the paper run has to be. Cited by the protocol.
+analyst-journal.jsonl        the record. Tracked in git on purpose; `CAJH_JOURNAL` moves it.
 scripts/                     IBKR collectors, refresh.sh, the protected-logic check
 bot.js commands.js ...       the Discord bot, deployed. Trading and comms only.
 brokers/                     PROTECTED. Live-trading logic. Do not edit.

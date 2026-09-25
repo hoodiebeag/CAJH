@@ -164,15 +164,20 @@ nothing, which is why it now has a test that asserts on the remote rather than o
 
 ## What is deliberately NOT scheduled
 
-`node analyst-run.mjs paper` — and by extension `settle` and `score`. Two reasons, one of which is
-a decision waiting on the owner:
+`node analyst-run.mjs paper` — and by extension `settle` and `score`:
 
-- **Where the journal lives is unresolved.** `analyst-journal.jsonl` resolves against the working
-  directory and `*.jsonl` is gitignored, so a scheduled `paper` writes the only evidence-grade
-  record this project will ever produce to a per-machine file that reaches nobody else. That
-  question should be settled before a scheduler starts appending to it.
 - **A scheduled `paper` run must not be the first one.** Run it by hand, read what it did, and
   check `node analyst-run.mjs protocol` before handing it to a timer.
+
+Where the journal lives is now settled, and the answer matters for scheduling: it is
+`analyst-journal.jsonl` at the repository root, resolved absolutely so the directory a scheduler
+happens to start in cannot fork the record, and tracked in git so it survives the machine. Override
+with `CAJH_JOURNAL` if you want it elsewhere. **One machine should append to it** — two both
+appending produce a merge conflict in an append-only file.
+
+`refresh.sh` stages and pushes the journal along with the data, so scheduling the refresh on the
+same machine that runs `paper` also backs the record up. Scheduling them on different machines does
+not, and splits the journal.
 
 No scheduler in this file places an order of any kind. The hard limits in README.md are unchanged
 by it, and this document deliberately does not restate them — they have one home.

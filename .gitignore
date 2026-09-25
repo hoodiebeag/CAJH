@@ -30,10 +30,20 @@ paper-runs/
 # rule was the only thing standing between the crypto universe and permanence.
 candle-bundle.tar.gz
 
-# Analyst journals are decision records, not source. They are per-deployment and
-# append-only; committing one would mix a run's history into the repository's.
-analyst-journal.jsonl
+# Journals are decision records rather than source, and the argument against committing one is
+# real: it mixes a run's history into the repository's. THE PAPER JOURNAL IS TRACKED ANYWAY, and
+# the reasoning is the same one that put the compact bundles in here above.
+#
+# It is the deliverable of the whole paper month. Untracked, it lived in whichever container or
+# machine happened to run `paper`, and this container is reclaimed after a period of inactivity --
+# so the first evidence-grade record this project ever produced would be deleted by a timeout, and
+# `settle` on any later run would find nothing to settle. A record that cannot survive the week is
+# not a record. A mixed history is the smaller cost, and it is reversible; a deleted month is not.
+#
+# ONE MACHINE SHOULD APPEND TO IT. Two machines both appending produce a genuine merge conflict in
+# an append-only file -- resolvable by taking the union of the lines, but easier not to cause.
 *.jsonl
+!analyst-journal.jsonl
 
 # The news cache is fetched per-deployment from a Gateway, and a committed one would be
 # both stale and a point-in-time record of somebody else's run.
