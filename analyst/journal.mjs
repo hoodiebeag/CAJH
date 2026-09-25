@@ -464,8 +464,29 @@ function summariseBucket(rows) {
   };
 }
 
+/**
+ * The instant a decision was ABOUT, not the instant it was written down.
+ *
+ * `at` is a write timestamp. In a forward paper run the two coincide, which is why this went
+ * unnoticed; everywhere else they do not. A journal replayed, backfilled or rebuilt in one sitting
+ * has every `at` inside the same minute while its decisions cover months.
+ *
+ * Falls back to `at` for records written before `asOfTime` existed. Mixing a bar time with a write
+ * time is imperfect, and it is strictly closer than using write times throughout.
+ */
+export function decisionTimeMs(d) {
+  return Number.isFinite(d?.asOfTime) ? d.asOfTime * 1000 : Date.parse(d?.at);
+}
+
+/**
+ * Calendar days from the first decision to the last, measured on the decision bars.
+ *
+ * WHY THIS IS NOT COSMETIC: `meetsStandingMinimum` gates on it. Read off write timestamps, five
+ * batches covering 2026-07-09 to 2026-08-06 reported a span of 0 days, so any journal not written
+ * in real time could never reach the 60-day floor no matter how much history it contained.
+ */
 function spanDays(decisions) {
-  const ts = decisions.map((d) => Date.parse(d.at)).filter((n) => Number.isFinite(n));
+  const ts = decisions.map(decisionTimeMs).filter((n) => Number.isFinite(n));
   if (ts.length < 2) return 0;
   return Math.round((Math.max(...ts) - Math.min(...ts)) / 86400000);
 }

@@ -343,8 +343,8 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
     // Criterion 1 counts batches against the weekdays their `at` timestamps span. In a forward run
     // those are the same thing; in a dry run every batch is recorded in the same minute, so the
     // ratio is meaningless rather than merely approximate. Said once, up front.
-    console.log(`These criteria are defined for the PAPER run. In mode "${mode}" this only exercises the`);
-    console.log("readout — criterion 1 in particular counts recording time, not sessions.\n");
+    console.log(`These criteria are defined for the PAPER run. In mode "${mode}" this exercises the`);
+    console.log("readout only; criterion 1 cannot be answered outside a forward run and says so.\n");
   }
   const mark = { pass: "PASS", fail: "FAIL", manual: "MANUAL" };
   for (const c of r.criteria) {

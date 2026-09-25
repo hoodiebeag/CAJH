@@ -17,7 +17,7 @@
  * `verdict` reports STOP separately from FAIL so the distinction survives into the output.
  */
 
-import { readJournal, scoreJournal, KIND, MODE, SKIP_REASON } from "./journal.mjs";
+import { readJournal, scoreJournal, decisionTimeMs, KIND, MODE, SKIP_REASON } from "./journal.mjs";
 import { REJECT } from "./risk.mjs";
 import { BATCH_FAILURE } from "./decide.mjs";
 
@@ -57,19 +57,34 @@ export function tier1(journalFile, { mode = MODE.PAPER, now = Date.now(), newsFl
     criteria.push({ n, name, status, detail, numbers, stops });
 
   // ---- 1. runs every session without hand-holding ------------------------------------------------
-  const times = decisions.map((d) => Date.parse(d.at)).filter(Number.isFinite)
+  //
+  // MEASURED ON THE DECISION BARS, NOT THE WRITE TIMESTAMPS. Read off `at`, five batches covering
+  // four weeks reported "5 batch(es) over 1 weekday(s) spanned" and passed at a ratio of 5.0,
+  // because they were all written in the same minute. A skip has no decision bar -- it exists
+  // precisely because no decision was made -- so those keep their `at`, which for a live refusal is
+  // the session anyway.
+  const times = decisions.map(decisionTimeMs).filter(Number.isFinite)
     .concat(skips.map((s) => Date.parse(s.at)).filter(Number.isFinite));
   const expected = times.length ? weekdaysBetween(Math.min(...times), Math.max(...times)) : 0;
   const ratio = expected ? decisions.length / expected : null;
+  // THIS CRITERION IS ONLY MEANINGFUL FOR A FORWARD RUN. It asks whether the thing ran unattended
+  // every session. A dry run's batches are hand-picked dates, so the ratio describes the operator's
+  // choice of `--asOf` and nothing about the system. Reporting it as a FAIL would be noise in a
+  // table where four criteria stop the run, and teaching anyone to skim a red line here is worse
+  // than printing nothing.
+  const forward = mode === MODE.PAPER;
   add(1, "Runs every session without hand-holding",
-    ratio === null ? MANUAL : ratio >= 0.9 ? PASS : FAIL,
+    !forward ? MANUAL : ratio === null ? MANUAL : ratio >= 0.9 ? PASS : FAIL,
     ratio === null
       ? "nothing in the journal yet"
       : `${decisions.length} batch(es) over ${expected} weekday(s) spanned` +
         (skips.length ? `, plus ${skips.length} session(s) that refused and said why` : "") +
-        ". Weekdays are not the session calendar: market holidays count here and should not, so a" +
-        " run spanning one reads slightly low.",
-    { batches: decisions.length, expected, ratio });
+        (forward
+          ? ". Weekdays are not the session calendar: market holidays count here and should not, so" +
+            " a run spanning one reads slightly low."
+          : `. Mode "${mode}" decides on hand-picked dates, so this ratio describes the --asOf` +
+            " values chosen and not whether anything ran unattended. Only a forward run answers it."),
+    { batches: decisions.length, expected, ratio, forward });
 
   // ---- 2. point-in-time integrity (STOPS) --------------------------------------------------------
   const pitSkips = skips.filter((s) => s.reason === SKIP_REASON.CONTEXT_NOT_POINT_IN_TIME);

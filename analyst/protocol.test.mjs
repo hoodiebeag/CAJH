@@ -210,3 +210,52 @@ test("dry-run records are not scored as a paper run", () => {
   const r = tier1(j, { mode: MODE.PAPER, now: wellAfter(20) });
   assert.equal(r.batches, 0, "a dry run cannot satisfy a criterion about the paper run");
 });
+
+// ---- criterion 1 is measured on decision bars, and only in a forward run ------------------------
+
+test("criterion 1 counts the weekdays the decisions cover, not the minute they were written", () => {
+  // Read off write timestamps this reported "5 batch(es) over 1 weekday(s)" and PASSED at a ratio
+  // of 5.0 -- a pass manufactured by the records having been written together.
+  const j = tmp();
+  const write = new Date().toISOString();
+  for (let s = 0; s < 5; s++) healthyBatch(j, s * 5, { at: write });   // 5 batches, 5 sessions apart
+
+  const r = tier1(j, { now: wellAfter(40) });
+
+  const c = by(r, 1);
+  assert.ok(c.numbers.expected >= 15, `expected weekdays should span the bars; got ${c.numbers.expected}`);
+  assert.ok(c.numbers.ratio < 0.5, `5 batches over ~4 weeks is sparse; got ratio ${c.numbers.ratio}`);
+  assert.equal(c.status, "fail", "a forward run that skipped most sessions has not passed");
+});
+
+test("a contiguous forward run passes criterion 1 on the decision bars", () => {
+  const j = tmp();
+  const write = new Date().toISOString();
+  for (let s = 0; s < 20; s++) healthyBatch(j, s, { at: write });      // one per consecutive session
+
+  const r = tier1(j, { now: wellAfter(40) });
+
+  const c = by(r, 1);
+  assert.equal(c.status, "pass");
+  assert.ok(c.numbers.ratio >= 0.9, `got ${c.numbers.ratio}`);
+});
+
+test("criterion 1 reports MANUAL outside a forward run instead of a meaningless pass or fail", () => {
+  // A dry run's batches are hand-picked --asOf dates, so the ratio describes the operator's choice.
+  // A red line here would be noise in a table where four criteria stop the run.
+  const j = tmp();
+  const write = new Date().toISOString();
+  for (let s = 0; s < 5; s++) {
+    recordDecision({
+      batchId: `dry-${s}`, at: write, mode: MODE.DRY_RUN,
+      context: { asOfTime: T0 + s * 5 * DAY },
+      proposals: [], gate: { allowed: [], rejected: [] }, pool: [],
+    }, j);
+  }
+
+  const r = tier1(j, { mode: MODE.DRY_RUN, now: wellAfter(40) });
+
+  assert.equal(by(r, 1).status, "manual");
+  assert.equal(by(r, 1).numbers.forward, false);
+  assert.match(by(r, 1).detail, /hand-picked dates/);
+});

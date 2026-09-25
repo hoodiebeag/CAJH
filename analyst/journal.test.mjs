@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   hashContext, matchedRandomControl, recordDecision, recordOutcome, recordNote, recordSkip,
-  readJournal, scoreJournal, holdPeriodKeys, KIND, MODE, SKIP_REASON, DEFAULT_JOURNAL,
+  readJournal, scoreJournal, holdPeriodKeys, decisionTimeMs, KIND, MODE, SKIP_REASON, DEFAULT_JOURNAL,
 } from "./journal.mjs";
 
 const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "journal-")), "j.jsonl");
@@ -451,4 +451,52 @@ test("two or more periods do get a real interval", () => {
   assert.equal(s.edgeCI.degenerate, false);
   assert.ok(Number.isFinite(s.edgeCI.lo));
   assert.ok(Number.isFinite(s.edgeCI.hi));
+});
+
+// ---- the span is measured on the decision bars -------------------------------------------------
+
+test("span is the period the decisions cover, not the minute they were written", () => {
+  // Read off write timestamps, five batches covering four weeks reported 0 days, because a replayed
+  // journal writes every record in the same minute. meetsStandingMinimum gates on this, so such a
+  // journal could never reach the 60-day floor however much history it held.
+  const j = tmp();
+  const write = new Date().toISOString();          // every record written NOW, as a replay would
+  for (let s = 0; s < 5; s++) {
+    recordDecision({
+      batchId: `paper-${s}`, at: write, mode: MODE.PAPER,
+      context: { asOfTime: 1_760_000_000 + s * 7 * DAY },   // but decided a week apart
+      proposals: [], gate: { allowed: [], rejected: [] }, pool: [],
+    }, j);
+  }
+
+  const s = scoreJournal(j, { mode: MODE.PAPER });
+  assert.equal(s.spanDays, 28, "four weeks of decision bars, all written in one minute");
+});
+
+test("the standing minimum can be reached by a journal that was not written in real time", () => {
+  const j = tmp();
+  const write = new Date().toISOString();
+  // 70 sessions, one sized name each: past the 60-day floor, short of the 50-trade one.
+  for (let s = 0; s < 70; s++) {
+    const allowed = [{ symbol: "AAA", action: "buy", targetPct: 0.05 }];
+    recordDecision({
+      batchId: `paper-${s}`, at: write, mode: MODE.PAPER,
+      context: { asOfTime: 1_760_000_000 + s * DAY },
+      proposals: allowed, gate: { allowed, rejected: [] }, pool: [],
+    }, j);
+  }
+
+  const s = scoreJournal(j, { mode: MODE.PAPER });
+  assert.equal(s.spanDays, 69);
+  assert.equal(s.decisions, 70);
+  assert.equal(s.meetsStandingMinimum, true, "60 days and 50 trades are both met");
+});
+
+test("a record written before asOfTime existed falls back to its write timestamp", () => {
+  // Older journals have no decision bar. Mixing a bar time with a write time is imperfect and is
+  // strictly closer than using write times throughout; what it must not do is return NaN.
+  const t = Date.parse("2026-07-09T00:00:00Z");
+  assert.equal(decisionTimeMs({ at: "2026-07-09T00:00:00Z" }), t);
+  assert.equal(decisionTimeMs({ asOfTime: 1_760_000_000, at: "2026-07-09T00:00:00Z" }), 1_760_000_000_000);
+  assert.ok(Number.isNaN(decisionTimeMs({})), "no usable time is NaN, which every caller filters");
 });
