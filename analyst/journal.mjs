@@ -402,7 +402,17 @@ export function scoreJournal(file = DEFAULT_JOURNAL, { mode = MODE.PAPER, holdDa
   const hold = holdDays ?? holdDaysOf(outcomes);
   const paired = outcomes.filter((o) => Number.isFinite(o.netReturn) && Number.isFinite(o.controlReturn));
   const pairedKeys = holdPeriodKeys(decisions, paired, hold);
-  const edgeCI = clusteredBootstrapCI(paired.map((o) => o.netReturn - o.controlReturn), { keys: pairedKeys });
+  const raw = clusteredBootstrapCI(paired.map((o) => o.netReturn - o.controlReturn), { keys: pairedKeys });
+
+  // ONE CLUSTER HAS NO INTERVAL, AND MUST NOT BE PRINTED AS A NARROW ONE.
+  //
+  // A cluster bootstrap resamples whole clusters. With one, every iteration redraws the same
+  // cluster, every draw is identical, and lo == hi == the point estimate. Found by running the
+  // chain on a real-panel journal: it printed "95% CI -1.61% .. -1.61%", which reads as a precise
+  // measurement and actually means the variance could not be estimated at all. A zero-width
+  // interval is the most flattering possible way to report no information, so the bounds are
+  // nulled and `degenerate` says why.
+  const edgeCI = raw.clusters < 2 ? { ...raw, lo: null, hi: null, degenerate: true } : { ...raw, degenerate: false };
 
   return {
     mode,

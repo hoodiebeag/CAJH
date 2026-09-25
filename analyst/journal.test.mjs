@@ -423,3 +423,32 @@ test("the default path does not move when the process changes directory", () => 
     assert.equal(path.resolve(DEFAULT_JOURNAL), before);
   } finally { process.chdir(cwd); }
 });
+
+test("a single period reports no interval rather than a zero-width one", () => {
+  // Found by running the chain, not by the suite: five decisions that all landed in one period
+  // printed "95% CI -1.61% .. -1.61%". A cluster bootstrap with one cluster redraws that cluster
+  // every iteration, so the bounds equal the point estimate. Zero width reads as precision and
+  // means the opposite, which is the most flattering possible way to report no information.
+  const j = tmp();
+  syntheticRun(j, { sessions: 3, perBatch: 4, holdDays: 5 });
+
+  const s = scoreJournal(j, { mode: MODE.PAPER });
+  assert.equal(s.periods, 1);
+  assert.equal(s.edgeCI.degenerate, true);
+  assert.equal(s.edgeCI.lo, null);
+  assert.equal(s.edgeCI.hi, null);
+  // The point estimate is still reported; it is the INTERVAL that does not exist.
+  assert.ok(Number.isFinite(s.edge));
+  assert.equal(s.edgeCI.nominalN, 12, "the trades still went in");
+});
+
+test("two or more periods do get a real interval", () => {
+  const j = tmp();
+  syntheticRun(j, { sessions: 20, perBatch: 4, holdDays: 5 });
+
+  const s = scoreJournal(j, { mode: MODE.PAPER });
+  assert.equal(s.periods, 4);
+  assert.equal(s.edgeCI.degenerate, false);
+  assert.ok(Number.isFinite(s.edgeCI.lo));
+  assert.ok(Number.isFinite(s.edgeCI.hi));
+});

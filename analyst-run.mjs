@@ -295,7 +295,10 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
   // trades, and the interval drawn over trades would be about three times too narrow.
   console.log(`  95% CI             ${s.edgeCI.lo === null ? "—" : `${pct(s.edgeCI.lo)} .. ${pct(s.edgeCI.hi)}`}` +
               `   over ${s.periods} independent period(s) at a ${s.holdDays}-day hold`);
-  if (s.periods && s.periods < 12) {
+  if (s.edgeCI.degenerate && s.periods) {
+    console.log("                     one period has NO interval: a cluster bootstrap can only redraw");
+    console.log("                     the same cluster, so the variance is not estimable here.");
+  } else if (s.periods && s.periods < 12) {
     console.log(`                     ${s.periods} period(s) resolves almost nothing — docs/PAPER-PROTOCOL.md`);
   }
   console.log(`  beat control       ${s.beatControlRate === null ? "—" : `${(s.beatControlRate * 100).toFixed(1)}%`} of decisions`);
@@ -336,6 +339,13 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
   const r = tier1(JOURNAL, { mode });
   console.log(`journal ${JOURNAL}, mode "${r.mode}", ${r.batches} batch(es)`);
   console.log("docs/PAPER-PROTOCOL.md Tier-1 — pre-registered 2026-09-24, before any paper decision\n");
+  if (mode !== MODE.PAPER) {
+    // Criterion 1 counts batches against the weekdays their `at` timestamps span. In a forward run
+    // those are the same thing; in a dry run every batch is recorded in the same minute, so the
+    // ratio is meaningless rather than merely approximate. Said once, up front.
+    console.log(`These criteria are defined for the PAPER run. In mode "${mode}" this only exercises the`);
+    console.log("readout — criterion 1 in particular counts recording time, not sessions.\n");
+  }
   const mark = { pass: "PASS", fail: "FAIL", manual: "MANUAL" };
   for (const c of r.criteria) {
     const stop = c.stops ? "  [STOPS THE RUN]" : "";
