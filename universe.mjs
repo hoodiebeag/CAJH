@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 // A data-sanity screen for a research universe.
 //
 // PARA sat in the sp500 bundle with closes ranging from $1.06 to $113,900 and 162 bars carrying no
@@ -54,4 +57,52 @@ export function screenUniverse(series, limits = {}) {
     kept[sym] = bars;
   }
   return { kept, rejected };
+}
+
+
+/**
+ * Parse a ticker list: whitespace or comma separated, `#` comments stripped per line, deduplicated.
+ *
+ * Shared by the collector and the panel puller so the two cannot disagree about what a universe file
+ * means. They previously each had their own parse, which is how two files that look identical end up
+ * enumerating different universes.
+ */
+export function parseSymbolFile(text) {
+  return [...new Set(
+    String(text).split("\n").map((l) => l.split("#")[0]).join(" ")
+      .split(/[\s,]+/).map((t) => t.trim().toUpperCase()).filter(Boolean),
+  )];
+}
+
+/**
+ * Decide which universe gets sectors and news, and say which one was chosen.
+ *
+ * WHY THIS IS A DECISION WORTH NAMING. The collector used to enumerate a candle bundle, defaulting to
+ * sp500-bundle's 128 names, while the panel puller collected ~1,000 from universe/candidates.txt into
+ * a different root. Sectors and news therefore covered a much smaller and different universe than the
+ * one being traded, and on a FIRST refresh there was no pulled bundle to enumerate at all. Coverage
+ * of roughly 12% would also fail the paper protocol's news criterion for a configuration reason
+ * rather than a fact about the feed.
+ *
+ * Order, most authoritative first. `verified` distinguishes a list IBKR has confirmed from one
+ * assembled by hand, because the difference changes how many failures to expect.
+ */
+export function resolveUniverseSource({ symbolsFile = null, bundleRoot = "sp500-bundle",
+                                        resolvedFile = path.join("ibkr-bundle", "universe-resolved.txt"),
+                                        candidatesFile = path.join("universe", "candidates.txt"),
+                                        readFile = (f) => fs.readFileSync(f, "utf8"),
+                                        exists = (f) => fs.existsSync(f),
+                                        fromBundle = null } = {}) {
+  if (symbolsFile) {
+    return { symbols: parseSymbolFile(readFile(symbolsFile)), source: `${symbolsFile} (explicit)`, verified: null };
+  }
+  if (exists(resolvedFile)) {
+    return { symbols: parseSymbolFile(readFile(resolvedFile)), source: `${resolvedFile} (IBKR-verified)`, verified: true };
+  }
+  if (exists(candidatesFile)) {
+    return { symbols: parseSymbolFile(readFile(candidatesFile)), source: `${candidatesFile} (candidates, UNVERIFIED)`, verified: false };
+  }
+  // The old behaviour, still reachable: whatever bundle is present.
+  if (!fromBundle) throw new Error("resolveUniverseSource: no symbol source and no bundle reader given");
+  return { symbols: fromBundle(bundleRoot), source: `${bundleRoot} (candle bundle)`, verified: null };
 }

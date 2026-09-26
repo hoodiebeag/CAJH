@@ -16,7 +16,7 @@ that keeps getting dropped:
 
 ```
 bash scripts/refresh.sh          # pull, collect, fetch the panel, commit, push
-bash scripts/refresh.sh collect  # just entitlements, sectors and news  (~3 min)
+bash scripts/refresh.sh collect  # entitlements, sectors and news        (~15 min, 1047 names)
 bash scripts/refresh.sh panel    # just the price panel                 (hours, resumable)
 bash scripts/refresh.sh commit   # commit and push what is already on disk
 ```
@@ -37,6 +37,25 @@ node analyst-run.mjs anonymised       # reasoning probe, identities stripped. NO
 
 `paper` refuses to run on a stale or future-dated panel. That refusal is the measurement
 instrument, not an obstacle — see below.
+
+### The first run, in order
+
+Paper mode reads `ibkr-bundle`, the current IBKR panel, and **fails closed** if it is absent rather
+than falling back to the months-old research bundle. So on a fresh machine:
+
+1. `bash scripts/refresh.sh` — collect, then pull the panel, then commit and push. The panel is the
+   slow part: hours the first time, resumable, and `--skip-fresh` makes a same-day re-run nearly free.
+   The collector covers `universe/candidates.txt` on this first pass because nothing has been verified
+   yet, and reports every name that does not resolve.
+2. Pull, anywhere. `git log origin/<branch> -1` is the check that matters — the remote is the only
+   witness that the push happened.
+3. `node analyst-run.mjs paper` — now reads the fresh panel. It still refuses if the last bar is
+   behind the panel's own session calendar, which is the point.
+4. Later, `bash scripts/refresh.sh` again. The collector now prefers
+   `ibkr-bundle/universe-resolved.txt`, the IBKR-verified list, so the wasted requests from
+   unresolvable candidates happen once rather than every time.
+
+`dry-run` and `anonymised` still read `sp500-bundle` and need none of this. Neither is evidence.
 
 ## The one thing that must not be forgotten
 

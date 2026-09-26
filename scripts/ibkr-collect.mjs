@@ -30,11 +30,15 @@
  *   --symbol SYM          the symbol used for the news and intraday probes (default AAPL)
  *   --skip-news|--skip-sectors|--skip-intraday
  *   --delay MS            between contract-details requests (default 200)
+ *   --symbols FILE        the universe to classify and fetch news for. Defaults to
+ *                         ibkr-bundle/universe-resolved.txt, else universe/candidates.txt,
+ *                         else the --root candle bundle.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { connect, fetchBars } from "../ibkr-bars.mjs";
 import { availablePairs } from "../bundle-loader.mjs";
+import { resolveUniverseSource } from "../universe.mjs";
 import { listProviders, fetchHeadlines, saveNewsCache } from "../analyst/news.mjs";
 
 const args = process.argv.slice(2);
@@ -50,6 +54,15 @@ const NEWS_DELAY = Number(flag("news-delay", 600));   // TWS paces historical ne
 const PER_SYMBOL = Number(flag("per-symbol", 8));     // a context budget, not a dump
 const ROOT = flag("root", "sp500-bundle");
 const OUT = flag("out", "data");
+const SYMFILE = flag("symbols", null);
+
+// Universe resolution lives in universe.mjs so the collector and the panel puller cannot disagree
+// about what a universe file means. See resolveUniverseSource there for the order and the reasoning.
+const resolveSymbols = () => resolveUniverseSource({
+  symbolsFile: SYMFILE, bundleRoot: ROOT,
+  fromBundle: (root) => availablePairs(1440, root),
+});
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const conIds = {};
@@ -96,8 +109,14 @@ if (!has("skip-news")) {
 
 // ---- 2. sector map -------------------------------------------------------------------------------
 if (!has("skip-sectors")) {
-  const symbols = availablePairs(1440, ROOT);
-  console.log(`[2/4] classifying ${symbols.length} symbols (about ${Math.ceil(symbols.length * DELAY / 1000)}s) ...`);
+  const picked = resolveSymbols();
+  const symbols = picked.symbols;
+  console.log(`[2/4] universe: ${picked.source}`);
+  if (picked.verified === false) {
+    console.log("      unverified by construction, so some names will not resolve. That is the");
+    console.log("      cleaning pass, and every failure is listed below rather than hidden.");
+  }
+  console.log(`      classifying ${symbols.length} symbols (about ${Math.ceil(symbols.length * DELAY / 1000)}s) ...`);
   const sectors = {}, unclassified = [], ambiguous = [];
   let reqId = 9100;
   for (const sym of symbols) {
@@ -135,7 +154,22 @@ if (!has("skip-sectors")) {
   if (ambiguous.length) console.log(`  ${ambiguous.length} ambiguous (listings disagree), left out`);
   if (unclassified.length) console.log(`  ${unclassified.length} unclassified, left out (not bucketed)`);
   console.log(`  wrote ${path.join(OUT, "sector-map.json")}`);
-  report.sectors = { classified: Object.keys(sectors).length, total: symbols.length, groups: groups.size, ambiguous: ambiguous.length, unclassified: unclassified.length };
+  // RESOLUTION IS COVERAGE, AND COVERAGE IS THE HEADLINE. A name that does not resolve gets no
+  // conId, and therefore no news -- so a quiet resolution failure becomes a quiet news gap, which is
+  // the criterion-8 trap this whole change exists to close.
+  const resolvedCount = Object.keys(conIds).length;
+  console.log(`  resolved ${resolvedCount}/${symbols.length} to a conId (${(100 * resolvedCount / Math.max(1, symbols.length)).toFixed(1)}%)` +
+              ` -- these and only these can carry news`);
+  if (unclassified.length) {
+    console.log(`  ${unclassified.length} did not resolve or carry an industry; full list in the report:`);
+    for (const [sym, why] of unclassified.slice(0, 10)) console.log(`    ${sym.padEnd(6)} ${why}`);
+    if (unclassified.length > 10) console.log(`    ... and ${unclassified.length - 10} more`);
+  }
+  report.sectors = { classified: Object.keys(sectors).length, total: symbols.length, groups: groups.size,
+                     ambiguous: ambiguous.length, unclassified: unclassified.length,
+                     universeSource: picked.source, verifiedUniverse: picked.verified,
+                     resolvedToConId: resolvedCount,
+                     unresolved: unclassified.map(([sym, why]) => ({ symbol: sym, reason: why })) };
   console.log("");
 }
 

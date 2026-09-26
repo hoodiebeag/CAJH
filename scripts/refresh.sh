@@ -12,9 +12,15 @@
 #
 # Usage:
 #   bash scripts/refresh.sh                 # everything (the panel takes hours the first time)
-#   bash scripts/refresh.sh collect         # entitlements, sectors, news only (~3 min)
+#   bash scripts/refresh.sh collect         # entitlements, sectors, news only (~15 min)
 #   bash scripts/refresh.sh panel           # the price panel only
 #   bash scripts/refresh.sh commit          # commit and push whatever is already on disk
+#
+# The collect stage covers the universe the PANEL uses, not a research bundle: it prefers
+# ibkr-bundle/universe-resolved.txt once a panel pull has written one, and universe/candidates.txt
+# before that. It used to enumerate sp500-bundle's 128 names, so news covered about 12% of the names
+# actually being traded -- enough to fail the paper protocol's news criterion for a configuration
+# reason rather than a fact about the feed.
 set -euo pipefail
 
 STAGE="${1:-all}"

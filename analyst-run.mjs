@@ -24,10 +24,11 @@
  *
  * Usage:
  *   node analyst-run.mjs dry-run [--asOf N] [--slate 300] [--journal FILE] [--stub]
- *   node analyst-run.mjs paper   [--journal FILE] [--no-checklist]
+ *   node analyst-run.mjs paper   [--journal FILE] [--no-checklist] [--root DIR]
  *   node analyst-run.mjs score   [--journal FILE] [--mode paper|dry-run|anonymised]
  */
 
+import fs from "node:fs";
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { screenUniverse } from "./universe.mjs";
 import { runOnce, realisedOutcomes, settleOutcomes, sessionWeekdays, missedSessions,
@@ -48,7 +49,33 @@ const has = (name) => argv.includes(`--${name}`);
 
 const JOURNAL = flag("journal", DEFAULT_JOURNAL);
 const useChecklist = !has("no-checklist");
-const ROOT = flag("root", "sp500-bundle");
+/**
+ * WHICH PANEL EACH MODE READS, AND WHY THEY DIFFER.
+ *
+ * scripts/ibkr-panel.mjs writes the current IBKR panel to `ibkr-bundle`. This file used to read
+ * `sp500-bundle` unconditionally, so a full refresh -- hours of paced requests across ~1,000
+ * symbols -- landed in a directory nothing read, and `paper` then refused on a months-old bar from
+ * the research bundle while the fresh data sat beside it. Nothing anywhere mentioned `--root`.
+ *
+ * So the default follows the MODE BEING OPERATED ON, not the subcommand:
+ *
+ *   paper                    the current IBKR panel. Forward decisions get current data or none.
+ *   settle --mode paper      the same panel, necessarily: settling a paper decision against a
+ *                            different panel looks up its bar in a series that never contained it.
+ *   dry-run, anonymised      the research bundle. Historical access is deliberately preserved.
+ *   settle --mode dry-run    likewise.
+ *
+ * `--root` overrides either, and is now documented. Paper mode FAILS CLOSED when its panel is
+ * absent rather than falling back to historical data, because a silent fallback is exactly how a
+ * forward run ends up deciding on a stale bar.
+ */
+const LIVE_PANEL_ROOT = "ibkr-bundle";
+const RESEARCH_ROOT = "sp500-bundle";
+const operatingMode = cmd === "paper" ? MODE.PAPER
+                    : cmd === "anonymised" ? MODE.ANONYMISED
+                    : cmd === "dry-run" ? MODE.DRY_RUN
+                    : flag("mode", MODE.PAPER);
+const ROOT = flag("root", operatingMode === MODE.PAPER ? LIVE_PANEL_ROOT : RESEARCH_ROOT);
 const pct = (v) => (typeof v === "number" ? `${(v * 100).toFixed(2)}%` : "—");
 
 /** Soft-wrap prose for the terminal. The Tier-1 details are paragraphs, not labels. */
@@ -98,6 +125,20 @@ async function realClient() {
 }
 
 function loadPanel() {
+  // FAIL CLOSED, AND SAY WHAT TO DO. availablePairs throws on a missing root, which is correct but
+  // reads as a broken install rather than "the data has not been collected yet".
+  if (!fs.existsSync(ROOT)) {
+    console.error(`\nno panel at "${ROOT}".`);
+    if (ROOT === LIVE_PANEL_ROOT) {
+      console.error("Paper mode reads the CURRENT IBKR panel and will not fall back to historical data.");
+      console.error("Collect it on a machine that can reach IB Gateway:");
+      console.error("  bash scripts/refresh.sh        (pull, collect, panel, commit, push)");
+      console.error(`Then pull. To work on history instead: --root ${RESEARCH_ROOT} with dry-run.`);
+    } else {
+      console.error(`Expected a candle bundle there. Pass --root with the bundle you mean.`);
+    }
+    process.exit(3);
+  }
   const raw = {};
   for (const s of availablePairs(1440, ROOT)) raw[s] = loadBundleCandles(s, 1440, ROOT);
   const screened = screenUniverse(raw);
@@ -114,7 +155,7 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
              : cmd === "anonymised" ? MODE.ANONYMISED
              : MODE.DRY_RUN;
   const { series, dates } = loadPanel();
-  console.log(`panel: ${Object.keys(series).length} symbols, ${dates.length} dates, ` +
+  console.log(`panel: ${ROOT}, ${Object.keys(series).length} symbols, ${dates.length} dates, ` +
               `last ${new Date(dates.at(-1) * 1000).toISOString().slice(0, 10)}`);
 
   // The staleness of the panel is reported BEFORE the key check. Otherwise a missing key is the
@@ -390,15 +431,18 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
 
 } else {
   console.log(`usage:
-  node analyst-run.mjs dry-run    [--asOf N] [--slate 300] [--stub] [--journal FILE]
+  node analyst-run.mjs dry-run    [--asOf N] [--slate 300] [--stub] [--journal FILE] [--root DIR]
   node analyst-run.mjs anonymised [--asOf N] [--slate 300] [--journal FILE]
-  node analyst-run.mjs settle     [--mode paper|dry-run] [--hold 5] [--journal FILE]
+  node analyst-run.mjs settle     [--mode paper|dry-run] [--hold 5] [--journal FILE] [--root DIR]
   node analyst-run.mjs paper   [--journal FILE] [--no-checklist]
   node analyst-run.mjs score   [--mode paper|dry-run|anonymised] [--journal FILE]
   node analyst-run.mjs protocol   [--mode paper] [--journal FILE]
 
 dry-run exercises the wiring on a historical date and is NOT evidence.
 anonymised probes reasoning with identities stripped and is NOT evidence.
-paper is the only mode that counts, and refuses to run on a stale panel.`);
+paper is the only mode that counts, and refuses to run on a stale panel.
+
+--root defaults to "ibkr-bundle" (the current IBKR panel) for paper, and to "sp500-bundle"
+(historical research data) for dry-run and anonymised. settle follows its --mode.`);
   process.exit(cmd ? 1 : 0);
 }
