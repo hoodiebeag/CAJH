@@ -200,19 +200,26 @@ can vanish entirely on execution. Read together they do not converge on a method
 *scepticism*, which this project already had and got the harder way: sixteen mechanisms closed
 against a coin flip drawing from the same slate.
 
-## If this is to reach the analyst
+## How this reaches the analyst
 
-The owner's stated intent is that these ideas reach CAJH. Nothing in this commit does that. The
-model's context is assembled in `analyst/context.mjs` and the digest marker is read from
-`WHAT-WE-KNOW.md` by `context.js`; putting reading notes into either is a change to what the decider
-sees, which is a behaviour change and a separate decision.
+**It now does, in one narrow form, on the owner's instruction.** `analyst/checklist.mjs` holds a short
+labelled block appended to the system prompt: two optional fields per proposal (`invalidation`,
+`costAssumption`), one paragraph on weighing downside against upside, and an explicit statement that
+none of it is validated or binding. It contains no numbers — there is a test asserting it contains no
+digits at all — and it gates nothing. The binding limits remain in `analyst/risk.mjs`, are enforced
+after the model answers, and are unchanged.
 
-It is also a decision with a real cost, which should be on the table before anyone makes it: feeding
-a model prose about what good traders do invites it to *narrate* in that register rather than reason
-about the evidence in front of it, and the journal would then contain theses that sound more
-disciplined without being better. That effect would be invisible in the very readout meant to catch
-it, because criterion 9 asks whether a thesis states a reason that could be wrong — and well-written
-boilerplate passes that test.
+Nothing else from this file reaches the decider. This note is not in the model's context; the digest
+marker `context.js` reads lives in `WHAT-WE-KNOW.md` and was not added here.
 
-If it is wanted anyway, the honest form is a short, explicitly-labelled audit checklist rather than a
-summary of four books, and its effect would have to be measured forward like anything else.
+**The cost of doing this is real and was not resolved by doing it.** Feeding a model prose about what
+good traders do invites it to *narrate* in that register rather than reason about the evidence in
+front of it, and the journal would then fill with theses that sound more disciplined without being
+better informed. That effect is invisible to criterion 9, which asks whether a thesis states a reason
+that could be wrong — well-written boilerplate does.
+
+So the checklist is measured rather than assumed. `checklistId` is recorded on every decision record,
+`--no-checklist` writes a control arm, and `scoreJournal` reports a `checklistSplit` that refuses to
+compare until 20+ outcomes exist on each side. Until both arms are populated the readout says so
+instead of printing a comparison. If the split ever shows the checklist arm doing worse, the checklist
+is the thing to remove.

@@ -28,6 +28,9 @@ node analyst-run.mjs paper        # one forward decision. The only mode that is 
 node analyst-run.mjs settle       # score decisions whose holding period has finished
 node analyst-run.mjs score        # the readout: the analyst beside its own random control
 node analyst-run.mjs protocol     # the ten pre-registered Tier-1 criteria, computed
+
+`paper` and `dry-run` take `--no-checklist`, which writes the control arm for the audit checklist in
+`analyst/checklist.mjs`. Without batches on both sides its effect cannot be measured.
 node analyst-run.mjs dry-run --stub   # exercise the wiring on a past date. NOT evidence.
 node analyst-run.mjs anonymised       # reasoning probe, identities stripped. NOT evidence.
 ```
@@ -66,6 +69,7 @@ universe.mjs bundle-loader.mjs costs.mjs inference.mjs      panel, screening, co
 paper-power.mjs              how long the paper run has to be. Cited by the protocol.
 analyst-journal.jsonl        the record. Tracked in git on purpose; `CAJH_JOURNAL` moves it.
 docs/READING-NOTES.md        second-hand reading. Hypotheses and audit prompts, NOT findings.
+analyst/checklist.mjs        the one part of that reading the model sees. Validated by nothing.
 scripts/                     IBKR collectors, refresh.sh, the protected-logic check
 bot.js commands.js ...       the Discord bot, deployed. Trading and comms only.
 brokers/                     PROTECTED. Live-trading logic. Do not edit.

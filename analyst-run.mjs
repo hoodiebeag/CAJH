@@ -24,7 +24,7 @@
  *
  * Usage:
  *   node analyst-run.mjs dry-run [--asOf N] [--slate 300] [--journal FILE] [--stub]
- *   node analyst-run.mjs paper   [--journal FILE]
+ *   node analyst-run.mjs paper   [--journal FILE] [--no-checklist]
  *   node analyst-run.mjs score   [--journal FILE] [--mode paper|dry-run|anonymised]
  */
 
@@ -35,6 +35,7 @@ import { runOnce, realisedOutcomes, settleOutcomes, sessionWeekdays, missedSessi
 import { loadNewsCache, toNewsMap, assertNotAfter } from "./analyst/news.mjs";
 import { scoreJournal, MODE, DEFAULT_JOURNAL } from "./analyst/journal.mjs";
 import { tier1 } from "./analyst/protocol.mjs";
+import { AUDIT_CHECKLIST, CHECKLIST_ID } from "./analyst/checklist.mjs";
 import { COST_MODELS } from "./costs.mjs";
 
 const argv = process.argv.slice(2);
@@ -46,6 +47,7 @@ const flag = (name, dflt) => {
 const has = (name) => argv.includes(`--${name}`);
 
 const JOURNAL = flag("journal", DEFAULT_JOURNAL);
+const useChecklist = !has("no-checklist");
 const ROOT = flag("root", "sp500-bundle");
 const pct = (v) => (typeof v === "number" ? `${(v * 100).toFixed(2)}%` : "—");
 
@@ -205,6 +207,11 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
     r = await runOnce({
       series, dates, asOf, client, mode, journalFile: JOURNAL, news,
       nav: Number(flag("nav", 100000)), slate: Number(flag("slate", 300)), newsMeta,
+      // ON BY DEFAULT, WITH AN OFF SWITCH THAT IS THE POINT RATHER THAN AN ESCAPE HATCH. The
+      // checklist's effect is only measurable if batches exist on both sides of it, so --no-checklist
+      // is how the control arm ever gets written. The id is journalled either way.
+      checklist: useChecklist ? AUDIT_CHECKLIST : null,
+      checklistId: useChecklist ? CHECKLIST_ID : null,
     });
   } catch (err) {
     console.error(String(err.message));
@@ -212,7 +219,8 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
   }
 
   console.log(`\nmode ${mode}, asOf ${r.context.asOf ?? "(anonymised)"}, ` +
-              `slate ${r.context.universe.shown}/${r.context.universe.total}`);
+              `slate ${r.context.universe.shown}/${r.context.universe.total}, ` +
+              `checklist ${useChecklist ? CHECKLIST_ID : "off (control arm)"}`);
   if (r.skipped) {
     console.log(`batch produced nothing: ${r.skipped.reason} — ${JSON.stringify(r.skipped.detail)}`);
   } else {
@@ -319,6 +327,19 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
     if (!ns.comparable) console.log("  smaller ones, and a skewed payoff needs more outcomes than a symmetric one, not fewer.");
     console.log("");
   }
+  // The split that says whether the reading changed anything. Printed with both counts and no
+  // verdict, exactly like the news split, and for the same reason.
+  const cs = s.checklistSplit;
+  if (cs && (cs.withChecklist.n || cs.withoutChecklist.n)) {
+    console.log("did the audit checklist change anything? (unvalidated reading, see docs/READING-NOTES.md)");
+    console.log(`  with checklist      n=${String(cs.withChecklist.n).padStart(4)}   net ${pct(cs.withChecklist.meanNet).padStart(8)}   control ${pct(cs.withChecklist.controlMeanNet).padStart(8)}   edge ${pct(cs.withChecklist.edge)}`);
+    console.log(`  without             n=${String(cs.withoutChecklist.n).padStart(4)}   net ${pct(cs.withoutChecklist.meanNet).padStart(8)}   control ${pct(cs.withoutChecklist.controlMeanNet).padStart(8)}   edge ${pct(cs.withoutChecklist.edge)}`);
+    console.log(cs.comparable
+      ? "  both arms have enough outcomes to be worth comparing. Compare the EDGES, not the nets."
+      : "  NOT YET COMPARABLE — needs 20+ outcomes in each arm. Run some batches with --no-checklist");
+    if (!cs.comparable) console.log("  or there is no control arm and the checklist's effect cannot be measured at all.");
+    console.log("");
+  }
   if (Object.keys(s.rejectCounts).length) {
     console.log("risk gate rejections:");
     for (const [code, n] of Object.entries(s.rejectCounts).sort((a, b) => b[1] - a[1])) {
@@ -372,7 +393,7 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
   node analyst-run.mjs dry-run    [--asOf N] [--slate 300] [--stub] [--journal FILE]
   node analyst-run.mjs anonymised [--asOf N] [--slate 300] [--journal FILE]
   node analyst-run.mjs settle     [--mode paper|dry-run] [--hold 5] [--journal FILE]
-  node analyst-run.mjs paper   [--journal FILE]
+  node analyst-run.mjs paper   [--journal FILE] [--no-checklist]
   node analyst-run.mjs score   [--mode paper|dry-run|anonymised] [--journal FILE]
   node analyst-run.mjs protocol   [--mode paper] [--journal FILE]
 

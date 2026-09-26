@@ -148,6 +148,7 @@ function mulberry32(a) {
  */
 export function recordDecision({
   batchId, at, context, proposals, gate, pool, seed, model, mode, news, newsSymbols, failure = null,
+  checklistId = null,
 }, file = DEFAULT_JOURNAL) {
   const contextHash = hashContext(context ?? {});
   const record = {
@@ -170,6 +171,11 @@ export function recordDecision({
     // empty allowed -- so "under 10% of batches lost to refusal, truncation or malformed JSON" was
     // not answerable from the record. null means the batch ran; a code means it did not.
     failure: failure ? { code: failure.code, detail: failure.detail ?? null } : null,
+    // WHICH GUIDANCE THE DECIDER SAW. null means the audit checklist was not in the prompt. Without
+    // this field the batches decided with it and without it are indistinguishable afterwards, and
+    // its effect could only be asserted, never measured -- which is the condition on which it was
+    // wired in at all. See analyst/checklist.mjs.
+    checklistId: checklistId ?? null,
     // The thesis is kept verbatim. It is the part that can be reviewed independently of P&L.
     proposals: (proposals ?? []).map((p) => ({
       symbol: p.symbol, action: p.action, targetPct: p.targetPct ?? null,
@@ -385,6 +391,18 @@ export function scoreJournal(file = DEFAULT_JOURNAL, { mode = MODE.PAPER, holdDa
     (flag === true ? bucket.withNews : flag === false ? bucket.withoutNews : bucket.unknown).push(o);
   }
 
+  // THE ARM EACH OUTCOME BELONGS TO. Mirrors newsSplit above for the same reason: a change to what
+  // the decider is shown is a claim about its output, and a claim of that shape gets measured or it
+  // gets believed. With only one arm present this reports that arm's count and nothing comparative,
+  // which is the honest answer — there is no control to compare against until batches exist on both
+  // sides.
+  const checklistFor = new Map(decisions.map((d) => [d.batchId, d.checklistId ?? null]));
+  const arms = { withChecklist: [], withoutChecklist: [] };
+  for (const o of outcomes) {
+    if (typeof o.netReturn !== "number") continue;
+    (checklistFor.get(o.batchId) ? arms.withChecklist : arms.withoutChecklist).push(o);
+  }
+
   const rejectCounts = {};
   for (const d of decisions) for (const r of d.rejected ?? []) {
     rejectCounts[r.code] = (rejectCounts[r.code] ?? 0) + 1;
@@ -442,6 +460,17 @@ export function scoreJournal(file = DEFAULT_JOURNAL, { mode = MODE.PAPER, holdDa
       unknown: bucket.unknown.length,
       // A threshold that says "do not read this yet", not one that blesses it when passed.
       comparable: bucket.withNews.length >= 20 && bucket.withoutNews.length >= 20,
+    },
+    checklistSplit: {
+      withChecklist: summariseBucket(arms.withChecklist),
+      withoutChecklist: summariseBucket(arms.withoutChecklist),
+      // Same floor as newsSplit, and the same intent: a threshold that says "do not read this yet",
+      // not one that blesses it when passed.
+      comparable: arms.withChecklist.length >= 20 && arms.withoutChecklist.length >= 20,
+      // Nulls last, deterministically. A default sort on mixed strings and null orders by the
+      // literal "null", which is an accident waiting to change.
+      ids: [...new Set(decisions.map((d) => d.checklistId ?? null))]
+        .sort((a, b) => (a === null ? 1 : b === null ? -1 : String(a).localeCompare(String(b)))),
     },
     rejectCounts,
     halts: decisions.filter((d) => d.halted).length,

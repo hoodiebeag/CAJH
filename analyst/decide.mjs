@@ -59,8 +59,9 @@ export const BATCH_FAILURE = Object.freeze({
  * this universe's matched random decile book is the actual bar, and an analyst that does not know
  * that will optimise for sounding right instead of for beating it.
  */
-export function buildSystemPrompt({ maxPositionPct = 0.10, maxNewPositions = 5, shortingPermitted = false } = {}) {
-  return [
+export function buildSystemPrompt({ maxPositionPct = 0.10, maxNewPositions = 5, shortingPermitted = false,
+                                    checklist = null } = {}) {
+  const lines = [
     "You are a portfolio analyst managing a real book. You decide positions from the evidence given.",
     "",
     "HOW YOU ARE SCORED. Your picks are compared against a RANDOM selection of the same number of",
@@ -89,7 +90,12 @@ export function buildSystemPrompt({ maxPositionPct = 0.10, maxNewPositions = 5, 
     "  outcome is known and reviewed against what happens. Write something that can be judged wrong.",
     "  Only propose symbols that appear in the candidates list you were given.",
     "  An empty decisions list is a valid and sometimes correct answer.",
-  ].join("\n");
+  ];
+  // APPENDED LAST, AND AFTER THE HARD CONSTRAINTS ON PURPOSE. The checklist is unvalidated reading;
+  // the constraints are code. Ordering them the other way would put questions nobody has tested
+  // above the limits that are actually enforced.
+  if (checklist) lines.push("", String(checklist));
+  return lines.join("\n");
 }
 
 /**
@@ -102,12 +108,12 @@ export function buildSystemPrompt({ maxPositionPct = 0.10, maxNewPositions = 5, 
 export async function decide({
   client, context, model = DEFAULT_MODEL, maxTokens = 4000,
   maxPositionPct = 0.10, maxNewPositions = 5, shortingPermitted = false,
-  systemPrompt = null,
+  systemPrompt = null, checklist = null,
 } = {}) {
   if (!client?.messages?.create) throw new Error("decide: a client with messages.create is required");
   if (!context) throw new Error("decide: context is required");
 
-  const system = systemPrompt ?? buildSystemPrompt({ maxPositionPct, maxNewPositions, shortingPermitted });
+  const system = systemPrompt ?? buildSystemPrompt({ maxPositionPct, maxNewPositions, shortingPermitted, checklist });
   const empty = { proposals: [], dropped: [], raw: null, usage: null, stopReason: null };
 
   let res;
@@ -243,8 +249,20 @@ export function normalise(decisions, knownSymbols, { maxPositionPct = 0.10, shor
     if (typeof confidence !== "number" || !Number.isFinite(confidence)) confidence = null;
     else confidence = Math.min(1, Math.max(0, confidence));
 
+    // THE TWO CHECKLIST FIELDS ARE OPTIONAL AND THEIR ABSENCE IS NEVER A DROP REASON.
+    //
+    // They are recorded when offered so they can be reviewed against what happened, and they gate
+    // nothing. Making a proposal conditional on them would convert unvalidated reading into a
+    // requirement, and would also pressure the model into filling them in rather than answering
+    // "not known from this context" -- which is the exact boilerplate this text exists to avoid.
+    const optional = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
+
     seen.add(symbol);
-    proposals.push({ symbol, action, targetPct, confidence, thesis });
+    proposals.push({
+      symbol, action, targetPct, confidence, thesis,
+      invalidation: optional(d.invalidation),
+      costAssumption: optional(d.costAssumption),
+    });
   }
   return { proposals, dropped };
 }

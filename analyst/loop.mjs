@@ -116,7 +116,7 @@ export async function runOnce({
   instruments = null, sectors = null, news = {}, newsMeta = null,
   mode = MODE.DRY_RUN, model, limits = {}, slate = 300, rankBy = "momentum",
   shortingPermitted = false, journalFile = DEFAULT_JOURNAL, now = Date.now(),
-  batchId = null, seed = null,
+  batchId = null, seed = null, checklist = null, checklistId = null,
 } = {}) {
   if (!Array.isArray(dates) || !dates.length) throw new Error("loop: dates required");
   const idx = Number.isInteger(asOf) ? asOf : dates.length - 1;
@@ -204,7 +204,7 @@ export async function runOnce({
     client, context, model,
     maxPositionPct: L.maxPositionPct,
     maxNewPositions: L.maxNewPositionsPerBatch,
-    shortingPermitted,
+    shortingPermitted, checklist,
   });
 
   if (decision.failure) {
@@ -215,7 +215,7 @@ export async function runOnce({
       batchId: batchId ?? defaultBatchId(asOfTime, mode),
       at: new Date(now).toISOString(), context, proposals: [],
       gate: { allowed: [], rejected: [], exposure: null },
-      pool: [], seed, model: model ?? null, mode, failure: decision.failure,
+      pool: [], seed, model: model ?? null, mode, failure: decision.failure, checklistId,
     }, journalFile);
     return { context, contextIssues, decision, gate: null, record, skipped: { reason: decision.failure.code, detail: decision.failure.detail } };
   }
@@ -284,6 +284,7 @@ export async function runOnce({
     context: named, proposals, gate, pool, seed,
     model: model ?? null, mode, news: newsSummary,
     newsSymbols: new Set(withNews.map((c) => String(c.symbol).toUpperCase())),
+    checklistId,
   }, journalFile);
 
   return { context, contextIssues, decision, gate, record, unmappedAliases, skipped: null };
