@@ -46,6 +46,8 @@
  *   --delay MS           between requests, default 1200 (TWS paces historical data strictly)
  *   --symbols FILE       one ticker per line; # comments allowed; otherwise taken from a bundle
  *   --skip-fresh         skip symbols already current (resumes an interrupted pull)
+ *   --limit N            pull only the first N symbols. A probe to measure real pacing
+ *                        and prove the path before committing to the full universe.
  *   --fresh-days N       what "current" means for --skip-fresh, default 2
  *   --write-resolved F   where to write the IBKR-verified universe (default <out>/universe-resolved.txt)
  *   --symbols-from ROOT  bundle to take the symbol list from, default sp500-bundle
@@ -62,6 +64,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { connect, fetchBars } from "../ibkr-bars.mjs";
 import { availablePairs } from "../bundle-loader.mjs";
+import { parseSymbolFile } from "../universe.mjs";
 
 const args = process.argv.slice(2);
 const flag = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : d; };
@@ -88,26 +91,28 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SYMFILE = flag("symbols", null);
 let symbols, symSource;
 if (SYMFILE) {
-  // COMMENTS ARE STRIPPED PER LINE, BEFORE TOKENISING, and that is not a nicety. The ticker
-  // pattern accepts any 1-10 letter word, so "# Semis and memory" contributed SEMIS, AND and
-  // MEMORY as tickers -- three symbols nobody asked for, arriving as unresolvable names in a
-  // report that also lists genuine delistings. A universe file is the natural place for a human
-  // to write headings, so the file format has to survive one.
-  symbols = [...new Set(
-    fs.readFileSync(SYMFILE, "utf8")
-      .split("\n")
-      .map((line) => line.split("#")[0])
-      .join(" ")
-      .split(/[\s,]+/)
-      .map((x) => x.trim().toUpperCase())
-      .filter((x) => /^[A-Z][A-Z.\-]{0,9}$/.test(x)),
-  )].sort();
+  // Parsing lives in universe.mjs, shared with scripts/ibkr-collect.mjs. Two copies of this is how
+  // the same file ends up meaning two different universes; the scar that produced the comment there
+  // was found here.
+  symbols = parseSymbolFile(fs.readFileSync(SYMFILE, "utf8"));
   symSource = `${SYMFILE} (${symbols.length} tickers)`;
 } else {
   symbols = availablePairs(1440, SRC);
   symSource = `${SRC} bundle`;
 }
 if (!symbols.length) { console.error(`no symbols from ${symSource}`); process.exit(2); }
+
+// A FAST FIRST PROBE. The full universe is one paced request per name, and this script has no
+// backoff: if IBKR's pacing limiter bites, requests FAIL rather than slow down, and you discover
+// that at the end of the run instead of the start. --limit pulls the first N so the real pacing,
+// the entitlements and the whole write-commit-push path can be proven in a couple of minutes
+// before committing to the whole list. --skip-fresh then makes the full run skip what is already
+// current, so the probe is not wasted work.
+const LIMIT = Number(flag("limit", 0));
+if (LIMIT > 0 && LIMIT < symbols.length) {
+  symbols = symbols.slice(0, LIMIT);
+  symSource = `${symSource} [--limit ${LIMIT}, a SUBSET: this is a probe, not the universe]`;
+}
 
 console.log(`connecting to ${process.env.IBKR_HOST ?? "127.0.0.1"}:${process.env.IBKR_PORT ?? 4002} ...`);
 const conn = await connect();

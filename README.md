@@ -17,7 +17,7 @@ that keeps getting dropped:
 ```
 bash scripts/refresh.sh          # pull, collect, fetch the panel, commit, push
 bash scripts/refresh.sh collect  # entitlements, sectors and news        (~15 min, 1047 names)
-bash scripts/refresh.sh panel    # just the price panel                 (hours, resumable)
+bash scripts/refresh.sh panel    # just the price panel                 (~21 min, resumable)
 bash scripts/refresh.sh commit   # commit and push what is already on disk
 ```
 
@@ -44,7 +44,15 @@ Paper mode reads `ibkr-bundle`, the current IBKR panel, and **fails closed** if 
 than falling back to the months-old research bundle. So on a fresh machine:
 
 1. `bash scripts/refresh.sh` — collect, then pull the panel, then commit and push. The panel is the
-   slow part: hours the first time, resumable, and `--skip-fresh` makes a same-day re-run nearly free.
+   slow part, though less so than this repo used to claim: the script's own arithmetic is ~21 min
+   for 1,047 names at its 1200ms spacing, not hours. It is resumable, and `--skip-fresh` makes a
+   same-day re-run nearly free.
+
+   **Prove it small first.** `node scripts/ibkr-panel.mjs --symbols universe/candidates.txt --limit 25`
+   takes about half a minute and exercises the entitlements, the write and the pacing. There is no
+   backoff in the pull loop: if IBKR's pacing limiter bites, requests FAIL and are listed rather
+   than slowing the run down, so a probe tells you whether the full pull will come back complete.
+   Re-running with `--skip-fresh` afterwards skips whatever the probe already collected.
    The collector covers `universe/candidates.txt` on this first pass because nothing has been verified
    yet, and reports every name that does not resolve.
 2. Pull, anywhere. `git log origin/<branch> -1` is the check that matters — the remote is the only

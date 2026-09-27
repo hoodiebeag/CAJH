@@ -69,9 +69,20 @@ export function screenUniverse(series, limits = {}) {
  */
 export function parseSymbolFile(text) {
   return [...new Set(
-    String(text).split("\n").map((l) => l.split("#")[0]).join(" ")
-      .split(/[\s,]+/).map((t) => t.trim().toUpperCase()).filter(Boolean),
-  )];
+    String(text).split("\n")
+      // COMMENTS ARE STRIPPED PER LINE, BEFORE TOKENISING, and that is not a nicety. The ticker
+      // pattern accepts any short letter word, so "# Semis and memory" contributed SEMIS, AND and
+      // MEMORY -- three symbols nobody asked for, arriving as unresolvable names in a report that
+      // also lists genuine delistings. A universe file is the natural place for a human to write
+      // headings, so the format has to survive one.
+      .map((line) => line.split("#")[0])
+      .join(" ")
+      .split(/[\s,]+/)
+      .map((x) => x.trim().toUpperCase())
+      // The shape filter is the panel puller's, carried over rather than reinvented. Without it
+      // this function and that one disagree about what the same file means.
+      .filter((x) => /^[A-Z][A-Z.\-]{0,9}$/.test(x)),
+  )].sort();
 }
 
 /**

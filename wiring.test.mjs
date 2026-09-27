@@ -171,12 +171,26 @@ test("with no source and no bundle reader it throws rather than returning an emp
 });
 
 test("the shared parser strips comments, splits on commas and whitespace, and dedupes", () => {
-  // The collector and the panel puller now share this, so the two cannot disagree about what a
-  // universe file means — which is how two files that look identical enumerate different universes.
   assert.deepEqual(parseSymbolFile("aaa BBB\n# skip\nCCC, aaa\n\n  ddd  "),
                    ["AAA", "BBB", "CCC", "DDD"]);
   assert.deepEqual(parseSymbolFile("AAA # trailing comment\n"), ["AAA"]);
   assert.deepEqual(parseSymbolFile(""), []);
+});
+
+test("the shared parser applies the panel puller's shape filter, not a looser one", () => {
+  // The first version of this claimed the collector and the panel puller shared a parser while the
+  // puller still had its own, and the two disagreed: the puller filtered on a ticker shape and
+  // sorted, this did neither. That is precisely the divergence the sharing was supposed to close,
+  // so the strict rules are the shared ones.
+  assert.deepEqual(parseSymbolFile("AAA toolongtickername B@D 123 BBB"), ["AAA", "BBB"]);
+  assert.deepEqual(parseSymbolFile("BRK.B RDS-A"), ["BRK.B", "RDS-A"], "dots and hyphens are real tickers");
+  assert.deepEqual(parseSymbolFile("ZZZ AAA MMM"), ["AAA", "MMM", "ZZZ"], "sorted, as the puller expected");
+});
+
+test("a heading in a universe file contributes no tickers", () => {
+  // The scar: "# Semis and memory" contributed SEMIS, AND and MEMORY as tickers, which then showed
+  // up as unresolvable names in a report that also listed genuine delistings.
+  assert.deepEqual(parseSymbolFile("# ---- Semis and memory ----\nNVDA AMD\n"), ["AMD", "NVDA"]);
 });
 
 test("the real candidate universe parses to the count the repo claims", () => {

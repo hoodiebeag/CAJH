@@ -15,9 +15,11 @@ Once per trading day, after the close. IBKR serves the day's completed daily bar
 ends, so a run before the close either misses it or pulls a partial one. 30–60 minutes after the
 close is comfortable; the exact minute does not matter because `--skip-fresh` makes a re-run cheap.
 
-**The first run is not the scheduled one.** The initial panel pull across ~1,000 symbols takes
-hours, because IBKR paces historical data hard. Run it by hand once, let it finish (it resumes if
-interrupted), and only then schedule the daily incremental.
+**The first run is not the scheduled one.** Run it by hand once, watch what it does, and only then
+schedule the daily incremental. The pull is one paced request per symbol — the script's own estimate
+is ~21 min for ~1,000 names at 1200ms spacing. It has no backoff, so if IBKR's pacing limiter bites,
+requests fail and are listed rather than slowing the run; `--limit 25` probes that in half a minute
+before you commit to the whole list.
 
 ## What has to be true before it works unattended
 

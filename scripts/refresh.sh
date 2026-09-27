@@ -11,7 +11,7 @@
 # of starting over, and a same-day re-run is nearly free.
 #
 # Usage:
-#   bash scripts/refresh.sh                 # everything (the panel takes hours the first time)
+#   bash scripts/refresh.sh                 # everything (~35 min for ~1,000 names, resumable)
 #   bash scripts/refresh.sh collect         # entitlements, sectors, news only (~15 min)
 #   bash scripts/refresh.sh panel           # the price panel only
 #   bash scripts/refresh.sh commit          # commit and push whatever is already on disk
