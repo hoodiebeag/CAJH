@@ -78,6 +78,46 @@ two-legged turnover before any signal. That is the cost of the geometry, not a f
 - **Cost assumptions were once half the real rate.** Every number predating that correction was
   wrong in the flattering direction. Costs come from `costs.mjs`, never from memory.
 
+## Crypto: the cost model closes it at this cadence, before judgement enters
+
+Measured 2026-09-27 by `crypto-null.mjs`, on the bundles already in this repository. Methodology is
+the deleted `null-calibration.mjs` recovered from git history, so the equity figures below are a
+legitimate comparison: decile book, equal weight, rebalanced every N bars, one round trip charged
+per rebalance, 2,000 draws, 120-bar warmup. Annualised on 365 rather than 252 because crypto trades
+every day, and costed at `krakenTaker` — **85bp per leg against US equities' 5bp.**
+
+**A random book rotated weekly loses essentially everything to fees.** Not to selection — to fees.
+
+| | buy & hold | null @5d hold | null @30d | null @90d | null @180d |
+|---|---|---|---|---|---|
+| `candle-bundle` 28 pairs, 2023-01-02..2026-07-30 | **+110.01%** | −97.88% | −31.98% | +23.39% | +13.56% |
+| `candle-bundle-long` 24 pairs, 2017-08-18..2026-09-06 | **+669.44%** | −99.99% | −8.00% | +181.28% | +637.00% |
+
+The gross column is what makes this readable: the same books return **+23% to +886% gross**. Crypto
+went up. It is the rotation that is fatal. At a 5-day hold the cost drag alone is −98.28% over 237
+rebalances and −100.00% over 637; the measured nets of −97.88% and −99.99% mean selection added a
+trace. **No judgement applied at that frequency could have helped, because the fee decides first.**
+
+Three things follow, and they are decisions rather than observations:
+
+- **CAJH's natural cadence is incompatible with crypto at these costs.** The analyst decides daily
+  on a five-day hold. That is the column that returns −98%.
+- **Buy-and-hold beats the rotating null at every hold tested, on both bundles** (+110% vs a best of
+  +23%; +669% vs a best of +637%). Any crypto strategy is competing with doing nothing, and doing
+  nothing pays the fee twice rather than 237 times.
+- **The holds where the null survives have no statistical power.** 90 and 180 days give 6 to 35
+  rebalances across the whole history. By the same arithmetic as `docs/PAPER-PROTOCOL.md`, that
+  resolves nothing.
+
+Caveats that belong next to the numbers: one historical path containing a crypto bull run, `krakenTaker`
+is the conservative rate and a maker or different venue would change the picture, and `CLASS_STATUS`
+still records that IBKR crypto spreads are unmeasured and two vendors disagreed 34% on identical
+names. What would reopen this is a **verified cheaper cost model**, not a better strategy.
+
+Equity comparison, same methodology: random-selection null **+33.70% net, Sharpe 0.850** on 127
+names, buy-and-hold +68.86%. There the 5bp cost model costs ~18% over 200 rebalances and the
+rotation survives. That 17× difference in fees is the entire distinction.
+
 ## Constraints on what can actually be traded
 
 - **Shorting is not available.** IBKR returned shortability UNKNOWN on 128 of 128 symbols and
