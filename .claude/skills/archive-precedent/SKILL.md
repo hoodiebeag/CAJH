@@ -68,7 +68,8 @@ HISTORY-ONLY — deleted from the tree; read with `git show 5116866^:<path>`:
 |---|---|---|
 | `VERDICTS.md` | 99 | the verdict index, 76 rows |
 | `docs/archive/VERDICTS_DETAIL.md` | 677 | registered claims, deciding metrics, commits |
-| `MULTIPLE_COMPARISONS_AUDIT.md` | — | programme-level FDR; the alpha budget |
+| `MULTIPLE_COMPARISONS_AUDIT.md` | 837 | programme-level FDR; the alpha budget |
+| `docs/archive/ROADMAP_ARCHIVE.md` | 5156 | **primary sections** for studies whose `ROADMAP.md` entry says "moved to `ROADMAP_ARCHIVE.md`" |
 
 All line counts in this file are `wc -l`. `agent_state_final.json` has no trailing newline, so a
 line-counting tool that counts final partial lines reports 1286 where `wc -l` reports 1285. Compare
@@ -80,17 +81,28 @@ resolve, or a file comes back shorter than its recorded length, **STOP and repor
 A failed or truncated read is not a negative finding, and reporting it as one is the single worst
 thing this skill can do.
 
-## A gap in the archive itself, found by testing this skill
+## Looking for a history-only file: `git rev-list -- <path>` is rename-blind
 
-Several closed studies say their section was "moved to `ROADMAP_ARCHIVE.md`" — among them
-`HOLDING-PERIOD-COST-AMORTIZATION-MAP` and `COST-SENSITIVITY-SURFACE`. **That file was never
-committed.** `git rev-list --all -- ROADMAP_ARCHIVE.md` returns nothing, so it exists in no commit
-and no ref. For those studies the one-line index summary in `ROADMAP.md` is the only surviving
-evidence anywhere.
+An earlier version of this file claimed `ROADMAP_ARCHIVE.md` "was never committed" and told the
+reader its primary sections were unrecoverable. **That was false.** The file was added, later renamed
+into `docs/archive/`, then deleted at `5116866` — and `git rev-list --all -- ROADMAP_ARCHIVE.md`
+returns empty because it matches the *root* path only. The rename made the check blind, and an empty
+result was read as an absence of history rather than as a failed query.
 
-So a reference is not a source. When a hit points at `ROADMAP_ARCHIVE.md`, report the index line
-verbatim and state that the primary section is unrecoverable — do not imply a fuller record exists
-to be consulted, and do not treat the summary as if it carried the detail.
+`git show 5116866^:docs/archive/ROADMAP_ARCHIVE.md` retrieves **5,156 lines**, including the primary
+`HOLDING-PERIOD-COST-AMORTIZATION-MAP` section at line 2217 and `COST-SENSITIVITY-SURFACE` at 2309.
+
+So: **an empty `git rev-list` for a path is not evidence a file never existed.** Confirm with at least
+two of these before ever saying a file is unrecoverable:
+
+```
+git log --all --follow --name-status -- <the/renamed/path>
+git ls-tree -r --name-only <candidate-commit> | grep <basename>
+git log --all --diff-filter=D --name-only --pretty=format: | grep <basename>
+```
+
+A reference in the archive is a *lead*, not a dead end. Follow it before reporting a gap — and if a
+source genuinely cannot be found, say which of the three checks were run and came back empty.
 
 ## Procedure
 

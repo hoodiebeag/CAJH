@@ -26,8 +26,9 @@ run in the main thread:
 - `docs/archive/agent_state_final.json` (1285 lines)
 
 You have no Bash and cannot read files that exist only in git history. If answering requires
-`VERDICTS.md`, `docs/archive/VERDICTS_DETAIL.md` or `MULTIPLE_COMPARISONS_AUDIT.md`, **say so and
-stop** — the caller reads those in the main thread with `git show 5116866^:<path>`.
+`VERDICTS.md` (99), `docs/archive/VERDICTS_DETAIL.md` (677), `MULTIPLE_COMPARISONS_AUDIT.md` (837) or
+`docs/archive/ROADMAP_ARCHIVE.md` (5156), **say so and stop** — the caller reads those in the main
+thread with `git show 5116866^:<path>`, one approved read at a time.
 
 Line counts above are `wc -l`. `agent_state_final.json` has no trailing newline, so a tool that
 counts a final partial line will report 1286 against the 1285 recorded here. Longer is not truncated;
@@ -36,10 +37,11 @@ only **shorter** triggers the stop.
 If a file in the list above is missing or reads shorter than its recorded line count, **report that
 as a failure and stop.** Do not continue and do not let a partial sweep become "nothing found".
 
-`ROADMAP_ARCHIVE.md` is referenced by several archive entries but **was never committed** — it is in
-no ref and no commit. It is not merely out of your scope; it is unrecoverable. Report the referring
-index line verbatim and say the primary section does not survive. Do not send the caller looking for
-a ref that does not exist.
+`docs/archive/ROADMAP_ARCHIVE.md` holds the **primary sections** for every study whose `ROADMAP.md`
+entry says "moved to `ROADMAP_ARCHIVE.md`". It is history-only at `5116866^` (5156 lines) and outside
+your scope, so hand it to the caller. An earlier version of this file wrongly called it unrecoverable;
+it is not. **Never report a source as non-existent** — you cannot run git, so you cannot establish
+that. Report it as out of scope and name it precisely.
 
 ## Anti-cherry-pick contract
 
