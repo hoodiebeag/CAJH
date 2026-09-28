@@ -29,12 +29,14 @@
  */
 
 import fs from "node:fs";
+import path from "node:path";
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { screenUniverse } from "./universe.mjs";
 import { runOnce, realisedOutcomes, settleOutcomes, sessionWeekdays, missedSessions,
          sessionsAhead } from "./analyst/loop.mjs";
 import { loadNewsCache, toNewsMap, assertNotAfter } from "./analyst/news.mjs";
 import { scoreJournal, MODE, DEFAULT_JOURNAL } from "./analyst/journal.mjs";
+import { isSyntheticRoot } from "./analyst/provenance.mjs";
 import { tier1 } from "./analyst/protocol.mjs";
 import { AUDIT_CHECKLIST, CHECKLIST_ID } from "./analyst/checklist.mjs";
 import { COST_MODELS } from "./costs.mjs";
@@ -139,6 +141,23 @@ function loadPanel() {
     }
     process.exit(3);
   }
+  // SYNTHETIC PANELS MAY NEVER BECOME A FORWARD TRACK RECORD.
+  //
+  // scripts/make-synthetic-panel.mjs writes noise with no predictable structure, for testing the
+  // scorer against known ground truth. It can be current-dated, so the freshness guard would let it
+  // through -- and a paper journal built on it would be indistinguishable from evidence afterwards.
+  // This refuses on the provenance the generator writes. It adds a refusal and relaxes nothing.
+  // `operatingMode`, not `mode`: there is no module-scoped `mode` binding, and an earlier version of
+  // this guard referenced one. It threw a ReferenceError on every loadPanel call, so the guard had
+  // never executed once — the in-process diagnostic calls analyst/loop.mjs directly and never reached
+  // it. Found only by running the CLI chain, which is the reason the CLI is what the tests exercise.
+  if (operatingMode === MODE.PAPER && isSyntheticRoot(ROOT)) {
+    console.error(`\nrefusing paper mode on "${ROOT}": its PROVENANCE.json marks it SYNTHETIC.`);
+    console.error("Generated noise cannot produce a forward track record. Use dry-run for the");
+    console.error("instrument diagnostic (see docs/FORWARD-EVAL-SPEC.md), or point --root at a real panel.");
+    process.exit(3);
+  }
+
   const raw = {};
   for (const s of availablePairs(1440, ROOT)) raw[s] = loadBundleCandles(s, 1440, ROOT);
   const screened = screenUniverse(raw);

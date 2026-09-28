@@ -137,6 +137,40 @@ unreachable from paper mode.
 is a negative control, and planting known structure to test detection would measure the analyst
 against our own assumptions about markets rather than against markets.
 
+### As built
+
+`synthetic-null.mjs`, `scripts/make-synthetic-panel.mjs`, `analyst/provenance.mjs`,
+`synthetic-null.test.mjs`.
+
+**One correction to the paragraph above.** "Require the instrument to report **no edge**" is not a
+usable criterion. A single noisy panel's edge is a draw from a distribution with sd ≈ 0.85%, so a lone
+nonzero reading is expected and reading it as a broken chain would be a false alarm every time. What
+is testable is the *distribution*: over 120 independent panels the mean edge must be indistinguishable
+from zero (|mean/SE| < 3), and that is what the diagnostic checks.
+
+Four parts, because a centred null alone is also passable by a scorer that reports nothing:
+
+1. **Centre** — the null distribution of edge over many panels, with its mean, SE and quantiles.
+2. **Coverage** — how often the reported 95% interval contains zero, per cluster count, against a
+   *measured* reference curve: the same `clusteredBootstrapCI` run on iid Gaussian clusters with no
+   panel, journal or scorer involved. The chain is judged against that reference, not against 95%,
+   because a percentile cluster bootstrap genuinely under-covers at few clusters — at k=2 its interval
+   reduces to the two cluster means, so coverage of a true zero is exactly 50% by construction.
+   Covering *less* than the reference is the defect this looks for; covering more is conservative.
+3. **Independent recompute** — edge, period count and outcome count recalculated off the raw journal
+   lines by a separate code path, and required to agree to 1e-12.
+4. **Sensitivity** — a seeded injection with an exact closed-form prediction, so a scorer hard-wired
+   to report zero fails. Two equal paired arms make the pooled edge exactly `(before + inject) / 2`.
+
+**Isolation, three independent layers**, all tested: the generator refuses to write into any path with
+a real data-root component (`sp500-bundle/.` defeated an earlier basename-only check), every panel
+stamps `"synthetic": true` in `PROVENANCE.json`, and paper mode refuses such a root. Synthetic records
+carry `synthetic-` in their `batchId`, and `scoreJournal` counts cross-mode records in
+`contaminatedRecords` rather than blending them.
+
+**Known limitation, not a pass:** intervals built from a handful of holding periods are optimistic
+against nominal. A forward run needs many more periods before its interval means what it says.
+
 ## 7. Independently verified executable cost basis
 
 `PER-FAMILY-COST-CEILING` (2026-08-28) already derived the exact break-even: because `netR` is affine
