@@ -44,11 +44,27 @@ HISTORY-ONLY — deleted from the tree; read with `git show 5116866^:<path>`:
 | `docs/archive/VERDICTS_DETAIL.md` | 677 | registered claims, deciding metrics, commits |
 | `MULTIPLE_COMPARISONS_AUDIT.md` | — | programme-level FDR; the alpha budget |
 
+All line counts in this file are `wc -l`. `agent_state_final.json` has no trailing newline, so a
+line-counting tool that counts final partial lines reports 1286 where `wc -l` reports 1285. Compare
+like with like, or the integrity check cries wolf on every run.
+
 **Verify the anchor before trusting any negative.** `git rev-parse 5116866^` must succeed and each
 `git show` must return a non-empty file of at least the line count above. If an anchor fails to
 resolve, or a file comes back shorter than its recorded length, **STOP and report the failure**.
 A failed or truncated read is not a negative finding, and reporting it as one is the single worst
 thing this skill can do.
+
+## A gap in the archive itself, found by testing this skill
+
+Several closed studies say their section was "moved to `ROADMAP_ARCHIVE.md`" — among them
+`HOLDING-PERIOD-COST-AMORTIZATION-MAP` and `COST-SENSITIVITY-SURFACE`. **That file was never
+committed.** `git rev-list --all -- ROADMAP_ARCHIVE.md` returns nothing, so it exists in no commit
+and no ref. For those studies the one-line index summary in `ROADMAP.md` is the only surviving
+evidence anywhere.
+
+So a reference is not a source. When a hit points at `ROADMAP_ARCHIVE.md`, report the index line
+verbatim and state that the primary section is unrecoverable — do not imply a fuller record exists
+to be consulted, and do not treat the summary as if it carried the detail.
 
 ## Procedure
 

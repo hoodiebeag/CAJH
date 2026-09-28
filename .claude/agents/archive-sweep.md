@@ -29,8 +29,17 @@ You have no Bash and cannot read files that exist only in git history. If answer
 `VERDICTS.md`, `docs/archive/VERDICTS_DETAIL.md` or `MULTIPLE_COMPARISONS_AUDIT.md`, **say so and
 stop** — the caller reads those in the main thread with `git show 5116866^:<path>`.
 
+Line counts above are `wc -l`. `agent_state_final.json` has no trailing newline, so a tool that
+counts a final partial line will report 1286 against the 1285 recorded here. Longer is not truncated;
+only **shorter** triggers the stop.
+
 If a file in the list above is missing or reads shorter than its recorded line count, **report that
 as a failure and stop.** Do not continue and do not let a partial sweep become "nothing found".
+
+`ROADMAP_ARCHIVE.md` is referenced by several archive entries but **was never committed** — it is in
+no ref and no commit. It is not merely out of your scope; it is unrecoverable. Report the referring
+index line verbatim and say the primary section does not survive. Do not send the caller looking for
+a ref that does not exist.
 
 ## Anti-cherry-pick contract
 
