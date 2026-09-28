@@ -32,7 +32,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { screenUniverse } from "./universe.mjs";
 import { seededRng, clusteredBootstrapCI } from "./inference.mjs";
@@ -72,7 +72,7 @@ const HOLD = 5;
 // coverage curve is the number of clusters. The panel must also outlast the last entry by the hold,
 // or the final batches never settle and the count silently stops meaning what it says.
 const BARS = FIRST_ASOF + (Math.max(...BATCH_COUNTS) - 1) * SPACING + HOLD + 10;
-const asOfsFor = (nBatches) => Array.from({ length: nBatches }, (_, i) => FIRST_ASOF + i * SPACING);
+export const asOfsFor = (nBatches) => Array.from({ length: nBatches }, (_, i) => FIRST_ASOF + i * SPACING);
 for (const n of BATCH_COUNTS) {
   const last = asOfsFor(n).at(-1);
   if (last + HOLD >= BARS) throw new Error(`batch layout overruns the panel: ${n} batches reach bar ${last}+${HOLD} of ${BARS}`);
@@ -120,7 +120,7 @@ function loadPanel(root) {
 }
 
 /** One panel end to end, in process: decisions -> settle -> score. Returns the score object. */
-async function runPanel(seed, tmp, nBatches = 30) {
+export async function runPanel(seed, tmp, nBatches = 30) {
   const root = path.join(tmp, `syn-${seed}`);
   makePanel(seed, root);
   const { series, dates } = loadPanel(root);
@@ -150,7 +150,7 @@ async function runPanel(seed, tmp, nBatches = 30) {
 }
 
 /** INDEPENDENT RECOMPUTE: same quantities, different code path, straight off the journal lines. */
-function recompute(journalFile, holdDays = HOLD) {
+export function recompute(journalFile, holdDays = HOLD) {
   const { records } = readJournal(journalFile);
   const decisions = records.filter((r) => r.kind === KIND.DECISION && r.mode === MODE.DRY_RUN);
   const ids = new Set(decisions.map((d) => d.batchId));
@@ -177,7 +177,54 @@ function recompute(journalFile, holdDays = HOLD) {
   };
 }
 
-// ---- run -------------------------------------------------------------------------------------
+/**
+ * SENSITIVITY: append an arm carrying a KNOWN edge, and predict the pooled result in closed form.
+ *
+ * A scorer hard-wired to report nothing would pass every other section of this diagnostic. This is
+ * the section it cannot pass.
+ *
+ * The prediction is exact, not a band. The injected arm is paired by construction — agent is control
+ * plus INJECT on every row — so its own edge is exactly INJECT. The two arms are equal in size, so
+ * the pooled edge must be their unweighted average: `(before.edge + INJECT) / 2`. That closed form is
+ * derived outside the scorer, which is what makes this a check rather than a feel.
+ *
+ * A first version asserted "movement is roughly half the injected lift". That was wrong — the movement
+ * is half the GAP between INJECT and the prior edge — and it looked right only because that panel's
+ * prior edge happened to sit near -INJECT.
+ */
+export async function injectKnownEdge(seed, tmp, inject = 0.02, holdDays = HOLD) {
+  const { journal } = await runPanel(seed, tmp);
+  const before = scoreJournal(journal, { mode: MODE.DRY_RUN });
+
+  // Fresh symbols on the existing batch ids, so nothing already written is rewritten. The journal is
+  // append-only by design and this respects that.
+  const rng = seededRng(seed);
+  const spiked = path.join(path.dirname(journal), "injected.jsonl");
+  fs.copyFileSync(journal, spiked);
+  const { records } = readJournal(spiked);
+  const decisions = records.filter((r) => r.kind === KIND.DECISION && r.mode === MODE.DRY_RUN);
+  for (const d of decisions) {
+    for (const a of (d.allowed ?? [])) {
+      const base = 0.01 * (rng() - 0.5);
+      recordOutcome({ batchId: d.batchId, symbol: `${a.symbol}-INJ`, holdDays,
+                      grossReturn: base + inject, netReturn: base + inject, controlReturn: base }, spiked);
+    }
+  }
+  const after = scoreJournal(spiked, { mode: MODE.DRY_RUN });
+  const predicted = ((before.edge ?? 0) + inject) / 2;
+  const error = Math.abs((after.edge ?? 0) - predicted);
+  const added = after.outcomes - before.outcomes;
+  return { before, after, inject, predicted, error, added,
+           ok: error < 1e-12 && added === before.outcomes };
+}
+
+// ---- run ---------------------------------------------------------------------------------------
+//
+// GUARDED SO IMPORTING THIS MODULE DOES NOT LAUNCH A 120-PANEL RUN. The pieces above are exported so
+// synthetic-null.test.mjs can assert on the centre, the recompute agreement and the injection
+// recovery in the ordinary suite — the checks that matter most are worthless if the only thing that
+// runs them is a script nobody runs. `npm test` imports this file; only a direct invocation reports.
+async function main() {
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "synthetic-null-"));
 console.log("SYNTHETIC NULL DIAGNOSTIC — is the scorer honest on data with no edge in it?");
@@ -336,12 +383,22 @@ if (intervals === 0) {
     console.log("  data with no panel, journal or scorer involved.");
     if (above.length) {
       console.log(`  At ${above.join(", ")} periods the chain covers MORE than the iid reference. That is the`);
-      console.log("  conservative direction — wider intervals, a higher bar for claiming an edge — and the");
-      console.log("  likely cause is that panel clusters are neither equal-sized nor iid, unlike the");
-      console.log("  reference. Reported, not dismissed, and not counted as a pass.");
+      console.log("  conservative direction — a higher bar for claiming an edge — but it is UNEXPLAINED, and");
+      console.log("  no mechanism is asserted for it here. Note what it cannot be: at k=2 the interval is");
+      console.log("  [min, max] of the two cluster means whatever their sizes, so cluster-size imbalance");
+      console.log("  cannot raise coverage above 50%. Two independent zero-median periods straddle zero at");
+      console.log("  most half the time, so exceeding that needs dependence between periods or a");
+      console.log("  systematic difference between the first and second. Reported, not dismissed, and not");
+      console.log("  counted as a pass.");
     }
     console.log("  LIMITATION, NOT A PASS: intervals from a handful of periods are optimistic against");
     console.log("  nominal, so a forward run needs many more periods before its interval means what it says.");
+    console.log("");
+    console.log("  AND THIS SHAPE IS NOT PAPER'S SHAPE. Batches here sit 12 bars apart, so holds never");
+    console.log("  overlap, settlement happens once at the end, and every batch decides from a FLAT book");
+    console.log("  (runOnce defaults to no positions and this diagnostic passes none). Paper decides daily,");
+    console.log("  with overlapping 5-day holds and a book carried across days — which is exactly where");
+    console.log("  period clustering does the work. The coverage result above does not transfer to it.");
   }
 }
 
@@ -353,46 +410,21 @@ console.log(`  ${mismatches === 0 ? "AGREES on edge, period count and outcome co
 // ---- 4. sensitivity: a scorer that always says zero must fail this -----------------------------
 console.log(`\n=== 4. SENSITIVITY — inject a known edge; the scorer must recover it ===`);
 {
-  const seed = BASE_SEED + 999983;
-  const { journal } = await runPanel(seed, tmp);
-  const before = scoreJournal(journal, { mode: MODE.DRY_RUN });
-
-  // Append a second arm of outcomes carrying a known +2.00% lift over their controls, on fresh
-  // batch ids so nothing existing is rewritten. The journal is append-only by design.
-  const INJECT = 0.02;
-  const rng = seededRng(seed);
-  const spiked = path.join(path.dirname(journal), "injected.jsonl");
-  fs.copyFileSync(journal, spiked);
-  const { records } = readJournal(spiked);
-  const decisions = records.filter((r) => r.kind === KIND.DECISION && r.mode === MODE.DRY_RUN);
-  for (const d of decisions) {
-    for (const a of (d.allowed ?? [])) {
-      const base = 0.01 * (rng() - 0.5);
-      recordOutcome({ batchId: d.batchId, symbol: `${a.symbol}-INJ`, holdDays: HOLD,
-                      grossReturn: base + INJECT, netReturn: base + INJECT, controlReturn: base }, spiked);
-    }
-  }
-  const after = scoreJournal(spiked, { mode: MODE.DRY_RUN });
-  // AN EXACT PREDICTION, NOT A LOOSE BAND. The injected arm is paired by construction -- agent is
-  // control plus INJECT on every row -- so its own edge is exactly INJECT. The two arms are equal in
-  // size, so the pooled edge must be their unweighted average: (before.edge + INJECT) / 2. That is a
-  // closed form derived outside the scorer, which makes this a check rather than a sanity feel.
-  // A first version of this asserted "movement is roughly half the injected lift", which was wrong:
-  // the movement is half the GAP between INJECT and the prior edge, and it happened to look right
-  // only because that panel's prior edge was near -INJECT.
-  const predicted = ((before.edge ?? 0) + INJECT) / 2;
-  const err = Math.abs((after.edge ?? 0) - predicted);
-  console.log(`  edge before injection   ${pct(before.edge)}   (${before.outcomes} outcomes)`);
-  console.log(`  injected per-name lift  ${pct(INJECT)} on ${after.outcomes - before.outcomes} added outcomes`);
-  console.log(`  edge after injection    ${pct(after.edge)}   (${after.outcomes} outcomes)`);
-  console.log(`  predicted, closed form  ${pct(predicted)}   = (before + inject) / 2, equal arms`);
-  console.log(`  absolute error          ${err.toExponential(2)}`);
-  const ok = err < 1e-12 && (after.outcomes - before.outcomes) === before.outcomes;
-  console.log(`  ${ok ? "RECOVERED EXACTLY — the scorer is not hard-wired to report nothing"
+  const r = await injectKnownEdge(BASE_SEED + 999983, tmp);
+  console.log(`  edge before injection   ${pct(r.before.edge)}   (${r.before.outcomes} outcomes)`);
+  console.log(`  injected per-name lift  ${pct(r.inject)} on ${r.added} added outcomes`);
+  console.log(`  edge after injection    ${pct(r.after.edge)}   (${r.after.outcomes} outcomes)`);
+  console.log(`  predicted, closed form  ${pct(r.predicted)}   = (before + inject) / 2, equal arms`);
+  console.log(`  absolute error          ${r.error.toExponential(2)}`);
+  console.log(`  ${r.ok ? "RECOVERED EXACTLY — the scorer is not hard-wired to report nothing"
               : "*** DOES NOT MATCH THE CLOSED FORM — the scorer or this prediction is wrong ***"}`);
 }
 
 console.log(`\nWhat this does and does not establish: the instrument was exercised against data with`);
 console.log(`no structure in it, and against a known injected effect. Nothing here says anything`);
 console.log(`about real markets, any strategy, or any edge. See docs/FORWARD-EVAL-SPEC.md.`);
-fs.rmSync(tmp, { recursive: true, force: true });
+  fs.rmSync(tmp, { recursive: true, force: true });
+
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) await main();

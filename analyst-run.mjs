@@ -36,7 +36,7 @@ import { runOnce, realisedOutcomes, settleOutcomes, sessionWeekdays, missedSessi
          sessionsAhead } from "./analyst/loop.mjs";
 import { loadNewsCache, toNewsMap, assertNotAfter } from "./analyst/news.mjs";
 import { scoreJournal, MODE, DEFAULT_JOURNAL } from "./analyst/journal.mjs";
-import { isSyntheticRoot } from "./analyst/provenance.mjs";
+import { isDeclaredSynthetic } from "./analyst/provenance.mjs";
 import { tier1 } from "./analyst/protocol.mjs";
 import { AUDIT_CHECKLIST, CHECKLIST_ID } from "./analyst/checklist.mjs";
 import { COST_MODELS } from "./costs.mjs";
@@ -78,6 +78,9 @@ const operatingMode = cmd === "paper" ? MODE.PAPER
                     : cmd === "dry-run" ? MODE.DRY_RUN
                     : flag("mode", MODE.PAPER);
 const ROOT = flag("root", operatingMode === MODE.PAPER ? LIVE_PANEL_ROOT : RESEARCH_ROOT);
+// Computed once here rather than per call: it is a property of the run, and paper mode refuses
+// outright on it (see loadPanel), so the only place it can be true is a dry run.
+const SYNTHETIC_ROOT = isDeclaredSynthetic(ROOT);
 const pct = (v) => (typeof v === "number" ? `${(v * 100).toFixed(2)}%` : "—");
 
 /** Soft-wrap prose for the terminal. The Tier-1 details are paragraphs, not labels. */
@@ -141,17 +144,22 @@ function loadPanel() {
     }
     process.exit(3);
   }
-  // SYNTHETIC PANELS MAY NEVER BECOME A FORWARD TRACK RECORD.
+  // A PANEL THAT DECLARES ITSELF SYNTHETIC MAY NOT BECOME A FORWARD TRACK RECORD.
   //
   // scripts/make-synthetic-panel.mjs writes noise with no predictable structure, for testing the
   // scorer against known ground truth. It can be current-dated, so the freshness guard would let it
   // through -- and a paper journal built on it would be indistinguishable from evidence afterwards.
-  // This refuses on the provenance the generator writes. It adds a refusal and relaxes nothing.
+  // This refuses on the LABEL the generator writes. It adds a refusal and relaxes nothing.
+  //
+  // IT IS NOT A GUARANTEE. isDeclaredSynthetic is fail-open, so a synthetic bundle whose
+  // PROVENANCE.json has been deleted passes here. Fail-closed would refuse every real bundle in this
+  // repo, none of which carries the file; see analyst/provenance.mjs for the full assessment and why
+  // the live paper path is deliberately not changed.
   // `operatingMode`, not `mode`: there is no module-scoped `mode` binding, and an earlier version of
   // this guard referenced one. It threw a ReferenceError on every loadPanel call, so the guard had
   // never executed once — the in-process diagnostic calls analyst/loop.mjs directly and never reached
   // it. Found only by running the CLI chain, which is the reason the CLI is what the tests exercise.
-  if (operatingMode === MODE.PAPER && isSyntheticRoot(ROOT)) {
+  if (operatingMode === MODE.PAPER && isDeclaredSynthetic(ROOT)) {
     console.error(`\nrefusing paper mode on "${ROOT}": its PROVENANCE.json marks it SYNTHETIC.`);
     console.error("Generated noise cannot produce a forward track record. Use dry-run for the");
     console.error("instrument diagnostic (see docs/FORWARD-EVAL-SPEC.md), or point --root at a real panel.");
@@ -266,6 +274,12 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
   try {
     r = await runOnce({
       series, dates, asOf, client, mode, journalFile: JOURNAL, news,
+      // A SYNTHETIC RECORD SAYS SO ON ITS OWN LINE. The panel root is what makes these decisions
+      // noise, and a root is not recorded in the journal — so a journal copied away from its root, or
+      // concatenated onto a real one, would look like ordinary dry-run history. The mode guard in
+      // scoreJournal already keeps dry-run out of a paper score; this makes the provenance legible to
+      // a reader of the file too. Default shape otherwise, so real journals are unchanged.
+      batchId: SYNTHETIC_ROOT ? `synthetic-${mode}-${new Date(dates[asOf] * 1000).toISOString().slice(0, 10)}` : undefined,
       nav: Number(flag("nav", 100000)), slate: Number(flag("slate", 300)), newsMeta,
       // ON BY DEFAULT, WITH AN OFF SWITCH THAT IS THE POINT RATHER THAN AN ESCAPE HATCH. The
       // checklist's effect is only measurable if batches exist on both sides of it, so --no-checklist

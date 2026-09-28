@@ -130,8 +130,9 @@ stub picker through `dry-run --root <synthetic>` → `settle` → `score`, and r
 report **no edge** against its matched control. If it reports one, the decision→journal→settle→score
 chain is broken and every downstream number is worthless.
 
-Needs no model, no key and no Gateway. It would be marked `SYNTHETIC` in its provenance and must be
-unreachable from paper mode.
+Needs no model, no key and no Gateway. It would be marked `SYNTHETIC` in its provenance and paper mode
+must refuse a root carrying that mark. (As built, that refusal keys on the label and is not
+authentication — see the residual gap under **As built** below.)
 
 **What it cannot do:** a pass says nothing about real markets, because there was nothing to find. It
 is a negative control, and planting known structure to test detection would measure the analyst
@@ -162,11 +163,44 @@ Four parts, because a centred null alone is also passable by a scorer that repor
 4. **Sensitivity** — a seeded injection with an exact closed-form prediction, so a scorer hard-wired
    to report zero fails. Two equal paired arms make the pooled edge exactly `(before + inject) / 2`.
 
-**Isolation, three independent layers**, all tested: the generator refuses to write into any path with
-a real data-root component (`sp500-bundle/.` defeated an earlier basename-only check), every panel
-stamps `"synthetic": true` in `PROVENANCE.json`, and paper mode refuses such a root. Synthetic records
-carry `synthetic-` in their `batchId`, and `scoreJournal` counts cross-mode records in
-`contaminatedRecords` rather than blending them.
+**Isolation: three layers, all tested, and NOT a guarantee.**
+
+1. The generator refuses to write into any path with a real data-root component (`sp500-bundle/.`
+   defeated an earlier basename-only check).
+2. Every generated panel stamps `"synthetic": true` in `PROVENANCE.json`, and paper mode refuses a root
+   carrying that label — verified through the CLI, which exits 3 before any decision.
+3. Synthetic records carry `synthetic-` in their `batchId` (in the CLI path too, not only the
+   diagnostic), and `scoreJournal` scores one mode at a time, counting cross-mode records in
+   `contaminatedRecords` rather than blending them.
+
+**The residual gap, stated rather than implied.** Layer 2 detects a *positive label*; it does not
+authenticate a panel. `isDeclaredSynthetic` is deliberately fail-open, so **deleting `PROVENANCE.json`
+from a synthetic bundle makes it pass the paper-mode check.** An earlier version of this section, and
+commit `e42077c`, said generated noise *cannot* become a paper record. That was an overclaim. The
+accurate claim is: **paper mode refuses a panel that declares itself synthetic.** A test asserts the
+stripped-label behaviour explicitly, and is written to fail if anyone later makes paper mode fail
+closed, so the claim and the code cannot drift apart.
+
+**Why paper mode is not made fail-closed here** (assessed 2026-09-28, not assumed):
+
+- Fail-closed means refusing any root that cannot positively prove it is real. **No bundle in this
+  repo carries a `PROVENANCE.json`** — not `sp500-bundle`, `candle-bundle`, `candle-bundle-long` or
+  `equity-bundle`. `scripts/ibkr-panel.mjs` does write one (a `source` field, no `synthetic` key), so a
+  freshly built `ibkr-bundle` would satisfy such a rule.
+- But `ibkr-bundle` is **absent from this container** — the very blocker this work runs around — so the
+  panel the live paper path would actually load cannot be inspected. An `ibkr-bundle` already collected,
+  or one whose provenance did not survive being committed, would be refused, converting a data problem
+  into a hard block on the only evidence channel that exists.
+- An unsigned JSON file is not authentication in either direction: whatever can delete
+  `PROVENANCE.json` can write one saying `"source": "IBKR..."`. Fail-closed on an unsigned file raises
+  the bar from "delete a file" to "write a file". Real authentication needs a signature or a checksum
+  manifest produced by the collector and verified against a key.
+
+Changing the live paper path is therefore **not done here** — it is the one path whose failure mode is
+a hard block on all forward evidence, and it needs the real `ibkr-bundle` in hand plus an explicit
+decision. **Layer 3 is the one that does not depend on a file anyone can delete**, and it is the layer
+that actually protects the record: a synthetic run is a dry run, and a dry run cannot enter a paper
+score whatever its panel claimed.
 
 **Known limitation, not a pass:** intervals built from a handful of holding periods are optimistic
 against nominal. A forward run needs many more periods before its interval means what it says.
