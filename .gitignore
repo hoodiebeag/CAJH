@@ -44,6 +44,13 @@ candle-bundle.tar.gz
 # an append-only file -- resolvable by taking the union of the lines, but easier not to cause.
 *.jsonl
 !analyst-journal.jsonl
+# The candidate/version ledger records what each configuration claimed BEFORE it ran, so it is tracked
+# for the same reason the journal is: an appended entry is not durable until it is committed, and
+# research-registry lost two runs' entries to a hard reset on 2026-09-03 for exactly that reason.
+!analyst-ledger.jsonl
+# Journal locks are per-machine runtime state. A committed lock would block every other checkout, and
+# `*.jsonl` above does not match `*.jsonl.lock`.
+*.jsonl.lock
 
 # The news cache is fetched per-deployment from a Gateway, and a committed one would be
 # both stale and a point-in-time record of somebody else's run.

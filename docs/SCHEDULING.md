@@ -39,6 +39,30 @@ Each of these is a way a scheduled run fails silently at 4pm on a Tuesday rather
    the analyst branch never sees it.
 6. **Output goes to a file.** A scheduled run with nowhere to write is a run you cannot diagnose.
 
+### The model key: `process.env`, not `.env`
+
+**Verified 2026-09-28 by reading the code, not assumed.** `analyst-run.mjs` reads
+`process.env.ANTHROPIC_API_KEY` directly (`analyst-run.mjs:127,129`) and **nothing in the analyst loads
+a `.env` file** — there is no `dotenv` import anywhere under `analyst/` or in `analyst-run.mjs`. So:
+
+- A key that lives only in `.env`, or only in your shell profile, **is absent under cron.** A scheduler
+  runs with a minimal environment and no login shell.
+- The wrapper below therefore has to *export* it. Reading it from a file the scheduler can see is fine;
+  relying on the analyst to find that file is not, because the analyst never looks.
+- Without the key, `paper` exits before deciding anything. That is a correct refusal and an unhelpful
+  one to discover from a log the next morning.
+
+Check it the same way the run will see it, without making a model call or touching the journal:
+
+```
+node analyst-run.mjs readiness
+```
+
+That reports the panel, the key, journal writability, the journal lock and the ledger, and exits
+non-zero if anything blocks. It constructs no model client and appends no record — in particular it does
+not create the SKIP record that a real `paper` run journals when it refuses a stale panel, so it is safe
+to run on a timer and safe to run against the real journal.
+
 ### A wrapper that makes 3–6 explicit
 
 Save as `~/cajh-refresh.sh`, `chmod +x`, and point the scheduler at this rather than at
@@ -54,6 +78,19 @@ cd "$REPO"
 git checkout "$BRANCH"
 exec bash scripts/refresh.sh
 ```
+
+`refresh.sh` needs no model key — it only talks to IB Gateway. A wrapper that will *also* run the
+analyst needs the key exported explicitly, because the analyst reads `process.env` and loads no `.env`:
+
+```bash
+# Only if this wrapper runs the analyst. Keep the key out of the repo and out of `git`.
+set -a; . "$HOME/.config/cajh/env"; set +a     # a file containing ANTHROPIC_API_KEY=...
+node analyst-run.mjs readiness || exit 1        # no model call, no journal write; non-zero = not ready
+```
+
+Keep that env file outside the checkout, readable only by the scheduling user (`chmod 600`). Nothing in
+this repository reads it — the `set -a` above is what puts the key into the environment the analyst
+inherits.
 
 Find the right PATH entry with `which node` in your own shell and put that directory first.
 
@@ -180,6 +217,19 @@ appending produce a merge conflict in an append-only file.
 `refresh.sh` stages and pushes the journal along with the data, so scheduling the refresh on the
 same machine that runs `paper` also backs the record up. Scheduling them on different machines does
 not, and splits the journal.
+
+**The one-writer rule is now enforced, not just advised.** `dry-run`, `paper`, `anonymised` and `settle`
+take a lockfile at `<journal>.lock` for the length of the invocation and exit 4 if another writer holds
+it, naming the host, pid and age. Recovery is deliberately manual: a lock older than 6h is reported as
+`STALE` with the exact `rm` command, and **nothing breaks it automatically.** Auto-breaking would need a
+timeout longer than the slowest legitimate run, and since no paper run has ever happened, that duration
+is unknown — guessing it short would silently re-create the two-writer case the lock exists to prevent.
+`node analyst-run.mjs readiness` reports the lock without taking it.
+
+**Nothing is scheduled today, and nothing in this repository enables a scheduler.** There are no cron
+entries, launchd plists or timers installed by anything here; the snippets above are for a human to
+install deliberately. `paper`, `settle` and `score` remain unscheduled on purpose, and the first `paper`
+run must be by hand.
 
 No scheduler in this file places an order of any kind. The hard limits in README.md are unchanged
 by it, and this document deliberately does not restate them — they have one home.

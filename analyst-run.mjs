@@ -37,6 +37,27 @@ import { runOnce, realisedOutcomes, settleOutcomes, sessionWeekdays, missedSessi
 import { loadNewsCache, toNewsMap, assertNotAfter } from "./analyst/news.mjs";
 import { scoreJournal, MODE, DEFAULT_JOURNAL } from "./analyst/journal.mjs";
 import { isDeclaredSynthetic } from "./analyst/provenance.mjs";
+import { acquireLock, releaseLock } from "./analyst/lock.mjs";
+import { readinessReport, formatReadiness } from "./analyst/readiness.mjs";
+import { inputHashes } from "./analyst/ledger.mjs";
+import { buildSystemPrompt } from "./analyst/decide.mjs";
+
+/**
+ * Hash what the model is actually given, so an unregistered change to it is visible.
+ *
+ * Reads the universe file rather than the parsed symbol list: a comment or ordering change that does
+ * not alter the parsed universe should not invent a new candidate, but the file is the artifact a human
+ * edits, so it is hashed as the checklist and prompt are -- as text, whole.
+ */
+function currentInputHashes() {
+  const uniFile = flag("symbols", "universe/candidates.txt");
+  return inputHashes({
+    systemPrompt: buildSystemPrompt({ checklist: useChecklist ? AUDIT_CHECKLIST : null }),
+    checklist: useChecklist ? AUDIT_CHECKLIST : null,
+    checklistId: useChecklist ? CHECKLIST_ID : null,
+    universeText: fs.existsSync(uniFile) ? fs.readFileSync(uniFile, "utf8") : "",
+  });
+}
 import { tier1 } from "./analyst/protocol.mjs";
 import { AUDIT_CHECKLIST, CHECKLIST_ID } from "./analyst/checklist.mjs";
 import { COST_MODELS } from "./costs.mjs";
@@ -177,7 +198,53 @@ function loadPanel() {
 
 // ---------------------------------------------------------------------------------------------
 
-if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
+// SINGLE WRITER, FOR THE COMMANDS THAT APPEND.
+//
+// `docs/SCHEDULING.md` already warned that two machines appending to an append-only journal produce a
+// merge conflict in the evidence record; nothing enforced it. Taken once per invocation around the
+// mutating commands rather than inside journal.mjs, so no record's CONTENT or ordering changes -- this
+// gates when a run may start, nothing else. Released in a finally block, and on signals, because a
+// lock leaked by a Ctrl-C would block tomorrow's scheduled run.
+const MUTATES = new Set(["dry-run", "paper", "anonymised", "settle"]);
+let heldLock = null;
+if (MUTATES.has(cmd)) {
+  try {
+    heldLock = acquireLock(JOURNAL, { command: `analyst-run.mjs ${argv.join(" ")}` });
+  } catch (e) {
+    console.error(`\n${e.message}`);
+    process.exit(4);
+  }
+  const drop = () => { if (heldLock) { releaseLock(JOURNAL); heldLock = null; } };
+  process.on("exit", drop);
+  for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => { drop(); process.exit(130); });
+}
+
+if (cmd === "readiness") {
+  // NO MODEL CALL, NO JOURNAL WRITE. It does not even take the lock above -- it reports on the lock,
+  // which is a read. This is the only way to ask "would paper run?" without the guard journalling a
+  // SKIP record for a question rather than for a session.
+  console.log(`readiness for ${operatingMode} mode — panel root "${ROOT}", journal ${JOURNAL}`);
+  const report = readinessReport({
+    root: ROOT,
+    journalFile: JOURNAL,
+    candidateId: flag("candidate", null),
+    current: currentInputHashes(),
+    loadDates: (r) => {
+      const raw = {};
+      for (const s of availablePairs(1440, r)) raw[s] = loadBundleCandles(s, 1440, r);
+      const times = new Set();
+      for (const bars of Object.values(screenUniverse(raw).kept)) for (const b of bars) times.add(Number(b.time));
+      return [...times].sort((a, b) => a - b);
+    },
+  });
+  console.log("");
+  for (const line of formatReadiness(report)) console.log(line);
+  console.log("");
+  console.log("Readiness is not permission: docs/SCHEDULING.md requires the FIRST paper run to be by hand,");
+  console.log("and nothing in this repository schedules paper, settle or score.");
+  process.exit(report.ready ? 0 : 1);
+
+} else if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
   const mode = cmd === "paper" ? MODE.PAPER
              : cmd === "anonymised" ? MODE.ANONYMISED
              : MODE.DRY_RUN;
@@ -464,12 +531,17 @@ if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
 
 } else {
   console.log(`usage:
+  node analyst-run.mjs readiness   [--root DIR] [--journal FILE] [--candidate ID]
   node analyst-run.mjs dry-run    [--asOf N] [--slate 300] [--stub] [--journal FILE] [--root DIR]
   node analyst-run.mjs anonymised [--asOf N] [--slate 300] [--journal FILE]
   node analyst-run.mjs settle     [--mode paper|dry-run] [--hold 5] [--journal FILE] [--root DIR]
   node analyst-run.mjs paper   [--journal FILE] [--no-checklist]
   node analyst-run.mjs score   [--mode paper|dry-run|anonymised] [--journal FILE]
   node analyst-run.mjs protocol   [--mode paper] [--journal FILE]
+
+readiness answers "would paper run now?" with NO model call and NO journal write. Exit 0 = ready.
+  It reports the panel, the key, journal writability, the journal lock and the ledger. Readiness is
+  not permission: the FIRST paper run is manual (docs/SCHEDULING.md) and nothing here is scheduled.
 
 dry-run exercises the wiring on a historical date and is NOT evidence.
 anonymised probes reasoning with identities stripped and is NOT evidence.
