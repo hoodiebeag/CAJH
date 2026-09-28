@@ -5,11 +5,37 @@ description: Before proposing ANY trading hypothesis, strategy variant, cost or 
   mechanism. Returns verbatim rows with provenance, or an auditable negative finding. Read-only.
 when_to_use: Invoke before any message that proposes a hypothesis to test, reopens a closed
   mechanism, recommends a research direction, or asserts what this project already knows.
-allowed-tools: Bash(git show *) Bash(git rev-parse *) Bash(git rev-list *) Grep Read Glob
+allowed-tools: Grep Read Glob
 disallowed-tools: Write, Edit, NotebookEdit
 ---
 
 # Archive precedent check
+
+## What this skill is and is not permitted to do — read this first
+
+**This skill is not technically read-only, and an earlier version of this file wrongly claimed it
+was.** Two things were wrong:
+
+1. `Bash(git show *)` was pre-approved as "read-only". It is not. `git show --output=<file>` writes —
+   verified here, 6141 bytes to an arbitrary path — and pattern-matching a git subcommand prefix
+   cannot bound the options that follow it. All `Bash(...)` pre-approvals have been removed.
+2. `disallowed-tools: Write, Edit, NotebookEdit` removes those three tools. **It does not restrict
+   Bash**, so it never made this skill read-only, and it must not be cited as if it did.
+
+What is true now: `allowed-tools` pre-approves only `Grep`, `Read` and `Glob`, which cannot write.
+Bash remains *callable* — `allowed-tools` never restricted anything — but it is **not pre-approved**,
+so every command runs through normal review. This skill therefore *prescribes* read-only operations
+and *relies on approval* for the one step that needs a command.
+
+Division of labour that follows from that:
+
+- **In-tree sources need no Bash at all.** `Grep`, `Read` and `Glob` cover all six of them. Prefer the
+  `archive-sweep` agent (`tools: Read, Grep, Glob`, no Bash, a hard allowlist) for wide sweeps — that
+  one *is* structurally restricted.
+- **History-only sources need a command, so flag them and let them be approved individually.** State
+  which file you need and why. Do not batch them into one invocation to reduce prompts; each read is
+  a reviewed action.
+
 
 `docs/WHAT-WE-KNOW.md` is 8.6K standing in for ~1.3MB of archive, and it demonstrably drops
 material qualifications — it asserts that every closed mechanism was "a transform of the same
