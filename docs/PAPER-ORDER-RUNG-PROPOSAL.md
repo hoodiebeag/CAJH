@@ -1,8 +1,24 @@
-# Proposal: a paper-account order rung. Not approved, not built, not in the ladder.
+# Proposal: a paper-account order rung. DECLINED for now.
 
-**Status: PROPOSAL FOR REVIEW. Nothing here is implemented.** No order code is wired, no route exists
-from the analyst to a broker, no schedule is created, and no risk threshold, sizing rule, STOP criterion
-or passing criterion is changed by this document. It asks for a decision; it does not record one.
+## Status: reviewed and declined, 2026-09-29
+
+**Both questions this document asked have been answered by the owner. Nothing here is implemented, and
+under decision 2 nothing here may be implemented without the full D3 gate.**
+
+1. **Should the rung exist? — No, not yet.** Do not build an IBKR paper-account order rung. The forward
+   path continues as the log-only journal, which is D2 as `SELF_AWARENESS_SPEC.md` already defines it.
+2. **Is a paper-account order a "live order" under the `README.md` hard limit? — Yes.** That boundary is
+   binding. It is recorded in `README.md` under **Hard limits**, which is the authoritative home for it.
+
+**What decision 2 changes, and it is more than a label.** A paper-account order is now subject to
+D1 → D2 → D3 with explicit human sign-off at D3 — a gate no document and no agent can satisfy. So this
+rung is not merely deferred pending a build decision; were it ever revisited it would have to clear D3
+first. Everything below is retained as the record of what was proposed and on what reasoning, not as a
+plan awaiting a start date.
+
+The original status note, still true: no order code is wired, no route exists from the analyst to a
+broker, no schedule is created, and no risk threshold, sizing rule, STOP criterion or passing criterion
+is changed by this document.
 
 ## 0. The thing this document must not pretend
 
@@ -184,7 +200,14 @@ are one `grep` away in the file named above. So:
    money and it does reach a broker over a real socket. Both readings are defensible. Tyler decides, and
    the answer should be written into `README.md` or `SELF_AWARENESS_SPEC.md` so it is not re-litigated.
 
-## 9. What is being asked of Tyler
+## 9. What was asked of Tyler, and what he answered
+
+**Answered 2026-09-29 — see the status block at the top.** (1) No, not yet: the rung is declined and the
+log-only journal continues. (2) Yes: a paper-account order is a live order, so it carries the D3 gate.
+(3) is therefore moot — `SELF_AWARENESS_SPEC.md` is not amended and the ladder is unchanged. (4) stands
+as an unmet precondition for any future revisit. The original wording follows.
+
+
 
 1. **Should D2b exist at all?**, given it buys zero statistical power and the spec's own recommendation is
    to stay log-only until fill realism is the binding uncertainty. A "no, not yet" is a complete answer

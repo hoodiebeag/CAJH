@@ -128,6 +128,12 @@ strategy look alive. Whether the analyst does better is unknown and, per
 - **No live order in any asset class** without D1 → D2 → D3 and explicit human sign-off at D3
   (`SELF_AWARENESS_SPEC.md`). A document in this repository is not a human at that gate, and
   neither is an agent.
+  - **An order submitted to an IBKR paper account counts as a live order under this limit**
+    (owner decision, 2026-09-29). It risks no money and it does reach a broker over a real
+    socket, and the boundary is drawn at the socket. So a paper-account order is subject to
+    D1 → D2 → D3 and explicit human sign-off at D3, exactly as a money order is — it is not a
+    lesser step that review can be skipped for. Recorded here so the question is settled once
+    rather than re-argued whenever an order path looks convenient.
 - **Never create the protected-edit override marker.** If the pre-commit check blocks a change,
   that is the system working: exclude the offending file, or stop and report. The same check runs
   in CI on every pushed commit, where it cannot be skipped. Wire it locally with
