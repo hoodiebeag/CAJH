@@ -12,7 +12,7 @@ import {
   handleHelp, handleWatchlist, handleWatch, handleUnwatch,
   handleSetChannel, handleStatus,
   handleScan, handleAnalyzeThat, handleChartRequest,
-  handleGeneral, handleManualTrade, handleBacktest, handleOptimize, handleWhy, handleAlign, handleRoom, handleModes, handleProfile, handleValidate, handleDiscover, handleExits, handleExcursion, handleTournament,
+  handleGeneral, handleManualTrade,
   handleStop, handleResume, handleSell, handlePort, handleReconcile, handleForget,
 } from "./commands.js";
 import * as logger from './logger.js';
@@ -247,24 +247,6 @@ client.on("messageCreate", async (message) => {
   if (lower === "!setchannel") return safe(handleSetChannel(message, state, config), message);
   if (lower === "!status")     return safe(handleStatus(message, state), message);
   if (lower === "!scan")       return safe(handleScan(message, state), message);
-  if (lower === "!optimize")   return safe(handleOptimize(message, state), message);
-  if (lower === "!align")      return safe(handleAlign(message, state), message);
-  if (lower === "!room")       return safe(handleRoom(message, state), message);
-  if (lower === "!modes")      return safe(handleModes(message, state), message);
-  if (lower === "!profile")    return safe(handleProfile(message, state), message);
-  if (lower === "!validate")   return safe(handleValidate(message, state), message);
-  if (lower === "!discover")   return safe(handleDiscover(message, state), message);
-  if (lower === "!exits")      return safe(handleExits(message, state), message);
-  if (lower === "!excursion")  return safe(handleExcursion(message, state), message);
-  if (lower === "!tournament") return safe(handleTournament(message, state), message);
-
-  if (lower === "!why" || lower.startsWith("!why ")) {
-    return safe(handleWhy(message, state, raw.slice(4).trim() || null), message);
-  }
-
-  if (lower === "!backtest" || lower.startsWith("!backtest ")) {
-    return safe(handleBacktest(message, state, raw.slice(9).trim()), message);
-  }
 
   if (lower === "!trade") {
     return safe(handleManualTrade(message, state, null), message);

@@ -1,0 +1,20 @@
+#!/bin/sh
+# Blocks any commit touching the live-trading, halt/resume or order-validation code
+# unless a fresh human-created override marker is present. The real logic lives in
+# scripts/check-protected-logic.cjs; this file exists only so the check can be wired
+# up with a directory that is actually committed.
+#
+# WHY THIS FILE IS IN THE REPO. The check was written to run from .git/hooks/pre-commit,
+# and .git/ is not version controlled — so a fresh clone, a new container or a cloud
+# session starts with NO hook and no sign that anything is missing. Measured on
+# 2026-09-24: this container had an empty .git/hooks and every commit made in it went
+# unchecked. A guard that silently disappears when the repository is copied is not a
+# guard. Committing the hook makes wiring it a one-line config instead of a thing
+# somebody has to remember.
+#
+# Enable it once per clone:
+#   git config core.hooksPath .githooks
+#
+# This is still local, and local means skippable (--no-verify, or simply never running
+# the config command). The same check therefore runs in CI, where it cannot be skipped.
+exec node "$(dirname "$0")/../scripts/check-protected-logic.cjs"

@@ -1,0 +1,89 @@
+{
+  "collectedAt": "2026-09-19T21:58:52.924Z",
+  "host": "127.0.0.1",
+  "port": 4002,
+  "news": {
+    "ok": true,
+    "providers": [
+      {
+        "code": "BRFG",
+        "name": "Briefing.com General Market Columns"
+      },
+      {
+        "code": "BRFUPDN",
+        "name": "Briefing.com Analyst Actions"
+      },
+      {
+        "code": "DJNL",
+        "name": "Dow Jones Newsletters"
+      }
+    ],
+    "reason": null,
+    "sample": {
+      "symbol": "AAPL",
+      "ok": true,
+      "count": 10,
+      "reason": null
+    }
+  },
+  "sectors": {
+    "classified": 118,
+    "total": 128,
+    "groups": 8,
+    "ambiguous": 0,
+    "unclassified": 10
+  },
+  "intraday": [
+    {
+      "duration": "1 D",
+      "barSize": "1 min",
+      "ok": true,
+      "bars": 390,
+      "reason": ""
+    },
+    {
+      "duration": "2 D",
+      "barSize": "1 min",
+      "ok": true,
+      "bars": 780,
+      "reason": ""
+    },
+    {
+      "duration": "5 D",
+      "barSize": "5 mins",
+      "ok": true,
+      "bars": 390,
+      "reason": ""
+    },
+    {
+      "duration": "1 M",
+      "barSize": "30 mins",
+      "ok": true,
+      "bars": 273,
+      "reason": ""
+    },
+    {
+      "duration": "6 M",
+      "barSize": "1 hour",
+      "ok": true,
+      "bars": 875,
+      "reason": ""
+    },
+    {
+      "duration": "1 Y",
+      "barSize": "1 day",
+      "note": "known-good control",
+      "ok": true,
+      "bars": 251,
+      "reason": ""
+    },
+    {
+      "duration": "1 Y",
+      "barSize": "1 min",
+      "note": "DELIBERATE OVER-ASK, should be REFUSED",
+      "ok": false,
+      "bars": 0,
+      "reason": "timeout"
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "fetchedAt": "2026-09-19T21:58:56.938Z",
+  "providers": [
+    {
+      "code": "BRFG",
+      "name": "Briefing.com General Market Columns"
+    },
+    {
+      "code": "BRFUPDN",
+      "name": "Briefing.com Analyst Actions"
+    },
+    {
+      "code": "DJNL",
+      "name": "Dow Jones Newsletters"
+    }
+  ],
+  "headlines": {
+    "AAPL": [
+      {
+        "at": 1785506032,
+        "atIso": "2026-07-31T13:53:52.000Z",
+        "providerCode": "BRFG",
+        "articleId": "BRFG$1f064106",
+        "headline": "{A:800015:L:en}Apple Bites Into Record Q3, but Supply Crunch Takes a Bite Out of Guidance"
+      },
+      {
+        "at": 1777645626,
+        "atIso": "2026-05-01T14:27:06.000Z",
+        "providerCode": "BRFG",
+        "articleId": "BRFG$1e4f0994",
+        "headline": "{A:800015:L:en}Apple Core Still Crisp: Strong iPhone Demand and Sweet Q3 Guide Power Shares Higher"
+      },
+      {
+        "at": 1777382366,
+        "atIso": "2026-04-28T13:19:26.000Z",
+        "providerCode": "BRFUPDN",
+        "articleId": "BRFUPDN$1e42b96d",
+        "headline": "{A:800015:L:en}!UBS reiterated Apple (AAPL) coverage with Neutral and target $287"
+      },
+      {
+        "at": 1776780575,
+        "atIso": "2026-04-21T14:09:35.000Z",
+        "providerCode": "BRFG",
+        "articleId": "BRFG$1e303153",
+        "headline": "{A:800015:L:en}Apple Turns Over a New Leaf as Tim Cook Hands CEO Role to John Ternus"
+      },
+      {
+        "at": 1776427257,
+        "atIso": "2026-04-17T12:00:57.000Z",
+        "providerCode": "BRFUPDN",
+        "articleId": "BRFUPDN$1e275e4c",
+        "headline": "{A:800015:L:en}!BNP Paribas Exane upgraded Apple (AAPL) to Outperform"
+      },
+      {
+        "at": 1776178722,
+        "atIso": "2026-04-14T14:58:42.000Z",
+        "providerCode": "BRFUPDN",
+        "articleId": "BRFUPDN$1e1f54ec",
+        "headline": "{A:800015:L:en}!BofA Securities reiterated Apple (AAPL) coverage with Buy and target $325"
+      },
+      {
+        "at": 1774272315,
+        "atIso": "2026-03-23T13:25:15.000Z",
+        "providerCode": "BRFUPDN",
+        "articleId": "BRFUPDN$1deaeefd",
+        "headline": "{A:800015:L:en}!BofA Securities reiterated Apple (AAPL) coverage with Buy and target $320"
+      },
+      {
+        "at": 1772716056,
+        "atIso": "2026-03-05T13:07:36.000Z",
+        "providerCode": "BRFUPDN",
+        "articleId": "BRFUPDN$1dbe0f31",
+        "headline": "{A:800015:L:en:K:n/a:C:0.9775911569595337}!Rosenblatt reiterated Apple (AAPL) coverage with Neutral and target $268"
+      },
+      {
+        "at": 1772545055,
+        "atIso": "2026-03-03T13:37:35.000Z",
+        "providerCode": "BRFUPDN",
+        "articleId": "BRFUPDN$1db64adf",
+        "headline": "{A:800015:L:en:K:n/a:C:0.7744059562683105}!Barclays reiterated Apple (AAPL) coverage with Underweight and target $248"
+      },
+      {
+        "at": 1772032038,
+        "atIso": "2026-02-25T15:07:18.000Z",
+        "providerCode": "BRFUPDN",
+        "articleId": "BRFUPDN$1da64165",
+        "headline": "{A:800015:L:en:K:n/a:C:0.9777254462242126}!MoffettNathanson reiterated Apple (AAPL) coverage with Neutral and target $270"
+      }
+    ]
+  }
+}

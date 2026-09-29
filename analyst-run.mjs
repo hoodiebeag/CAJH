@@ -1,0 +1,553 @@
+#!/usr/bin/env node
+/**
+ * analyst-run.mjs — the command line for the analyst.
+ *
+ * THREE SUBCOMMANDS, AND THE DIFFERENCE BETWEEN THEM IS THE WHOLE POINT:
+ *
+ *   settle    compute outcomes for decisions whose holding period has finished, and append them.
+ *             Without this nothing ever calls recordOutcome, so `score` reads zero outcomes
+ *             forever and the measurement instrument measures nothing. Idempotent: a decision
+ *             already settled is skipped, never written twice.
+ *   dry-run   exercise context -> decide -> risk -> journal on a historical date. Proves the
+ *             plumbing works. NOT EVIDENCE OF ANYTHING ELSE, and recorded under its own mode so
+ *             `score` cannot blend it into a track record.
+ *   paper     one forward decision at today's date. The only mode that is evidence. Refuses to run
+ *             on a stale panel, because a model asked about a past date already knows the answer.
+ *   anonymised  the reasoning probe. Same path, identities stripped: no tickers, no dates, no
+ *               sectors, no news. It answers "is the reasoning coherent on evidence alone?", which
+ *               is the only question a historical run CAN answer honestly, because with identities
+ *               present the model recalls what happened instead of reasoning. Recorded under its
+ *               own mode and NEVER evidence of edge.
+ *   score     print the journal readout: the analyst beside its own matched random control.
+ *
+ * THIS FILE CANNOT PLACE AN ORDER. It composes modules none of which can reach a venue.
+ *
+ * Usage:
+ *   node analyst-run.mjs dry-run [--asOf N] [--slate 300] [--journal FILE] [--stub]
+ *   node analyst-run.mjs paper   [--journal FILE] [--no-checklist] [--root DIR]
+ *   node analyst-run.mjs score   [--journal FILE] [--mode paper|dry-run|anonymised]
+ */
+
+import fs from "node:fs";
+import path from "node:path";
+import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
+import { screenUniverse } from "./universe.mjs";
+import { runOnce, realisedOutcomes, settleOutcomes, sessionWeekdays, missedSessions,
+         sessionsAhead } from "./analyst/loop.mjs";
+import { loadNewsCache, toNewsMap, assertNotAfter } from "./analyst/news.mjs";
+import { scoreJournal, MODE, DEFAULT_JOURNAL } from "./analyst/journal.mjs";
+import { isDeclaredSynthetic } from "./analyst/provenance.mjs";
+import { acquireLock, releaseLock } from "./analyst/lock.mjs";
+import { readinessReport, formatReadiness } from "./analyst/readiness.mjs";
+import { inputHashes } from "./analyst/ledger.mjs";
+import { buildSystemPrompt } from "./analyst/decide.mjs";
+
+/**
+ * Hash what the model is actually given, so an unregistered change to it is visible.
+ *
+ * Reads the universe file rather than the parsed symbol list: a comment or ordering change that does
+ * not alter the parsed universe should not invent a new candidate, but the file is the artifact a human
+ * edits, so it is hashed as the checklist and prompt are -- as text, whole.
+ */
+function currentInputHashes() {
+  const uniFile = flag("symbols", "universe/candidates.txt");
+  return inputHashes({
+    systemPrompt: buildSystemPrompt({ checklist: useChecklist ? AUDIT_CHECKLIST : null }),
+    checklist: useChecklist ? AUDIT_CHECKLIST : null,
+    checklistId: useChecklist ? CHECKLIST_ID : null,
+    universeText: fs.existsSync(uniFile) ? fs.readFileSync(uniFile, "utf8") : "",
+  });
+}
+import { tier1 } from "./analyst/protocol.mjs";
+import { AUDIT_CHECKLIST, CHECKLIST_ID } from "./analyst/checklist.mjs";
+import { COST_MODELS } from "./costs.mjs";
+
+const argv = process.argv.slice(2);
+const cmd = argv[0];
+const flag = (name, dflt) => {
+  const i = argv.indexOf(`--${name}`);
+  return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : dflt;
+};
+const has = (name) => argv.includes(`--${name}`);
+
+const JOURNAL = flag("journal", DEFAULT_JOURNAL);
+const useChecklist = !has("no-checklist");
+/**
+ * WHICH PANEL EACH MODE READS, AND WHY THEY DIFFER.
+ *
+ * scripts/ibkr-panel.mjs writes the current IBKR panel to `ibkr-bundle`. This file used to read
+ * `sp500-bundle` unconditionally, so a full refresh -- hours of paced requests across ~1,000
+ * symbols -- landed in a directory nothing read, and `paper` then refused on a months-old bar from
+ * the research bundle while the fresh data sat beside it. Nothing anywhere mentioned `--root`.
+ *
+ * So the default follows the MODE BEING OPERATED ON, not the subcommand:
+ *
+ *   paper                    the current IBKR panel. Forward decisions get current data or none.
+ *   settle --mode paper      the same panel, necessarily: settling a paper decision against a
+ *                            different panel looks up its bar in a series that never contained it.
+ *   dry-run, anonymised      the research bundle. Historical access is deliberately preserved.
+ *   settle --mode dry-run    likewise.
+ *
+ * `--root` overrides either, and is now documented. Paper mode FAILS CLOSED when its panel is
+ * absent rather than falling back to historical data, because a silent fallback is exactly how a
+ * forward run ends up deciding on a stale bar.
+ */
+const LIVE_PANEL_ROOT = "ibkr-bundle";
+const RESEARCH_ROOT = "sp500-bundle";
+const operatingMode = cmd === "paper" ? MODE.PAPER
+                    : cmd === "anonymised" ? MODE.ANONYMISED
+                    : cmd === "dry-run" ? MODE.DRY_RUN
+                    : flag("mode", MODE.PAPER);
+const ROOT = flag("root", operatingMode === MODE.PAPER ? LIVE_PANEL_ROOT : RESEARCH_ROOT);
+// Computed once here rather than per call: it is a property of the run, and paper mode refuses
+// outright on it (see loadPanel), so the only place it can be true is a dry run.
+const SYNTHETIC_ROOT = isDeclaredSynthetic(ROOT);
+const pct = (v) => (typeof v === "number" ? `${(v * 100).toFixed(2)}%` : "—");
+
+/** Soft-wrap prose for the terminal. The Tier-1 details are paragraphs, not labels. */
+const wrap = (text, width) => {
+  const out = [];
+  let line = "";
+  for (const word of String(text).split(/\s+/)) {
+    if (line && line.length + 1 + word.length > width) { out.push(line); line = word; }
+    else line = line ? `${line} ${word}` : word;
+  }
+  if (line) out.push(line);
+  return out;
+};
+
+/**
+ * A stub client, for proving the wiring without a key or a network.
+ *
+ * IT IS DELIBERATELY NOT AN ANALYST. It picks the top few names by whatever the slate was ranked
+ * on and says so in its thesis. Anything cleverer would invite reading its output as a result,
+ * which it is not and cannot be.
+ */
+function stubClient(n = 3) {
+  return {
+    messages: {
+      create: async ({ messages }) => {
+        const ctx = JSON.parse(messages[0].content[0].text);
+        const picks = (ctx.candidates ?? []).filter((c) => !c.held).slice(0, n).map((c) => ({
+          symbol: c.symbol, action: "buy", targetPct: 0.05, confidence: 0.5,
+          thesis: `STUB CLIENT: mechanical top-of-slate pick by ${ctx.universe?.rankedBy}. Not analysis.`,
+        }));
+        return {
+          id: "msg_stub", container: null,
+          content: [{ type: "text", text: JSON.stringify({ decisions: picks }), citations: null }],
+          model: "stub", role: "assistant", stop_details: null,
+          stop_reason: "end_turn", stop_sequence: null, type: "message",
+          usage: { input_tokens: 0, output_tokens: 0 },
+        };
+      },
+    },
+  };
+}
+
+async function realClient() {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+}
+
+function loadPanel() {
+  // FAIL CLOSED, AND SAY WHAT TO DO. availablePairs throws on a missing root, which is correct but
+  // reads as a broken install rather than "the data has not been collected yet".
+  if (!fs.existsSync(ROOT)) {
+    console.error(`\nno panel at "${ROOT}".`);
+    if (ROOT === LIVE_PANEL_ROOT) {
+      console.error("Paper mode reads the CURRENT IBKR panel and will not fall back to historical data.");
+      console.error("Collect it on a machine that can reach IB Gateway:");
+      console.error("  bash scripts/refresh.sh        (pull, collect, panel, commit, push)");
+      console.error(`Then pull. To work on history instead: --root ${RESEARCH_ROOT} with dry-run.`);
+    } else {
+      console.error(`Expected a candle bundle there. Pass --root with the bundle you mean.`);
+    }
+    process.exit(3);
+  }
+  // A PANEL THAT DECLARES ITSELF SYNTHETIC MAY NOT BECOME A FORWARD TRACK RECORD.
+  //
+  // scripts/make-synthetic-panel.mjs writes noise with no predictable structure, for testing the
+  // scorer against known ground truth. It can be current-dated, so the freshness guard would let it
+  // through -- and a paper journal built on it would be indistinguishable from evidence afterwards.
+  // This refuses on the LABEL the generator writes. It adds a refusal and relaxes nothing.
+  //
+  // IT IS NOT A GUARANTEE. isDeclaredSynthetic is fail-open, so a synthetic bundle whose
+  // PROVENANCE.json has been deleted passes here. Fail-closed would refuse every real bundle in this
+  // repo, none of which carries the file; see analyst/provenance.mjs for the full assessment and why
+  // the live paper path is deliberately not changed.
+  // `operatingMode`, not `mode`: there is no module-scoped `mode` binding, and an earlier version of
+  // this guard referenced one. It threw a ReferenceError on every loadPanel call, so the guard had
+  // never executed once — the in-process diagnostic calls analyst/loop.mjs directly and never reached
+  // it. Found only by running the CLI chain, which is the reason the CLI is what the tests exercise.
+  if (operatingMode === MODE.PAPER && isDeclaredSynthetic(ROOT)) {
+    console.error(`\nrefusing paper mode on "${ROOT}": its PROVENANCE.json marks it SYNTHETIC.`);
+    console.error("Generated noise cannot produce a forward track record. Use dry-run for the");
+    console.error("instrument diagnostic (see docs/FORWARD-EVAL-SPEC.md), or point --root at a real panel.");
+    process.exit(3);
+  }
+
+  const raw = {};
+  for (const s of availablePairs(1440, ROOT)) raw[s] = loadBundleCandles(s, 1440, ROOT);
+  const screened = screenUniverse(raw);
+  for (const [sym, why] of screened.rejected) console.log(`screened out ${sym}: ${why}`);
+  const times = new Set();
+  for (const bars of Object.values(screened.kept)) for (const b of bars) times.add(Number(b.time));
+  return { series: screened.kept, dates: [...times].sort((a, b) => a - b) };
+}
+
+// ---------------------------------------------------------------------------------------------
+
+// SINGLE WRITER, FOR THE COMMANDS THAT APPEND.
+//
+// `docs/SCHEDULING.md` already warned that two machines appending to an append-only journal produce a
+// merge conflict in the evidence record; nothing enforced it. Taken once per invocation around the
+// mutating commands rather than inside journal.mjs, so no record's CONTENT or ordering changes -- this
+// gates when a run may start, nothing else. Released in a finally block, and on signals, because a
+// lock leaked by a Ctrl-C would block tomorrow's scheduled run.
+const MUTATES = new Set(["dry-run", "paper", "anonymised", "settle"]);
+let heldLock = null;
+if (MUTATES.has(cmd)) {
+  try {
+    heldLock = acquireLock(JOURNAL, { command: `analyst-run.mjs ${argv.join(" ")}` });
+  } catch (e) {
+    console.error(`\n${e.message}`);
+    process.exit(4);
+  }
+  const drop = () => { if (heldLock) { releaseLock(JOURNAL); heldLock = null; } };
+  process.on("exit", drop);
+  for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => { drop(); process.exit(130); });
+}
+
+if (cmd === "readiness") {
+  // NO MODEL CALL, NO JOURNAL WRITE. It does not even take the lock above -- it reports on the lock,
+  // which is a read. This is the only way to ask "would paper run?" without the guard journalling a
+  // SKIP record for a question rather than for a session.
+  console.log(`readiness for ${operatingMode} mode — panel root "${ROOT}", journal ${JOURNAL}`);
+  const report = readinessReport({
+    root: ROOT,
+    journalFile: JOURNAL,
+    candidateId: flag("candidate", null),
+    current: currentInputHashes(),
+    loadDates: (r) => {
+      const raw = {};
+      for (const s of availablePairs(1440, r)) raw[s] = loadBundleCandles(s, 1440, r);
+      const times = new Set();
+      for (const bars of Object.values(screenUniverse(raw).kept)) for (const b of bars) times.add(Number(b.time));
+      return [...times].sort((a, b) => a - b);
+    },
+  });
+  console.log("");
+  for (const line of formatReadiness(report)) console.log(line);
+  console.log("");
+  console.log("Readiness is not permission: docs/SCHEDULING.md requires the FIRST paper run to be by hand,");
+  console.log("and nothing in this repository schedules paper, settle or score.");
+  process.exit(report.ready ? 0 : 1);
+
+} else if (cmd === "dry-run" || cmd === "paper" || cmd === "anonymised") {
+  const mode = cmd === "paper" ? MODE.PAPER
+             : cmd === "anonymised" ? MODE.ANONYMISED
+             : MODE.DRY_RUN;
+  const { series, dates } = loadPanel();
+  console.log(`panel: ${ROOT}, ${Object.keys(series).length} symbols, ${dates.length} dates, ` +
+              `last ${new Date(dates.at(-1) * 1000).toISOString().slice(0, 10)}`);
+
+  // The staleness of the panel is reported BEFORE the key check. Otherwise a missing key is the
+  // first error a user sees, and they conclude paper mode merely needs credentials when the real
+  // blocker is that there is no current data to decide on.
+  if (mode === MODE.PAPER) {
+    const ahead = sessionsAhead(dates.at(-1), Date.now());
+    if (ahead > 0) {
+      console.error(`\npanel's last bar is dated ${new Date(dates.at(-1) * 1000).toISOString().slice(0, 10)}, ` +
+                    `${ahead} day(s) in the FUTURE.`);
+      console.error("That is corrupt input, not a stale panel — a timezone mis-parse, a wrong clock,");
+      console.error("or a vendor stamping forward. Deciding on bars that have not happened is the");
+      console.error("exact contamination paper mode exists to prevent. Fix the panel.");
+      process.exit(3);
+    }
+    const missed = missedSessions(dates.at(-1), Date.now(), sessionWeekdays(dates));
+    if (missed > 0) {
+      console.error(`\npanel is ${missed} completed session(s) behind its own calendar (last bar ` +
+                    `${new Date(dates.at(-1) * 1000).toISOString().slice(0, 10)}). Paper mode needs`);
+      console.error("current data: a model asked what it would do on a past date already knows what");
+      console.error("happened. Refresh the panel first — a key will not help:");
+      console.error("  node scripts/ibkr-panel.mjs      (on a machine that can reach IB Gateway)");
+      console.error("Use dry-run to exercise the wiring in the meantime.");
+      process.exit(3);
+    }
+  }
+
+  const client = has("stub") ? stubClient() : await realClient();
+  if (!client) {
+    console.error("no ANTHROPIC_API_KEY. Use --stub to exercise the wiring without a model.");
+    process.exit(2);
+  }
+  if (has("stub") && mode === MODE.PAPER) {
+    console.error("refusing --stub in paper mode: a stub's picks are not decisions and must never");
+    console.error("enter the record that is read as evidence. Use dry-run.");
+    process.exit(2);
+  }
+  if (has("stub") && mode === MODE.ANONYMISED) {
+    console.log("note: --stub picks mechanically off the slate, so it probes the WIRING of this");
+    console.log("mode and tells you nothing about reasoning, which is the only thing it is for.");
+  }
+  if (mode === MODE.ANONYMISED) {
+    console.log("anonymised: tickers, dates, sectors and news are stripped before the model sees");
+    console.log("anything; the risk gate still prices the real instruments behind the labels, and");
+    console.log("proposals are translated back before the journal. So these ARE settleable — and");
+    console.log("still NOT evidence of edge, because the anonymisation cannot be proven complete.");
+  }
+
+  const asOf = flag("asOf", null) === null ? dates.length - 1 : Number(flag("asOf"));
+
+  // ---- news, from the cache rather than the wire ----------------------------------------------
+  // Fetching live inside the decision would hand a replay TODAY'S news for YESTERDAY'S decision --
+  // the exact contamination this design exists to prevent, arriving through a convenience. The
+  // cache is a point-in-time record, and every headline is re-checked against the decision
+  // boundary here even though context.mjs filters again. Two filters, because a provider stamping
+  // articles forward is the failure that would look most like skill.
+  let news = {};
+  let newsMeta = { source: null, fetchedAt: null, ageHours: null, stale: null, droppedAtBoundary: 0 };
+  const cache = loadNewsCache(flag("news", "data/news-cache.json"));
+  if (cache) {
+    const boundary = dates[asOf];
+    const filtered = {}, dropCount = {};
+    let totalDropped = 0;
+    for (const [sym, headlines] of Object.entries(cache.headlines)) {
+      const { kept, dropped } = assertNotAfter(headlines, boundary);
+      filtered[sym] = kept;
+      if (dropped.length) { dropCount[sym] = dropped.length; totalDropped += dropped.length; }
+    }
+    news = toNewsMap(filtered);
+    newsMeta = {
+      source: flag("news", "data/news-cache.json"),
+      fetchedAt: cache.fetchedAt ?? null,
+      ageHours: Number.isFinite(cache.ageMs) ? Math.round(cache.ageMs / 36000) / 100 : null,
+      stale: !!cache.stale,
+      droppedAtBoundary: totalDropped,
+    };
+    const withNews = Object.values(news).filter((v) => v.length).length;
+    console.log(`news cache: fetched ${cache.fetchedAt}, ${withNews} symbol(s) with headlines` +
+                `${cache.stale ? `  [STALE: ${(cache.ageMs / 3600000).toFixed(1)}h old]` : ""}`);
+    if (totalDropped) {
+      console.log(`  ${totalDropped} headline(s) dated at/after the decision were dropped: ` +
+                  Object.entries(dropCount).map(([s, n]) => `${s}x${n}`).join(", "));
+    }
+  } else {
+    console.log("no news cache; running on price and indicators alone.");
+  }
+
+  let r;
+  try {
+    r = await runOnce({
+      series, dates, asOf, client, mode, journalFile: JOURNAL, news,
+      // A SYNTHETIC RECORD SAYS SO ON ITS OWN LINE. The panel root is what makes these decisions
+      // noise, and a root is not recorded in the journal — so a journal copied away from its root, or
+      // concatenated onto a real one, would look like ordinary dry-run history. The mode guard in
+      // scoreJournal already keeps dry-run out of a paper score; this makes the provenance legible to
+      // a reader of the file too. Default shape otherwise, so real journals are unchanged.
+      batchId: SYNTHETIC_ROOT ? `synthetic-${mode}-${new Date(dates[asOf] * 1000).toISOString().slice(0, 10)}` : undefined,
+      nav: Number(flag("nav", 100000)), slate: Number(flag("slate", 300)), newsMeta,
+      // ON BY DEFAULT, WITH AN OFF SWITCH THAT IS THE POINT RATHER THAN AN ESCAPE HATCH. The
+      // checklist's effect is only measurable if batches exist on both sides of it, so --no-checklist
+      // is how the control arm ever gets written. The id is journalled either way.
+      checklist: useChecklist ? AUDIT_CHECKLIST : null,
+      checklistId: useChecklist ? CHECKLIST_ID : null,
+    });
+  } catch (err) {
+    console.error(String(err.message));
+    process.exit(3);
+  }
+
+  console.log(`\nmode ${mode}, asOf ${r.context.asOf ?? "(anonymised)"}, ` +
+              `slate ${r.context.universe.shown}/${r.context.universe.total}, ` +
+              `checklist ${useChecklist ? CHECKLIST_ID : "off (control arm)"}`);
+  if (r.skipped) {
+    console.log(`batch produced nothing: ${r.skipped.reason} — ${JSON.stringify(r.skipped.detail)}`);
+  } else {
+    console.log(`proposals ${r.decision.proposals.length}, dropped ${r.decision.dropped.length}, ` +
+                `allowed ${r.gate.allowed.length}, rejected ${r.gate.rejected.length}`);
+    for (const p of r.gate.allowed) console.log(`  + ${p.symbol.padEnd(8)} ${p.action} ${pct(p.targetPct)}`);
+    for (const x of r.gate.rejected) console.log(`  - ${String(x.proposal?.symbol).padEnd(8)} ${x.code}: ${x.detail}`);
+    for (const d of r.decision.dropped) console.log(`  ~ dropped by decide: ${d.why}`);
+  }
+  console.log(`journalled to ${JOURNAL} as batch ${r.record?.batchId}`);
+
+  // In a dry run the outcome is already knowable, so the full path including scoring can be shown.
+  if (mode === MODE.DRY_RUN && r.record && !r.skipped) {
+    // requireComplete:false so a hold the panel cannot cover is SHOWN as incomplete rather than
+    // silently absent. The default drops them, which is what a journal writer must do; a human
+    // reading a dry run should see that the panel ran out, not an empty section.
+    const rows = realisedOutcomes({
+      record: r.record, series, dates, entryIdx: asOf, holdDays: 5,
+      costPerLeg: COST_MODELS.usEquityIbkr.feeRate + COST_MODELS.usEquityIbkr.slipPct,
+      requireComplete: false,
+    });
+    if (rows.length) {
+      console.log("\nrealised over the next 5 sessions (DRY RUN — not evidence):");
+      for (const x of rows) {
+        if (!x.complete) {
+          console.log(`  ${x.symbol.padEnd(8)} INCOMPLETE — ${x.sessionsHeld}/${x.holdDays} sessions ` +
+                      `available after this date; no outcome exists yet and none is recorded`);
+          continue;
+        }
+        console.log(`  ${x.symbol.padEnd(8)} net ${pct(x.netReturn).padStart(8)}   ` +
+                    `control ${pct(x.controlReturn).padStart(8)}`);
+      }
+    }
+  }
+
+} else if (cmd === "settle") {
+  // CLOSES THE LOOP BETWEEN A DECISION AND WHAT HAPPENED TO IT.
+  //
+  // recordOutcome existed and nothing called it. Decisions were journalled, `realisedOutcomes`
+  // could compute results, and the two were never connected -- so `score` reported "outcomes 0"
+  // no matter how long the agent ran. A measurement instrument that cannot record a measurement
+  // is not one.
+  //
+  // It is a SEPARATE command rather than a step inside `paper` because the holding period has not
+  // elapsed when the decision is made. Settlement happens days later, on a later run, which is
+  // also why it must be idempotent.
+  const { series, dates } = loadPanel();
+  const holdDays = Number(flag("hold", 5));
+  const mode = flag("mode", MODE.PAPER);
+  const r = settleOutcomes({
+    series, dates, journalFile: JOURNAL, mode, holdDays,
+    costPerLeg: COST_MODELS.usEquityIbkr.feeRate + COST_MODELS.usEquityIbkr.slipPct,
+  });
+  console.log(`settle mode "${mode}", hold ${holdDays}d, journal ${JOURNAL}`);
+  if (r.malformed) console.log(`  ${r.malformed} malformed line(s) skipped`);
+  console.log(`  ${r.decisions} decision batch(es) in this mode`);
+  console.log(`  wrote ${r.wrote} outcome(s)`);
+  if (r.already) console.log(`  ${r.already} already settled, left alone`);
+  if (r.pending) console.log(`  ${r.pending} decision(s) still inside the holding period — nothing recorded`);
+  if (r.unknownBar) {
+    console.log(`  ${r.unknownBar} batch(es) carry no decision bar this panel knows; skipped, not guessed at.`);
+    console.log("    (records written before asOfTime was stored, or a panel that no longer covers them)");
+  }
+
+} else if (cmd === "score") {
+  const mode = flag("mode", MODE.PAPER);
+  const s = scoreJournal(JOURNAL, { mode });
+  console.log(`journal ${JOURNAL}, mode "${s.mode}"${s.isEvidence ? "" : "  — NOT EVIDENCE OF EDGE"}`);
+  if (s.contaminatedRecords) {
+    console.log(`${s.contaminatedRecords} record(s) from other modes excluded from every figure below.`);
+  }
+  console.log(`batches ${s.batches}, sized decisions ${s.decisions}, outcomes ${s.outcomes}, span ${s.spanDays}d`);
+  if (s.malformed) console.log(`${s.malformed} malformed line(s) skipped`);
+  console.log("");
+  console.log(`  analyst mean net   ${pct(s.agentMeanNet)}`);
+  console.log(`  control mean net   ${pct(s.controlMeanNet)}   <- a coin flip from the same slate`);
+  console.log(`  edge               ${pct(s.edge)}`);
+  // THE PERIOD COUNT BELONGS BESIDE THE EDGE, NOT IN A FOOTNOTE. The protocol's whole arithmetic
+  // turns on it: 20 trading days at a 5-day hold is four independent observations, not a hundred
+  // trades, and the interval drawn over trades would be about three times too narrow.
+  console.log(`  95% CI             ${s.edgeCI.lo === null ? "—" : `${pct(s.edgeCI.lo)} .. ${pct(s.edgeCI.hi)}`}` +
+              `   over ${s.periods} independent period(s) at a ${s.holdDays}-day hold`);
+  if (s.edgeCI.degenerate && s.periods) {
+    console.log("                     one period has NO interval: a cluster bootstrap can only redraw");
+    console.log("                     the same cluster, so the variance is not estimable here.");
+  } else if (s.periods && s.periods < 12) {
+    console.log(`                     ${s.periods} period(s) resolves almost nothing — docs/PAPER-PROTOCOL.md`);
+  }
+  console.log(`  beat control       ${s.beatControlRate === null ? "—" : `${(s.beatControlRate * 100).toFixed(1)}%`} of decisions`);
+  console.log(`  hit rate           ${s.hitRate === null ? "—" : `${(s.hitRate * 100).toFixed(1)}%`}`);
+  console.log("");
+  // The split that tests the design's one claim. Printed with both counts and no verdict: this
+  // pivot's argument is that the edge comes from the non-price input, and the only way to read
+  // that is names bought WITH a headline against names bought without.
+  const ns = s.newsSplit;
+  if (ns && (ns.withNews.n || ns.withoutNews.n || ns.unknown)) {
+    console.log("did the news matter? (the claim this design rests on)");
+    console.log(`  with a headline     n=${String(ns.withNews.n).padStart(4)}   net ${pct(ns.withNews.meanNet).padStart(8)}   control ${pct(ns.withNews.controlMeanNet).padStart(8)}   edge ${pct(ns.withNews.edge)}`);
+    console.log(`  without             n=${String(ns.withoutNews.n).padStart(4)}   net ${pct(ns.withoutNews.meanNet).padStart(8)}   control ${pct(ns.withoutNews.controlMeanNet).padStart(8)}   edge ${pct(ns.withoutNews.edge)}`);
+    if (ns.unknown) console.log(`  unrecorded          n=${String(ns.unknown).padStart(4)}   (decisions written before the flag existed)`);
+    console.log(ns.comparable
+      ? "  both arms have enough outcomes to be worth comparing. Compare the EDGES, not the nets."
+      : "  NOT YET COMPARABLE — needs 20+ outcomes in each arm. Splitting a small sample makes two");
+    if (!ns.comparable) console.log("  smaller ones, and a skewed payoff needs more outcomes than a symmetric one, not fewer.");
+    console.log("");
+  }
+  // The split that says whether the reading changed anything. Printed with both counts and no
+  // verdict, exactly like the news split, and for the same reason.
+  const cs = s.checklistSplit;
+  if (cs && (cs.withChecklist.n || cs.withoutChecklist.n)) {
+    console.log("did the audit checklist change anything? (unvalidated reading, see docs/READING-NOTES.md)");
+    console.log(`  with checklist      n=${String(cs.withChecklist.n).padStart(4)}   net ${pct(cs.withChecklist.meanNet).padStart(8)}   control ${pct(cs.withChecklist.controlMeanNet).padStart(8)}   edge ${pct(cs.withChecklist.edge)}`);
+    console.log(`  without             n=${String(cs.withoutChecklist.n).padStart(4)}   net ${pct(cs.withoutChecklist.meanNet).padStart(8)}   control ${pct(cs.withoutChecklist.controlMeanNet).padStart(8)}   edge ${pct(cs.withoutChecklist.edge)}`);
+    console.log(cs.comparable
+      ? "  both arms have enough outcomes to be worth comparing. Compare the EDGES, not the nets."
+      : "  NOT YET COMPARABLE — needs 20+ outcomes in each arm. Run some batches with --no-checklist");
+    if (!cs.comparable) console.log("  or there is no control arm and the checklist's effect cannot be measured at all.");
+    console.log("");
+  }
+  if (Object.keys(s.rejectCounts).length) {
+    console.log("risk gate rejections:");
+    for (const [code, n] of Object.entries(s.rejectCounts).sort((a, b) => b[1] - a[1])) {
+      console.log(`  ${code.padEnd(28)} ${n}`);
+    }
+  }
+  if (s.halts || s.brakes) console.log(`halts ${s.halts}, daily brakes ${s.brakes}`);
+  console.log("");
+  console.log(s.meetsStandingMinimum
+    ? "Standing minimum MET (60 days and 50 trades). A significance test is now meaningful."
+    : `Standing minimum NOT met (needs 60 days and 50 trades; have ${s.spanDays}d and ${s.decisions}). ` +
+      "No p-value is computed before then: with this few outcomes it would be noise with a decimal point.");
+
+} else if (cmd === "protocol") {
+  // The pre-registered Tier-1 criteria, computed rather than read. See analyst/protocol.mjs for
+  // why three of the ten report "manual" instead of a number.
+  const mode = flag("mode", MODE.PAPER);
+  const r = tier1(JOURNAL, { mode });
+  console.log(`journal ${JOURNAL}, mode "${r.mode}", ${r.batches} batch(es)`);
+  console.log("docs/PAPER-PROTOCOL.md Tier-1 — pre-registered 2026-09-24, before any paper decision\n");
+  if (mode !== MODE.PAPER) {
+    // Criterion 1 counts batches against the weekdays their `at` timestamps span. In a forward run
+    // those are the same thing; in a dry run every batch is recorded in the same minute, so the
+    // ratio is meaningless rather than merely approximate. Said once, up front.
+    console.log(`These criteria are defined for the PAPER run. In mode "${mode}" this exercises the`);
+    console.log("readout only; criterion 1 cannot be answered outside a forward run and says so.\n");
+  }
+  const mark = { pass: "PASS", fail: "FAIL", manual: "MANUAL" };
+  for (const c of r.criteria) {
+    const stop = c.stops ? "  [STOPS THE RUN]" : "";
+    console.log(`${String(c.n).padStart(2)}. ${mark[c.status].padEnd(6)} ${c.name}${stop}`);
+    for (const line of wrap(c.detail, 92)) console.log(`      ${line}`);
+    if (c.n === 9 && c.numbers.sample?.length) {
+      console.log("      first few, for the spot-check:");
+      for (const t of c.numbers.sample.slice(0, 3)) console.log(`        ${t.symbol}: ${t.thesis}`);
+    }
+    console.log("");
+  }
+  if (r.verdict === "STOP") {
+    console.log(`STOP: ${r.stops.map((c) => c.n).join(", ")} failed. These are integrity failures, not`);
+    console.log("performance ones; continuing past them produces a record that means nothing.");
+  } else if (r.verdict === "FAIL") {
+    console.log("Criteria failed, none of them stopping ones. Reported and judged, per the protocol.");
+  } else {
+    console.log("No computable criterion failed. The manual ones are still owed a human.");
+  }
+  console.log("\nAnd none of this is evidence of edge. See the table in docs/PAPER-PROTOCOL.md.");
+
+} else {
+  console.log(`usage:
+  node analyst-run.mjs readiness   [--root DIR] [--journal FILE] [--candidate ID]
+  node analyst-run.mjs dry-run    [--asOf N] [--slate 300] [--stub] [--journal FILE] [--root DIR]
+  node analyst-run.mjs anonymised [--asOf N] [--slate 300] [--journal FILE]
+  node analyst-run.mjs settle     [--mode paper|dry-run] [--hold 5] [--journal FILE] [--root DIR]
+  node analyst-run.mjs paper   [--journal FILE] [--no-checklist]
+  node analyst-run.mjs score   [--mode paper|dry-run|anonymised] [--journal FILE]
+  node analyst-run.mjs protocol   [--mode paper] [--journal FILE]
+
+readiness answers "would paper run now?" with NO model call and NO journal write. Exit 0 = ready.
+  It reports the panel, the key, journal writability, the journal lock and the ledger. Readiness is
+  not permission: the FIRST paper run is manual (docs/SCHEDULING.md) and nothing here is scheduled.
+
+dry-run exercises the wiring on a historical date and is NOT evidence.
+anonymised probes reasoning with identities stripped and is NOT evidence.
+paper is the only mode that counts, and refuses to run on a stale panel.
+
+--root defaults to "ibkr-bundle" (the current IBKR panel) for paper, and to "sp500-bundle"
+(historical research data) for dry-run and anonymised. settle follows its --mode.`);
+  process.exit(cmd ? 1 : 0);
+}
