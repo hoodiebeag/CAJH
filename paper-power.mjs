@@ -29,6 +29,7 @@ import { loadBundleCandles, availablePairs } from "./bundle-loader.mjs";
 import { screenUniverse } from "./universe.mjs";
 import { seededRng } from "./inference.mjs";
 import { COST_MODELS } from "./costs.mjs";
+import { mde, periodsFor, annualise, costDragPerYear, nonOverlappingStarts } from "./analyst/power.mjs";
 
 const DRAWS = Number(process.argv[2] ?? 20000);
 let HOLD = 5;
@@ -75,10 +76,26 @@ function bookReturn(syms, i) {
 // This is exactly what the journal's matched control is, so its spread is the noise any claimed
 // edge has to clear.
 const rng = seededRng(SEED);
-const starts = [];
-for (let i = 250; i + HOLD < dates.length; i += HOLD) starts.push(i);
 
-function pairedDiffs(bookSize) {
+/**
+ * Non-overlapping start indices FOR THE HOLD BEING MEASURED.
+ *
+ * This was a single array built once at HOLD=5 and reused as HOLD was reassigned below, which made
+ * the shorter-hold comparison sample only every fifth session whatever the hold. Two consequences,
+ * both measured: a 1-day hold was being estimated from a weekday-phase subsample (every 5th trading
+ * day, so a fixed day-of-week bias) rather than from all days, and at a 21-day hold 3 of 133 starts
+ * ran past the end of the panel and were silently clamped to a shorter window by the Math.min in
+ * bookReturn, understating long-hold noise.
+ *
+ * Rebuilding per hold makes each row an apples-to-apples non-overlapping grid, which is what the
+ * section claims to compare. Direction of the correction, for the record: the annualised column
+ * becomes FLATTER (168-185% rather than 155-180%), so the "shortening the hold does not help"
+ * conclusion comes out stronger, not weaker. The 5-day row is unchanged by construction and serves
+ * as the internal control.
+ */
+const startsFor = (hold) => nonOverlappingStarts(250, hold, dates.length);
+
+function pairedDiffs(bookSize, starts = startsFor(HOLD)) {
   const diffs = [];
   for (let d = 0; d < DRAWS; d++) {
     const i = starts[Math.floor(rng() * starts.length)];
@@ -94,12 +111,16 @@ function pairedDiffs(bookSize) {
   return diffs;
 }
 
-/** Observations needed for a two-sided 95% test at 80% power to see an edge of `delta` per period. */
-const nFor = (sigma, delta) => Math.ceil(((1.96 + 0.84) ** 2 * sigma ** 2) / delta ** 2);
-/** The smallest per-period edge that n observations can resolve. */
-const mde = (sigma, n) => (1.96 + 0.84) * sigma / Math.sqrt(n);
+// mde / periodsFor / annualise / costDragPerYear now come from analyst/power.mjs, which is tested.
+// They used to be two local arrow functions here with 1.96 and 0.84 inlined and no coverage at all.
+//
+// TO BE PRECISE ABOUT WHAT THIS DOES NOT YET DO: the candidate ledger does NOT import power.mjs. Its
+// `mdeAtMinimum` is still a value the registrant supplies, so the two can still disagree. What has
+// changed is that there is now one tested implementation to compute it with instead of a console
+// readout to copy from. Wiring the ledger to cross-check the field is proposed, not done -- see
+// docs/POWER-VALIDATION.md, since it touches what the ledger accepts.
 
-console.log(`panel ${names.length} names, ${dates.length} dates, ${starts.length} non-overlapping ${HOLD}-day periods`);
+console.log(`panel ${names.length} names, ${dates.length} dates, ${startsFor(HOLD).length} non-overlapping ${HOLD}-day periods`);
 console.log(`null simulated by drawing TWO random books per period and differencing: ${DRAWS} draws\n`);
 
 for (const bookSize of [5, 10, 20]) {
@@ -111,10 +132,10 @@ for (const bookSize of [5, 10, 20]) {
   for (const [label, n] of [["20 trading days  (4 periods)", 4], ["60 trading days (12 periods)", 12],
                             ["6 months        (26 periods)", 26], ["1 year          (50 periods)", 50]]) {
     const m = mde(s, n);
-    console.log(`    ${label}  >= ${pct(m).padStart(8)} per period  (~${pct(m * 50)} annualised)`);
+    console.log(`    ${label}  >= ${pct(m).padStart(8)} per period  (~${pct(annualise(m, HOLD))} annualised)`);
   }
-  console.log(`  periods needed to resolve a genuinely large edge of 1.00% per period: ${nFor(s, 0.01)}` +
-              `  (~${Math.round(nFor(s, 0.01) * HOLD)} trading days)`);
+  console.log(`  periods needed to resolve a genuinely large edge of 1.00% per period: ${periodsFor(s, 0.01)}` +
+              `  (~${Math.round(periodsFor(s, 0.01) * HOLD)} trading days)`);
   console.log("");
 }
 
@@ -134,14 +155,13 @@ console.log("DOES A SHORTER HOLD HELP? (book of 10, one month of trading)");
 console.log("  hold   periods   per-period noise   detectable edge/period   annualised   cost drag/yr");
 for (const h of [1, 2, 5, 10, 21]) {
   HOLD = h;
-  const diffs = pairedDiffs(10);
+  const diffs = pairedDiffs(10, startsFor(h));
   const s2 = sd(diffs);
   const periodsInMonth = Math.max(1, Math.floor(20 / h));
   const m = mde(s2, periodsInMonth);
-  const perYear = 252 / h;
   console.log(`  ${String(h).padStart(4)}d   ${String(periodsInMonth).padStart(7)}   ` +
               `${pct(s2).padStart(16)}   ${pct(m).padStart(22)}   ` +
-              `${pct(m * perYear).padStart(10)}   ${pct(2 * LEG * perYear).padStart(12)}`);
+              `${pct(annualise(m, h)).padStart(10)}   ${pct(costDragPerYear(LEG, h)).padStart(12)}`);
 }
 console.log("");
 console.log("  The annualised column is the comparable one. It barely moves: shortening the hold");
