@@ -53,12 +53,25 @@ import {
   buildReturnMap, drawPair, sd, mean, monteCarloSeOfSd, periodBootstrapSd, blockBootstrapSd,
 } from "./analyst/panel-null.mjs";
 
-export const ROOT = "sp500-bundle";
+/**
+ * The panel to measure. Defaults to the research bundle; `--root ibkr-bundle` points it at the live
+ * panel, which matters more than it looks: `universe/candidates.txt` holds **1,047 tickers** (confirmed
+ * by a panel pull on 2026-10-05), while `sp500-bundle` holds 127 screened names. At 127 names a
+ * slate of 300 IS the whole cross-section; at 1,047 it is roughly 29% of it, and section 3 measures
+ * that a slate narrower than the universe raises sigma. So the same code answers a different question
+ * depending on this flag, and the report prints which panel it read.
+ */
+const flag = (name, dflt) => {
+  const i = process.argv.indexOf(`--${name}`);
+  return i >= 0 && process.argv[i + 1] && !process.argv[i + 1].startsWith("--") ? process.argv[i + 1] : dflt;
+};
+export const ROOT = flag("root", "sp500-bundle");
 export const SEED = 20261006;
 export const HOLD = 5;
 export const FIRST_START = 252;        // the momentum warm-up; buildContext can rank nothing earlier
 const LEG = COST_MODELS.usEquityIbkr.feeRate + COST_MODELS.usEquityIbkr.slipPct;
-const DRAWS = Number(process.argv[2] ?? 20000);
+// The first bare numeric argument is the draw count, so `--root X 5000` and `5000 --root X` both work.
+const DRAWS = Number(process.argv.slice(2).find((a) => /^\d+$/.test(a)) ?? 20000);
 
 const pct3 = (x) => (Number.isFinite(x) ? `${(x * 100).toFixed(3)}%` : "—");
 const pct = (x) => (Number.isFinite(x) ? `${(x * 100).toFixed(2)}%` : "—");

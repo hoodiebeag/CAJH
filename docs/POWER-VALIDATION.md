@@ -273,9 +273,20 @@ the close of `barDates[i]` → `asOf = i`. `loadGrids` throws if a future panel 
 | slate=80 | 80.0 | 2.548% | 0.013% | 1.009% | 50.9% |
 | slate=300 (deployed) | 127.0 | 2.348% | 0.012% | 0.930% | 46.9% |
 
-`slate=300` against 127 names **is** the whole cross-section — `context.mjs` says so itself — so the
-registered σ was measured against the right pool **by coincidence of sizing, not by design**.
-Ratio 1.0029 against the full universe confirms it.
+`slate=300` against 127 names **is** the whole cross-section — `context.mjs` says so itself — so on
+**`sp500-bundle`** the registered σ was measured against the right pool **by coincidence of sizing, not
+by design**. Ratio 1.0029 against the full universe confirms it.
+
+> ⚠️ **CORRECTION, 2026-10-05, from a live panel pull rather than inference.** An earlier draft of this
+> section said slate-conditioning "changes nothing TODAY", which read as a statement about the deployed
+> configuration. It is only true of the 127-name research bundle. `scripts/ibkr-panel.mjs` reported
+> **`universe from universe/candidates.txt (1047 tickers)`** on the owner's machine. Against 1,047 names
+> a slate of 300 shows roughly **29%** of the universe, so the narrow-slate regime below is the LIVE
+> regime, not a hypothetical one — and it is the regime in which the registered MDE is **optimistic by
+> ~20%**. `context.mjs` records that 300 was chosen "against a ~1,000-name universe"; that pull confirms
+> the figure. The measurement must be repeated against `ibkr-bundle` once the panel is complete:
+> `node slate-null.mjs 20000 --root ibkr-bundle`. Until then the σ figures here describe 127 survivors
+> and should not be read as the live noise level.
 
 **The direction matters and it is the uncomfortable one.** A narrow slate is a *ranked* slate holding the
 momentum extremes, not a random subset. Two effects compete — a smaller pool means more overlap between
@@ -353,9 +364,11 @@ grid endpoint is right, and the old `i + hold < length` was one period short.
 
 ## 6. Next work, ranked by expected information gain
 
-1. ~~Measure σ against the slate the analyst is actually shown.~~ **DONE — §5b.** It coincides with the
-   full universe at the deployed `slate=300`, and would make the registered MDE optimistic by ~20% at a
-   narrower slate.
+1. **Re-measure §5b against the live `ibkr-bundle` once it lands.** Done for `sp500-bundle` (127 names),
+   where `slate=300` coincides with the full universe. But the live universe is **1,047 tickers**, so
+   `slate=300` is ~29% of it and the narrow-slate regime — where the registered MDE is optimistic by
+   ~20% — is the live one. `--root ibkr-bundle` now exists for exactly this. **Highest-information item
+   the moment the panel is pushed**, and it supersedes the ordering below.
 2. ~~Decide the control-sampling convention for the forward record.~~ **WITHDRAWN — there was no
    decision to make.** §5b: the runtime already fixes it. `loop.mjs` passes the point-in-time slate as
    the pool and `matchedRandomControl` permits overlap, so the diagnostic was the thing out of step.

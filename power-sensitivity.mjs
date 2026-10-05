@@ -49,12 +49,17 @@ import {
   buildReturnMap, drawPair, sd, mean, monteCarloSeOfSd, periodBootstrapSd,
 } from "./analyst/panel-null.mjs";
 
-export const ROOT = "sp500-bundle";
+/** See slate-null.mjs: `--root ibkr-bundle` measures the live panel instead of the 127-name research one. */
+const flag = (name, dflt) => {
+  const i = process.argv.indexOf(`--${name}`);
+  return i >= 0 && process.argv[i + 1] && !process.argv[i + 1].startsWith("--") ? process.argv[i + 1] : dflt;
+};
+export const ROOT = flag("root", "sp500-bundle");
 export const SEED = 20261005;
 export const HOLD = 5;                 // the registered hold; this tool varies other things
 export const FIRST_START = 250;        // clears the 252-bar ranking warm-up used by the analyst
 const LEG = COST_MODELS.usEquityIbkr.feeRate + COST_MODELS.usEquityIbkr.slipPct;
-const DRAWS = Number(process.argv[2] ?? 20000);
+const DRAWS = Number(process.argv.slice(2).find((a) => /^\d+$/.test(a)) ?? 20000);
 
 const pct = (x) => (Number.isFinite(x) ? `${(x * 100).toFixed(2)}%` : "—");
 const pct3 = (x) => (Number.isFinite(x) ? `${(x * 100).toFixed(3)}%` : "—");

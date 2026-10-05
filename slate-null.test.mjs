@@ -382,3 +382,27 @@ test("a set-identical pool measures identically once order is normalised", () =>
   const unsorted = measureWithPool(g.panel, starts, (i) => pools.get(i), opts);
   assert.notEqual(unsorted.sd, flatRun.sd, "held-first ordering should change which names get drawn");
 });
+
+test("the panel root is overridable, because the live universe is not the research one", () => {
+  // `universe/candidates.txt` holds 1,047 tickers (confirmed by a panel pull on 2026-10-05) while
+  // sp500-bundle holds 127 screened names. At 127 a slate of 300 is the whole cross-section; at 1,047
+  // it is ~29% of it, which is the regime where section 3 measures a HIGHER sigma. So the conclusion
+  // depends on which panel is read, and the root has to be selectable rather than compiled in.
+  const out = execFileSync("node", [path.join(REPO, "slate-null.mjs"), "120", "--root", "sp500-bundle"],
+    { cwd: REPO, stdio: "pipe", encoding: "utf8", timeout: 600000,
+      env: { ...process.env, SLATE_NULL_SLATES: "300" } });
+  assert.match(out, /^root sp500-bundle,/m, "the report must name the panel it read");
+  // The draw count is the first bare numeric argument, so it is not swallowed by --root's value.
+  assert.match(out, /120 draws per configuration/);
+});
+
+test("a nonexistent root fails loudly rather than measuring an empty panel", () => {
+  // Pointing at a panel that is not there must not quietly yield a sigma of zero from no data.
+  let failed = false, out = "";
+  try {
+    execFileSync("node", [path.join(REPO, "slate-null.mjs"), "50", "--root", "no-such-bundle"],
+      { cwd: REPO, stdio: "pipe", encoding: "utf8", timeout: 600000 });
+  } catch (e) { failed = true; out = String(e.stdout ?? "") + String(e.stderr ?? ""); }
+  assert.ok(failed, "a missing root should not exit 0");
+  assert.doesNotMatch(out, /sigma\/period\s+0\.000%/, "a missing panel must not report a sigma at all");
+});
