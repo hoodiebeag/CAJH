@@ -88,10 +88,16 @@ const rng = seededRng(SEED);
  * bookReturn, understating long-hold noise.
  *
  * Rebuilding per hold makes each row an apples-to-apples non-overlapping grid, which is what the
- * section claims to compare. Direction of the correction, for the record: the annualised column
- * becomes FLATTER (168-185% rather than 155-180%), so the "shortening the hold does not help"
- * conclusion comes out stronger, not weaker. The 5-day row is unchanged by construction and serves
- * as the internal control.
+ * section claims to compare. Direction of the correction, measured at 20,000 draws: the annualised
+ * column goes from 159.8-177.5% to 165.7-180.7% -- a narrower spread (15.0 points against 17.8), so
+ * the "shortening the hold does not help" reading comes out slightly stronger. An earlier version of
+ * this comment quoted 168-185%, which came from a throwaway probe with different rng consumption and
+ * was never the script's output. The 5-day row is unchanged by construction and is the control.
+ *
+ * ENDPOINT, VERIFIED RATHER THAN ASSUMED. `ret` is keyed by bar time and holds the return INTO that
+ * bar (close[i-1] -> close[i]), so a hold of H from index i compounds the returns at i..i+H-1 and is
+ * entered at the close of i-1. A full, untruncated window therefore needs i+H <= dates.length, which
+ * is the bound nonOverlappingStarts uses. The old `i + HOLD < dates.length` was one short.
  */
 const startsFor = (hold) => nonOverlappingStarts(250, hold, dates.length);
 

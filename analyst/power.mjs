@@ -24,7 +24,30 @@ export const Z_ALPHA_TWO_SIDED_95 = 1.959963984540054;
 export const Z_POWER_80 = 0.8416212335729143;
 export const TRADING_DAYS_PER_YEAR = 252;
 
-const zSum = ({ zAlpha = Z_ALPHA_TWO_SIDED_95, zPower = Z_POWER_80 } = {}) => zAlpha + zPower;
+/**
+ * The critical-value sum. Both overrides are validated: a caller passing a p-value (0.05) or a string
+ * where a z-score belongs would otherwise get a plausible-looking MDE that is wrong by ~50x, and a
+ * registered `mdeAtMinimum` computed that way would look entirely ordinary.
+ */
+const zSum = ({ zAlpha = Z_ALPHA_TWO_SIDED_95, zPower = Z_POWER_80 } = {}) => {
+  positive(zAlpha, "zAlpha");
+  positive(zPower, "zPower");
+  return zAlpha + zPower;
+};
+
+const finite = (v, label) => {
+  if (typeof v !== "number" || !Number.isFinite(v)) {
+    throw new Error(`power: ${label} must be a finite number, got ${v}`);
+  }
+  return v;
+};
+
+const nonNegative = (v, label) => {
+  if (typeof v !== "number" || !Number.isFinite(v) || v < 0) {
+    throw new Error(`power: ${label} must be a finite non-negative number, got ${v}`);
+  }
+  return v;
+};
 
 const positive = (v, label) => {
   if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) {
@@ -46,6 +69,23 @@ export function mde(sigma, n, opts = {}) {
   return zSum(opts) * sigma / Math.sqrt(n);
 }
 
+/**
+ * A PLANNING ESTIMATE, NOT A GUARANTEED POWER RESULT. `mde` and `periodsFor` use the normal
+ * approximation: they assume the per-period difference is roughly normal with known sigma, and that
+ * the n periods are independent. At the period counts this project actually faces — 4 in a month, 50
+ * in a year — that approximation is doing real work:
+ *
+ *   - sigma is ESTIMATED, not known. A t-based interval would be wider, and more so at small n.
+ *   - Real per-period differences are fat-tailed, which costs power the normal formula does not charge.
+ *   - Periods are only independent if they do not overlap AND share no common shock. Non-overlap is
+ *     enforced by construction here; a common market regime across adjacent periods is not.
+ *
+ * So treat these numbers as "roughly how long before this is worth looking at", not as "80% power is
+ * guaranteed at this n". They are the right tool for deciding a minimum period count in advance and
+ * the wrong tool for claiming a completed run achieved a particular power.
+ */
+export const MDE_IS_A_PLANNING_ESTIMATE = true;
+
 /** Independent periods needed to resolve a per-period effect of `delta`. Inverse of `mde`. */
 export function periodsFor(sigma, delta, opts = {}) {
   positive(sigma, "sigma");
@@ -55,7 +95,9 @@ export function periodsFor(sigma, delta, opts = {}) {
 
 /** A per-period figure expressed per year, at `holdDays` per period. */
 export function annualise(perPeriod, holdDays, tradingDays = TRADING_DAYS_PER_YEAR) {
+  finite(perPeriod, "perPeriod");          // may legitimately be negative or zero; must be a number
   positive(holdDays, "holdDays");
+  positive(tradingDays, "tradingDays");
   return perPeriod * (tradingDays / holdDays);
 }
 
@@ -64,27 +106,39 @@ export function annualise(perPeriod, holdDays, tradingDays = TRADING_DAYS_PER_YE
  * sessions per period. Linear in `1/holdDays`, which is the whole reason a shorter hold is expensive.
  */
 export function costDragPerYear(perLegCost, holdDays, tradingDays = TRADING_DAYS_PER_YEAR) {
+  nonNegative(perLegCost, "perLegCost");   // zero is a legitimate frictionless baseline
   positive(holdDays, "holdDays");
+  positive(tradingDays, "tradingDays");
   return 2 * perLegCost * (tradingDays / holdDays);
 }
 
 /**
- * THE CLOSED FORM BEHIND "SHORTENING THE HOLD DOES NOT HELP".
+ * THE PLANNING FORMULA'S BEHAVIOUR ACROSS HOLDS, UNDER AN EXPLICIT ASSUMPTION.
  *
- * `paper-power.mjs` measured this and concluded the lever is closed. It is also derivable exactly,
- * and the derivation is worth having because a measured flat line invites the reader to wonder
- * whether a different hold might have been luckier.
+ * WHAT THIS IS AND IS NOT. This is an algebraic property of the normal-approximation planning
+ * formula under one stated assumption. It is NOT a proof that every empirical hold is powerless, and
+ * NOT a proof that no hold could be luckier on real data. An earlier version of this comment and of
+ * docs/POWER-VALIDATION.md claimed the stronger thing; that was an overclaim.
  *
- * If per-period noise scales with the square root of the hold — sigma_h = sigma_1 * sqrt(h), the
- * random-walk scaling — then in a fixed window of W trading days:
+ * Three conditions, all of which can fail:
+ *   1. It assumes sigma_h = sigma_1 * sqrt(h) exactly. Real returns are not an exact random walk, so
+ *      the measured column is flat only to the extent that assumption holds — which is an empirical
+ *      question, answered by measurement, with its own Monte Carlo and sample uncertainty.
+ *   2. It treats W/h as a continuous quantity. A hold that does not divide the window leaves a
+ *      fractional period that cannot be realised; at h > W there is less than one period and the
+ *      formula returns a number for a test that cannot be run at all.
+ *   3. It inherits every limitation of the normal approximation itself (see `mde`).
+ *
+ * If per-period noise does scale with the square root of the hold, then in a window of W trading days:
  *
  *     n = W / h                                      periods in the window
  *     MDE_per_period = z * sigma_1 * sqrt(h) / sqrt(W/h) = z * sigma_1 * h / sqrt(W)
  *     MDE_annualised = MDE_per_period * (252 / h)    = 252 * z * sigma_1 / sqrt(W)
  *
- * The hold cancels **exactly**. Annualised detectable edge depends only on one-day noise and the
- * length of the window, never on how the window is sliced. Cost, meanwhile, scales as 1/h and does
- * not cancel — so the only thing a shorter hold reliably changes is how much you pay.
+ * The hold cancels **algebraically, under condition 1**. So to the extent returns scale like a random
+ * walk, annualised detectable edge depends on one-day noise and window length rather than on how the
+ * window is sliced. Cost, by contrast, scales as 1/h unconditionally and does not cancel — that part
+ * is arithmetic, not an assumption.
  *
  * Returns the annualised MDE under exact sqrt scaling. Any deviation between this and the measured
  * value is the extent to which real returns are NOT a random walk at that horizon (autocorrelation,
@@ -136,6 +190,7 @@ export function nonOverlappingStarts(firstIndex, hold, length) {
  */
 export function canAnswer({ sigma, periods, holdDays, hypothesisAnnualised,
                             tradingDays = TRADING_DAYS_PER_YEAR }, opts = {}) {
+  positive(tradingDays, "tradingDays");
   const perPeriod = mde(sigma, periods, opts);
   const mdeAnnualised = annualise(perPeriod, holdDays, tradingDays);
   positive(hypothesisAnnualised, "hypothesisAnnualised");

@@ -91,21 +91,33 @@ test("cost drag is linear in 1/hold, matching the registered 1.3%/yr to 27.7%/yr
   for (const h of [1, 2, 5, 10]) close(costDragPerYear(LEG, h) / costDragPerYear(LEG, 2 * h), 2);
 });
 
-test("THE LEVER IS CLOSED, exactly: annualised MDE is independent of hold under sqrt scaling", () => {
-  // The protocol measured a roughly flat annualised column across holds and concluded the lever is
-  // closed. It is also an identity. If sigma_h = sigma_1 * sqrt(h) then in a window of W trading days
-  // the hold cancels completely:
-  //     MDE_ann = z * sigma_1 * sqrt(h) / sqrt(W/h) * (252/h) = 252 * z * sigma_1 / sqrt(W)
-  // Asserted here across two orders of magnitude of hold, to 1e-9. A measured flat line invites the
-  // reader to wonder whether some other hold might have been luckier; this says none can be.
+test("under sqrt scaling the planning formula is hold-invariant — the ALGEBRA, not the market", () => {
+  // WHAT THIS ASSERTS: an algebraic property of the normal-approximation planning formula under the
+  // explicit assumption sigma_h = sigma_1*sqrt(h). WHAT IT DOES NOT ASSERT: that any empirical hold is
+  // powerless, or that no hold could be luckier on real data. An earlier version of this test was
+  // named "THE LEVER IS CLOSED, exactly" and commented "this says none can be", which claimed the
+  // stronger thing. Real scaling is measured in the next test and is close to, but not equal to, sqrt.
+  //
+  //     MDE_ann = z*sigma_1*sqrt(h) / sqrt(W/h) * (252/h) = 252*z*sigma_1 / sqrt(W)
   const sigmaOneDay = 0.0108, W = 20;
   const reference = annualisedMdeUnderSqrtScaling(sigmaOneDay, W);
-  for (const h of [1, 2, 4, 5, 10, 20, 50, 100]) {
+  for (const h of [1, 2, 4, 5, 10, 20]) {
     const sigmaH = sigmaOneDay * Math.sqrt(h);
-    const periods = W / h;
-    close(annualise(mde(sigmaH, periods), h), reference);
+    close(annualise(mde(sigmaH, W / h), h), reference);
   }
-  // Longer windows DO help, as 1/sqrt(W) — the one lever that is not closed.
+
+  // FRACTIONAL AND SUB-ONE PERIOD COUNTS: the algebra still returns a number, and that number is not a
+  // runnable test. h=50 in a 20-day window is 0.4 of a period. Asserted so the limitation is explicit
+  // rather than discovered by someone registering a candidate against an unrealisable period count.
+  for (const h of [50, 100]) {
+    const n = W / h;
+    assert.ok(n < 1, `h=${h} in W=${W} gives ${n} periods — below one, so not realisable`);
+    close(annualise(mde(sigmaOneDay * Math.sqrt(h), n), h), reference);
+  }
+  // A hold that does not divide the window leaves a fractional period that cannot be run.
+  assert.ok(!Number.isInteger(20 / 3), "3-day hold in a 20-day window: 6.67 periods, 6 realisable");
+
+  // Longer windows DO help, as 1/sqrt(W) — the one lever not closed by this algebra.
   close(annualisedMdeUnderSqrtScaling(sigmaOneDay, 80) / reference, 0.5);
 });
 
@@ -156,18 +168,61 @@ test("canAnswer reports whether the TEST is adequate, never whether the claim is
     "at periodsNeeded the MDE should have reached the hypothesis");
 });
 
-test("every entry point rejects the inputs that would silently produce a wrong answer", () => {
-  // A zero or negative sigma yields Infinity or a negative MDE rather than an error, and an n of 0
-  // divides by zero. Both would propagate into a registered mdeAtMinimum as a plausible-looking number.
+test("mde, periodsFor and nonOverlappingStarts reject inputs that would read as plausible", () => {
+  // A zero or negative sigma yields Infinity or a negative MDE rather than an error, and n=0 divides by
+  // zero. Both would propagate into a registered mdeAtMinimum as an ordinary-looking number.
   for (const bad of [0, -1, NaN, Infinity, "0.02", null, undefined]) {
     assert.throws(() => mde(bad, 10), /sigma must be a finite positive number/);
     assert.throws(() => periodsFor(0.02, bad), /delta must be a finite positive number/);
-    assert.throws(() => annualise(0.01, bad), /holdDays must be a finite positive number/);
-    assert.throws(() => costDragPerYear(0.0005, bad), /holdDays/);
   }
   for (const bad of [0, -5, NaN, "4"]) assert.throws(() => mde(0.02, bad), /n must be/);
-  assert.throws(() => canAnswer({ sigma: 0.02, periods: 4, holdDays: 5, hypothesisAnnualised: 0 }),
-    /hypothesisAnnualised/);
+});
+
+test("annualise and costDragPerYear validate every argument, including tradingDays", () => {
+  // THESE WERE THE GAPS. An earlier test was named "every entry point rejects..." and did not cover
+  // annualise's perPeriod, costDragPerYear's perLegCost, or either function's tradingDays override —
+  // so the name was an overclaim. A tradingDays of 0 silently returns 0 for every annualised figure,
+  // which reads as "no detectable edge required" rather than as a bad argument.
+  for (const bad of [NaN, Infinity, "0.01", null, undefined, {}]) {
+    assert.throws(() => annualise(bad, 5), /perPeriod must be a finite number/);
+  }
+  // perPeriod may legitimately be zero or negative: a measured edge can be either.
+  assert.equal(annualise(0, 5), 0);
+  assert.ok(annualise(-0.01, 5) < 0);
+
+  for (const bad of [0, -1, NaN, "252", null]) {
+    assert.throws(() => annualise(0.01, 5, bad), /tradingDays must be a finite positive number/);
+    assert.throws(() => costDragPerYear(0.0005, 5, bad), /tradingDays must be a finite positive number/);
+  }
+  for (const bad of [-0.001, NaN, "0.0005", null, undefined]) {
+    assert.throws(() => costDragPerYear(bad, 5), /perLegCost must be a finite non-negative number/);
+  }
+  // Zero cost is a legitimate frictionless baseline, so it must NOT throw.
+  assert.equal(costDragPerYear(0, 5), 0);
+  for (const bad of [0, -1, NaN, "5"]) {
+    assert.throws(() => annualise(0.01, bad), /holdDays/);
+    assert.throws(() => costDragPerYear(0.0005, bad), /holdDays/);
+  }
+});
+
+test("custom critical values are validated, so a p-value cannot be passed as a z-score", () => {
+  // Passing alpha=0.05 where z=1.96 belongs understates the MDE by ~50x, and the result looks ordinary.
+  for (const bad of [0, -1.96, NaN, "1.96", null]) {
+    assert.throws(() => mde(0.02, 10, { zAlpha: bad }), /zAlpha must be a finite positive number/);
+    assert.throws(() => mde(0.02, 10, { zPower: bad }), /zPower must be a finite positive number/);
+    assert.throws(() => periodsFor(0.02, 0.01, { zAlpha: bad }), /zAlpha/);
+  }
+  // A valid override still works and moves the answer in the right direction.
+  assert.ok(mde(0.02, 10, { zAlpha: 2.576 }) > mde(0.02, 10), "a 99% critical value must widen the MDE");
+});
+
+test("canAnswer validates its own tradingDays rather than inheriting a silent default", () => {
+  const ok = { sigma: 0.0242, periods: 4, holdDays: 5, hypothesisAnnualised: 0.3 };
+  for (const bad of [0, -252, NaN, "252"]) {
+    assert.throws(() => canAnswer({ ...ok, tradingDays: bad }), /tradingDays/);
+  }
+  assert.throws(() => canAnswer({ ...ok, hypothesisAnnualised: 0 }), /hypothesisAnnualised/);
+  assert.throws(() => canAnswer({ ...ok, sigma: 0 }), /sigma/);
 });
 
 test("TRADING_DAYS_PER_YEAR is used consistently and is overridable", () => {

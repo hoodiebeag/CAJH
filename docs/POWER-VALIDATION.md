@@ -55,17 +55,24 @@ does not help" conclusion. Fixing it makes that conclusion stronger:
 |---|---|---|
 | annualised MDE across holds 1–21d | 159.8 – 177.5% | **165.7 – 180.7%** |
 | spread | 17.8 points | **15.0 points** |
-| within the registered "~157–181%" band? | lower bound below it | **entirely inside** |
+| within the registered "~157–181%" band? | **yes, 159.8 > 157** | **yes** |
 
-The fixed range sits **inside** the pre-registered band, and flatter. **No correction to
-`docs/PAPER-PROTOCOL.md` is required**, and none was made — it is a pre-registration, and this document
-does not amend it.
+**Correction to an earlier draft of this document:** it said the pre-fix range had its "lower bound
+below" the registered band. That was wrong — 159.8% is above 157%, so **both** ranges sit inside the
+registered band. The fix narrows the spread and shifts it up slightly; it does not rescue the range from
+outside the band, because it was never outside. **No correction to `docs/PAPER-PROTOCOL.md` is
+required**, and none was made — it is a pre-registration, and this document does not amend it.
 
-## 3. The flat column is an identity, not a lucky measurement
+## 3. The flat column follows from an assumption, stated
 
-The protocol measured a roughly flat annualised column and concluded the lever is closed. It is also
-exactly derivable, which is worth having: a measured flat line invites the reader to wonder whether some
-other hold might have been luckier.
+The protocol measured a roughly flat annualised column and concluded the lever is closed. The planning
+formula has a matching algebraic property — but it is **conditional**, and an earlier draft of this
+document overstated it as a proof that "no hold can be luckier". It is not that.
+
+**Three conditions, any of which can fail:** it assumes `σ_h = σ₁√h` exactly; it treats `W/h` as
+continuous, so a hold that does not divide the window leaves an unrealisable fractional period (and at
+`h > W` the formula returns a number for a test that cannot be run); and it inherits the normal
+approximation's limitations (§3a). Within those conditions:
 
 If per-period noise scales as a random walk, `σ_h = σ₁√h`, then in a window of `W` trading days:
 
@@ -75,11 +82,21 @@ MDE_per_period = z·σ₁·√h / √(W/h) = z·σ₁·h / √W
 MDE_annualised = MDE_per_period · (252/h) = 252·z·σ₁ / √W
 ```
 
-**The hold cancels exactly.** Annualised detectable edge depends only on one-day noise and the length of
-the window — never on how the window is sliced. Asserted to 1e-9 across holds from 1 to 100 in
-`analyst/power.test.mjs`. Cost, by contrast, scales as `1/h` and does not cancel: 1.3%/yr at a 21-day
-hold against 27.7%/yr at a 1-day hold. **The only thing a shorter hold reliably changes is how much you
-pay.** The one lever that is *not* closed is window length, which helps as `1/√W`.
+**The hold cancels algebraically, under the first condition.** So to the extent returns scale like a
+random walk, annualised detectable edge depends on one-day noise and window length rather than on how
+the window is sliced. Asserted to 1e-9 across holds 1–100 in `analyst/power.test.mjs` — that assertion
+tests the algebra, not the market. Cost, by contrast, scales as `1/h` **unconditionally**: 1.3%/yr at a
+21-day hold against 27.7%/yr at a 1-day hold. That half is arithmetic rather than an assumption, and it
+is the firmer half of the argument. Window length helps as `1/√W`.
+
+### 3a. These are planning estimates, not guaranteed power
+
+`mde` and `periodsFor` use the normal approximation with a known sigma and independent periods. At 4
+periods in a month this is doing real work: sigma is estimated rather than known (a t-based interval
+would be wider, more so at small n), real per-period differences are fat-tailed in a direction the
+normal formula does not charge for, and independence needs non-overlap *and* no common shock —
+non-overlap is enforced by construction, a shared market regime across adjacent periods is not. Read
+every MDE here as "roughly how long before this is worth looking at", never as "80% power achieved".
 
 The measured residual against this identity turns out to be small. Measured `σ_h / σ₁√h` is within 6%
 of 1 at every hold, and at 21 days it is 0.996 — 21-day noise of 4.93% against a predicted 4.95%. So the
@@ -91,6 +108,82 @@ it is.
 from Monte Carlo error at 20,000 draws, and reading it as a signal would be the noise-mining this project
 closed 76 verdicts on.
 
+## 3b. Sensitivity: which of the registered table's four choices actually matter
+
+`node power-sensitivity.mjs 20000` (seed 20261005, `sp500-bundle`, 127 screened names, 920 dates,
+134 non-overlapping 5-day periods, 2023-01-04 → 2026-09-03). Same caveats as §1: null only, historical,
+today's universe, planning estimates.
+
+The registered table fixed four things at once — book size 10, hold 5, the whole window, and a
+disjoint-books control. Each was a choice. Measured:
+
+### Book size is the dominant lever, by a wide margin
+
+| book | σ/period | MC se | historical 95% CI (period bootstrap) | MDE@50 periods | annualised |
+|---|---|---|---|---|---|
+| 1 | 7.747% | 0.039% | 7.266 – 8.278% | 3.069% | 154.7% |
+| 3 | 4.493% | 0.022% | 4.184 – 4.810% | 1.780% | 89.7% |
+| 5 | 3.453% | 0.017% | 3.250 – 3.686% | 1.368% | 69.0% |
+| **10** (registered) | **2.425%** | 0.012% | 2.289 – 2.573% | **0.961%** | **48.4%** |
+| 20 | 1.703% | 0.009% | 1.620 – 1.807% | 0.675% | 34.0% |
+| 40 | 1.208% | 0.006% | 1.141 – 1.287% | 0.479% | 24.1% |
+
+σ falls **6.41x** from a 1-name to a 40-name book, against 1/√n's 6.32x. So over a year the detectable
+edge ranges from ~155% annualised to ~24% depending only on how many names are held.
+
+**This is a change in the noise floor, not a source of edge.** A larger book does not make a strategy
+profitable; it makes a given edge easier to *see*. Three things keep it from being a free lunch:
+
+- **The real book size is not this tool's to choose.** It is governed by `analyst/risk.mjs` limits and
+  by what the analyst proposes. Nothing here changes either, and no size is recommended.
+- **The large-book rows are confounded.** Two *disjoint* books of 40 consume 80 of 127 eligible names,
+  so sampling without replacement from a nearly-exhausted pool makes the books negatively correlated
+  and *inflates* the difference's variance. The large-book σ is biased upward; the measured 6.41x
+  understates true diversification. An artifact of the measurement convention, not of the strategy.
+- **A bigger book dilutes a real edge too.** If skill is concentrated in a few names, spreading across
+  40 reduces both the noise and the signal. This measures only the denominator.
+
+### The control-sampling rule makes the registered table ~5% conservative
+
+| rule | σ/period |
+|---|---|
+| disjoint books (`paper-power.mjs`, and what the registered table used) | 2.437% |
+| overlap permitted (`journal.mjs`'s actual `matchedRandomControl`) | 2.323% |
+
+ratio **0.953**. `matchedRandomControl` shuffles the eligible pool and takes the first n names **without
+reference to the analyst's picks**, so control and book may share names. Overlap correlates them and
+shrinks the variance of their difference. The registered figure is therefore conservative by ~5% — the
+safe direction. Neither rule is wrong; they answer different questions, and which one the forward record
+should be scored against is a question for whoever registers a candidate, not for this tool.
+
+### σ is broadly stable across chronological sub-windows
+
+Four chronological quarters, **33 non-overlapping periods each**:
+
+| sub-window | periods | σ/period |
+|---|---|---|
+| 2024-01-03 → 2024-09-03 | 33 | 2.462% |
+| 2024-09-03 → 2025-05-06 | 33 | 2.285% |
+| 2025-05-06 → 2026-01-05 | 33 | 2.280% |
+| 2026-01-05 → 2026-09-03 | 33 | 2.687% |
+
+Spread 1.18x against a full-panel 2.437%. So the registered MDE is **not obviously a regime artifact** at
+this resolution. Each quarter holds a quarter of the evidence, so each estimate is correspondingly
+noisier — and four sub-windows are four views of one history, not four independent confirmations.
+
+### Historical uncertainty dominates Monte Carlo uncertainty by 11x
+
+| source | magnitude | shrinks with more draws? |
+|---|---|---|
+| Monte Carlo (same config, 5 seeds, max−min) | 0.028% | **yes** |
+| historical sample (period bootstrap 95% CI width, 134 periods) | 0.319% | **no** |
+
+**11.4x.** Adding draws is nearly free and buys nearly nothing: the binding constraint is that the panel
+contains 134 non-overlapping periods, not how many times they were resampled. 20,000 draws over 134
+periods means every period recurs ~150 times. And the bootstrap still **understates**: periods do not
+overlap by construction, but adjacent ones share a market regime, which it treats as independent. Read
+that CI as a floor on the uncertainty, not a ceiling.
+
 ## 4. What changed
 
 | file | change |
@@ -99,6 +192,10 @@ closed 76 verdicts on.
 | `analyst/power.test.mjs` | **new.** 15 tests: the 1/√n law, `periodsFor`/`mde` inversion, the registered-table reproduction, the exact hold-invariance identity, the grid invariants, and input rejection. |
 | `paper-power.test.mjs` | **new.** 7 tests on the script: determinism under a fixed seed, the corrected period count, per-hold grids, exact cost inversion, flatness of the annualised column, and that the output cannot be misread as a claim of edge. |
 | `paper-power.mjs` | grid rebuilt per hold via `nonOverlappingStarts`; the two untested local arrow functions replaced by the module; annualisation uses 252/h rather than a hardcoded 50. |
+| `analyst/panel-null.mjs` | **new.** The null's machinery — `buildReturnMap`, `bookReturn`, `drawPair` (with the disjoint/overlap control choice explicit), `monteCarloSeOfSd`, `periodBootstrapSd`. Extracted so the sensitivity work does not carry a second copy of `bookReturn`. |
+| `analyst/panel-null.test.mjs` | **new.** 13 tests on a synthetic panel with hand-computable returns, so index semantics are checked against arithmetic. Includes the test that licenses the extraction: it reproduces `paper-power.mjs`'s 2.45% exactly, replaying that script's rng consumption. |
+| `power-sensitivity.mjs` | **new.** The sensitivity report (§3b). Deterministic, offline, guarded main. |
+| `power-sensitivity.test.mjs` | **new.** 10 tests: determinism, monotone σ in book size, the overlap direction, per-sub-window period counts, periods-drawn vs periods-available, the empty-grid case, fractional-period flagging, and that the report states its limitations before any number. |
 
 Why it was worth doing: `docs/FORWARD-EVAL-SPEC.md` §4 requires every registered candidate version to
 carry **minimum periods and the MDE at that count** — "because a test whose MDE exceeds its hypothesis
@@ -113,36 +210,63 @@ done** — it changes what the ledger accepts, which is a protocol-adjacent deci
 
 ## 5. What was ruled out
 
-- **Shortening the hold to buy power.** Closed by identity, not just by measurement (§3). No hold can be
-  luckier. Already an archive verdict (`HOLDING-PERIOD-COST-AMORTIZATION-MAP`); this adds the derivation.
+- **Shortening the hold to buy power, as a *planning* lever.** Under random-walk scaling the hold
+  cancels algebraically (§3), and measurement across 1–21 days shows a 15-point spread with no hold
+  clearly better. That is not a proof that no hold could ever be luckier on real data — it is an
+  assumption plus a measurement, both stated. Already an archive verdict
+  (`HOLDING-PERIOD-COST-AMORTIZATION-MAP`); this adds the derivation and its conditions.
 - **Rescuing a month by running it twice.** MDE falls as `1/√n`: four periods to eight improves the
   detectable edge by 29%, not 50%.
 - **Re-deriving the registered table as suspect.** It reproduces. The pre-registration is sound and no
   amendment is needed.
 
+## 5a. Corrections to this document's own earlier draft
+
+Four overclaims, found on review and fixed rather than left standing:
+
+1. **"The hold cancels exactly … no hold can be luckier."** It is an algebraic property of the planning
+   formula under `σ_h = σ₁√h`, treating `W/h` as continuous. It does not prove any empirical hold is
+   powerless. Now stated with its three conditions (§3), and the test that asserts it is renamed to say
+   it tests the algebra rather than the market.
+2. **"Pre-fix range had its lower bound below the registered band."** False — 159.8% > 157%, so *both*
+   ranges were inside it. The fix narrows the spread; it never rescued the range from outside.
+3. **A `168–185%` range in a `paper-power.mjs` comment** came from a throwaway probe with different rng
+   consumption and was never the script's output. The script's figures are 165.7–180.7%.
+4. **"Every entry point rejects invalid inputs."** It did not. `annualise`'s `perPeriod`,
+   `costDragPerYear`'s `perLegCost`, both functions' `tradingDays`, and custom `zAlpha`/`zPower` were
+   unvalidated — so a `tradingDays` of 0 silently returned 0 for every annualised figure, and a p-value
+   passed where a z-score belongs understated the MDE ~50x. All now validated and tested.
+
+Also verified rather than assumed: `bookReturn` compounds the returns at indices `i..i+hold-1` — the
+price change from `dates[i-1]`'s close — so a full window needs `i+hold <= length`. That confirms the
+grid endpoint is right, and the old `i + hold < length` was one period short.
+
 ## 6. Next work, ranked by expected information gain
 
-1. **Wire the ledger to cross-check `mdeAtMinimum`** against `power.mjs` and warn on disagreement.
-   Highest value: it closes the last hand-copied number in the pre-registration path. **Needs an owner
-   decision** because it changes what the ledger accepts — warn-only, or refuse?
-2. **Measure per-period paired noise at the book size the analyst will actually run.** The registered
-   table assumes a book of 10; `analyst/risk.mjs` limits govern the real size, and σ falls with book
-   size (5 names 3.50%, 10 names 2.45%, 20 names lower). If the real book is larger, every MDE in the
-   protocol is pessimistic — and that is checkable offline today.
-3. **A window-length sweep.** `1/√W` is the only open lever, so the honest question is what run length
-   a stated hypothesis needs. `canAnswer` already computes it; a readout would make the trade-off
-   legible before a claim is registered rather than after.
-4. **Robustness of σ to the sample period.** The whole table rests on one 920-date window. Splitting it
-   and re-measuring would show whether the noise level is stable or whether the registered MDE is an
-   artifact of one regime. Offline, no new data.
-5. **Cost-model sensitivity of the registered MDE.** `PER-FAMILY-COST-CEILING` already gives break-even
-   in closed form; what is not written down is how the *detectable* edge moves with the cost
-   assumption. Low information gain — cost enters the mean, not the variance — so it is last.
+1. **Measure σ against the slate the analyst is actually shown, not the whole screened universe.**
+   `loop.mjs` passes `context.candidates` as the control pool — held names plus the top and bottom
+   `slate/2` by momentum. At `slate=300` against 127 names that is the whole universe, so today the two
+   coincide; on a larger universe they would not, and the control pool is the thing
+   `matchedRandomControl`'s own comment calls more important than the draw. Highest value because it is
+   the one modelling gap that could make the registered σ *wrong* rather than merely conservative.
+2. **Decide the control-sampling convention for the forward record.** §3b shows disjoint and
+   overlap-permitted differ by ~5%, and `journal.mjs` does the latter while the registered table used
+   the former. **Needs an owner decision**, since it is what a forward result gets scored against.
+3. **Regime-conditioned σ.** Sub-windows are stable at 1.18x, but quarters are a crude split. Measuring
+   σ conditioned on realised market volatility would show whether the MDE should be regime-dependent —
+   relevant because a drawdown window is pre-registered. Offline.
+4. **A t-based / bootstrap MDE alongside the normal approximation.** §3a says these are planning
+   estimates; at 4 periods the normal approximation is doing real work. Quantifying the gap would show
+   how optimistic the registered table is at small n. Offline.
+5. **Cost-model sensitivity of the MDE.** Last, as before: cost enters the mean, not the variance, so it
+   shifts the edge being measured rather than the noise floor. `PER-FAMILY-COST-CEILING` already has the
+   break-even in closed form.
 
 ## 7. What still requires Tyler
 
-- **The panel and the key**, as before. Nothing here needed them; everything in §6 items 2–5 is also
-  offline.
-- **Item 1's decision**: should the ledger cross-check `mdeAtMinimum`, and warn or refuse?
-- **Nothing else.** No pre-registration was amended, no passing criterion or STOP rule touched, no
-  strategy claim invented, and no draft candidate turned into an approved registration.
+- **The panel and the key**, as before. Nothing in §3b needed them, and items 1, 3, 4 and 5 above are
+  all offline too.
+- **The ledger cross-check decision** (warn or refuse) — untouched, as instructed.
+- **The control-sampling convention** (§6 item 2) — a new decision surfaced by this work.
+- **Nothing else.** No pre-registration amended, no passing criterion, STOP rule, risk limit, sizing rule
+  or hold changed; no book size chosen; no strategy claim invented; no candidate registered.
