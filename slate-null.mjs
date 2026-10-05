@@ -112,6 +112,75 @@ export function slateFor({ kept, barDates }, i, { slate = 300, positions = {} } 
 }
 
 /**
+ * A DETERMINISTIC SYNTHETIC CARRY RULE. Not an analyst, not an account, not a strategy.
+ *
+ * WHAT THIS CLOSES. `slateFor` is called with `positions: {}` everywhere else in this tool, so the
+ * reconstructed pool omits held names — and `buildContext` shows held names ON TOP of the ranked slate,
+ * which makes a live pool WIDER than a flat one. That was the one labelled approximation left in the
+ * slate measurement. This measures its size.
+ *
+ * THE RULE, STATED SO IT CANNOT BE MISREAD AS A BOOK: at period p the "held" names are the random book
+ * that was drawn at period p-1. Nothing selects them, nothing optimises them, and they are drawn from a
+ * stream seeded independently of the measurement draws. Period 0 starts flat.
+ *
+ * CARRYING RANDOM BOOKS CANNOT MAKE THIS EVIDENCE ABOUT THE ANALYST. The quantity under test forward is
+ * a fixed analyst book against one random control; this is still random-versus-random, now with a
+ * random book persisting for one period. It measures ONLY how pool composition responds to holding
+ * something — a planning-proxy sensitivity. It says nothing about the analyst's paired variance, and a
+ * real book would be selected, concentrated and correlated in ways a random carry is not.
+ *
+ * WHY THE POOL MUST NOT DEPEND ON THE DRAW. `measureWithPool` groups diffs by period for the bootstrap,
+ * so `poolFor(i)` has to be a function of the period alone. The chain is therefore precomputed once per
+ * (slate, bookSize, seed) and cached, rather than evolving as draws are taken.
+ *
+ * HOLDING CHANGES THE SLATE THROUGH TWO CHANNELS, NOT ONE — found by a test that assumed otherwise.
+ * `context.mjs` builds the ranked slices from `rest = rows.filter(r => !r.held)`, so held names are
+ * EXCLUDED from the ranking before the top and bottom halves are taken. Holding 10 names therefore
+ * (a) adds those names to the pool, and (b) PROMOTES 10 names that the flat ranking had excluded, as
+ * the halves slide down the cross-section. A test asserting "anything beyond the flat ranked slate must
+ * be a carried name" failed on a promoted name, which was the test's error rather than the rule's.
+ * `heldByPeriod` is returned so the chain can be audited directly instead of inferred from the pool.
+ *
+ * INDEXING, AUDITED. The held names at period p were chosen at `starts[p-1]`, which is strictly earlier
+ * than `starts[p]`, and the slate at `starts[p]` is built by `buildContext` with `asOf = starts[p]`. So
+ * no future bar is visible, and the carried names are not information from the future either — they are
+ * a past random draw. `avgPrice` is the entry bar's actual close, looked up point-in-time.
+ */
+export function carriedPools(grids, starts, { slate = 300, bookSize = 10, seed = SEED, holdPct = 0.05 } = {}) {
+  const { kept, barDates } = grids;
+  // Index i in a symbol's candle array corresponds to barDates[i] only if every series shares the grid.
+  // loadGrids already asserts one shared first bar; this asserts the length, since a short series would
+  // make avgPrice read the wrong bar.
+  for (const [sym, bars] of Object.entries(kept)) {
+    if (bars.length !== barDates.length) {
+      throw new Error(`carriedPools: ${sym} has ${bars.length} bars against a ${barDates.length}-bar grid; ` +
+                      `the avgPrice lookup below would read the wrong date`);
+    }
+  }
+  const rng = seededRng(seed);
+  const pools = new Map();
+  const heldByPeriod = new Map();      // exposed so a test can audit the chain directly
+  const heldCounts = [];
+  let held = {};                       // period 0 is flat, by construction
+  for (const i of starts) {
+    const s = slateFor(grids, i, { slate, positions: held });
+    pools.set(i, s.symbols);
+    heldByPeriod.set(i, Object.keys(held));
+    heldCounts.push(Object.keys(held).length);
+    // Next period's held names: a random book out of THIS period's pool, at this period's close.
+    const bag = [...s.symbols];
+    const next = {};
+    for (let k = 0; k < bookSize && bag.length; k++) {
+      const sym = bag.splice(Math.floor(rng() * bag.length), 1)[0];
+      next[sym] = { pct: holdPct, avgPrice: Number(kept[sym][i].close) };
+    }
+    held = next;
+  }
+  return { pools, heldByPeriod, meanHeld: mean(heldCounts),
+           meanPool: mean([...pools.values()].map((p) => p.length)) };
+}
+
+/**
  * Measure the null, drawing from a per-period pool.
  *
  * `poolFor(i)` returns the eligible pool at period `i`, so full-universe and slate-conditioned runs
@@ -254,12 +323,18 @@ async function main() {
     slateRuns.set(slate, m);
     row(`slate=${slate}`, m);
   }
-  const s10 = slateRuns.get(10), s300 = slateRuns.get(300);
-  console.log(`  ratio slate=300 / full universe: ${(s300.sd / full.sd).toFixed(4)}  <- expect ~1, same pool`);
-  if (s10.degenerate) {
+  // Found generically rather than by hardcoding a slate value: SLATE_NULL_SLATES can omit any of them,
+  // and an earlier version indexed slateRuns.get(10) unconditionally and threw on an override without it.
+  const s300 = slateRuns.get(300) ?? null;
+  if (s300) {
+    console.log(`  ratio slate=300 / full universe: ${(s300.sd / full.sd).toFixed(4)}  <- expect ~1, same pool`);
+  }
+  const degenSlates = slateValues.filter((v) => slateRuns.get(v).degenerate);
+  if (degenSlates.length) {
+    const s10 = slateRuns.get(degenSlates[0]);
     console.log("");
-    console.log(`  DEGENERATE AT slate=10, AND THIS IS A REAL PROPERTY OF THE RUNTIME, not a tool bug:`);
-    console.log(`  a slate of 10 against a book of 10 means the control draw takes the entire pool, so`);
+    console.log(`  DEGENERATE AT slate=${degenSlates.join(", ")}, AND THIS IS A REAL PROPERTY OF THE RUNTIME,`);
+    console.log(`  not a tool bug: a slate no larger than the book means the control draw takes the whole pool, so`);
     console.log(`  control and book are the SAME NAMES and the paired difference is exactly zero on`);
     console.log(`  ${(s10.identicalShare * 100).toFixed(1)}% of draws. matchedRandomControl samples without replacement from the`);
     console.log(`  pool and truncates rather than duplicating, so it cannot manufacture a distinct control`);
@@ -270,8 +345,14 @@ async function main() {
   }
   console.log("");
   const usable = slateValues.filter((v) => !slateRuns.get(v).degenerate);
-  const worst = usable.reduce((a, v) => (slateRuns.get(v).sd > slateRuns.get(a).sd ? v : a), usable[0]);
-  const worstRatio = slateRuns.get(worst).sd / full.sd;
+  if (!usable.length) {
+    console.log("  Every configured slate was degenerate, so there is no dispersion comparison to make.");
+    console.log("");
+  }
+  const worst = usable.length
+    ? usable.reduce((a, v) => (slateRuns.get(v).sd > slateRuns.get(a).sd ? v : a), usable[0]) : null;
+  const worstRatio = worst === null ? NaN : slateRuns.get(worst).sd / full.sd;
+  if (worst !== null) {
   console.log("  A NARROW SLATE IS A RANKED slate, so it is NOT a random subset of the cross-section: it");
   console.log("  holds the momentum extremes. Two effects pull in opposite directions — a smaller pool");
   console.log("  makes the two books overlap more, which SHRINKS the difference's variance, while ranked");
@@ -285,6 +366,7 @@ async function main() {
   console.log("  127-name panel. It would bite at the ~1,000-name universe slate=300 was chosen for.");
   console.log("  This is a property of the RANKING, not of pool size alone, and nothing here changes");
   console.log("  the slate, the hold, the book size or any gate.\n");
+  }
 
   // ---- 4. coverage and missing bars ------------------------------------------------------------
   console.log("=== 4. COVERAGE AND MISSING BARS ===");
@@ -328,6 +410,70 @@ async function main() {
   console.log("  mine called the i.i.d. interval a 'floor' and asserted it understates; that claimed a");
   console.log("  direction nothing here establishes. Read the three widths as a range of modelling");
   console.log("  assumptions.\n");
+
+  // ---- 6. the held-book approximation, measured -----------------------------------------------
+  console.log("=== 6. FLAT vs CARRIED-BOOK POOL (deterministic SYNTHETIC carry, book of 10) ===");
+  console.log("  THE RULE: at period p the held names are the random book drawn at period p-1, from a");
+  console.log("  stream seeded independently of the measurement draws. Period 0 is flat. Nothing selects");
+  console.log("  or optimises them. THIS IS NOT AN ANALYST BOOK AND NOT AN ACCOUNT.");
+  console.log("  Carrying random books cannot turn this into evidence about the analyst's paired");
+  console.log("  variance: it is still random-vs-random, now with a random book persisting one period.");
+  console.log("  It measures ONLY how pool composition responds to holding something.");
+  console.log("");
+  console.log("  AUDIT OF THE RULE, before any sigma:");
+  const auditSlate = 40;
+  const auditCarry = carriedPools(grids, starts, { slate: auditSlate, bookSize: 10, seed: SEED + 991 });
+  const firstKey = starts[0], secondKey = starts[1];
+  console.log(`    period 0 (bar ${new Date(barDates[firstKey] * 1000).toISOString().slice(0, 10)}) held 0 names, pool ${auditCarry.pools.get(firstKey).length}`);
+  console.log(`    period 1 (bar ${new Date(barDates[secondKey] * 1000).toISOString().slice(0, 10)}) pool ${auditCarry.pools.get(secondKey).length}`);
+  console.log(`    mean held across periods ${auditCarry.meanHeld.toFixed(2)} (expect ~10 after period 0)`);
+  console.log(`    mean pool at slate=${auditSlate}: ${auditCarry.meanPool.toFixed(2)} vs ${auditSlate} flat`);
+  console.log("    held names are shown ON TOP of the ranked slate, so a carried pool is WIDER; the");
+  console.log("    excess over the flat slate is the held names the ranking would not have shown.");
+  console.log("");
+  // PAIRED AND ORDER-NORMALISED, because two things were confounding this comparison.
+  //
+  // First a different seed: the slate=300 row showed a 1.052 ratio while both pools held the same 127
+  // names -- pure Monte Carlo reading as a 5% effect. Both runs now share one seed per slate.
+  //
+  // Second, ORDER. buildContext returns [...held, ...top, ...bottom] and excludes held names from the
+  // ranked slices, so a carried pool is a different PERMUTATION of the same set at slate=300, and
+  // drawPair splices by index -- so identical sets still drew different names and left a spurious
+  // 1.012. Both pools are sorted here. That is faithful to the runtime rather than a convenience:
+  // matchedRandomControl SHUFFLES the pool before taking names, so pool order carries no meaning.
+  console.log("  Flat and carried share one seed per slate and both pools are sorted, so a set-identical");
+  console.log("  pool gives a ratio of exactly 1.000 and any departure is the pool, not the stream.");
+  console.log("  slate   flat pool   carried pool   flat sigma   carried sigma   ratio   same set?");
+  const sorted = (a) => [...a].sort();
+  for (const slate of slateValues) {
+    const flatCache = slateCache.get(slate);
+    const flatRun = measureWithPool(panel, starts, (i) => sorted(flatCache.get(i)),
+      { bookSize: 10, hold: HOLD, draws: DRAWS, seed: SEED + slate });
+    const carry = carriedPools(grids, starts, { slate, bookSize: 10, seed: SEED + 991 });
+    const carriedRun = measureWithPool(panel, starts, (i) => sorted(carry.pools.get(i)),
+      { bookSize: 10, hold: HOLD, draws: DRAWS, seed: SEED + slate });
+    const sameSet = starts.every((i) =>
+      JSON.stringify(sorted(flatCache.get(i))) === JSON.stringify(sorted(carry.pools.get(i))));
+    const fs = flatRun.degenerate ? "DEGEN" : pct3(flatRun.sd);
+    const cs = carriedRun.degenerate ? "DEGEN" : pct3(carriedRun.sd);
+    const ratio = (flatRun.degenerate || carriedRun.degenerate) ? "—"
+                : (carriedRun.sd / flatRun.sd).toFixed(3);
+    console.log(`  ${String(slate).padStart(5)}   ${flatRun.meanPoolSize.toFixed(1).padStart(9)}   ` +
+                `${carry.meanPool.toFixed(1).padStart(12)}   ${fs.padStart(10)}   ${cs.padStart(13)}   ` +
+                `${ratio.padStart(5)}   ${sameSet ? "yes" : "no"}`);
+  }
+  const carry300 = carriedPools(grids, starts, { slate: 300, bookSize: 10, seed: SEED + 991 });
+  const equiv = Math.abs(carry300.meanPool - panel.names.length) < 1e-9;
+  console.log("");
+  console.log(`  DOES THE DEPLOYED slate=300 / FULL-POOL EQUIVALENCE SURVIVE A CARRIED BOOK? ${equiv ? "YES" : "NO"}`);
+  console.log(`  carried mean pool at slate=300 is ${carry300.meanPool.toFixed(2)} against ${panel.names.length} screened names.`);
+  console.log("  The reason is structural, not lucky: the ranked slice already returns the ENTIRE");
+  console.log("  cross-section at slate=300, and held names are drawn FROM that pool, so there is");
+  console.log("  nothing left for them to add. Holding changes the pool only when the ranking was");
+  console.log("  actually excluding something — i.e. only when slate < universe.");
+  console.log("  At smaller slates the pool widens by up to the book size and the ranked extremes get");
+  console.log("  diluted by whatever was held, which is why the sigma ratio moves there and not at 300.");
+  console.log("  STILL A PLANNING PROXY. None of this measures an analyst book.\n");
 
   console.log("WHAT THIS ESTABLISHES: the runtime's control pool is the point-in-time slate with overlap");
   console.log("permitted, and at the deployed slate=300 against this 127-name panel that pool is the whole");

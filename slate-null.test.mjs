@@ -18,7 +18,7 @@ import { buildContext } from "./analyst/context.mjs";
 import { nonOverlappingStarts } from "./analyst/power.mjs";
 import { buildReturnMap, blockBootstrapSd, periodBootstrapSd, sd } from "./analyst/panel-null.mjs";
 import { seededRng } from "./inference.mjs";
-import { loadGrids, slateFor, measureWithPool, SEED, HOLD, FIRST_START } from "./slate-null.mjs";
+import { loadGrids, slateFor, measureWithPool, carriedPools, SEED, HOLD, FIRST_START } from "./slate-null.mjs";
 
 const REPO = import.meta.dirname;
 const DAY = 86400;
@@ -248,4 +248,137 @@ test("the report is deterministic and states its limits before any number", () =
   // And it must not make an affirmative sizing recommendation.
   assert.doesNotMatch(out, /(we|you)\s+(should|recommend)\s+(use|set|a)\b/i);
   assert.doesNotMatch(out, /recommended (setting|configuration) (is|:)/i);
+});
+
+// ---- the synthetic carry rule -------------------------------------------------------------------
+
+test("the carry rule starts flat and then holds exactly the previous period's book", () => {
+  // THE RULE, ASSERTED. Period 0 has nothing held; every later period holds `bookSize` names, and each
+  // of them must have been in the PREVIOUS period's pool, because that is where it was drawn from.
+  const g = loadGrids();
+  const starts = nonOverlappingStarts(FIRST_START, HOLD, g.panel.dates.length);
+  const slate = 40, bookSize = 10;
+  const { pools, meanHeld } = carriedPools(g, starts, { slate, bookSize, seed: SEED + 991 });
+
+  assert.equal(pools.get(starts[0]).length, slate, "period 0 must be the flat ranked slate");
+  assert.ok(meanHeld > bookSize * 0.9 && meanHeld <= bookSize,
+    `mean held ${meanHeld} should approach ${bookSize} after the flat first period`);
+
+  // Each later pool is the ranked slate plus held names, so it is wider by at most the book size.
+  for (let p = 1; p < starts.length; p++) {
+    const n = pools.get(starts[p]).length;
+    assert.ok(n > slate && n <= slate + bookSize, `period ${p} pool ${n} outside (${slate}, ${slate + bookSize}]`);
+    assert.equal(new Set(pools.get(starts[p])).size, n, "a carried pool contains a duplicate");
+  }
+});
+
+test("carried held names are drawn from the PREVIOUS period's pool, never from the future", () => {
+  // The indexing audit, done against the chain's OWN held sets rather than inferred from pool
+  // membership. An earlier version of this test assumed anything in a pool beyond the flat ranked slate
+  // must be a carried name; it is not. context.mjs ranks `rest = rows.filter(r => !r.held)`, so holding
+  // names also PROMOTES names the flat ranking excluded, and the test failed on a promoted name.
+  const g = loadGrids();
+  const starts = nonOverlappingStarts(FIRST_START, HOLD, g.panel.dates.length);
+  const slate = 40, bookSize = 10;
+  const { pools, heldByPeriod } = carriedPools(g, starts, { slate, bookSize, seed: SEED + 991 });
+
+  assert.deepEqual(heldByPeriod.get(starts[0]), [], "period 0 must hold nothing");
+  for (let p = 1; p < starts.length; p++) {
+    const held = heldByPeriod.get(starts[p]);
+    const prev = new Set(pools.get(starts[p - 1]));
+    assert.equal(held.length, bookSize, `period ${p} held ${held.length} names`);
+    for (const sym of held) {
+      assert.ok(prev.has(sym),
+        `period ${p} holds ${sym}, which was not in the period ${p - 1} pool — the chain indexes forward`);
+    }
+    // And every held name is in this period's pool, since held names are always shown.
+    const pool = new Set(pools.get(starts[p]));
+    for (const sym of held) assert.ok(pool.has(sym), `held ${sym} is missing from its own period's pool`);
+  }
+});
+
+test("holding also PROMOTES names the flat ranking excluded — two channels, not one", () => {
+  // The finding the failed assertion exposed, now asserted as the property it is. With 10 names held
+  // and removed from `rest`, the top and bottom halves slide down the cross-section, so the pool gains
+  // promoted names as well as carried ones.
+  const g = loadGrids();
+  const starts = nonOverlappingStarts(FIRST_START, HOLD, g.panel.dates.length);
+  const slate = 40, bookSize = 10;
+  const { pools, heldByPeriod } = carriedPools(g, starts, { slate, bookSize, seed: SEED + 991 });
+
+  const i = starts[1];
+  const flatRanked = new Set(slateFor(g, i, { slate }).symbols);
+  const held = new Set(heldByPeriod.get(i));
+  const beyondFlat = pools.get(i).filter((sym) => !flatRanked.has(sym));
+  const promoted = beyondFlat.filter((sym) => !held.has(sym));
+  assert.ok(promoted.length > 0,
+    "expected some names beyond the flat slate to be PROMOTED rather than carried");
+  assert.ok(beyondFlat.length >= promoted.length);
+  // Promoted names are genuinely from the universe, not invented.
+  for (const sym of promoted) assert.ok(g.panel.names.includes(sym));
+});
+
+test("avgPrice is the entry bar's actual close, looked up point-in-time", () => {
+  // PRICE/INDEX SANITY. carriedPools asserts every series shares the bar grid so that kept[sym][i] is
+  // the bar at barDates[i]. This checks the lookup lands on the right bar and a real price, because an
+  // off-by-one here would silently price every carried position at the wrong day.
+  const g = loadGrids();
+  const starts = nonOverlappingStarts(FIRST_START, HOLD, g.panel.dates.length);
+  const i = starts[3];
+  // Rebuild the chain's own held set at the next period by calling buildContext the way the rule does.
+  const pool = slateFor(g, i, { slate: 40 }).symbols;
+  for (const sym of pool.slice(0, 5)) {
+    const bar = g.kept[sym][i];
+    assert.equal(Number(bar.time), g.barDates[i], `${sym} index ${i} is not barDates[${i}]`);
+    assert.ok(Number(bar.close) > 0, `${sym} close at ${i} is not a positive price`);
+  }
+  // And the grid assertion fires when a series is short.
+  const broken = { ...g, kept: { ...g.kept, [pool[0]]: g.kept[pool[0]].slice(0, -1) } };
+  assert.throws(() => carriedPools(broken, starts.slice(0, 3), { slate: 40 }), /would read the wrong date/);
+});
+
+test("the carry chain is deterministic and seed-dependent", () => {
+  const g = loadGrids();
+  const starts = nonOverlappingStarts(FIRST_START, HOLD, g.panel.dates.length).slice(0, 12);
+  const a = carriedPools(g, starts, { slate: 40, bookSize: 10, seed: 123 });
+  const b = carriedPools(g, starts, { slate: 40, bookSize: 10, seed: 123 });
+  const c = carriedPools(g, starts, { slate: 40, bookSize: 10, seed: 124 });
+  const flat = (m) => starts.map((i) => m.pools.get(i).join(",")).join("|");
+  assert.equal(flat(a), flat(b), "the carry chain is not deterministic for a fixed seed");
+  assert.notEqual(flat(a), flat(c), "the carry chain does not depend on its seed");
+});
+
+test("at slate=300 a carried book cannot widen the pool — the equivalence survives", () => {
+  // THE CENTRAL RESULT OF THIS UNIT, and it is structural rather than empirical: the ranked slice
+  // already returns the entire cross-section at slate=300, and held names are drawn FROM that pool, so
+  // there is nothing left for them to add.
+  const g = loadGrids();
+  const starts = nonOverlappingStarts(FIRST_START, HOLD, g.panel.dates.length);
+  const { pools, meanPool } = carriedPools(g, starts, { slate: 300, bookSize: 10, seed: SEED + 991 });
+  assert.equal(meanPool, g.panel.names.length);
+  for (const i of starts) {
+    const carried = [...pools.get(i)].sort();
+    const flat = [...slateFor(g, i, { slate: 300 }).symbols].sort();
+    assert.deepEqual(carried, flat, `period ${i}: carried and flat pools differ at slate=300`);
+  }
+});
+
+test("a set-identical pool measures identically once order is normalised", () => {
+  // Pool ORDER is not meaningful — matchedRandomControl shuffles the pool before taking names — but
+  // drawPair splices by index, so an unsorted comparison of the same SET drew different names and left
+  // a spurious 1.012 ratio at slate=300. Sorting both makes the paired comparison exact.
+  const g = loadGrids();
+  const starts = nonOverlappingStarts(FIRST_START, HOLD, g.panel.dates.length);
+  const { pools } = carriedPools(g, starts, { slate: 300, bookSize: 10, seed: SEED + 991 });
+  const sorted = (a) => [...a].sort();
+  const flatCache = new Map(starts.map((i) => [i, slateFor(g, i, { slate: 300 }).symbols]));
+
+  const opts = { bookSize: 10, hold: HOLD, draws: 600, seed: SEED + 300 };
+  const flatRun = measureWithPool(g.panel, starts, (i) => sorted(flatCache.get(i)), opts);
+  const carriedRun = measureWithPool(g.panel, starts, (i) => sorted(pools.get(i)), opts);
+  assert.equal(flatRun.sd, carriedRun.sd, "set-identical sorted pools must measure identically");
+
+  // Unsorted, the same sets diverge — which is the artifact, demonstrated rather than asserted.
+  const unsorted = measureWithPool(g.panel, starts, (i) => pools.get(i), opts);
+  assert.notEqual(unsorted.sd, flatRun.sd, "held-first ordering should change which names get drawn");
 });
