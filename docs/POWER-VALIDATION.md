@@ -179,10 +179,15 @@ noisier — and four sub-windows are four views of one history, not four indepen
 | historical sample (period bootstrap 95% CI width, 134 periods) | 0.319% | **no** |
 
 **11.4x.** Adding draws is nearly free and buys nearly nothing: the binding constraint is that the panel
-contains 134 non-overlapping periods, not how many times they were resampled. 20,000 draws over 134
-periods means every period recurs ~150 times. And the bootstrap still **understates**: periods do not
-overlap by construction, but adjacent ones share a market regime, which it treats as independent. Read
-that CI as a floor on the uncertainty, not a ceiling.
+contains 134 non-overlapping periods, not how many times they were resampled.
+
+**Two corrections to how this was first described** (see §5b): 20,000 draws over 134 periods means each
+period recurs ~150 times, and that does **not** make the draws dependent — conditional on the panel they
+are i.i.d. from a fixed empirical distribution, which is precisely what makes the simulation standard
+error valid. What repeats fail to supply is *new historical evidence*. And the period bootstrap is **not
+a floor**: it resamples periods i.i.d. and so does not model regime dependence, but the direction of
+that omission is undetermined. A contiguous-block bootstrap is run alongside it in `slate-null.mjs` as a
+sensitivity on exactly that assumption.
 
 ## 4. What changed
 
@@ -220,6 +225,111 @@ done** — it changes what the ledger accepts, which is a protocol-adjacent deci
 - **Re-deriving the registered table as suspect.** It reproduces. The pre-registration is sound and no
   amendment is needed.
 
+## 5b. The slate-conditioned null, and the convention that was never open
+
+`node slate-null.mjs 20000` (seed 20261006, hold 5, 133 non-overlapping periods from the momentum
+warm-up at index 252). Same standing caveats: null only, historical, survivors, planning estimates.
+
+### The runtime already fixes the control convention — there was no owner decision
+
+§6 item 2 previously asked Tyler to choose a control-sampling convention. **That was a manufactured
+blocker, and it is withdrawn.** Reading the chain settles it:
+
+| file | behaviour |
+|---|---|
+| `context.mjs` | `candidates = [...held, ...top(half), ...bottom(half)]` by `rankBy`, `half = max(1, floor(slate/2))`; held names always shown |
+| `loop.mjs:260` | `pool = context.candidates.map(c => c.symbol)` — **the point-in-time slate, not the universe** |
+| `journal.mjs` | `matchedRandomControl(allowed, pool, seed)` shuffles `pool`, takes the first `sized.length` names **without reference to `allowed`** — so overlap is permitted, sampling is without replacement, and it truncates rather than duplicating when `pool < book` |
+
+So the convention is: **pool = the slate, overlap permitted.** The diagnostic was the thing out of step,
+and the fix is to match the measurement to the runtime — not to ask which convention to adopt. No
+runtime behaviour, ledger behaviour, size, hold or gate is changed by any of this.
+
+### Point-in-time, and precisely where it stops
+
+The slate is built by calling the **real `buildContext`** at the decision bar, so "the one truncation"
+applies and no ranking or eligibility test can see a future bar. A test appends a 1.5×-per-day run-up to
+the worst-ranked name and confirms the earlier slate is unchanged.
+
+Index mapping is asserted, not assumed: all 127 symbols share one start bar and one length, so
+`returnDates[k] === barDates[k+1]` for all 920, and a window starting at return index `i` is entered at
+the close of `barDates[i]` → `asOf = i`. `loadGrids` throws if a future panel breaks that.
+
+- **Faithful:** slate membership for a flat book.
+- **Approximation, labelled in the output:** `positions = {}`. A live run carries a book and held names
+  are *always* on the slate, so the reconstructed pool is narrower than a live one. Asserted in a test.
+- **Impossible from these files:** point-in-time *eligibility*. Every symbol shares one start bar, so no
+  delisting, acquisition or index change is represented — names that left the universe were never
+  collected. Ranking is point-in-time; **membership is survivors**.
+
+### At the deployed setting, slate-conditioning changes nothing — by coincidence of sizing
+
+| pool | mean size | σ/period | sim se | MDE@50p | annualised |
+|---|---|---|---|---|---|
+| full universe | 127.0 | 2.341% | 0.012% | 0.928% | 46.8% |
+| slate=10 | 10.0 | **DEGENERATE** | — | — | — |
+| slate=20 | 20.0 | 2.671% | 0.013% | 1.058% | 53.3% |
+| slate=40 | 40.0 | **2.816%** | 0.014% | 1.116% | 56.2% |
+| slate=80 | 80.0 | 2.548% | 0.013% | 1.009% | 50.9% |
+| slate=300 (deployed) | 127.0 | 2.348% | 0.012% | 0.930% | 46.9% |
+
+`slate=300` against 127 names **is** the whole cross-section — `context.mjs` says so itself — so the
+registered σ was measured against the right pool **by coincidence of sizing, not by design**.
+Ratio 1.0029 against the full universe confirms it.
+
+**The direction matters and it is the uncomfortable one.** A narrow slate is a *ranked* slate holding the
+momentum extremes, not a random subset. Two effects compete — a smaller pool means more overlap between
+the books, shrinking the difference's variance, while ranked extremes are more volatile names, inflating
+it. **Measured, the second wins:** σ peaks at `slate=40` at 1.203× the full-universe figure. So a
+deployed slate narrower than the universe would make the registered MDE **optimistic by ~20%**, the
+opposite direction from the control-overlap mismatch (which was conservative by ~5%). It does not bite
+today, and it would bite at the ~1,000-name universe `slate=300` was chosen for.
+
+### A degeneracy in the runtime's control, worth knowing before any forward configuration
+
+At `slate=10` against a book of 10 the control draw takes the **entire pool**, so control and book are
+the same names and the paired difference is **exactly zero on 100% of draws**. `matchedRandomControl`
+samples without replacement and truncates rather than duplicating, so it cannot manufacture a distinct
+control from a pool that size. The comparison does not get noisy — **it ceases to exist**.
+
+A first version of the tool's own guard tested `pool < book`, which is false at `pool == book`, and so
+reported σ = 0.000% as though it were a measurement of perfect precision. Now detected and printed as
+`DEGENERATE`. **Reported as a measurement limit, not as a recommended slate or book size** — both are
+owner settings and neither is touched.
+
+### Coverage
+
+Mean sessions held is exactly **5.000** at every pool, with **0.00%** of windows short of the hold and
+0.00% of draws unable to supply a distinct control (outside the degenerate row). So no name in this
+panel has a missing bar inside any measured window, and the "skipped, not forward-filled" hazard —
+real in the code — does not fire here.
+
+### Simulation error vs sampling error, stated correctly this time
+
+| source | magnitude | shrinks with draws? |
+|---|---|---|
+| conditional simulation (5 seeds, max−min) | 0.042% | **yes**, as 1/√draws |
+| analytic simulation se at 20,000 draws | 0.012% | yes |
+| sampling, i.i.d. period bootstrap (133 periods) | width 0.288% | no |
+| sampling, block bootstrap L=5 | width 0.333% | no |
+| sampling, block bootstrap L=13 | width 0.298% | no |
+
+Draws are **i.i.d. from a fixed empirical distribution**, so a repeated date does not make them
+dependent — that is exactly what licenses the simulation se. What repeats fail to supply is new
+historical evidence. And the i.i.d. bootstrap is **not a floor**: the block versions come out modestly
+wider at L=5 and comparable at L=13, which brackets the sensitivity to the exchangeability assumption
+rather than establishing a direction for it.
+
+### Random-versus-random is a planning proxy
+
+Everything above differences *two random books*. The forward quantity is a **fixed** analyst book (fixed
+in the sense that the rule is deterministic given the information set) against one random control.
+`Var(R_a − R_c) = Var(R_a) + Var(R_c) − 2Cov`, and random-versus-random sets `Var(R_a) = Var(R_c)` by
+construction. A real book concentrated in high-beta or sector-clustered names has a different variance
+and a different covariance with the pool. If it is more volatile than a random draw, every MDE here is
+**optimistic**; if more diversified, conservative. The realised dispersion can only be measured from a
+forward journal, of which there is none.
+
 ## 5a. Corrections to this document's own earlier draft
 
 Four overclaims, found on review and fixed rather than left standing:
@@ -243,15 +353,20 @@ grid endpoint is right, and the old `i + hold < length` was one period short.
 
 ## 6. Next work, ranked by expected information gain
 
-1. **Measure σ against the slate the analyst is actually shown, not the whole screened universe.**
-   `loop.mjs` passes `context.candidates` as the control pool — held names plus the top and bottom
-   `slate/2` by momentum. At `slate=300` against 127 names that is the whole universe, so today the two
-   coincide; on a larger universe they would not, and the control pool is the thing
-   `matchedRandomControl`'s own comment calls more important than the draw. Highest value because it is
-   the one modelling gap that could make the registered σ *wrong* rather than merely conservative.
-2. **Decide the control-sampling convention for the forward record.** §3b shows disjoint and
-   overlap-permitted differ by ~5%, and `journal.mjs` does the latter while the registered table used
-   the former. **Needs an owner decision**, since it is what a forward result gets scored against.
+1. ~~Measure σ against the slate the analyst is actually shown.~~ **DONE — §5b.** It coincides with the
+   full universe at the deployed `slate=300`, and would make the registered MDE optimistic by ~20% at a
+   narrower slate.
+2. ~~Decide the control-sampling convention for the forward record.~~ **WITHDRAWN — there was no
+   decision to make.** §5b: the runtime already fixes it. `loop.mjs` passes the point-in-time slate as
+   the pool and `matchedRandomControl` permits overlap, so the diagnostic was the thing out of step.
+   Listing this as an owner decision was a manufactured blocker.
+2b. **Measure σ with a held book carried across periods.** The one labelled approximation left in §5b:
+   `positions = {}`, so held names — which are *always* on the slate — are absent, and the reconstructed
+   pool is narrower than a live one. A simple deterministic holding rule (hold the previous period's
+   random book) would close it without a model call, and would also exercise the overlap between a
+   carried book and the slate. **Now the highest-information offline item**, because it is the last
+   known gap between the measured pool and the live one.
+
 3. **Regime-conditioned σ.** Sub-windows are stable at 1.18x, but quarters are a crude split. Measuring
    σ conditioned on realised market volatility would show whether the MDE should be regime-dependent —
    relevant because a drawdown window is pre-registered. Offline.
@@ -267,6 +382,5 @@ grid endpoint is right, and the old `i + hold < length` was one period short.
 - **The panel and the key**, as before. Nothing in §3b needed them, and items 1, 3, 4 and 5 above are
   all offline too.
 - **The ledger cross-check decision** (warn or refuse) — untouched, as instructed.
-- **The control-sampling convention** (§6 item 2) — a new decision surfaced by this work.
 - **Nothing else.** No pre-registration amended, no passing criterion, STOP rule, risk limit, sizing rule
   or hold changed; no book size chosen; no strategy claim invented; no candidate registered.

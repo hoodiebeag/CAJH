@@ -110,22 +110,44 @@ export const sd = (a) => {
 };
 
 /**
- * Standard error of an sd estimate from `d` INDEPENDENT draws: sd / sqrt(2(d-1)).
+ * CONDITIONAL SIMULATION ERROR of an sd estimate from `d` draws: sd / sqrt(2(d-1)).
  *
- * This is MONTE CARLO error only — it shrinks as draws are added and says nothing about how well the
- * panel represents the future. It is also an UNDERSTATEMENT here, because draws resample a finite set
- * of start dates and therefore are not independent: the same period can be drawn many times. Use
- * `periodBootstrapSd` for the uncertainty that does not shrink with draws.
+ * TWO ERRORS, AND AN EARLIER VERSION OF THIS COMMENT CONFLATED THEM.
+ *
+ * Draws here are i.i.d. from a FIXED empirical distribution — the panel's periods with their
+ * probabilities. Drawing the same date twice does NOT make the draws dependent: conditional on the
+ * panel, they are independent by construction, which is exactly what makes this formula applicable.
+ * The earlier comment called repeats "dependent" and described this se as an understatement on that
+ * basis. That was wrong.
+ *
+ * What repeats genuinely fail to provide is NEW HISTORICAL EVIDENCE. So:
+ *
+ *   - CONDITIONAL SIMULATION ERROR (this function): how precisely the Monte Carlo has pinned down the
+ *     dispersion OF THE FIXED EMPIRICAL DISTRIBUTION. Shrinks as 1/sqrt(draws), to zero.
+ *   - SAMPLING / GENERALISATION ERROR (`periodBootstrapSd`, `blockBootstrapSd`): how far that fixed
+ *     empirical distribution may sit from the one a future period is drawn from. Governed by how many
+ *     periods the panel holds, and unaffected by adding draws.
+ *
+ * Reporting only the first makes an estimate look far more certain than it is. The distinction is not
+ * that one is "real" and the other an artifact — they answer different questions.
  */
 export const monteCarloSeOfSd = (sdEstimate, d) => (d > 1 ? sdEstimate / Math.sqrt(2 * (d - 1)) : NaN);
 
 /**
- * Historical sample uncertainty: resample whole PERIODS, not draws.
+ * Sampling / generalisation uncertainty: resample whole PERIODS, not draws.
  *
  * The quantity that limits generalisation is how many non-overlapping periods the panel contains — 134
- * at a 5-day hold on 920 dates — not how many times they were drawn. Adding Monte Carlo draws shrinks
- * Monte Carlo error toward zero while leaving this untouched, which is why reporting only the former
- * makes an estimate look far more certain than it is.
+ * at a 5-day hold on 920 dates — not how many times they were drawn.
+ *
+ * NOT A GUARANTEED LOWER BOUND, and an earlier version of this comment said it was. It resamples
+ * periods i.i.d., so it does not model regime dependence between adjacent periods — but the direction
+ * of that omission is NOT determined. Positive dependence within a regime inflates the true sampling
+ * variance of a dispersion estimate, so an i.i.d. bootstrap can understate; dependence can equally
+ * make the realised sequence more homogeneous than i.i.d. resampling of a heterogeneous period pool,
+ * in which case it overstates. Calling it a "floor" asserted a direction nothing here establishes.
+ *
+ * `blockBootstrapSd` resamples contiguous blocks instead, which preserves local dependence, and the
+ * two together bracket the sensitivity to that modelling choice rather than claiming either is right.
  *
  * Resamples periods with replacement and recomputes sd within each resample.
  */
@@ -145,3 +167,55 @@ export function periodBootstrapSd(diffsByPeriod, rng, iterations = 400) {
   const at = (q) => draws[Math.min(draws.length - 1, Math.floor(draws.length * q))];
   return { lo: at(0.025), hi: at(0.975), clusters: periods.length, degenerate: false, iterations };
 }
+
+/**
+ * Contiguous-BLOCK bootstrap over periods, as a sensitivity on `periodBootstrapSd`'s i.i.d. assumption.
+ *
+ * Resamples runs of `blockLength` consecutive periods instead of single periods, so a regime that
+ * spans several periods is carried into the resample intact. Comparing the two intervals shows how
+ * much the reported uncertainty depends on assuming periods are exchangeable — which is the honest
+ * alternative to asserting a direction for that assumption's error.
+ *
+ * Blocks wrap at the end of the sequence (a circular block bootstrap) so every period has equal
+ * probability of inclusion; without wrapping, periods near the edges are systematically under-sampled.
+ */
+export function blockBootstrapSd(diffsByPeriod, rng, { iterations = 400, blockLength = 5 } = {}) {
+  const keys = [...diffsByPeriod.keys()].sort((a, b) => a - b);
+  if (keys.length < 2) return { lo: null, hi: null, clusters: keys.length, degenerate: true, blockLength };
+  const nBlocks = Math.max(1, Math.ceil(keys.length / blockLength));
+  const draws = [];
+  for (let it = 0; it < iterations; it++) {
+    const pooled = [];
+    for (let b = 0; b < nBlocks; b++) {
+      const start = Math.floor(rng() * keys.length);
+      for (let j = 0; j < blockLength; j++) {
+        pooled.push(...diffsByPeriod.get(keys[(start + j) % keys.length]));
+      }
+    }
+    draws.push(sd(pooled));
+  }
+  draws.sort((a, b) => a - b);
+  const at = (q) => draws[Math.min(draws.length - 1, Math.floor(draws.length * q))];
+  return { lo: at(0.025), hi: at(0.975), clusters: keys.length, degenerate: false, iterations, blockLength };
+}
+
+/**
+ * WHAT A RANDOM-VERSUS-RANDOM NULL IS AND IS NOT.
+ *
+ * Everything in this module differences TWO RANDOM books. The forward quantity under test is different:
+ * a FIXED analyst book (fixed in the sense that the selection rule is deterministic given the
+ * information set) against one random control draw. Those two variances need not match.
+ *
+ *     Var(R_a - R_c) = Var(R_a) + Var(R_c) - 2*Cov(R_a, R_c)
+ *
+ * Random-versus-random sets Var(R_a) = Var(R_c) by construction. A real analyst book can have a
+ * different variance — concentrated in high-beta or high-volatility names, or sector-clustered — and a
+ * different covariance with the control pool. If the analyst's book is more volatile than a random
+ * draw of the same size, the true paired variance is LARGER than this null suggests and every MDE here
+ * is optimistic; if it is more diversified or lower-beta, smaller and the MDE is conservative.
+ *
+ * So treat these figures as a PLANNING PROXY for choosing a minimum period count in advance. The
+ * realised dispersion of the actual paired difference can only be measured from a forward journal, of
+ * which there is currently none.
+ */
+export const RANDOM_VS_RANDOM_IS_A_PROXY = true;

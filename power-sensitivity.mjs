@@ -238,11 +238,16 @@ async function main() {
               `(${boot.clusters} periods, ${boot.iterations} iters)`);
   console.log(`  width of that CI                    ${pct3(boot.hi - boot.lo)}   <- does NOT shrink with draws`);
   console.log(`  ratio                               ${((boot.hi - boot.lo) / Math.max(1e-12, mcSpread)).toFixed(1)}x`);
-  console.log("  The second is the one that limits what this panel can say. Draws are also DEPENDENT:");
-  console.log(`  ${DRAWS} draws resample only ${boot.clusters} distinct periods, so the same period`);
-  console.log("  recurs many times. Periods themselves do not overlap by construction, but adjacent");
-  console.log("  ones share a market regime, which the bootstrap treats as independent and so still");
-  console.log("  understates. Read the CI as a floor on the uncertainty, not a ceiling.\n");
+  console.log("  The second is the one that limits what this panel can say.");
+  console.log(`  Draws resample ${boot.clusters} distinct periods, so with ${DRAWS} draws each period recurs`);
+  console.log("  many times. THAT DOES NOT MAKE THEM DEPENDENT: conditional on the panel, the draws are");
+  console.log("  i.i.d. from a fixed empirical distribution, which is what makes the simulation se valid.");
+  console.log("  What repeats fail to supply is NEW HISTORICAL EVIDENCE. An earlier version of this");
+  console.log("  output called repeats 'dependent'; that was wrong.");
+  console.log("  The period bootstrap resamples periods i.i.d., so it does not model regime dependence");
+  console.log("  between adjacent periods — but the DIRECTION of that omission is not determined, and an");
+  console.log("  earlier version called the interval a 'floor'. It is a limitation, not a bound. See");
+  console.log("  slate-null.mjs for a contiguous-block bootstrap run alongside it as a sensitivity.\n");
 
   console.log("WHAT THIS DOES AND DOES NOT ESTABLISH: it measures how the null's spread — and therefore");
   console.log("the planning MDE — responds to book size, window length, sub-period and control-sampling");
