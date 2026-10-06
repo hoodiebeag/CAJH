@@ -16,7 +16,7 @@ import fs from "node:fs";
 import os from "node:os";
 import { execFileSync } from "node:child_process";
 import {
-  trailingVol, terciles, classifyPeriods, measureStates, STATE, STATE_SEED,
+  trailingVol, volWindowIndices, terciles, classifyPeriods, measureStates, STATE, STATE_SEED,
   VOL_WINDOW, MIN_HISTORY, MIN_PERIODS_PER_STATE, HOLD, FIRST_START, SEED,
 } from "./regime-null.mjs";
 import { buildReturnMap, sd } from "./analyst/panel-null.mjs";
@@ -48,45 +48,103 @@ function regimePanel({ bars = 400, calm = 200, calmMove = 0.001, wildMove = 0.04
 
 // ---- the state definition uses only pre-decision information -----------------------------------
 
-test("trailingVol reads only returns at or before the decision bar", () => {
-  const { panel } = regimePanel({ bars: 120, calm: 120 });
+test("every return timestamp consumed is at or before the DECISION timestamp", () => {
+  // THE BOUNDARY, ASSERTED ON TIMESTAMPS RATHER THAN ON INDEX ARITHMETIC I CHOSE. An earlier version of
+  // this test recomputed the basket over the same i-inclusive indices trailingVol used, so it certified
+  // whatever boundary the implementation had — including the wrong one.
+  const { panel, barDates } = regimePanel({ bars: 120, calm: 120 });
   const i = 60, w = 21;
-  const got = trailingVol(panel, i, w);
+  const span = volWindowIndices(i, w, panel.dates.length);
+  assert.ok(span, "the window should be available at i=60");
 
-  // Recompute from the window explicitly: indices i-w+1 .. i, nothing later.
+  const decisionTime = barDates[i];
+  for (let k = span.from; k <= span.to; k++) {
+    assert.ok(panel.dates[k] <= decisionTime,
+      `return index ${k} is keyed ${new Date(panel.dates[k] * 1000).toISOString().slice(0, 10)}, ` +
+      `after the decision close ${new Date(decisionTime * 1000).toISOString().slice(0, 10)}`);
+  }
+  // The last permissible index is exactly the decision bar, so the window is not needlessly short.
+  assert.equal(panel.dates[span.to], decisionTime, "the window should end AT the decision close");
+  assert.equal(span.to, i - 1, "return index i is the move INTO barDates[i+1] and must be excluded");
+  assert.equal(span.to - span.from + 1, w);
+
+  // And the value matches an independent average over exactly that span.
   const basket = [];
-  for (let k = i - w + 1; k <= i; k++) {
-    const rs = panel.names.map((s) => panel.ret.get(s).get(panel.dates[k])).filter((r) => r !== undefined);
+  for (let k = span.from; k <= span.to; k++) {
+    const rs = panel.names.map((sy) => panel.ret.get(sy).get(panel.dates[k])).filter((r) => r !== undefined);
     basket.push(rs.reduce((a, b) => a + b, 0) / rs.length);
   }
-  assert.ok(Math.abs(got - sd(basket)) < 1e-12, "trailingVol does not match its own stated window");
+  assert.ok(Math.abs(trailingVol(panel, i, w) - sd(basket)) < 1e-12);
 });
 
-test("a violent FUTURE move does not change an earlier period's volatility or label", () => {
-  // THE NO-LOOK-AHEAD TEST, by construction. If classification read any future bar, extending the panel
-  // with a 40%-per-day run would alter the earlier labels.
-  const short = regimePanel({ bars: 300, calm: 300 });
-  const long = regimePanel({ bars: 300, calm: 300 });
-  // Extend `long` with violence AFTER bar 299.
-  for (const s of Object.keys(long.series)) {
-    let px = long.series[s].at(-1).close;
-    for (let i = 0; i < 60; i++) {
-      px *= 1 + (i % 2 === 0 ? 0.4 : -0.4);
-      long.series[s].push({ time: 1_600_000_000 + (300 + i) * DAY, close: px });
+test("REGRESSION: changing precisely bar i+1 leaves the volatility and label untouched", () => {
+  // THE TEST THAT WOULD HAVE CAUGHT IT. The old no-look-ahead test appended bars far in the future,
+  // which cannot detect a leak exactly one bar wide. This perturbs ONLY bar i+1, keeps every bar at or
+  // before i byte-identical, and checks the measurement at i does not move.
+  const DAY2 = 86400;
+  const build = (bars, perturbAt, factor) => {
+    const series = {};
+    for (let k = 0; k < 4; k++) {
+      const out = [];
+      let px = 100;
+      for (let j = 0; j < bars; j++) {
+        let m = 0.001 * (1 + 0.1 * k) * (j % 2 ? -1 : 1);
+        if (perturbAt !== null && j === perturbAt) m *= factor;
+        px *= 1 + m;
+        out.push({ time: 1_600_000_000 + j * DAY2, close: px });
+      }
+      series[`S${k}`] = out;
     }
+    return series;
+  };
+  const i = 50;
+  const plain = build(120, null, 1);
+  const bumped = build(120, i + 1, 60);
+
+  // The premise: identical at and before i, different at i+1.
+  for (const sy of Object.keys(plain)) {
+    for (let j = 0; j <= i; j++) {
+      assert.equal(Number(plain[sy][j].close), Number(bumped[sy][j].close),
+        `${sy} bar ${j} differs — the fixture does not isolate bar i+1`);
+    }
+    assert.notEqual(Number(plain[sy][i + 1].close), Number(bumped[sy][i + 1].close),
+      `${sy} bar ${i + 1} is unchanged — the fixture perturbs nothing`);
   }
-  long.panel = buildReturnMap(long.series);
-  long.barDates = [...new Set(Object.values(long.series).flatMap((b) => b.map((x) => Number(x.time))))].sort((a, b) => a - b);
 
-  const i = 250;
-  assert.ok(Math.abs(trailingVol(short.panel, i, VOL_WINDOW) - trailingVol(long.panel, i, VOL_WINDOW)) < 1e-12,
-    "a future bar changed a past volatility reading — look-ahead");
+  const a = buildReturnMap(plain), b = buildReturnMap(bumped);
+  assert.equal(trailingVol(a, i, VOL_WINDOW), trailingVol(b, i, VOL_WINDOW),
+    "a change at bar i+1 moved the volatility at i — one-bar look-ahead");
 
-  // And the same at the label level, over a shared set of periods.
-  const starts = nonOverlappingStarts(60, HOLD, 290);
-  const a = classifyPeriods(short.panel, starts, { window: VOL_WINDOW, mode: "expanding", minHistory: 5 });
-  const b = classifyPeriods(long.panel, starts, { window: VOL_WINDOW, mode: "expanding", minHistory: 5 });
-  assert.deepEqual(a.labels, b.labels, "a future bar changed past labels — look-ahead in classification");
+  // And at the label level across a shared period set.
+  const starts = nonOverlappingStarts(40, HOLD, 110);
+  const ca = classifyPeriods(a, starts, { window: VOL_WINDOW, mode: "expanding", minHistory: 5 });
+  const cb = classifyPeriods(b, starts, { window: VOL_WINDOW, mode: "expanding", minHistory: 5 });
+  const upTo = starts.findIndex((st) => st > i);
+  assert.ok(upTo > 2, "need periods at or before i to compare");
+  assert.deepEqual(ca.labels.slice(0, upTo), cb.labels.slice(0, upTo),
+    "a change at bar i+1 moved an earlier label — one-bar look-ahead in classification");
+});
+
+test("an incomplete window returns null rather than a figure from fewer dates", () => {
+  // `basket.length >= 2` accepted a short window whenever some dates had no data for any symbol and
+  // reported it as a full-window measurement. The window must be fully covered or null.
+  const DAY3 = 86400;
+  const series = {
+    A: Array.from({ length: 60 }, (_, j) => ({ time: 1_600_000_000 + j * DAY3, close: 100 * 1.001 ** j })),
+  };
+  // B shares the grid but omits a block of dates, so those dates have A's data only — still covered.
+  series.B = series.A.filter((_, j) => j < 20 || j > 30);
+  const panel = buildReturnMap(series);
+  assert.ok(Number.isFinite(trailingVol(panel, 40, 21)), "dates covered by at least one symbol are fine");
+
+  // A panel where a date is covered by NO symbol cannot occur through buildReturnMap (the union is
+  // built from the data), so the uncoverable case is the short window at the start of the panel.
+  // from = i - window and to = i - 1, so the first fully-available window is i === window.
+  assert.equal(trailingVol(panel, 5, 21), null, "a window reaching before the panel must be null");
+  assert.equal(trailingVol(panel, 20, 21), null, "i=20 needs return index -1, so it is unavailable");
+  assert.deepEqual(volWindowIndices(21, 21, 59), { from: 0, to: 20 });
+  assert.ok(Number.isFinite(trailingVol(panel, 21, 21)), "i=21 is the first fully-available window");
+  assert.equal(volWindowIndices(20, 21, 59), null);
 });
 
 test("expanding cut-points depend only on earlier periods; full-sample ones do not", () => {

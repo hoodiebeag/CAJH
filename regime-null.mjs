@@ -89,27 +89,56 @@ export const STATE = Object.freeze({ LOW: "low", MID: "mid", HIGH: "high", UNLAB
 export const STATE_SEED = Object.freeze({ [STATE.LOW]: 101, [STATE.MID]: 211, [STATE.HIGH]: 331 });
 
 /**
- * Realised volatility of the equal-weight basket over the `window` sessions ENDING at return index i.
+ * The return indices a decision at window-start `i` may legitimately read.
  *
- * Uses returns at indices `i-window+1 .. i`, all of which are at or before the decision bar — the return
- * AT index i is the move into `barDates[i]`, which has closed by the time a decision at that close is
- * made. Returns null when the window is not fully available rather than averaging a short one.
+ * THE BOUNDARY, DERIVED FROM TIMESTAMPS RATHER THAN ASSERTED. `buildReturnMap` keys each return to the
+ * LATER of its two bars, and strips every symbol's first bar, so `returnDates[k] === barDates[k+1]`
+ * (verified on the real panel: 921 bars, 920 return dates, equality at all k). A window starting at
+ * return index `i` is entered at the close of `barDates[i]`.
+ *
+ * Therefore the return at index `i` is the move INTO `barDates[i+1]` — a bar that has not closed when
+ * the decision is made. **The latest permissible return index is `i-1`**, whose timestamp is
+ * `barDates[i]`, exactly the decision close.
+ *
+ * AN EARLIER VERSION READ THROUGH INDEX `i` AND SO LOOKED ONE BAR AHEAD. Demonstrated rather than
+ * reasoned: perturbing only `barDates[i+1]`, with every bar at or before `i` byte-identical, moved the
+ * measured volatility at `i` from 0.118% to 1.510%. The accompanying test recomputed the basket over the
+ * same `i`-inclusive indices, so it certified the wrong boundary, and the no-look-ahead test appended
+ * bars far in the future — which cannot detect a leak that is exactly one bar wide.
+ *
+ * Returns null when the full window is not available, rather than shortening it.
+ */
+export function volWindowIndices(i, window = VOL_WINDOW, available = Infinity) {
+  if (!Number.isInteger(i) || i < 0) throw new Error(`volWindowIndices: i must be a non-negative integer, got ${i}`);
+  if (!Number.isInteger(window) || window < 2) throw new Error(`volWindowIndices: window must be an integer >= 2, got ${window}`);
+  const to = i - 1;                       // the last CLOSED return at the decision bar
+  const from = to - window + 1;
+  if (from < 0 || to < 0 || to >= available) return null;
+  return { from, to };
+}
+
+/**
+ * Realised volatility of the equal-weight basket over the `window` returns that have CLOSED by the
+ * decision bar for a window starting at return index `i` — indices `i-window .. i-1`.
+ *
+ * Returns null unless EVERY date in the window contributed a basket return. A first version accepted
+ * `basket.length >= 2`, which silently measured a shorter window whenever some dates had no data for any
+ * symbol, and reported it as a full-window figure.
  */
 export function trailingVol(panel, i, window = VOL_WINDOW) {
-  if (!Number.isInteger(i) || i < 0) throw new Error(`trailingVol: i must be a non-negative integer, got ${i}`);
-  if (!Number.isInteger(window) || window < 2) throw new Error(`trailingVol: window must be an integer >= 2, got ${window}`);
-  const from = i - window + 1;
-  if (from < 0 || i >= panel.dates.length) return null;
+  const span = volWindowIndices(i, window, panel.dates.length);
+  if (!span) return null;
   const basket = [];
-  for (let k = from; k <= i; k++) {
+  for (let k = span.from; k <= span.to; k++) {
     const rs = [];
     for (const sym of panel.names) {
       const r = panel.ret.get(sym)?.get(panel.dates[k]);
       if (r !== undefined) rs.push(r);
     }
-    if (rs.length) basket.push(rs.reduce((a, b) => a + b, 0) / rs.length);
+    if (!rs.length) return null;          // a date with no data at all: the window is incomplete
+    basket.push(rs.reduce((a, b) => a + b, 0) / rs.length);
   }
-  return basket.length >= 2 ? sd(basket) : null;
+  return basket.length === window ? sd(basket) : null;
 }
 
 /** Tercile cut-points of a sample. Returns null when there is too little to split. */
