@@ -17,11 +17,15 @@
  *    because it is the substitution people reach for, and labelled a heuristic so nobody reads it as
  *    80% power.
  *
- * 3. `mdeTExact` — solves for the effect at which a one-sample t-test genuinely attains the target
- *    power, with σ ESTIMATED from the same n observations. Power is computed from the noncentral-t
- *    rejection probability by simulation, so it carries a stated Monte Carlo error rather than a
- *    closed form this file would have to get right unverified. This is the honest small-n answer under
- *    normality.
+ * 3. `mdeTExact` — solves for the effect at which a one-sample t-test attains the target power, with σ
+ *    ESTIMATED from the same n observations. Power is computed from the noncentral-t rejection
+ *    probability by simulation, so it carries a stated Monte Carlo error rather than a closed form this
+ *    file would have to get right unverified.
+ *
+ *    "EXACT" IS SCOPED, and the scope matters: exact for the t-test's own sampling problem under
+ *    I.I.D. NORMAL periods. It removes the known-σ approximation and nothing else. Real per-period
+ *    differences are fat-tailed and adjacent periods share a market regime, so every figure this
+ *    module returns is still a PLANNING ESTIMATE, never power attained on a forward record.
  *
  * 4. `mdeBootstrapConditional` — resamples an OBSERVED sample. **Conditional historical sensitivity,
  *    not fresh evidence and not guaranteed coverage.** It asks "if the future looks exactly like this

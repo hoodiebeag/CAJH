@@ -646,7 +646,7 @@ by dropping the conditional.** Commit titles are immutable; the correction lives
 |---|---|
 | **normal** | one-sample **z**-test, σ **known**. What `analyst/power.mjs` computes and what `PAPER-PROTOCOL.md` registered. |
 | **t-heuristic** | critical *t* substituted for critical *z*. This corrects the **level** for an estimated σ. It is **not** a power calculation: under the alternative the statistic is noncentral *t*, and leaving the power term normal does not fix that. Labelled a heuristic in the code for this reason. |
-| **t-exact** | the effect at which a one-sample *t*-test genuinely attains 80% power with σ **estimated from the same n observations**. Obtained by simulating the test and bisecting on the effect, so it carries a Monte Carlo error, reported alongside. |
+| **t-exact** | the effect at which a one-sample *t*-test attains 80% power with σ **estimated from the same n observations**. Obtained by simulating the test and bisecting on the effect, so it carries a Monte Carlo error, reported alongside. **"Exact" means exact for the *t*-test's own sampling problem under i.i.d. normal periods** — it removes the known-σ approximation and nothing else. Real per-period differences are fat-tailed and adjacent periods share a market regime (§3a), so this is still a **planning estimate**, not attained power on the forward record. |
 | **bootstrap** | **conditional historical sensitivity** — how the figure moves if the per-period distribution is taken to be one observed sample's empirical distribution. Not fresh evidence, and **not a coverage guarantee**. |
 
 ### The gap, at the period counts already in the registered table
@@ -767,6 +767,169 @@ STOP rule is touched, and `analyst/power.mjs` is unchanged — the registered ta
 exactly as §1 says it does. The finding is about **how to read** that table's small-n rows, not about
 replacing it.
 
+## 5g. Cost sensitivity of the measurement: the paired edge is invariant, and three things are not
+
+`cost-cancellation.mjs`, `cost-cancellation.test.mjs` (8 tests). Offline, no model call, no panel
+upload. **`costs.mjs` is unchanged and no runtime behaviour is touched.** This is not a strategy run and
+not a break-even: `PER-FAMILY-COST-CEILING` answers break-even in closed form and
+`COST-SENSITIVITY-SURFACE` already mapped a fee × slippage grid for the crypto baseline families. Both
+are closed and neither is reopened. **No formal test is added, so no BH-FDR threshold moves** — the
+precedent for that bucket is `EQUITIES-COST-ASSUMPTION-SENSITIVITY`, logged with "no p-value, no
+pre-registered gate, no pass/fail claim of any kind".
+
+**Built on precedent rather than rediscovering it.** `VERDICTS-COST-CONSTANT-STALENESS-SWEEP`
+(2026-08-29) already established that "a uniform `roundTripCost` shift **cancels** in a difference of two
+means computed on the same population", and classified every archive figure as AFFECTED or
+UNAFFECTED-BY-CANCELLATION on that basis. What is new is applying it to the **forward paired edge** and
+to the null's σ/MDE, and then asking precisely where the uniformity precondition fails.
+
+### The three structures, derived before measuring
+
+| cost structure | paired edge (book − matched control) | absolute net |
+|---|---|---|
+| **equal fixed per round trip** — what `bookReturn`, `realisedOutcomes` and `scoreJournal` all implement | **cancels: enters neither the mean nor the variance** | mean shift of 2c, no variance |
+| **unequal but deterministic** — e.g. one side trades every period, the other every *k*-th | mean shift of exactly **2c(1 − 1/k)**, still no variance | mean shift |
+| **book-dependent per name** | mean bias **2(c̄ₐ − c̄_b)**, which is a *random variable* — so it adds **variance too** | mean shift and variance |
+
+The third row is the answer to "does *cost enters the mean, not the variance* hold?" — **it holds only
+under equal fixed costs.** Under book-dependent costs the differential is a draw, not a constant, and it
+enters both moments. (§6's item 5 said cost "shifts the edge being measured rather than the noise floor".
+For the paired edge that is wrong in the other direction: the edge is not shifted **at all**. Corrected
+there.)
+
+### Measured: the paired statistic is invariant to any cost assumption
+
+σ = 2.335% paired per period (`sp500-bundle`, 127 names, 133 periods, book 10, hold 5, 19,950 draws,
+seed 20261006). Baseline cost is the repository's own verified `usEquityIbkr`: **5.5bp per leg, 11bp
+round trip**. Everything else is labelled hypothetical:
+
+| per-leg cost | label | σ paired | max \|diff − diff@0\| | MDE @ n=50 |
+|---|---|---|---|---|
+| 0.00bp | diagnostic zero | 2.335% | 0 | 0.925% |
+| 5.50bp | **VERIFIED baseline** | 2.335% | 2.8×10⁻¹⁷ | 0.925% |
+| 11.00bp | hypothetical | 2.335% | 2.8×10⁻¹⁷ | 0.925% |
+| 35.00bp | hypothetical | 2.335% | 2.8×10⁻¹⁷ | 0.925% |
+| 85.00bp | hypothetical | 2.335% | 2.8×10⁻¹⁷ | 0.925% |
+
+`bookReturn` returns `mean(gross) − 2c`, so `drawPair`'s diff is `(a − 2c) − (b − 2c) = a − b`. **No cost
+assumption, however large, moves the selection MDE.** The deviation column is floating-point noise:
+`(a−2c)−(b−2c)` is **not** bit-equal to `a−b` in IEEE arithmetic, so the claim is "invariant to ~10⁻¹⁶",
+never "bit-identical" — and the test asserts 10⁻¹², with a second draw proving the invariance is not
+vacuous.
+
+### Two claims, two σ — the registered MDE answers only one of them
+
+| | σ per period | MDE @4 | @12 | @26 | @50 |
+|---|---|---|---|---|---|
+| **paired** (book − matched control, same slate, same instant) | 2.335% | 3.271% | 1.889% | 1.283% | 0.925% |
+| **absolute** (one random book, no control) | 2.848% | 3.989% | 2.303% | 1.565% | 1.128% |
+
+**1.22× wider with no control**, because the control removes the common market move. So the registered
+table is the **selection** claim's resolution and nothing else, and **a positive absolute gross return is
+mostly market exposure, not stock-selection skill.** Reading an absolute figure against the registered
+MDE would understate the required effect by 22%.
+
+### What cost does move
+
+- **Absolute net levels**, by exactly 2c: at the baseline, −0.110% per period on a gross mean of +0.327%.
+- **`scoreJournal`'s `hitRate`**, which counts `netReturn > 0` and is therefore **cost-dependent**: 55.3%
+  of periods positive at zero cost, 53.3% at the baseline, 27.8% at a hypothetical 85bp. `beatControlRate`
+  and `edgeCI` are not cost-dependent, because both sides carry the same charge.
+- **Annualised drag**: 5.544%/yr at hold 5, 27.720%/yr at hold 1.
+
+### A discrepancy in the protocol's own cost figures, reported and not edited
+
+`PAPER-PROTOCOL.md` reads "cost drag rises from **1.3%/yr to 27.7%/yr**" in a sentence comparing the
+deployed hold 5 against hold 1. `costDragPerYear` is linear in 1/hold, so that ratio must be **exactly
+5**, not 21.3. The computed figures at the baseline are **5.544%/yr at hold 5** and 27.720%/yr at hold 1;
+**1.32%/yr is the hold-21 row.** So the sentence pairs the hold-1 figure with the hold-**21** figure, and
+understates the deployed hold's drag by ~4.2× — in the flattering direction. The protocol is
+pre-registered and is **not edited**; a test asserts the ratio so the arithmetic cannot drift.
+
+Separately, that passage sets **absolute cost drag** beside the **paired** MDE. Those are different
+claims — the drag is an absolute-performance quantity and the MDE is a selection-resolution quantity —
+and the "lever is closed" conclusion is about the first while the table beside it is the second.
+
+### Where cancellation fails: cost that depends on the book
+
+A per-share schedule with a per-order minimum gives a per-leg rate of
+`max(minPerOrder/notional, perShare/price)` — **a function of position size and of the name's price**, so
+a constant `feeRate` cannot represent it. At the **configured** NAV of $100,000 (`analyst-run.mjs`'s
+`--nav` default) with 10 names at 10% each, notional is $10,000 per name.
+
+**The repository disagrees with itself about the schedule, and both readings are run as hypotheticals.**
+`costs.mjs`'s comment cites "$0.0035/share with a $0.35 minimum" (IBKR tiered); the archive row
+`EQUITIES-COST-ASSUMPTION-SENSITIVITY` instead cites "IBKR's **$1.00/order** commission floor binds below
+200 shares" (IBKR fixed). Different plans, different floors; this session's egress policy blocks
+verifying either against the broker, and which plan the owner holds is an owner fact. Neither is
+presented as the live schedule.
+
+| schedule (both hypothetical) | rate: min / median / max | per-share charge exceeds the modelled 0.5bp below | names below that price | 2(c̄ₐ−c̄_b): sd / max |
+|---|---|---|---|---|
+| `$0.0035`/share, `$0.35` floor | 0.35 / 0.35 / 16.13 bp | $70/share | **43 of 127** | 1.82bp / 11.79bp |
+| `$0.005`/share, `$1.00` floor | 1.00 / 1.00 / 23.04 bp | $100/share | **54 of 127** | 2.53bp / 16.52bp |
+
+**The magnitude was predictable, and is reported as arithmetic rather than as a finding.** A dispersion
+measured in basis points enters the variance as bp² against a σ measured in percent:
+`var(Δc)/var(gross)` is 6.1×10⁻³% and 1.2×10⁻²% for the two schedules — orders of magnitude *below* the
+Monte Carlo error on σ itself. (Which is why the measured change in σ is reported as a **decomposition**
+and not as a signed "inflation": an earlier draft printed "inflation −0.011%", which reads as a cost
+*reducing* variance when it is the covariance term and noise.)
+
+**The channel that is not negligible in principle is a mean bias correlated with selection** — an analyst
+that systematically picks cheaper or dearer names than its control. **The journal's paired edge assigns
+that bias exactly zero by construction**, because it charges one constant to both sides. That is the
+identified gap, and it is **not measurable offline**: it needs the analyst's own realised book.
+
+Scale, against the paired MDE — **not a break-even for anything**, but the resolution of the instrument:
+
+| systematic differential (per leg) | per period | % of MDE @4 | @12 | @26 | @50 |
+|---|---|---|---|---|---|
+| 0.50bp | 0.010% | 0.3% | 0.5% | 0.8% | 1.1% |
+| 5.00bp | 0.100% | 3.1% | 5.3% | 7.8% | 10.8% |
+| 10.00bp | 0.200% | 6.1% | 10.6% | 15.6% | 21.6% |
+| 25.00bp | 0.500% | 15.3% | 26.5% | 39.0% | **54.0%** |
+
+At the plausible end — the basis point or two these schedules actually disperse by — this is ~1% of the
+MDE at every n. A 25bp **systematic** differential would reach a majority of the n=50 MDE, so it is not
+dismissable in principle, only implausible at these notionals. **The binding constraint on this
+measurement remains the period count, not the cost model.**
+
+### Turnover: the runtime does not measure it at all
+
+`decide.mjs` sets `targetPct = 0` for a `hold` action, and every consumer (`journal.mjs:119`,
+`loop.mjs:344`, `matchedRandomControl`) filters those out. So a **carried name produces no outcome row,
+is charged no cost, and gets no control**. Low turnover therefore shows up as a **smaller n**, not as a
+cost saving: the measurement is conservative about the analyst's realised cost and pays for it in sample
+size. Reported, not changed.
+
+Two further runtime semantics, verified in source and left alone:
+
+- **`scoreJournal.edge` is a difference of independently filtered means** (`journal.mjs:367-368`), while
+  `edgeCI` is strictly paired (`:421`). A null control row drops that name from the paired statistic but
+  not from `agentMeanNet`. Cost still cancels in the difference of means — a constant subtracts from
+  every element either way — but the two statistics are computed on different row sets.
+- **Incomplete holds are charged a full round trip only in a dry run.** `realisedOutcomes` defaults to
+  `requireComplete: true` and `settle` uses the default, so a decision still inside its holding period is
+  dropped rather than recorded as a flat trade.
+
+### An arithmetic error in `costs.mjs`'s comment, reported and not fixed
+
+The comment reads "$0.0035/share with a $0.35 minimum. On a $100 stock that is **3.5bp per leg at one
+share**". One share of a $100 stock is $100 of notional, pays the $0.35 minimum, and that is **35bp** —
+ten times the stated figure. The `feeRate` *value* (0.00005) is a separate, defensible choice for
+$10,000 notional above the floor; only the comment's worked example is wrong. `costs.mjs` is not this
+unit's to edit, so the correct arithmetic is asserted in `cost-cancellation.test.mjs` instead.
+
+### What remains unmeasured
+
+- **The analyst's own cost profile.** Whether its book skews cheap or dear relative to the control is the
+  one channel that could bias the paired edge, and it needs journalled decisions — the key and the panel.
+- **Real fill costs.** Unmeasured because of the owner's decision that broker orders count as live
+  orders, not because of a missing prerequisite. Slippage stays an assumption for the whole log-only run.
+- **Which IBKR plan is in force.** An owner fact. It changes only the hypothetical columns above.
+
+**No owner prerequisite blocked this unit**, and none blocks the queue items that remain offline.
 ## 5a. Corrections to this document's own earlier draft
 
 Four overclaims, found on review and fixed rather than left standing:
@@ -818,14 +981,21 @@ grid endpoint is right, and the old `i + hold < length` was one period short.
    table — and because the ratios are scale-invariant in σ it holds whatever σ that table used. σ's own
    measured band (±6%, §3b) outweighs the method correction at n ≥ 26 and is outweighed by it at n=4.
    No gate proposed.
-5. **Cost-model sensitivity of the MDE.** Last, as before: cost enters the mean, not the variance, so it
-   shifts the edge being measured rather than the noise floor. `PER-FAMILY-COST-CEILING` already has the
-   break-even in closed form.
+5. ~~Cost-model sensitivity of the MDE.~~ **DONE — §5g**, and the reasoning in this entry was wrong.
+   "Cost enters the mean, not the variance, so it shifts the edge being measured" holds only under
+   **equal fixed** costs, and even then the paired edge is not shifted **at all** — it cancels
+   algebraically, so no cost assumption moves the selection MDE. Under **book-dependent** costs the
+   differential is a random variable and enters **both** moments; measured at 6.1×10⁻³% of the variance
+   on this panel, i.e. negligible in magnitude but not zero in structure. What cost does move: absolute
+   net levels, `hitRate`, and annualised drag. `PER-FAMILY-COST-CEILING` still has the break-even in
+   closed form and was not reopened.
 
 ## 7. What still requires Tyler
 
-- **The panel and the key**, as before. Nothing in §3b needed them; items 1 and 5 above are offline too,
-  and items 3 and 4 have since been done offline (§5e, §5f).
+- **The panel and the key**, as before. Nothing in §3b needed them; item 1 above is offline too, and
+  items 3, 4 and 5 have since been done offline (§5e, §5f, §5g). **No owner prerequisite has blocked any
+  unit so far.** What the key and panel would add is the analyst's *own* realised cost profile (§5g) —
+  the one channel that could bias the paired edge — and §5b against the live bundle.
 - **The ledger cross-check decision** (warn or refuse) — untouched, as instructed.
 - **Nothing else.** No pre-registration amended, no passing criterion, STOP rule, risk limit, sizing rule
   or hold changed; no book size chosen; no strategy claim invented; no candidate registered.
