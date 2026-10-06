@@ -256,8 +256,11 @@ Index mapping is asserted, not assumed: all 127 symbols share one start bar and 
 the close of `barDates[i]` → `asOf = i`. `loadGrids` throws if a future panel breaks that.
 
 - **Faithful:** slate membership for a flat book.
-- **Approximation, labelled in the output:** `positions = {}`. A live run carries a book and held names
-  are *always* on the slate, so the reconstructed pool is narrower than a live one. Asserted in a test.
+- **Approximation, labelled in the output:** `positions = {}`. A live run carries a book, so the
+  reconstructed pool is narrower than a live one — and by **more than the book size**: held names are
+  excluded *before* ranking, so a carried book both adds the held names and **promotes ranked names the
+  flat slate excluded**. Asserted in a test. **Measured in §5d** (`866d661`): at the deployed `slate=300`
+  the pool is already the full cross-section, so the equivalence is unaffected.
 - **Impossible from these files:** point-in-time *eligibility*. Every symbol shares one start bar, so no
   delisting, acquisition or index change is represented — names that left the universe were never
   collected. Ranking is point-in-time; **membership is survivors**.
@@ -473,6 +476,52 @@ git ls-tree -r --name-only FETCH_HEAD -- ibkr-bundle | wc -l
 fetched, so reading it without fetching can confirm an upload that never happened. Use `FETCH_HEAD` from
 a fetch in the same breath, and treat stdout from the push as a claim rather than as verification.
 
+## 5d. The held-book slate approximation, measured — and the deployed equivalence survives it
+
+Landed in `866d661` (`slate-null.mjs`, `slate-null.test.mjs`). **This section was missing: that commit
+changed no documentation, so the result lived only in its commit message while §6 pointed at a "§5d"
+that did not exist.** Recorded here from the commit's own figures.
+
+§5b called `slateFor` with `positions: {}` at every period, so the reconstructed pool omitted held names
+— but `buildContext` returns `[...held, ...top, ...bottom]`, making a live pool wider. The carry rule is
+**deterministic and synthetic**: at period *p* the "held" names are the random book drawn at *p-1*, from
+a stream seeded independently of the measurement draws; period 0 is flat. **Nothing selects or optimises
+them.** Not an analyst book, not an account, not a strategy — carrying random books is still
+random-versus-random with a book persisting one period, and measures only how pool composition responds
+to holding something.
+
+3,000 draws, seed 20261006, hold 5, 133 periods:
+
+| slate | flat pool | carried pool | flat σ | carried σ | ratio | same set? |
+|---|---|---|---|---|---|---|
+| 20 | 20.0 | 29.9 | 2.598% | 2.832% | 1.090 | no |
+| 40 | 40.0 | 49.9 | 2.822% | 2.761% | 0.978 | no |
+| 300 | 127.0 | 127.0 | 2.345% | 2.345% | **1.000** | yes |
+
+**The deployed `slate=300` / full-pool equivalence survives a carried book, structurally rather than
+luckily:** at 300 the ranked slice already returns the whole 127-name cross-section, and held names are
+drawn *from* that pool, so there is nothing to add. Holding changes the pool only where the ranking was
+excluding something, i.e. slate < universe. At smaller slates the pool widens by up to the book size and
+the effect is modest and **not monotone** (+9% at 20, −2% at 40), so no direction is claimed.
+
+Two things the audit caught before any number was reported:
+
+- **Holding changes the slate through two channels, not one.** `context.mjs` excludes held names *before*
+  ranking, so holding 10 names adds those 10 **and promotes 10 that the flat ranking excluded** as the
+  halves slide down the cross-section. Found by a test of mine asserting "anything beyond the flat ranked
+  slate must be a carried name", which failed on a promoted name — the test's error, not the rule's.
+  (This also corrects the §5b prose that described added names as held names only.)
+- **Pool order was confounding the comparison.** A carried pool is a different *permutation* of the same
+  set at slate=300, and `drawPair` splices by index, so identical sets drew different names and left a
+  spurious 1.012 ratio; an earlier seed mismatch had produced a spurious 1.052 on the same row. Both
+  pools are now sorted and flat/carried share one seed per slate, so a set-identical pool measures
+  exactly 1.000. Sorting is faithful, not convenient: `matchedRandomControl` shuffles the pool before
+  taking names, so order carries no meaning.
+
+**Verification as it actually stood at that commit:** `slate-null.test.mjs` passed and the protected-logic
+check passed, but the full suite was **not** re-run before it — the owner declined that step while working
+through an unrelated checkout problem. The file is at 31/31 now and the full suite has been run since.
+
 ## 5e. Regime-conditioned noise: no detectable dependence, and the sample cannot see a modest one
 
 `node regime-null.mjs 20000` (seed 20261006, `sp500-bundle`, hold 5, 133 periods, book 10, slate 300).
@@ -504,24 +553,25 @@ truncates later periods and confirms expanding labels don't move while full-samp
 | state | periods | σ/period | sim se | MDE@50p | annualised | sampling 95% CI |
 |---|---|---|---|---|---|---|
 | **ALL (ref)** | 133 | 2.350% | 0.012% | 0.931% | 46.9% | 2.197 – 2.501% |
-| low | 38 | 2.402% | 0.012% | 0.952% | 48.0% | 2.187 – 2.644% |
-| mid | 35 | 2.381% | 0.012% | 0.943% | 47.5% | 2.113 – 2.735% |
-| high | 40 | 2.383% | 0.012% | 0.944% | 47.6% | 2.172 – 2.621% |
+| low | 34 | 2.341% | 0.012% | 0.927% | 46.7% | 2.126 – 2.609% |
+| mid | 37 | **2.436%** | 0.012% | 0.965% | 48.7% | 2.138 – 2.821% |
+| high | 42 | 2.353% | 0.012% | 0.932% | 47.0% | 2.151 – 2.556% |
 
-Ratios to the reference: 1.022 / 1.013 / 1.014. **Spread across states 1.009×.** Across all six
-window × mode combinations the spread runs 1.021–1.111×, with no ordering that survives the window
-choice — at window 10, `high` has the *lowest* σ, which is the signature of noise rather than structure.
+Ratios to the reference: 0.996 / 1.037 / 1.001. **Spread across states 1.041×.** Across all six
+window × mode combinations the spread runs 1.010–1.114×, with no ordering that survives the window
+choice — and `mid`, not `high`, carries the largest σ at the primary window, which is the signature of
+noise rather than structure.
 
 ### The limit that decides what "flat" means
 
 | | magnitude |
 |---|---|
-| typical per-state sampling CI width | **0.509%** |
-| as a share of pooled σ | **21.7%** |
-| between-state differences observed | ~0.02–0.05% |
+| typical per-state sampling CI width | **0.524%** |
+| as a share of pooled σ | **22.3%** |
+| between-state differences observed | ~0.003–0.086% |
 
-The uncertainty is roughly **twenty times** the effect. So this is **"no detectable dependence at this
-sample size"**, not "no dependence". Each state holds about a third of 133 periods, and closing that gap
+The uncertainty is roughly **six to a hundred times** the observed differences. So this is **"no
+detectable dependence at this sample size"**, not "no dependence". Each state holds about a third of 133 periods, and closing that gap
 needs **more history, not more draws** — simulation error is already 0.012% and shrinks with draws, while
 the sampling CI does not.
 
@@ -529,12 +579,138 @@ the sampling CI does not.
 pooled σ is the honest default. That is a statement about what is measurable here, not a finding that
 volatility regimes are irrelevant.
 
-### A defect caught before reporting
+### Two defects, one of which invalidated the first published numbers
+
+**A ONE-BAR LOOK-AHEAD IN THE CLASSIFIER — found by independent review of `abfe7fd`, after publication.**
+`buildReturnMap` keys each return to the later of its two bars and strips every symbol's first bar, so
+`returnDates[k] === barDates[k+1]`. A window starting at return index `i` is entered at the close of
+`barDates[i]`, which makes the return at index `i` the move **into `barDates[i+1]`** — a bar that has not
+closed when the decision is made. The latest permissible index is `i-1`. `trailingVol` read through `i`.
+
+Demonstrated, not argued: perturbing **only** `barDates[i+1]`, with every bar at or before `i`
+byte-identical, moved the measured volatility at `i` from **0.118% to 1.510%**.
+
+**Both of my tests failed to catch it, in different ways.** One recomputed the basket over the same
+`i`-inclusive indices the implementation used, so it certified whatever boundary the code had. The other
+appended bars *far* in the future, which cannot detect a leak exactly one bar wide. Replaced with: an
+assertion that **every return timestamp consumed is ≤ the decision timestamp**, and a regression that
+perturbs precisely bar `i+1` while asserting all bars ≤ `i` are identical.
+
+**Every number in this section was recomputed.** The conclusion survives — the spread is still far below
+the resolution — but the figures all moved and state membership shifted (low 38→34, mid 35→37,
+high 40→42; spread 1.009×→1.041×). The earlier figures should not be quoted.
+
+**An incomplete window was accepted.** `trailingVol` returned a value on `basket.length >= 2`, so a
+window with uncovered dates was measured short and reported as a full-window figure. It now returns null
+unless every date in the window contributed.
+
+### A seed collision, caught before the first publication
 
 The per-state Monte Carlo seed was derived as `state.length * 13`, and `"low"` and `"mid"` are both three
 characters — so **two states shared a stream** and their σ were correlated by construction, in a tool
-whose entire purpose is detecting correlation between states. Replaced with explicit distinct offsets;
-asserted in a test. Deriving a seed from an incidental property of a label is how that happens quietly.
+whose purpose is detecting correlation between states. Replaced with explicit distinct offsets, asserted
+in a test. Deriving a seed from an incidental property of a label is how that happens quietly.
+
+## 5f. Small-n planning sensitivity: the registered table's n=4 row is a ~48% power test
+
+`analyst/power-t.mjs`, `power-small-n.mjs`, `analyst/power-t.test.mjs` (14 tests). Offline, no model
+call, no panel. **Nothing here amends the protocol or proposes a gate change.** §3a already said the
+registered figures are planning estimates; this measures by how much, and names which inferential
+problem each number answers.
+
+### Four different questions, which must not be pooled
+
+| label | the question it answers |
+|---|---|
+| **normal** | one-sample **z**-test, σ **known**. What `analyst/power.mjs` computes and what `PAPER-PROTOCOL.md` registered. |
+| **t-heuristic** | critical *t* substituted for critical *z*. This corrects the **level** for an estimated σ. It is **not** a power calculation: under the alternative the statistic is noncentral *t*, and leaving the power term normal does not fix that. Labelled a heuristic in the code for this reason. |
+| **t-exact** | the effect at which a one-sample *t*-test genuinely attains 80% power with σ **estimated from the same n observations**. Obtained by simulating the test and bisecting on the effect, so it carries a Monte Carlo error, reported alongside. |
+| **bootstrap** | **conditional historical sensitivity** — how the figure moves if the per-period distribution is taken to be one observed sample's empirical distribution. Not fresh evidence, and **not a coverage guarantee**. |
+
+### The gap, at the period counts already in the registered table
+
+σ = 2.350% per period (measured, `sp500-bundle`, book 10, hold 5 — §5e), α = 0.05, target power 0.80,
+20,000 draws per evaluation, fixed seeds:
+
+| n | normal MDE | t-heuristic | ratio | **t-exact** | **ratio** | power the **normal** MDE actually attains |
+|---|---|---|---|---|---|---|
+| 4 | 3.292% | 4.728% | 1.436× | **4.997%** | **1.518×** | **0.483 ± 0.002** |
+| 12 | 1.901% | 2.064% | 1.086× | 2.090% | 1.100× | 0.721 ± 0.002 |
+| 26 | 1.291% | 1.337% | 1.036× | 1.344% | 1.041× | 0.765 ± 0.002 |
+| 50 | 0.931% | 0.948% | 1.018× | 0.951% | 1.021× | 0.782 ± 0.002 |
+
+**Read the n=4 row plainly.** Four non-overlapping 5-day periods is one trading month, and the registered
+normal figure there is a **~48% power test, not an 80% one**, once σ is estimated rather than known. The
+direction is not a surprise — estimating σ from four observations costs power — but the size is: a factor
+of **1.52 on the detectable effect**, larger than most of the effects this project has argued about. The
+correction decays fast: 1.10× at 12 periods, 1.04× at 26, 1.02× at 50. **At n ≥ 26 the normal
+approximation is a rounding detail; at n = 4 it is not.**
+
+The t-exact figure annualises to 251.8% at n=4. That number is absurd on its face, and that is the useful
+part: it is the same annualisation the registered table performs, applied to an honest small-sample MDE.
+
+### The heuristic understates the exact correction — which is why it is labelled one
+
+At n=4 the critical-*t* substitution gives 1.436× where the exact answer is 1.518×. A test in
+`power-t.test.mjs` asserts both that ordering and that the heuristic's own attained power is materially
+below 0.80, so the label cannot quietly become a claim.
+
+### Uncertainty in σ is a separate axis, and at n=50 it is the larger one
+
+Sections above hold σ fixed at the measured value and vary the method. But σ is itself an estimate; §5e
+measured a per-state sampling CI of ~22% of σ. The MDE is **linear in σ**, so a ±10% band on σ gives a
+22.2% span in the MDE **at every n**:
+
+| n | MDE at 0.9σ | at σ | at 1.1σ | span |
+|---|---|---|---|---|
+| 4 | 4.497% | 4.997% | 5.497% | 22.2% |
+| 12 | 1.881% | 2.090% | 2.299% | 22.2% |
+| 26 | 1.210% | 1.344% | 1.479% | 22.2% |
+| 50 | 0.856% | 0.951% | 1.046% | 22.2% |
+
+At n=50 that is **five times the entire normal-vs-t correction**. These are two different uncertainties —
+one about the inference, one about the input — and the smaller one is the one the method debate is about.
+
+### The bootstrap is weakest exactly where the small-sample question is most pressing
+
+| n | distinct resamples, at most | bootstrap MDE | t-exact MDE | ratio |
+|---|---|---|---|---|
+| 4 | **256** | 5.905% | 4.997% | 1.182 |
+| 12 | 8.9×10¹² | 2.659% | 2.090% | 1.272 |
+| 26 | 6.2×10³⁶ | 1.191% | 1.344% | 0.886 |
+| 50 | 8.9×10⁸⁴ | 0.812% | 0.951% | 0.854 |
+
+At n=4 there are at most **4⁴ = 256 distinct resamples of four numbers**, so the bootstrap figure is a
+statement about those four numbers and not about the world. The ratios straddle 1 — each row's sample is
+itself a draw, and a sample that happened to be tight gives a smaller figure, not a better one. The
+ratio column reads as *how much this particular sample disagrees*, never as a correction factor.
+`mdeBootstrapConditional` returns `conditional: true` and `distinctResamplesBound` so a caller cannot
+quote the number without the bound, and a test asserts both.
+
+### Numerical verification, so the figures are checkable rather than self-consistent
+
+A statistical routine that agrees only with itself has not been tested. Three independent anchors:
+
+- **The standard critical-*t* table.** `studentTQuantile(0.975, df)` against twelve tabulated df
+  (1, 2, 3, 4, 5, 10, 15, 20, 30, 60, 100, 120): all agree to < 5×10⁻⁴, i.e. table precision
+  (df 1 → 12.7062 vs 12.706; df 5 → 2.5706 vs 2.571; df 30 → 2.0423 vs 2.042; df 100 → 1.9840 vs 1.984).
+- **Power at a zero effect must equal α.** The one exact identity available without a reference
+  implementation. Simulated power at δ=0 is 0.0504 / 0.0515 / 0.0498 at n = 4 / 12 / 50 against 0.05
+  (± 0.0011), and the test also checks α = 0.10.
+- **Closed forms of the incomplete beta.** `I_x(1,1) = x`, `I_x(1,2) = 1-(1-x)²`, `I_x(2,1) = x²` — three
+  different functional forms, all to 10⁻¹², which exercises the continued fraction rather than restating it.
+
+Plus the structural checks: *t* → *z* as df → ∞, monotonicity in df, the quantile inverting the CDF to
+10⁻⁸, `mdeTExact` attaining both 0.80 and 0.90 within Monte Carlo error, and determinism under a fixed
+seed. Every entry point rejects non-finite, non-positive and non-integer inputs.
+
+### What this does not establish
+
+Nothing about edge. Every σ here is the **null's** dispersion measured on historical survivors, and this
+section is arithmetic over it. No candidate is registered, no gate is proposed, no passing criterion or
+STOP rule is touched, and `analyst/power.mjs` is unchanged — the registered table still reproduces
+exactly as §1 says it does. The finding is about **how to read** that table's small-n rows, not about
+replacing it.
 
 ## 5a. Corrections to this document's own earlier draft
 
@@ -569,27 +745,29 @@ grid endpoint is right, and the old `i + hold < length` was one period short.
    decision to make.** §5b: the runtime already fixes it. `loop.mjs` passes the point-in-time slate as
    the pool and `matchedRandomControl` permits overlap, so the diagnostic was the thing out of step.
    Listing this as an owner decision was a manufactured blocker.
-2b. ~~Measure σ with a held book carried across periods.~~ **DONE — `866d661`, §5d.** A deterministic
-   synthetic carry rule; the `slate=300` / full-pool equivalence survives it, and the effect at smaller
-   slates is modest and not monotone. This entry was left marked outstanding after the work landed.
+2b. ~~Measure σ with a held book carried across periods.~~ **DONE — `866d661`, now written up in
+   §5d.** A deterministic synthetic carry rule; the `slate=300` / full-pool equivalence survives it, and
+   the effect at smaller slates is modest and not monotone. This entry was left marked outstanding after
+   the work landed, and the §5d it pointed at did not exist — that commit changed no documentation, so
+   the result sat in a commit message only. Both now fixed.
 
-3. ~~Regime-conditioned σ.~~ **DONE — §5e.** Flat: spread 1.009× across states, and the per-state
-   sampling CI is ~22% of σ, so a modest dependence would be invisible. More history, not more draws.
+3. ~~Regime-conditioned σ.~~ **DONE — §5e.** Flat: spread 1.041× across states against a per-state
+   sampling CI of ~22% of σ, so a modest dependence would be invisible. Needs more history, not more
+   draws. (A duplicate "3b" entry restating this as outstanding has been removed.)
 
-3b. **Regime-conditioned σ.** Sub-windows are stable at 1.18x, but quarters are a crude split. Measuring
-   σ conditioned on realised market volatility would show whether the MDE should be regime-dependent —
-   relevant because a drawdown window is pre-registered. Offline.
-4. **A t-based / bootstrap MDE alongside the normal approximation.** §3a says these are planning
-   estimates; at 4 periods the normal approximation is doing real work. Quantifying the gap would show
-   how optimistic the registered table is at small n. Offline.
+4. ~~A t-based / bootstrap MDE alongside the normal approximation.~~ **DONE — §5f.** The gap is
+   large only at the smallest count: the registered normal MDE at n=4 attains **~48% power**, not 80%,
+   once σ is estimated (t-exact MDE **1.52×** the normal one); 1.10× at 12, 1.04× at 26, 1.02× at 50.
+   A ±10% band on σ is a 22.2% span in the MDE at every n — five times the whole normal-vs-t correction
+   at n=50 — so the input uncertainty dominates the method choice except at n=4. No gate proposed.
 5. **Cost-model sensitivity of the MDE.** Last, as before: cost enters the mean, not the variance, so it
    shifts the edge being measured rather than the noise floor. `PER-FAMILY-COST-CEILING` already has the
    break-even in closed form.
 
 ## 7. What still requires Tyler
 
-- **The panel and the key**, as before. Nothing in §3b needed them, and items 1, 3, 4 and 5 above are
-  all offline too.
+- **The panel and the key**, as before. Nothing in §3b needed them; items 1 and 5 above are offline too,
+  and items 3 and 4 have since been done offline (§5e, §5f).
 - **The ledger cross-check decision** (warn or refuse) — untouched, as instructed.
 - **Nothing else.** No pre-registration amended, no passing criterion, STOP rule, risk limit, sizing rule
   or hold changed; no book size chosen; no strategy claim invented; no candidate registered.
