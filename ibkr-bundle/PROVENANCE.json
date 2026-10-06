@@ -1,0 +1,244 @@
+{
+  "source": "IBKR reqHistoricalData, SMART/USD STK, whatToShow TRADES",
+  "adjustment": "IBKR TRADES bars: split-adjusted, NOT dividend-adjusted. Single vendor, single basis.",
+  "doNotJoin": "Do not merge with sp500-bundle or any other root. Different vendor, unverified basis.",
+  "duration": "1 Y",
+  "symbolsFrom": "universe/candidates.txt (1047 tickers)",
+  "collectedAt": "2026-10-06T22:12:55.862Z",
+  "symbols": 989,
+  "failed": [
+    {
+      "symbol": "AKRO",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "ALE",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "AMED",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "APGE",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "APLS",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "ATAI",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "AVB",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "AXNX",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "AZEK",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "BERY",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "BITF",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "BLD",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "BPMC",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "BRK.B",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "CFLT",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "CHX",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "CIVI",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "CMA",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "CRNX",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "CTRA",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "CYBR",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "DAWN",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "DFS",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "DO",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "EA",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "EQR",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "ETNB",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "EXAS",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "FL",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "FOLD",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "GPS",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "HOLX",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "IAC",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "ITCI",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "JWN",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "K",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "LSI",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "MRUS",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "NOVA",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "NSA",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "NUVL",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "NVTA",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "PCH",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "QRVO",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "RAPT",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "SAGE",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "SEE",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "SGH",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "SILK",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "SKX",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "SNV",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "SWN",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "SWTX",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "TERN",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "THS",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "TMHC",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "VERV",
+      "reason": "-1: No security definition has been found for the request"
+    },
+    {
+      "symbol": "X",
+      "reason": "-1: No security definition has been found for the request"
+    }
+  ],
+  "newestBar": "2026-10-06"
+}
