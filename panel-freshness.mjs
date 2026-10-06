@@ -277,6 +277,109 @@ export function symbolFreshness({ series = {}, dates = [], asOf = null, now = nu
   return { asOf: iso(asOfTime), gridSessions: gridUpTo.length, symbols: rows };
 }
 
+/**
+ * Whether a decision is DUE for settlement, on sourced expected sessions.
+ *
+ * WHY NOT THE OBSERVED PANEL COUNT. An earlier version of the remediation plan proposed counting
+ * "sessions the panel contains after the decision bar" and said it depended on nothing. Both were
+ * wrong. A session missing for EVERY symbol — an outage, or an exceptional closure the published
+ * schedule does not carry — disappears from the observed union (§9.6), so an overdue decision would
+ * read as "not due yet" and a missing-data failure would be ERASED by the very gap that caused it.
+ * Dueness therefore needs the EXPECTED set, which is sourced and only available inside grounded
+ * coverage.
+ *
+ * THREE OUTCOMES, AND THE THIRD IS NOT "NOT DUE":
+ *
+ *   { due: true  }                 enough expected sessions have elapsed.
+ *   { due: false }                 they have not. A weekend or a published closure is legitimately
+ *                                  not due, and that is a correct answer, not a deferral.
+ *   { due: null, unknown: <why> }  the window is outside grounded calendar coverage, so dueness is
+ *                                  UNDECIDABLE. A caller must treat this as a reportable failure to
+ *                                  determine, never as "not due" and never by falling back to the
+ *                                  observed count.
+ *
+ * COVERAGE IS A SEPARATE QUESTION. Whether the SYMBOL has the bars to settle is not asked here, and
+ * a due decision whose symbol lacks coverage stays due — see §8.7. This function answers "has enough
+ * market time passed", nothing else.
+ *
+ * DIAGNOSTIC ONLY. Nothing in the runtime calls this, and `analyst/protocol.mjs` is unchanged.
+ */
+export function duenessByCalendar({ decisionBar, now, holdSessions = 5, calendar = NYSE_2026_2028 } = {}) {
+  if (!Number.isFinite(decisionBar)) throw new Error("panel-freshness: duenessByCalendar needs a finite decisionBar");
+  if (!Number.isFinite(now)) throw new Error("panel-freshness: duenessByCalendar needs a finite now (ms)");
+  if (!Number.isInteger(holdSessions) || holdSessions < 1) {
+    throw new Error("panel-freshness: holdSessions must be a positive integer");
+  }
+  const bar = dayStart(decisionBar);
+  const upTo = dayStart(Math.floor(now / 1000));
+  if (upTo < bar) return { due: false, elapsedSessions: 0, holdSessions, basis: "expected-sessions", reason: "now precedes the decision bar" };
+
+  const exp = expectedSessions({ from: bar, to: upTo, calendar });
+  if (!exp.supported) {
+    return {
+      due: null,
+      unknown: exp.reason,
+      elapsedSessions: null,
+      holdSessions,
+      basis: "none",
+      // Stated so a caller cannot read this as a deferral.
+      note: "dueness is UNDECIDABLE here; report a failure to determine, do not substitute the observed count",
+    };
+  }
+  // Sessions strictly AFTER the decision bar: the bar itself is the entry, not an elapsed session.
+  const elapsed = exp.sessions.filter((t) => t > bar).length;
+  return {
+    due: elapsed >= holdSessions,
+    elapsedSessions: elapsed,
+    holdSessions,
+    basis: "expected-sessions",
+    calendar: { source: calendar.source, retrieved: calendar.retrieved, coverage: calendar.coverage },
+  };
+}
+
+/**
+ * What freshness information a DAILY panel actually contains — and what it does not.
+ *
+ * THE DEFECT THIS REPLACES. An earlier plan item proposed deriving the gate's `quoteAgeMs` from the
+ * symbol's own last bar. That conflates two different quantities. A daily bar is stamped at
+ * 00:00:00Z of its session date (verified on the real bundle: 0 of 921 misaligned); it is a SESSION
+ * RECORD, not an observation of an executable quote. Substituting it into a 15-minute quote-age limit
+ * would reject every symbol, fresh ones included, because the figure is always at least a day old.
+ *
+ * SO THE TWO ARE REPORTED SEPARATELY AND NAMED:
+ *
+ *   sessionsSinceLastBar     DAILY-SESSION freshness. Derived, meaningful, and the quantity that
+ *                            distinguishes a live name from a delisted one.
+ *   barTimestampAgeMs        the wall-clock age of a midnight-stamped session record. This is what
+ *                            `instrumentsFromContext` currently computes, and it is NOT a quote age.
+ *   quoteAgeMs               UNAVAILABLE. A daily panel contains no intraday observation, so there is
+ *                            no quote whose age could be measured. Reported as null, never imputed.
+ *
+ * DIAGNOSTIC ONLY. No threshold is changed, nothing is wired in, and no choice between the options in
+ * docs/REMEDIATION-PLAN.md item A3 is made here.
+ */
+export function freshnessInformation({ series = {}, dates = [], asOf = null, now = null } = {}) {
+  const base = symbolFreshness({ series, dates, asOf, now });
+  const asOfTime = dayStart(Number(dates[Number.isInteger(asOf) ? asOf : dates.length - 1]));
+  return {
+    asOf: base.asOf,
+    // The two reference times the runtime actually uses, from analyst/loop.mjs:231.
+    referenceUsedByPaper: now,
+    referenceUsedByDryRun: asOfTime * 1000,
+    symbols: base.symbols.map((s) => ({
+      symbol: s.symbol,
+      sessionsSinceLastBar: s.sessionsSinceLastBar,
+      forwardFilledAtDecision: s.forwardFilledAtDecision,
+      barTimestampAgeMs: s.wallClockAgeMs,
+      // Explicit, so no caller can read a session record as a tradable quote.
+      quoteAgeMs: null,
+      quoteAgeAvailable: false,
+      quoteAgeReason: "a daily panel carries no intraday observation; its bars are session records "
+                    + "stamped at 00:00:00Z, so no executable quote age exists to measure",
+    })),
+  };
+}
+
 const flag = (name, dflt) => {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 && process.argv[i + 1] && !process.argv[i + 1].startsWith("--") ? process.argv[i + 1] : dflt;
