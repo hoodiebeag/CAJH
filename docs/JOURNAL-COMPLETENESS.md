@@ -385,3 +385,171 @@ Checked against source before reporting, per the standing instruction not to man
    the panel's own dates *are* a calendar, and both call sites use a weekday set instead.
 
 None of the three needs the key, the panel upload or the owner's PC.
+
+---
+
+# §9. Ragged-panel point-in-time invariants, and calendar accounting with an explicit unknown
+
+Third unit. `context-ragged.test.mjs` (13 tests), `calendarAccounting()` in `journal-completeness.mjs`
+(§5b of its output). Offline and synthetic. Nothing runtime changed — no calendar, gate, eligibility or
+criterion was touched.
+
+## 9.1 The invariant holds, verified by perturbation
+
+Not by restating the implementation's index arithmetic. Alter **only** the bar at `asOf + 1`, leave every
+bar at or before `asOf` byte-identical, and the whole context must match:
+
+- `AAA` next close set to **99999** and `BBB` next close to **0.01** → context **deepEqual** to the
+  unperturbed one.
+- The same with that session also appended to `dates`, `asOf` unchanged → still deepEqual, and equal to
+  what the shorter grid produced.
+- Every timestamp the context reports is `<= asOfTime`, read off the returned object; a headline dated
+  after the decision is filtered out inside `buildContext` (`context.mjs:165`).
+
+**Why it holds, structurally:** `buildContext` truncates per symbol at `b.time > asOfTime` (`:88`), and
+then builds the grid over `gridDates = dates.slice(0, asOf + 1)` with a **time-keyed** lookup
+(`byTime.get(t)`). A bar can only enter the grid if some `gridDates` entry equals its timestamp, so a
+future bar has no slot to occupy. That is a stronger guarantee than the truncation alone.
+
+## 9.2 What criterion 2 can and cannot independently verify
+
+`contextIsPointInTime` compares exactly two things against the boundary: `ctx.asOf` (the label) and each
+news item's `at`. **No price, bar, indicator or ranking is examined.**
+
+| | checked by criterion 2 | protected by something else |
+|---|---|---|
+| the `asOf` label | **yes** | — |
+| news timestamps | **yes** | also filtered in `buildContext` |
+| prices and indicators | **no** | structurally, by the time-keyed grid (§9.1) |
+| per-symbol freshness | **no** | **nothing** (§9.4) |
+| grid sortedness / duplicates | **no** | nothing (§9.3) |
+
+Asserted both ways: a forged context with `asOf: "2099-01-01"` **is** caught; a forged context whose
+candidate carries `momentum: 42` and `ret5d: 99` passes with **zero issues**. So "zero
+`context_not_point_in_time` skips" certifies the label and the news dates. It is **not** an
+independent audit of the prices — those rest on `buildContext`'s construction, which criterion 2 never
+inspects.
+
+## 9.3 Malformed grids: accepted, not refused — but no price leaks
+
+- **An interior future date in an unsorted `dates`** (index 150 set to 2099) raises **no issue** and the
+  context *does* differ from the sorted one — a phantom index that no bar can fill, so position-indexed
+  lookbacks shift by a slot. **No future price reaches the context**, because `byTime` has no entry at
+  that timestamp. Note the related gap: `runOnce` checks only `sessionsAhead(dates.at(-1), now)`, so an
+  interior future date is not caught there either.
+- **A duplicate timestamp** is accepted; the duplicated session repeats a close, and the index space
+  shifts the same way. No issue raised.
+
+Both are silent distortions of the index space rather than look-ahead. `buildContext` validates `asOf`'s
+bounds (`:77-79`) and nothing about the grid's ordering or uniqueness.
+
+## 9.4 Two reachable defects
+
+### R1. A symbol whose own bars are out of order gets a fabricated flat history
+
+The truncation loop `break`s at the first bar after the boundary, relying on the series being
+time-ordered. Put a future bar at position 1 and **everything after it is discarded**: one surviving
+bar, forward-filled across 300 sessions, so every return is exactly zero.
+
+The symbol stays a **candidate** with `momentum: 0`, `ret5d: 0`, `ret63d: 0` — **not `null`**. Zero is a
+plausible mid-cross-section value, so it ranks rather than being refused, and criterion 2 reports
+nothing. The same series sorted gives `momentum > 0.1`, so this is the scrambling, not the fixture.
+
+### R2. A symbol dead for 200 sessions is a ranked candidate and passes the risk gate
+
+**Point-in-time holds here — every bar used predates the decision. Freshness does not, and they are
+different properties.** A symbol whose history stops 200 sessions before the decision bar is
+forward-filled to the decision and:
+
+| | ALIVE | DEAD (last traded 200 sessions earlier) |
+|---|---|---|
+| shown to the analyst | yes | **yes** |
+| `momentum` | finite | **finite** |
+| `ret5d` | moving | `0` (forward-filled) |
+| `quoteAgeMs` | 0 | **0 — identical** |
+| risk gate | allowed | **allowed, zero rejections** |
+| price sized from | current close | **its close 200 sessions ago** |
+
+`instrumentsFromContext` sets `quoteAgeMs: max(0, referenceMs - asOfTime * 1000)` — derived from the
+**decision bar**, the same for every symbol. So `maxQuoteAgeMs` (15 minutes, `risk.mjs:74`, enforced at
+`:221`) is structurally **blind to per-symbol staleness**: it polices how old the *panel* is, never how
+old a *name* is. Criterion 2 reports zero issues throughout.
+
+This is the most consequential finding of the unit, and it is the live-panel case: a delisting, a halt,
+or a symbol that failed to resolve in an IBKR pull all produce exactly this shape.
+
+## 9.5 Correctly handled — refusals, not defects
+
+- **A late start cannot be ranked.** 30 bars in a 300-session grid leaves leading zeros, `ret()` guards
+  `a > 0 && b > 0` (`indicators.mjs:17-20`), so `momentum` is `null`, the name is not `rankable`, and it
+  is **counted in `universe.total` but kept off the slate**. Safe and deliberate.
+- **Interior missing dates forward-fill.** No look-ahead; the documented intent is that "a held-flat
+  price is what a stale quote actually looks like". The cost is that a 63-**index** return covers more
+  than 63 sessions of real history, and `medianDollarVolume` reads the symbol's **own** last 63 bars
+  (not the grid), so its window spans whatever calendar those bars cover. Semantics, verified, not a bug.
+
+## 9.6 Calendar accounting: five quantities, and the one that must stay unknown
+
+**Primary source unavailable, stated rather than worked around.** `www.nyse.com`, `www.sec.gov`,
+`www.federalreserve.gov` and `markets.nasdaq.com` are all blocked by this session's egress policy. Only
+`pypi.org` is reachable, and a package index is not a primary trading-calendar publisher — installing a
+redistribution to assert holiday facts would be both a dependency change and a third-party source
+dressed as primary. **No holiday date is asserted anywhere in this unit**, and every fixture defines its
+gaps structurally ("a weekday for which no symbol has a bar").
+
+`calendarAccounting()` separates:
+
+| # | quantity | source | this unit's value |
+|---|---|---|---|
+| 1 | **expected market sessions** | an exchange calendar | **`null` — UNKNOWN** |
+| 2 | observed panel sessions | the union of bar dates | derivable |
+| 3 | operational attempts | decisions **+** skips | derivable |
+| 4 | successful decisions | distinct decision sessions | derivable |
+| 5 | statistical periods | sessions clustered by hold | derivable |
+
+**The panel's observed dates are not a calendar.** A session missing for *every* symbol — holiday or
+outage — **disappears from the union entirely**. Asserted: removing one weekday from a 20-session grid
+leaves `sessionWeekdays` returning the same `{1,2,3,4,5}`, so nothing looks odd, while `missedSessions`
+reads the absence as one completed session behind.
+
+So each weekday in the span is classified three ways, and the third is **not resolved**:
+
+- **covered** — a bar and a decision.
+- **operational gap** — a bar, no decision. The runner did not fire, or refused.
+- **UNKNOWN** — no bar for any symbol. **Either** a market holiday (no session expected) **or** a
+  panel-wide outage (a session expected and missed).
+
+**This is deliberately not a holiday count.** §8.2 showed criterion 1 resolving the unknown one way, by
+treating every weekday as an expected session, which penalises a holiday. Substituting the panel's own
+observed dates would resolve it the other way — and then **a day the system should have traded and did
+not would vanish from the denominator**, which is the worse error. Neither is derivable here, so the
+bucket is counted and left unresolved. A no-bar weekday stays visible; it never leaves the denominator.
+
+Also separated, because §8.1 showed them diverging: **decision records** (7) against **successful
+decision sessions** (6) against **statistical periods** (2) on the same fixture.
+
+## 9.7 Limits
+
+- **Nothing above is implemented as a runtime change.** No calendar source added, no gate altered, no
+  eligibility rule touched, no criterion rewritten.
+- **The unknown bucket cannot be collapsed offline.** Resolving it needs an exchange calendar, which
+  needs either an egress allowance for a primary source or an owner-supplied file. Not an owner
+  *decision* — an owner-supplied *input*.
+- **R2's blast radius is not measured.** How often a real IBKR pull contains a dead-but-present symbol is
+  a property of the live panel, which is not on the remote yet.
+- `buildContext` is exercised directly; `runOnce`'s refusal paths remain covered by the existing stubs
+  at `loop.test.mjs:51,93,115,634` rather than re-run here.
+
+## 9.8 Remaining useful independent work
+
+1. **A per-symbol freshness measure** for the diagnostic — sessions since each symbol's own last bar,
+   against the decision bar. That is the number R2 shows nothing currently computes, and it is derivable
+   offline from any panel.
+2. **Grid validation as a diagnostic** — sortedness, uniqueness and monotonicity of `dates`, plus
+   per-symbol ordering, reported rather than enforced (§9.3 shows all three are currently accepted).
+3. **Criterion 2's coverage, written into the protocol readout** so the criterion's text says what it
+   certifies — currently a reader can reasonably take "point-in-time integrity holds live" to cover
+   prices.
+
+None needs the key, the panel upload or the owner's PC. Item 1 would become much more informative once a
+real panel is on the remote.

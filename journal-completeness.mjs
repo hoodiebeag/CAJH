@@ -164,6 +164,63 @@ export function versionSpread(decisions) {
   return { model: of("model"), checklistId: of("checklistId"), contextHash: of("contextHash").length };
 }
 
+/**
+ * Five quantities that get conflated, separated — with an explicit UNKNOWN bucket.
+ *
+ *   1. EXPECTED MARKET SESSIONS   needs an exchange calendar. NOT DERIVABLE from this repo, and no
+ *                                 primary source is reachable from this session (see docs). Left unknown.
+ *   2. OBSERVED PANEL SESSIONS    the union of bar dates. A session missing for EVERY symbol —
+ *                                 holiday or outage — DISAPPEARS from this union entirely.
+ *   3. OPERATIONAL ATTEMPTS       decision records plus skip records: the runner fired.
+ *   4. SUCCESSFUL DECISIONS       decision records only.
+ *   5. STATISTICAL PERIODS        distinct entry sessions clustered by hold.
+ *
+ * WHY THE UNKNOWN BUCKET IS THE POINT. Criterion 1 divides by `weekdaysBetween`, which treats EVERY
+ * weekday as an expected session and so penalises a market holiday. Substituting the panel's own
+ * observed dates would make the opposite error: a panel-wide outage would silently stop being an
+ * expected session, and a day the system should have traded and did not would vanish from the
+ * denominator. Neither is right, because the panel cannot tell a holiday from an outage. So a weekday
+ * with no bar for any symbol is reported as UNKNOWN and counted, never resolved by assumption.
+ */
+export function calendarAccounting({ panelDates = [], decisions = [], skips = [], holdDays = 5 } = {}) {
+  const dayOf = (secs) => Math.floor(secs / 86400) * 86400;
+  const observed = new Set(panelDates.map(dayOf));
+  const decidedOn = new Set(decisions.map((d) => d.asOfTime).filter(Number.isFinite).map(dayOf));
+  const attemptedOn = new Set([...decidedOn]);
+  for (const s of skips) {
+    const t = Date.parse(s.at);
+    if (Number.isFinite(t)) attemptedOn.add(dayOf(Math.floor(t / 1000)));
+  }
+
+  const stamps = [...observed, ...decidedOn, ...attemptedOn];
+  const span = stamps.length ? { from: Math.min(...stamps), to: Math.max(...stamps) } : null;
+
+  const weekdays = { covered: [], operationalGap: [], unknownNoBar: [] };
+  if (span) {
+    for (let t = span.from; t <= span.to; t += 86400) {
+      const dow = new Date(t * 1000).getUTCDay();
+      if (dow === 0 || dow === 6) continue;
+      if (!observed.has(t)) weekdays.unknownNoBar.push(t);
+      else if (decidedOn.has(t)) weekdays.covered.push(t);
+      else weekdays.operationalGap.push(t);
+    }
+  }
+  const iso = (t) => new Date(t * 1000).toISOString().slice(0, 10);
+  return {
+    expectedMarketSessions: null,              // deliberately unknown: no calendar source
+    observedPanelSessions: observed.size,
+    operationalAttempts: attemptedOn.size,
+    successfulDecisions: decidedOn.size,
+    decisionRecords: decisions.length,         // may exceed successfulDecisions: see section 8.1
+    statisticalPeriods: decidedOn.size ? Math.ceil(decidedOn.size / holdDays) : 0,
+    weekdaysInSpan: weekdays.covered.length + weekdays.operationalGap.length + weekdays.unknownNoBar.length,
+    covered: weekdays.covered.length,
+    operationalGap: weekdays.operationalGap.map(iso),
+    unknownNoBar: weekdays.unknownNoBar.map(iso),
+    span: span ? { from: iso(span.from), to: iso(span.to) } : null,
+  };
+}
+
 function main() {
   const file = flag("journal", DEFAULT_JOURNAL);
   const mode = flag("mode", MODE.PAPER);
@@ -294,6 +351,26 @@ function main() {
       console.log(`  latest decision bar: ${new Date(latest).toISOString().slice(0, 10)}`);
     }
   }
+
+  console.log("\n=== 5b. FIVE QUANTITIES THAT GET CONFLATED ===");
+  const panelDates = decisions.map((d) => d.asOfTime).filter(Number.isFinite);
+  const ca = calendarAccounting({ panelDates, decisions, skips, holdDays: s.holdDays });
+  console.log(`  1. expected market sessions   ${ca.expectedMarketSessions ?? "UNKNOWN — no exchange calendar is reachable"}`);
+  console.log(`  2. observed panel sessions    ${ca.observedPanelSessions}   (a session missing for EVERY symbol is not in this union)`);
+  console.log(`  3. operational attempts       ${ca.operationalAttempts}   (decisions plus skips: the runner fired)`);
+  console.log(`  4. successful decisions       ${ca.successfulDecisions}   (distinct sessions; ${ca.decisionRecords} decision RECORDS)`);
+  console.log(`  5. statistical periods        ${ca.statisticalPeriods}   at a ${s.holdDays}-session hold`);
+  if (ca.span) console.log(`  span ${ca.span.from} .. ${ca.span.to}, ${ca.weekdaysInSpan} weekday(s)`);
+  console.log(`    covered (bar AND decision)  ${ca.covered}`);
+  console.log(`    operational gap (bar, no decision)  ${ca.operationalGap.length}` +
+              (ca.operationalGap.length ? `  ${ca.operationalGap.slice(0, 6).join(" ")}` : ""));
+  console.log(`    UNKNOWN (no bar for any symbol)     ${ca.unknownNoBar.length}` +
+              (ca.unknownNoBar.length ? `  ${ca.unknownNoBar.slice(0, 6).join(" ")}` : ""));
+  console.log("  THE UNKNOWN BUCKET IS NOT A HOLIDAY COUNT. Without an exchange calendar a weekday with");
+  console.log("  no bar is EITHER a market holiday (no session expected) OR a panel-wide outage (a session");
+  console.log("  expected and missed). Criterion 1 resolves it one way by counting every weekday;");
+  console.log("  counting only observed dates would resolve it the other and let an outage vanish.");
+  console.log("  Neither is derivable here, so it stays counted and unresolved.");
 
   console.log("\n=== 6. SESSION CALENDAR: A HOLIDAY LOOKS LIKE A MISSED SESSION ===");
   const latestBar = decisions.map((d) => d.asOfTime).filter(Number.isFinite).sort((a, b) => b - a)[0];
