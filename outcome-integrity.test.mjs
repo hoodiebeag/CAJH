@@ -5,9 +5,15 @@
  * `typeof v === "number"` and its paired sample with `Number.isFinite`, which differ in principle. The
  * tests below establish whether they can differ on a value that SURVIVES JSON, rather than assuming so.
  *
- * SERIALIZATION IS TESTED AT THE BOUNDARY, not in memory. `JSON.stringify` maps `NaN`, `Infinity` and
- * `-Infinity` to `null`, so an in-memory Infinity is not a persisted Infinity and must not be reported
- * as one.
+ * TWO DIFFERENT QUESTIONS, AND AN EARLIER DRAFT CONFLATED THEM:
+ *
+ *   (a) what THIS WRITER produces. `JSON.stringify` maps `NaN`, `Infinity` and `-Infinity` to `null`,
+ *       so a value `recordOutcome` was handed in memory is not necessarily what lands on disk.
+ *   (b) what the READER accepts. `readJournal` parses any valid JSON line, whatever wrote it. The
+ *       numeric token `1e400` is valid JSON and `JSON.parse` yields `Infinity`, so a journal line from
+ *       an import, a hand edit or a foreign writer CAN carry a persisted Infinity.
+ *
+ * Claims about (a) do not transfer to (b). The filters' behaviour differs between the two.
  *
  * Temp journals and plain objects throughout. No runtime change is proposed here; proposals live in
  * docs/REMEDIATION-PLAN.md §F6 and are unapproved.
@@ -44,8 +50,9 @@ const rowsOf = (file) => readJournal(file).records.filter((r) => r.kind === KIND
 
 // ---- the serialization boundary ------------------------------------------------------------------
 
-test("NaN and both Infinities DO NOT PERSIST: JSON writes them as null", () => {
-  // The distinction the audit turns on. An accepted in-memory Infinity is not a persisted Infinity.
+test("THROUGH THIS WRITER, NaN and both Infinities do not persist: stringify writes them as null", () => {
+  // Scoped to the writer. An in-memory Infinity handed to recordOutcome is not a persisted Infinity --
+  // but a journal line written by anything else can still carry one (see the 1e400 test below).
   for (const v of [NaN, Infinity, -Infinity]) {
     assert.equal(JSON.stringify({ netReturn: v }), '{"netReturn":null}',
       `${String(v)} serializes to null`);
@@ -76,48 +83,94 @@ test("recordOutcome accepts any shape, and four distinct inputs converge on one 
   assert.equal(recovered.every((v) => v === null), true);
 });
 
-test("a numeric STRING is the only non-number shape that survives readback", () => {
+test("SEVERAL non-number shapes survive the writer unchanged — a string is only one of them", () => {
+  // An earlier draft of this test claimed a numeric string was the ONLY surviving bad shape. It is not:
+  // `JSON.stringify` preserves booleans, objects and arrays verbatim, and `recordOutcome` applies
+  // `?? null`, which only catches null and undefined.
   const f = tmp();
-  recordOutcome({ batchId: "b1", symbol: "str", holdDays: 5, netReturn: "0.05", controlReturn: 0 }, f);
-  const [row] = rowsOf(f);
-  assert.equal(row.netReturn, "0.05");
-  assert.equal(typeof row.netReturn, "string");
-  assert.equal(Number.isFinite(row.netReturn), false);
-  assert.equal(typeof row.netReturn === "number", false);
+  const shapes = [["str", "0.05"], ["bool", true], ["boolFalse", false], ["obj", { v: 0.05 }],
+    ["arr", [0.05]], ["emptyStr", ""]];
+  for (const [symbol, v] of shapes) {
+    recordOutcome({ batchId: "b1", symbol, holdDays: 5, netReturn: v, controlReturn: 0 }, f);
+  }
+  const rows = rowsOf(f);
+  const by = Object.fromEntries(rows.map((r) => [r.symbol, r.netReturn]));
+  assert.equal(by.str, "0.05");
+  assert.equal(by.bool, true);
+  assert.equal(by.boolFalse, false, "`false` is not nullish, so `?? null` does not catch it");
+  assert.deepEqual(by.obj, { v: 0.05 });
+  assert.deepEqual(by.arr, [0.05]);
+  assert.equal(by.emptyStr, "");
+  // None is a finite number, and none is a number at all, so every mean excludes them.
+  for (const [symbol, v] of Object.entries(by)) {
+    assert.equal(Number.isFinite(v), false, `${symbol} is not finite`);
+    assert.equal(typeof v === "number", false, `${symbol} is not a number`);
+  }
 });
 
 // ---- the two filters, and whether they can actually diverge --------------------------------------
 
-test("THE PREMISE CORRECTED: the two filters cannot diverge on any persisted value", () => {
-  // `typeof v === "number"` is true and `Number.isFinite(v)` false only for NaN and the Infinities --
-  // and all three serialize to null, so no readback value can separate the filters.
-  const divergent = [NaN, Infinity, -Infinity];
-  for (const v of divergent) {
-    assert.equal(typeof v === "number", true, "these are the only divergent values");
+test("the two filters agree on everything THIS WRITER can emit — and that is the whole claim", () => {
+  // Scoped deliberately. An earlier draft said the filters "cannot diverge on any persisted value",
+  // which is false: see the next test. What is true is narrower — round-tripping a value through
+  // `JSON.stringify` never produces a number that `typeof` accepts and `Number.isFinite` rejects,
+  // because the only such values are NaN and the Infinities and stringify maps all three to null.
+  for (const v of [NaN, Infinity, -Infinity]) {
+    assert.equal(typeof v === "number", true, "these are the only divergent values in memory");
     assert.equal(Number.isFinite(v), false);
-    assert.equal(JSON.parse(JSON.stringify({ v })).v, null, "and each becomes null on disk");
+    assert.equal(JSON.parse(JSON.stringify({ v })).v, null, "and each becomes null through stringify");
   }
-  // Exhaustively, over every shape that can appear in a file: the two filters agree.
-  for (const v of [0, -0.03, 0.05, null, "0.05", "", true, [], {}]) {
+  for (const v of [0, -0.03, 0.05, null, "0.05", "", true, false, [], {}, { v: 1 }]) {
     const back = JSON.parse(JSON.stringify({ v })).v;
     assert.equal(typeof back === "number", Number.isFinite(back),
-      `the filters agree on ${JSON.stringify(back)}`);
+      `the filters agree on ${JSON.stringify(back)} after a stringify round-trip`);
   }
-  // The difference is real in memory and unreachable through the journal. Worth recording precisely,
-  // because the concern that prompted this unit was that they diverge on stored data. They cannot.
 });
 
-test("a surviving string counts in `outcomes` and the beatControl denominator, and nowhere else", () => {
+test("A READ journal CAN carry Infinity: `1e400` is valid JSON and the filters DIVERGE on it", () => {
+  // `readJournal` parses whatever valid JSON a line holds, whoever wrote it — an import, a hand edit,
+  // a foreign tool. The numeric token 1e400 overflows to Infinity on parse, and nothing rejects it.
+  assert.equal(JSON.parse('{"v":1e400}').v, Infinity, "valid JSON text, Infinity on parse");
+  assert.equal(JSON.parse('{"v":-1e400}').v, -Infinity);
+  assert.equal(typeof JSON.parse('{"v":1e400}').v, "number", "typeof accepts it");
+  assert.equal(Number.isFinite(JSON.parse('{"v":1e400}').v), false, "Number.isFinite rejects it");
+
   const f = withDecision(tmp());
-  const vals = [["good1", 0.10], ["good2", -0.04], ["zero", 0], ["str", "0.05"],
+  fs.appendFileSync(f, `${'{"kind":"outcome","batchId":"b1","symbol":"AAA","at":"2026-03-09T00:00:00Z"'
+    + ',"holdDays":5,"grossReturn":1e400,"netReturn":1e400,"controlReturn":0,"note":null}'}\n`);
+
+  const { records, malformed } = readJournal(f);
+  assert.equal(malformed, 0, "the line is well-formed JSON, so nothing is counted as malformed");
+  const row = records.find((r) => r.kind === KIND.OUTCOME);
+  assert.equal(row.netReturn, Infinity, "and the readback really is Infinity");
+  assert.equal(Number.isFinite(row.netReturn), false);
+
+  // THE SCORE CONSEQUENCE, pinned exactly. Inspected field by field: JSON.stringify would hide it.
+  const s = scoreJournal(f);
+  assert.equal(s.outcomes, 1);
+  assert.equal(s.agentMeanNet, Infinity, "the typeof-number filter admits it into the mean");
+  assert.equal(s.controlMeanNet, 0);
+  assert.equal(s.edge, Infinity);
+  assert.equal(s.beatControlRate, 1, "Infinity > 0, so the row counts as beating its control");
+  assert.equal(s.hitRate, 1);
+  assert.equal(s.edgeCI.nominalN, 0, "while the paired sample is EMPTY — the filters disagree here");
+  assert.equal(s.periods, 0);
+  // So the readout would print an infinite edge with no interval beside it at all.
+  assert.equal(JSON.stringify({ agentMeanNet: s.agentMeanNet }), '{"agentMeanNet":null}',
+    "and serializing the result hides the Infinity, which is why it must be inspected directly");
+});
+
+test("a surviving non-number counts in `outcomes` and the beatControl denominator, and nowhere else", () => {
+  const f = withDecision(tmp());
+  const vals = [["good1", 0.10], ["good2", -0.04], ["zero", 0], ["str", "0.05"], ["bool", true],
     ["nan", NaN], ["inf", Infinity], ["nul", null]];
   for (const [symbol, v] of vals) {
     recordOutcome({ batchId: "b1", symbol, holdDays: 5, netReturn: v, controlReturn: 0.01 }, f);
   }
   const outs = rowsOf(f);
   const s = scoreJournal(f);
-  assert.equal(outs.length, 7);
-  assert.equal(s.outcomes, 7, "every row counts here, whatever it holds");
+  assert.equal(outs.length, 8);
+  assert.equal(s.outcomes, 8, "every row counts here, whatever it holds");
 
   // The means and the paired sample admit the same three rows.
   const admitted = outs.map((o) => o.netReturn).filter((v) => typeof v === "number");
@@ -126,11 +179,11 @@ test("a surviving string counts in `outcomes` and the beatControl denominator, a
   assert.equal(s.edgeCI.nominalN, 3);
   assert.ok(Math.abs(s.agentMeanNet - 0.02) < 1e-12, "mean over the three admitted rows");
 
-  // THE MEASURABLE IMPACT: beatControlRate's denominator is every row, so the four unusable rows
-  // depress it. One of three eligible rows beat its control; the printed figure is 1/7.
+  // THE MEASURABLE IMPACT: beatControlRate's denominator is every row, so the five unusable rows
+  // depress it. One of three eligible rows beat its control; the printed figure is 1/8.
   const beatEligible = classifyOutcomes(outs).paired.filter((o) => o.netReturn > o.controlReturn).length;
   assert.equal(beatEligible, 1);
-  assert.ok(Math.abs(s.beatControlRate - 1 / 7) < 1e-12, "printed over all seven rows");
+  assert.ok(Math.abs(s.beatControlRate - 1 / 8) < 1e-12, "printed over all eight rows");
   assert.ok(s.beatControlRate < beatEligible / 3, "biased downward — a second route into defect D2");
   // hitRate uses the admitted rows as its denominator, so it is unaffected by the four.
   assert.ok(Math.abs(s.hitRate - 1 / 3) < 1e-12);

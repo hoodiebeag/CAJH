@@ -594,14 +594,39 @@ record unexamined.
 
 `outcome-integrity.test.mjs` (11 tests). Temp journals and plain objects. Nothing implemented.
 
-### The premise, checked before it was used
+### Two different questions, which an earlier draft of this section conflated
 
-The concern was that `scoreJournal`'s means filter with `typeof v === "number"` while the paired CI
-filters with `Number.isFinite`, and that the two could disagree on stored data. **They cannot.** The only
-values for which those predicates differ are `NaN`, `Infinity` and `-Infinity`, and **all three
-serialize to `null`** — so no value recoverable from a journal can separate them. Checked exhaustively
-over every shape that can appear in a file. The difference is real in memory and **unreachable through
-the record**.
+**(a) What this writer emits.** `JSON.stringify` maps `NaN`, `Infinity` and `-Infinity` to `null`, so a
+value handed to `recordOutcome` in memory is not necessarily what lands on disk. Across every shape that
+survives a stringify round-trip, `typeof v === "number"` and `Number.isFinite(v)` **agree**.
+
+**(b) What the reader accepts.** `readJournal` parses any valid JSON line, whoever wrote it — an import,
+a hand edit, a foreign tool. **The numeric token `1e400` is valid JSON and `JSON.parse` yields
+`Infinity`.** So a journal CAN carry a persisted Infinity, and on that value the two filters **diverge**.
+
+**An earlier draft claimed the filters "cannot diverge on any persisted value". That is false**, and only
+the narrower claim in (a) holds. Claims about the writer do not transfer to the reader.
+
+### The divergence, pinned end to end
+
+One decision plus one appended line carrying `netReturn: 1e400`, `controlReturn: 0`, `holdDays: 5`:
+
+| | value |
+|---|---|
+| `readJournal` `malformed` | **0** — the line is well-formed JSON |
+| readback `netReturn` | **`Infinity`** (`typeof` number, not finite) |
+| `outcomes` | 1 |
+| `agentMeanNet` | **`Infinity`** — the `typeof`-number filter admits it |
+| `controlMeanNet` | 0 |
+| `edge` | **`Infinity`** |
+| `beatControlRate` | **1** — `Infinity > 0` |
+| `hitRate` | 1 |
+| **`edgeCI.nominalN`** | **0** — the paired sample is **empty** |
+| `periods` | 0 |
+
+So the readout would print an **infinite edge with no interval beside it**. Note that
+`JSON.stringify` of the result renders `agentMeanNet` as `null`, which is why this has to be inspected
+field by field rather than dumped.
 
 ### What is actually written and recovered
 
@@ -623,21 +648,27 @@ disk**: a `NaN` produced by an upstream arithmetic error (a 0/0, a divide by a z
 means **no retroactive repair is possible**, because the information was destroyed at write time, not at
 read time.
 
-**2. A numeric string is the only surviving bad shape, and it has one measurable effect.** On a
-seven-row fixture — three finite, one string, three that collapsed to `null`:
+**2. Several non-number shapes survive the writer unchanged — a numeric string is only one of them.**
+An earlier draft said it was the only one. `JSON.stringify` preserves booleans, objects and arrays
+verbatim, and `recordOutcome`'s `?? null` catches only `null` and `undefined`, so `true`, `false`,
+`{v: 0.05}`, `[0.05]` and `""` all persist exactly as given. None is a number, so every mean excludes
+them. On an eight-row fixture — three finite, a string, a boolean, and three that collapsed to `null`:
 
-- `outcomes: 7` — every row counts.
-- means and the paired sample admit the same **3** rows; `agentMeanNet` and `edgeCI.nominalN` agree.
+- `outcomes: 8` — every row counts.
+- means and the paired sample admit the same **3** rows; `agentMeanNet` and `edgeCI.nominalN` agree
+  **on this fixture**, because no row here carries a parsed Infinity.
 - `hitRate` = 1/3, over its own admitted denominator — unaffected.
-- **`beatControlRate` = 1/7**, because its denominator is every row, where 1 of 3 eligible rows beat its
+- **`beatControlRate` = 1/8**, because its denominator is every row, where 1 of 3 eligible rows beat its
   control. **This is a second route into defect D2**, not a new defect.
 
 ### Supported-incomplete versus malformed, and what is neither
 
 - **Supported incomplete:** `null` or an absent field. `realisedOutcomes` legitimately produces this —
   a control with no bar (§9.4) — and every statistic already excludes it correctly.
-- **Malformed:** a numeric string, or any non-number that survives. Accepted on write, excluded from
-  every mean, counted in two places.
+- **Malformed:** any non-number that survives — a numeric string, a boolean, an object, an array, an
+  empty string. Accepted on write, excluded from every mean, counted in `outcomes` and in
+  `beatControlRate`'s denominator. **And, from arbitrary read input, a parsed `Infinity`** — which is
+  worse, because it is admitted *into* the means.
 - **Not a defect:** `0` and negative returns are first-class and paired-eligible; zero is not a win,
   which is the existing rule. **No return cap or magnitude threshold is proposed or implied** — a +999%
   row is a data question for whoever reads it, not something for this layer to bound.
@@ -663,9 +694,20 @@ cannot contaminate a mean — the safe direction, already covered for orphans.
 | **O2** | `recordOutcome` requires `holdDays` to be a positive **integer** or `null`. | `GATE` (a write refusal) | Removes the uneven-cluster path at source. | `holdDaysOf`'s own filter, and every existing integer hold. |
 | **O3** | `scoreJournal` reports a count of rows excluded from the means, so a malformed row is visible rather than silently absent. | `STAT` | Additive figure only; no existing number moves. | Every filter and every published mean. |
 
-**Dependency order: O3, then O1, then O2.** O3 is additive and makes the problem visible without
-refusing anything. O1 and O2 are **write refusals** — they make a journal append fail, which is why each
-needs its own approval. **O1 must land before O2 is useful**, since both are the same validation seam.
+**The three are INDEPENDENT. An earlier draft asserted "O1 must land before O2 is useful, since both are
+the same validation seam" — that was wrong.** Sharing a validation site is not a logical dependency:
+return validation governs the means, `holdDays` validation governs `holdDaysOf` and the period count, and
+neither needs the other to be correct or useful. Either can land alone, in either order, and O3 is
+independent of both.
+
+**The only ordering is a recommendation, not a prerequisite:** O3 first, because it is additive and makes
+the problem visible without refusing anything; then O1 and O2 in whichever order the owner prefers, since
+each is a **write refusal** that makes a journal append fail and therefore needs its own approval.
+
+**O1 also covers the read side only partially, and that limit is part of the proposal.** Validating on
+write cannot repair a line some other tool appended. An equivalent check at read time would be a separate
+item; it is **not** proposed here, because nothing in the current design writes journal lines except
+`recordOutcome`, and inventing a reader guard for a path that does not exist would be speculative.
 
 **Migration implications, stated plainly.** None of the three rewrites or re-labels a stored record.
 Existing `null` rows stay `null` and stay excluded; their original value is **unrecoverable** and no
@@ -684,7 +726,7 @@ retry contract, the version boundary and now outcome field integrity, every find
 fixture and every proposed fix is typed and unapproved. Closed areas, not to be re-audited: the calendar
 grounding and session reconciliation, ragged-panel point-in-time and criterion 2's scope, the
 paired/unpaired statistic cluster, the retry contract, the version boundary, criteria 3/4/5/6/8, and
-outcome field integrity.
+outcome field integrity — including the writer-versus-reader distinction corrected above.
 
 **What remains genuinely untested, with the reason it stays that way:**
 
