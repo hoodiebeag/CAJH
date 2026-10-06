@@ -553,3 +553,131 @@ decision sessions** (6) against **statistical periods** (2) on the same fixture.
 
 None needs the key, the panel upload or the owner's PC. Item 1 would become much more informative once a
 real panel is on the remote.
+
+---
+
+# §10. Per-symbol freshness, grid validation, and a 2026-grounded session reconciliation
+
+Fourth unit. `panel-freshness.mjs` (new, read-only), `panel-freshness.test.mjs` (15 tests), this
+section. **Reported, never repaired:** nothing in this unit sorts, de-duplicates, drops or imputes, and
+none of it is wired into eligibility, the gate, scoring, settlement, cost, the ledger or the protocol
+readout. §9.2's statement of what criterion 2 covers is preserved in documentation only.
+
+## 10.1 The calendar, scoped and cited
+
+`NYSE_2026` records the published NYSE schedule for **2026 only**.
+
+- **Source:** the primary NYSE Holidays & Trading Hours page, `https://www.nyse.com/markets/hours-calendars`
+- **Retrieved:** 2026-10-06, by independent research outside this session. This session's own egress
+  policy blocks `nyse.com` (§9.6), so the facts were supplied rather than fetched here.
+- **Coverage:** 2026. The page's text also covers 2027 and 2028; those years were **not transcribed and
+  are UNKNOWN to this module**, not extrapolated.
+- **Basis:** *published scheduled* sessions. An **exceptional** closure — weather, a day of mourning, a
+  systems outage — arrives as a separate exchange notice and is **not** represented. So a weekday absent
+  from both a panel and this list remains **UNKNOWN**: it may be an unpublished exceptional closure or a
+  data gap. The module reports that case and does not resolve it.
+- **Published full-day closures (10):** Jan 1, Jan 19, Feb 16, Apr 3, May 25, Jun 19, Jul 3
+  (Independence Day observed), Sep 7, Nov 26, Dec 25.
+- **Early closes (2):** Nov 27 and Dec 24, 1:00pm America/New_York. Regular session 9:30am–4:00pm.
+  **An early close is a shorter session, not a closure — a bar is expected**, and the test asserts both
+  that neither date is in `closed` and that `expectedSessions` includes them.
+
+`expectedSessions()` **refuses** outside 2026 rather than falling back to a weekday count, including for
+a window that merely straddles the boundary. Asserted for 2025, for 2025-12-30→2026-01-05 and for
+2026-12-28→2027-01-04.
+
+## 10.2 The real research panel reconciles exactly for 2026
+
+`node panel-freshness.mjs` on `sp500-bundle` (127 symbols, 921 observed sessions, 2023-01-03 →
+2026-09-03):
+
+| | result |
+|---|---|
+| grid shape | **clean** — no misalignment, duplicate or out-of-order timestamp |
+| full span vs calendar | **UNSUPPORTED** — 2023–2026 is outside the grounded year; **37** no-bar weekdays reported as **UNKNOWN, counted** |
+| narrowed to 2026-01-02 → 2026-09-03 | **expected 169, observed 169** |
+| expected sessions with no bar | **0** |
+| bars on a published closure | **0** |
+| published closures inside that window | 6 (Jan 1 falls before the panel's first 2026 bar) |
+
+**For the grounded window, §9.6's UNKNOWN bucket collapses to zero**: every absent weekday is an
+explained published closure, and there is no evidence of a panel-wide outage. That is the first time this
+project has been able to say so rather than leave it open. The 37 UNKNOWN weekdays over 2023–2025
+**remain unknown** — they are not asserted to be holidays, because those years are not grounded.
+
+Corroborating detail, not a claim: the panel's weekday histogram is Mon 173, Tue 191, Wed 189, Thu 184,
+Fri 184. Mondays are the scarcest, which is the shape a holiday schedule produces; it is consistent with
+closures rather than evidence of their dates.
+
+Per-symbol, `sp500-bundle` is perfectly rectangular — 0 symbols stale at the decision, 0 with a late
+start, 0 with interior gaps, 0 with a shape problem. **The diagnostic finds nothing on this panel**,
+which is the honest result and the reason the behaviour is demonstrated on fixtures instead.
+
+## 10.3 What is now measured per symbol
+
+| field | meaning |
+|---|---|
+| `lastBarAtOrBefore` | the symbol's own newest bar at or before the decision, found **by time, not position** |
+| `sessionsSinceLastBar` | distance on the **observed** grid. Not an expected-session count, and never substituted for one |
+| `wallClockAgeMs` | age against a supplied `now`, which separates a dead name from a live one — the gate's `quoteAgeMs` cannot |
+| **`forwardFilledAtDecision`** | **true when the symbol has no bar at the decision session**, so the context's price for it is held-flat and **not a quote** |
+| `lateStartSessions` | grid sessions preceding its first bar |
+| `interiorMissingSessions` | absences strictly inside its own span — distinct from a late start |
+| `earlyEnd` | its history stops before the decision |
+| `barsAfterDecision` | present in the input, **excluded from every at-or-before count** |
+| `offGridDates` | bar dates the grid does not contain at all — named, not ignored |
+| `shape` | ordering, duplicate and alignment problems, **unrepaired** |
+
+A symbol with no usable bar reports **`null`**, not `0` — absence is not freshness.
+
+**On a 60-session fixture with `DEAD` stopping 20 sessions early:** `sessionsSinceLastBar = 20`
+(hand-checkable as 59 − 39), `forwardFilledAtDecision = true`, `wallClockAgeMs` strictly greater than
+the live name's, and `DEAD` sorts first so the worst case is the first thing a reader sees.
+
+## 10.4 Invariants and pitfalls, each demonstrated
+
+- **Immediate-next-bar contamination cannot move any figure.** Appending a bar at `asOf + 1` with close
+  `1e6` to one symbol and `0.001` to another leaves the whole report `deepEqual` once the deliberate
+  `barsAfterDecision` counter is stripped — and that counter goes to 1, so the bar is *seen* and
+  *excluded* rather than ignored.
+- **Measured by time, not position.** §9.4's R1 symbol — a future bar at position 1 — loses all later
+  history inside `buildContext`'s `break`. This diagnostic counts all 40 at-or-before bars, reports
+  `sessionsSinceLastBar: 0` and **names the disorder** in `shape`. The two views of the same series
+  disagree, and that disagreement is the finding.
+- **The date-boundary pitfall, computed rather than recalled.** A stamp at `2026-03-10T01:00:00Z` is
+  `2026-03-09` in America/New_York — the *previous* session day. The real bundle avoids this entirely by
+  stamping every bar at `00:00:00Z` of the session date (verified: **0 of 921** misaligned), so a
+  non-midnight timestamp is **flagged** rather than assigned to a day on the caller's behalf. The
+  2026-11-27 early close at 13:00 ET is 18:00Z and *happens* to stay on the same UTC date — flagged
+  anyway, because the check must not depend on that luck.
+- **A missing expected session never leaves the denominator.** Dropping one session from a 2026 February
+  window leaves `expected` unchanged and lists the gap in `missingExpected`. **The expected count does
+  not shrink to match what was observed** — the error §9.6 warned against.
+- **A bar on a published closure** is reported in `presentButClosed`: the panel disagreeing with the
+  schedule, which is a different problem from a gap and is kept separate.
+- **Validation reports and returns the input untouched.** After `validateTimestamps` flags a swap, the
+  array is asserted still swapped. A duplicate is reported as both a duplicate *and* a non-increase.
+
+## 10.5 Limits
+
+- **2027, 2028 and every venue other than NYSE remain UNKNOWN.** Not an owner decision — an input that
+  has not been grounded. The module refuses rather than extrapolating.
+- **Exceptional closures are outside the source.** A weekday absent from both the panel and the
+  published list stays UNKNOWN. No diagnostic can close that gap from the schedule alone.
+- **Intraday semantics are untested** because the panel is daily. The early-close times are recorded for
+  a future intraday diagnostic so that a short session is not read as a missing one; nothing here uses
+  them.
+- **Nothing is wired in.** §9.4's R2 — a dead symbol passing the gate at a stale price — is now
+  *measurable* and still *unmitigated*: `forwardFilledAtDecision` exists, and no runtime path consults it.
+- **The live panel is still not on the remote**, so R2's frequency on real IBKR data remains unmeasured.
+
+## 10.6 Next useful independent work
+
+1. **Run this diagnostic against the live `ibkr-bundle` once it lands.** It is the first tool that would
+   show whether a real pull contains dead-but-present symbols, and it needs no key — only the panel.
+2. **Ground 2027 from the same primary page**, so a forward run crossing the year boundary is not
+   immediately UNSUPPORTED. The 2026 window already ends Dec 31.
+3. **A `presentButClosed` check against the live panel**, which would catch a vendor stamping a bar on a
+   closed day — a class of error the research bundle shows zero of.
+
+None needs the key or the owner's PC. Item 1 needs only the panel upload that is already pending.
