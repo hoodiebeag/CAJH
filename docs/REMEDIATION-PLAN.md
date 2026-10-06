@@ -590,6 +590,118 @@ paired/unpaired statistic cluster (§2, §8.5), the retry contract (§B1, F2 par
 That is one focused unit — not a re-audit — and it is the last place a wrong number could enter the
 record unexamined.
 
+## F6. Outcome field integrity — and a correction to the concern that prompted it
+
+`outcome-integrity.test.mjs` (11 tests). Temp journals and plain objects. Nothing implemented.
+
+### The premise, checked before it was used
+
+The concern was that `scoreJournal`'s means filter with `typeof v === "number"` while the paired CI
+filters with `Number.isFinite`, and that the two could disagree on stored data. **They cannot.** The only
+values for which those predicates differ are `NaN`, `Infinity` and `-Infinity`, and **all three
+serialize to `null`** — so no value recoverable from a journal can separate them. Checked exhaustively
+over every shape that can appear in a file. The difference is real in memory and **unreachable through
+the record**.
+
+### What is actually written and recovered
+
+| input to `recordOutcome` | byte on disk | readback | `typeof number` | `Number.isFinite` |
+|---|---|---|---|---|
+| `0`, `-0.03`, `0.05` | `0` / `-0.03` / `0.05` | same number | yes | yes |
+| `NaN` | **`null`** | `null` | no | no |
+| `Infinity`, `-Infinity` | **`null`** | `null` | no | no |
+| `null` | `null` | `null` | no | no |
+| field absent | `null` | `null` | no | no |
+| `"0.05"` | `"0.05"` | **string** | no | no |
+
+**Two findings follow, and only two.**
+
+**1. Four distinct inputs converge on one byte.** `NaN`, `±Infinity`, an explicit `null` and a missing
+field all persist as `null`. **So supported incomplete data and malformed data are indistinguishable on
+disk**: a `NaN` produced by an upstream arithmetic error (a 0/0, a divide by a zero price) is written as
+"no value" and reads exactly like a legitimately absent one. This is the migration-relevant fact — it
+means **no retroactive repair is possible**, because the information was destroyed at write time, not at
+read time.
+
+**2. A numeric string is the only surviving bad shape, and it has one measurable effect.** On a
+seven-row fixture — three finite, one string, three that collapsed to `null`:
+
+- `outcomes: 7` — every row counts.
+- means and the paired sample admit the same **3** rows; `agentMeanNet` and `edgeCI.nominalN` agree.
+- `hitRate` = 1/3, over its own admitted denominator — unaffected.
+- **`beatControlRate` = 1/7**, because its denominator is every row, where 1 of 3 eligible rows beat its
+  control. **This is a second route into defect D2**, not a new defect.
+
+### Supported-incomplete versus malformed, and what is neither
+
+- **Supported incomplete:** `null` or an absent field. `realisedOutcomes` legitimately produces this —
+  a control with no bar (§9.4) — and every statistic already excludes it correctly.
+- **Malformed:** a numeric string, or any non-number that survives. Accepted on write, excluded from
+  every mean, counted in two places.
+- **Not a defect:** `0` and negative returns are first-class and paired-eligible; zero is not a win,
+  which is the existing rule. **No return cap or magnitude threshold is proposed or implied** — a +999%
+  row is a data question for whoever reads it, not something for this layer to bound.
+
+### `holdDays` and identity shapes, only where a readout moves
+
+`holdDays` persists as given (`"5"`, `0`, `-3`, `2.5` all survive; `NaN` → `null`), and `holdDaysOf`
+takes the max of the finite positives, so a string and a non-positive are already excluded. **A
+fractional hold is accepted**, and it makes the period clusters uneven: `floor(rank / 2.5)` over six
+ranks gives clusters of **3, 2 and 1** where an integer hold gives equal runs. That changes `periods`,
+which is the sample size the protocol's whole arithmetic rests on.
+
+Two identity shapes that change a join: **symbol case** splits the settlement key (raw) while the news
+bucket folds it (`toUpperCase`), so two rows differing only in case are two rows to settle and one name
+to the split; and a **batchId that does not match a decision** is dropped from every statistic, so it
+cannot contaminate a mean — the safe direction, already covered for orphans.
+
+### Acceptance-contract proposal — unapproved, dependency-ordered, smallest first
+
+| # | Change | Type | Impact | Untouched |
+|---|---|---|---|---|
+| **O1** | `recordOutcome` **rejects** a `netReturn`/`grossReturn`/`controlReturn` that is neither a finite number nor `null`/absent — including a string, and including `NaN`/`±Infinity` **before** JSON erases them. | `GATE` (a write refusal) | Stops malformed data entering, and preserves the distinction between absent and malformed by refusing rather than coercing. | Finite values, `null` and absent all keep today's behaviour. No cap, no threshold. |
+| **O2** | `recordOutcome` requires `holdDays` to be a positive **integer** or `null`. | `GATE` (a write refusal) | Removes the uneven-cluster path at source. | `holdDaysOf`'s own filter, and every existing integer hold. |
+| **O3** | `scoreJournal` reports a count of rows excluded from the means, so a malformed row is visible rather than silently absent. | `STAT` | Additive figure only; no existing number moves. | Every filter and every published mean. |
+
+**Dependency order: O3, then O1, then O2.** O3 is additive and makes the problem visible without
+refusing anything. O1 and O2 are **write refusals** — they make a journal append fail, which is why each
+needs its own approval. **O1 must land before O2 is useful**, since both are the same validation seam.
+
+**Migration implications, stated plainly.** None of the three rewrites or re-labels a stored record.
+Existing `null` rows stay `null` and stay excluded; their original value is **unrecoverable** and no
+proposal pretends otherwise. O1 and O2 are forward-only: they change what a *future* write accepts.
+
+**No new owner decision is created by this unit.** O1–O3 are three more items for the same
+item-by-item approval the sheet already describes; `beatControlRate`'s denominator is **D2**, already
+listed, not a new question.
+
+---
+
+## F7. Audit closure
+
+**The offline audit stream is closed.** Across ten registered criteria, the first-run boundaries, the
+retry contract, the version boundary and now outcome field integrity, every finding is pinned to a named
+fixture and every proposed fix is typed and unapproved. Closed areas, not to be re-audited: the calendar
+grounding and session reconciliation, ragged-panel point-in-time and criterion 2's scope, the
+paired/unpaired statistic cluster, the retry contract, the version boundary, criteria 3/4/5/6/8, and
+outcome field integrity.
+
+**What remains genuinely untested, with the reason it stays that way:**
+
+- **The CLI** — `analyst-run.mjs`'s argument handling, mode dispatch, lock acquire/release and signal
+  handling. Launching it constructs an SDK client and takes the real journal lock. **Not testable under
+  the standing restrictions**, and no stub reproduces it honestly.
+- **Every live interface** — the model, the key, the broker. Out of scope by instruction.
+- **Criterion 9** — MANUAL, and it counts thesis strings, which is what it says it does.
+
+**No further bounded unit is proposed.** The remaining paths are untestable offline rather than
+unexamined, and inventing another audit would be manufacturing work. The useful next step is
+**approval**, not more analysis.
+
+**The machine-side state stays unverified.** No evidence has arrived about the PC refresh, the key or
+the bundle upload; the panel is still absent from the remote and the first real forward record remains
+manual.
+
 ## G. Review sheet for the coordinating thread
 
 Plain language, one line of consequence each. **Nothing here is approved, and this is not a
