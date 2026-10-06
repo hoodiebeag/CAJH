@@ -155,11 +155,15 @@ is a limit, not a design choice.
 The journal is append-only and a test pins that every earlier byte survives a second pass, so **no
 option may rewrite or delete a record.** In increasing order of intervention:
 
-- **R0 — report only.** Count repeated `(batchId)` decision records in `scoreJournal` and in the
-  readout, and exclude duplicates from `sized` *as a reported figure alongside the raw one*. Changes a
-  published statistic; adds no refusal, no new record kind, no identity scheme. **Simplest option that
-  closes the gate-input defect**, and the one the grounding supports: since only decision-side counts
-  move, correcting the count is sufficient and nothing needs to be prevented.
+- **R0a — additive diagnostics only.** `LABEL`. Add a repeated-`batchId` count and a *de-duplicated*
+  `sized` figure **alongside** the raw one, in `scoreJournal`'s return and the readout. `sized` itself
+  is unchanged, so **no gate input moves** and `meetsStandingMinimum` is untouched. This is the only
+  genuinely report-only option.
+- **R0b — replace the gate count.** `STAT`, **and it changes a gate input.** Make
+  `meetsStandingMinimum` read the de-duplicated count instead of the raw one. This is what actually
+  closes the defect, and calling it "report only" — as an earlier draft of this item did — was wrong:
+  the standing minimum is the evidence floor, so changing its input changes when the record may be
+  cited. It depends on **P1**, since what `sized` *should* count defines what de-duplicated means.
 - **R1 — refuse.** `runOnce` reads the journal and refuses a decision at an `asOfTime` already
   journalled in that mode, writing a skip. Prevents the duplicate at source; costs a journal read in
   the decision path, and **would block a legitimate retry after a genuine partial failure** — which, per
@@ -172,13 +176,16 @@ option may rewrite or delete a record.** In increasing order of intervention:
   never a duplicate. Removes the ambiguity but makes every retry look like a new experiment, which is
   exactly the conflation the measurement above says to avoid. **Not recommended.**
 
-**Preferred for approval: R0.** The evidence is that nothing needs preventing — the outcome side is
-already safe — so the minimum intervention that fixes the gate input is to count correctly and say so.
-R1 and R2 remain available if the owner wants the duplicate prevented rather than reported.
+**Preferred sequence for approval: R0a first, then R0b.** The evidence is that nothing needs
+*preventing* — the outcome side is already safe — so the minimum step is to make the duplicate visible
+(**R0a**, no gate input moves, approvable on wording alone). Closing the defect then needs **R0b**,
+which is a deliberate change to the evidence floor's input and needs its own approval and **P1**. R1 and
+R2 remain available if the owner wants the duplicate prevented rather than counted.
 
-**Unresolved and genuinely the owner's:** (1) which option; (2) **P1**, since what `sized` should count
-determines what "correctly" means here; and (3) whether a legitimate retry after a partial failure
-should be *possible at all* — R1 forbids it, R0 and R2 permit it, and no diagnostic can decide that.
+**Unresolved and genuinely the owner's:** (1) which option, and whether R0a and R0b are approved
+separately; (2) **P1**, since what `sized` should count defines what de-duplicated means; and (3)
+whether a legitimate retry after a partial failure should be *possible at all* — R1 forbids it, R0a/R0b
+and R2 permit it, and no diagnostic can decide that.
 
 ### B2 — Closing rows count toward the standing minimum · `STAT` · **latent (needs `positions` wired)**
 
@@ -359,9 +366,116 @@ drift against the current version's hashes and `["prompt"]` against the supersed
 owner-approved: registering a version is an act of record-keeping, and a new source, document or hash
 value existing does not make scoped scoring an approved rule.
 
+**What the parent-decision join is, and is not.** Joining an outcome to its parent decision's `batchId`
+is a **safe way to diagnose attribution** — it is arithmetic over records that already exist, and limit 2
+shows the naive alternative is simply wrong. **It is not an adopted scoping rule.** Using it to produce a
+scoped figure for reporting, or resetting independent periods per version, remains **unapproved** (item
+**P3**); the join being correct says nothing about whether scoped scoring should be adopted.
+
 **What the diagnostic does not do.** It changes no scoring, settlement, protocol, ledger, journal or
 runtime behaviour; it registers no real candidate; it rewrites and deletes nothing; and it chooses no
 rule for attributing a straddling decision.
+
+## F3. Criteria 3, 5 and 6, and the skip-reason taxonomy
+
+`criteria-semantics.test.mjs` (14 tests), hand-computable temp journals, the risk gate called as a
+library function with explicit arguments. **No CLI was launched**, so no SDK was constructed and no lock
+taken — the CLI's own argument handling and lock lifecycle remain **untested**, as before.
+**Registered meanings are unchanged**: `PAPER-PROTOCOL.md` is pre-registered and this section pins the
+implementation against its words. Fixes are proposed separately, typed, below.
+
+### The three verdicts across five scenarios
+
+| scenario | c3 (STOPS) | c5 | c6 (STOPS, MANUAL) |
+|---|---|---|---|
+| absent run — empty journal | **PASS** `{stale:0,future:0}` | FAIL `{total:0}` | MANUAL `{toReview:0}` |
+| two safe refusals, no decision | **PASS** `{stale:1,future:1}` | FAIL `{total:0}` | MANUAL `{toReview:0}` |
+| decided anyway, beside a stale refusal | **PASS** `{stale:1,future:0}` | FAIL `{total:0}` | MANUAL `{toReview:1}` |
+| **A3: every proposal rejected** | **PASS** | **PASS** `{total:10, stale_quote:10}` | MANUAL `{toReview:0}` |
+| clean book, zero rejections | **PASS** | **FAIL** `{total:0}` | MANUAL `{toReview:5}` |
+
+### Criterion 3 — a stopping criterion that cannot fail
+
+Registered: *"Panel freshness never silently degrades / zero paper batches on a stale or future-dated
+panel."* The implementation passes **`PASS` as a literal**, not a condition (`protocol.mjs`, branch 3),
+and **never compares any batch against a panel**. It counts the two skip reasons and asserts the zero
+structurally, on the stated grounds that the guards throw before a batch exists.
+
+**Consequence:** absent run, safe refusal and a batch that decided alongside a stale refusal all read
+**PASS**. The `numbers` differ, so the information exists — the verdict never uses it. **A guard
+regression, or a record written by any route other than `runOnce`, would not move this criterion.** This
+is a *vacuous pass* on a stopping criterion, and it is the sharpest finding here.
+
+**Fail-closed vs diagnostic:** today it is neither. It is a diagnostic reported in the slot of a
+stopping criterion.
+
+### Criterion 5 — satisfied in both of the two ways the gate can be useless
+
+Registered: *"The risk gate is load-bearing, not decorative / rejections occur, and every code is one we
+can explain."*
+
+**Yes — under A3's all-rejected book it reads PASS**, with `total: 10`, `codes: {stale_quote: 10}`,
+`unexplained: []`. The registered words are *literally satisfied*: rejections occurred and the code is
+one `risk.mjs` defines. So **the implementation is faithful to the words; the mismatch is between the
+words and the criterion's own title.** A gate rejecting 100% of proposals is not load-bearing — it is
+inert in the other direction.
+
+It also passes on **one** rejection, including a single `halted`, and on a batch rejected entirely for
+**want of usable risk input** (`no usable NAV` → `malformed_proposal`, a known code) — a case where no
+risk limit was evaluated at all. And it **FAILS** on a clean book with zero rejections, where the detail
+string itself says the reading is ambiguous: *"Either nothing was ever out of bounds, or the gate is not
+being reached."* So PASS and FAIL both occur for reasons opposite to the name.
+
+### Criterion 6 — a pre-outcome count, vacuous when the book is empty
+
+Registered: *"No proposal reached the book that the gate should have caught / manual review of all
+allowed positions, zero escapes."* It is `MANUAL` always, so it never stops automatically, and it counts
+`sizedAllowed` **at decision time, before any outcome exists** — which is correct for its purpose.
+
+Under an empty book it prints *"manual review of all 0 allowed position(s)"*. **Nothing to review is not
+the same as no escapes**, and the readout does not distinguish them. Its count also includes a
+`targetPct: 0` closing row, which can never be settled, and criterion 8's news denominator uses the same
+set.
+
+### The skip-reason taxonomy — an asymmetry with rejects and failures
+
+`SKIP_REASON` defines three codes and **`runOnce` emits all three** (asserted against `loop.mjs`), so the
+enum is fully exercised by the refusal paths. But:
+
+- `recordSkip` does `String(reason)` with **no validation**. An unknown string, `undefined` and an object
+  persist as `"some_new_reason_nobody_defined"`, `"undefined"` and `"[object Object]"`.
+- `protocol.mjs` validates reject codes against `REJECT` and failure codes against `BATCH_FAILURE`.
+  **There is no equivalent set for skip reasons** (asserted: no `KNOWN_SKIP` anywhere).
+- So an unknown reason is **invisible to criteria 2 and 3 — both stopping criteria** — counted raw by
+  criterion 10 (MANUAL), **and it extends criterion 1's denominator while adding nothing to its
+  numerator**, turning three malformed skips into `ratio: 0, FAIL`.
+
+A *known* reason works correctly: a `context_not_point_in_time` skip makes criterion 2 FAIL and stop. **So
+the gap is specifically the unknown case**, and an unknown *failure* code is caught by criterion 4 while
+an unknown *skip* reason is not.
+
+### Proposed fixes — separate, typed, none approved
+
+| # | Fix | Type | Acceptance test |
+|---|---|---|---|
+| **S1** | Criterion 3 verifies rather than asserts: FAIL if any decision's `asOfTime` is behind the panel's newest session, or ahead of it, using the same guard arithmetic. | **`GATE` (STOP)** | The "decided anyway" fixture reads **FAIL**; the absent run and safe-refusal fixtures read PASS with their counts intact; a clean run is unaffected. |
+| **S2** | Criterion 3 distinguishes the three states in its detail and numbers: no run, refused, decided. | `LABEL` | Each of the three fixtures prints a distinguishable detail; no verdict changes. |
+| **S3** | Criterion 5 reports the **rejection rate** beside the count, and says explicitly that an all-rejected book satisfies the words while meaning the gate admitted nothing. Registered words unchanged. | `LABEL` | The A3 fixture still reads PASS, with a printed rate of 100% and the caveat; the clean-book fixture still FAILs with its existing wording. |
+| **S4** | Criterion 6 states `toReview: 0` as *"no allowed position exists to review"* rather than leaving a reviewer to read it as zero escapes. | `LABEL` | The empty-book fixture's detail is unambiguous; `toReview` is unchanged. |
+| **S5** | Add `KNOWN_SKIP_REASONS` and report an unknown reason, mirroring criteria 4 and 5. | `STAT` | The three malformed-reason skips are reported as unknown; a known reason is unaffected; criteria 2 and 3 verdicts unchanged. |
+| **S6** | `recordSkip` rejects a reason not in `SKIP_REASON` instead of coercing it. | `GATE` (a write refusal) | `recordSkip` throws on `undefined`, an object and an unknown string; all three defined reasons still write. **Note: this makes a journal write fail, so it needs its own approval.** |
+
+**S1 is the only one that changes a verdict.** S3, S4 and S2 are wording; S5 adds a reported figure; S6
+changes a write path. **None is implemented, and none is approved.**
+
+### Limits
+
+- **Operational correctness, realised evidence and vacuous pass are three different things**, and these
+  criteria mix them: criterion 3 reports operational health in a stopping slot, criterion 5's words
+  measure *that rejections happened* rather than *that the gate is useful*, and criterion 6 is a
+  pre-outcome manual prompt. Separating them is a protocol question, not a code one.
+- **The CLI remains untested here** — launching it would construct an SDK client and take the real lock.
+- Nothing above tells you whether the gate's *thresholds* are right; that was never in scope.
 
 ## G. Review sheet for the coordinating thread
 
@@ -433,7 +547,7 @@ lock or any `ibkr-*` module, and that the real journal is byte-identical afterwa
 | 3 | Quote age | **FAIL** — 37.8h for **every** symbol against a 15-minute limit | the limit applies to an actual quote, which a daily panel does not carry |
 | 3 | Gate outcome | **FAIL** — **allowed 0 of 2**, both `stale_quote` | a symbol with a bar at the decision session is allowed; one without is rejected |
 | 4 | Batch recorded | **FAIL** — journalled with `allowed = 0`, `control = 0` | a non-empty book with one control per sized decision |
-| 4 | Same-session retry | **FAIL** — 2 records, 1 session, **1 batchId**, 1 repeated | refused or marked superseding; two distinct batches stay one period (B1) |
+| 4 | Same-session retry | **FAIL** — 2 records, 1 session, **1 batchId**, 1 repeated | the duplicate is visible in the counts, under **whichever of B1's proposed options R0a/R0b/R1/R2 is approved — none is selected**; two distinct batches must stay one period |
 | 4 | No-decision batch | recorded, distinguishable from a run that never fired | unchanged |
 | 4 | Short control pool | **FAIL** — 1 slot for 2 sized decisions; the **tail** goes unpaired, positionally | unpaired rows reported, paired count printed (A4) |
 | 5 | Settlement | `wrote 0` — correct, since the book is empty | `pending` split three ways (C4) |
