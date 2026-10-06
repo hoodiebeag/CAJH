@@ -611,12 +611,34 @@ characters — so **two states shared a stream** and their σ were correlated by
 whose purpose is detecting correlation between states. Replaced with explicit distinct offsets, asserted
 in a test. Deriving a seed from an incidental property of a label is how that happens quietly.
 
-## 5f. Small-n planning sensitivity: the registered table's n=4 row is a ~48% power test
+## 5f. Small-n planning sensitivity: read as a test, the registered table's n=4 row is ~48% power
 
-`analyst/power-t.mjs`, `power-small-n.mjs`, `analyst/power-t.test.mjs` (14 tests). Offline, no model
+`analyst/power-t.mjs`, `power-small-n.mjs`, `analyst/power-t.test.mjs` (19 tests). Offline, no model
 call, no panel. **Nothing here amends the protocol or proposes a gate change.** §3a already said the
 registered figures are planning estimates; this measures by how much, and names which inferential
 problem each number answers.
+
+### First, what the protocol actually runs — because it is not a t-test
+
+**`docs/PAPER-PROTOCOL.md` registers no NHST decision rule on the paired difference at all.** Its ten
+pre-registered pass criteria are **operational** (sessions journalled, zero point-in-time skips, panel
+freshness, parse rate, gate rejections, settlement idempotence, news reach, thesis reviewability), and
+its Tier 2 says in terms that the month *cannot* establish edge. The registered table is labelled
+"**smallest edge it can resolve**" and is computed by `paper-power.mjs` from a simulated null, i.e. with
+σ **taken as known**.
+
+So this section is **conditional**, and the condition must be stated: *if* that resolution figure were
+read as the effect a one-sample test on the forward periods could detect — the natural reading of
+"smallest edge it can resolve", and the reading that any eventual formal comparison would need — then
+with σ **estimated from those same n periods** it attains only ~48% power at n=4. It is a statement
+about **how to read the table**, not a measurement of a test the protocol currently performs.
+
+One consequence is worth stating because it makes the finding robust: the **attained power and the
+ratios below are scale-invariant in σ**. They therefore apply to the registered table whichever σ it was
+built from; only the absolute MDEs in percent move with σ.
+
+**The commit title of `2f09691` ("the registered table's n=4 row is a ~48% power test") overstates this
+by dropping the conditional.** Commit titles are immutable; the correction lives here.
 
 ### Four different questions, which must not be pooled
 
@@ -639,8 +661,8 @@ problem each number answers.
 | 26 | 1.291% | 1.337% | 1.036× | 1.344% | 1.041× | 0.765 ± 0.002 |
 | 50 | 0.931% | 0.948% | 1.018× | 0.951% | 1.021× | 0.782 ± 0.002 |
 
-**Read the n=4 row plainly.** Four non-overlapping 5-day periods is one trading month, and the registered
-normal figure there is a **~48% power test, not an 80% one**, once σ is estimated rather than known. The
+**Read the n=4 row plainly.** Four non-overlapping 5-day periods is one trading month, and read as a
+test, the registered normal figure there attains **~48% power, not 80%**, once σ is estimated. The
 direction is not a surprise — estimating σ from four observations costs power — but the size is: a factor
 of **1.52 on the detectable effect**, larger than most of the effects this project has argued about. The
 correction decays fast: 1.10× at 12 periods, 1.04× at 26, 1.02× at 50. **At n ≥ 26 the normal
@@ -657,9 +679,13 @@ below 0.80, so the label cannot quietly become a claim.
 
 ### Uncertainty in σ is a separate axis, and at n=50 it is the larger one
 
-Sections above hold σ fixed at the measured value and vary the method. But σ is itself an estimate; §5e
-measured a per-state sampling CI of ~22% of σ. The MDE is **linear in σ**, so a ±10% band on σ gives a
-22.2% span in the MDE **at every n**:
+Sections above hold σ fixed at the measured value and vary the method. But σ is itself an estimate. The
+relevant uncertainty here is the **pooled** σ's, and §3b measured that directly: a period-bootstrap 95%
+CI **0.319% wide** on a σ of 2.437%, i.e. roughly **±6%**. (§5e's 22.3% figure is a *per-state*
+resolution over ~37 periods and does **not** apply to the pooled estimate — grounding the band on it
+would be the wrong quantity.) The ±10% band below is therefore **illustrative and deliberately wider
+than measured**. The MDE is **linear in σ**, so it gives a 22.2% span **at every n** — which is algebra
+(1.1/0.9), not a measurement; the table exists to show the band does not interact with n:
 
 | n | MDE at 0.9σ | at σ | at 1.1σ | span |
 |---|---|---|---|---|
@@ -668,8 +694,10 @@ measured a per-state sampling CI of ~22% of σ. The MDE is **linear in σ**, so 
 | 26 | 1.210% | 1.344% | 1.479% | 22.2% |
 | 50 | 0.856% | 0.951% | 1.046% | 22.2% |
 
-At n=50 that is **five times the entire normal-vs-t correction**. These are two different uncertainties —
-one about the inference, one about the input — and the smaller one is the one the method debate is about.
+Even on the **measured** ±6% band the span is 12.8%, still **six times** the entire normal-vs-t
+correction at n=50 (1.021×). These are two different uncertainties — one about the inference, one about
+the input — and the smaller one is the one the method debate is about. At n=4 the ordering reverses: the
+1.52× method correction dominates any plausible band on σ.
 
 ### The bootstrap is weakest exactly where the small-sample question is most pressing
 
@@ -689,20 +717,47 @@ quote the number without the bound, and a test asserts both.
 
 ### Numerical verification, so the figures are checkable rather than self-consistent
 
-A statistical routine that agrees only with itself has not been tested. Three independent anchors:
+A statistical routine that agrees only with itself has not been tested.
 
-- **The standard critical-*t* table.** `studentTQuantile(0.975, df)` against twelve tabulated df
-  (1, 2, 3, 4, 5, 10, 15, 20, 30, 60, 100, 120): all agree to < 5×10⁻⁴, i.e. table precision
-  (df 1 → 12.7062 vs 12.706; df 5 → 2.5706 vs 2.571; df 30 → 2.0423 vs 2.042; df 100 → 1.9840 vs 1.984).
-- **Power at a zero effect must equal α.** The one exact identity available without a reference
-  implementation. Simulated power at δ=0 is 0.0504 / 0.0515 / 0.0498 at n = 4 / 12 / 50 against 0.05
-  (± 0.0011), and the test also checks α = 0.10.
+**A boundary first, stated rather than papered over.** This session's egress policy **blocks
+`itl.nist.gov` and `en.wikipedia.org`**, so no published critical-value table could be *fetched* to cite.
+The twelve tabulated df the test checks (1, 2, 3, 4, 5, 10, 15, 20, 30, 60, 100, 120, all agreeing to
+< 5×10⁻⁴) are therefore asserted **as known**, which is weaker than a citation. Everything below was
+added so that **nothing load-bearing rests on them**:
+
+- **Two exact closed forms, derived not looked up.** df=1 is standard Cauchy, so the 0.975 point is
+  `tan(0.475π)`; df=2 has `F(t) = (1 + t/√(2+t²))/2`, inverting to `c√(2/(1-c²))` with `c = 2p-1`. The
+  module matches both to 10⁻⁷ — and those closed forms agree with the printed table, which is as much
+  corroboration of the remembered values as this session can obtain.
+- **The whole *t* CDF against independent quadrature of its own density.** Under `x = tan u` the density
+  integrates over a finite range, and dividing by its own total mass **cancels the gamma constants**, so
+  the check needs no incomplete beta, no Lanczos gamma and no table. Agreement to 10⁻⁶ at ν ∈
+  {1, 2, 4, 11, 25, 49} across five *t* values each.
+- **AN ANCHOR AT δ > 0, which the δ=0 identity cannot provide.** Power at a zero effect checks the test's
+  **size**, not its power: a mis-scaled alternative — σ for σ/√n, or one-sided for two-sided — would pass
+  every δ=0 check ever written. So exact two-sided noncentral power is computed by deterministic
+  quadrature, `E_U[Φ(λ - t_c U) + Φ(-λ - t_c U)]` with `λ = δ√n/σ` and `U = S/σ`, again normalised by its
+  own mass. It reproduces the headline column without simulation:
+
+  | n | normal MDE | t-exact, **simulated** | t-exact, **quadrature** | attained power, sim. | attained power, **quad.** |
+  |---|---|---|---|---|---|
+  | 4 | 3.292% | 4.997% | **5.002%** | 0.483 | **0.4829** |
+  | 12 | 1.901% | 2.090% | **2.088%** | 0.721 | **0.7229** |
+  | 26 | 1.291% | 1.344% | **1.344%** | 0.765 | **0.7681** |
+  | 50 | 0.931% | 0.951% | **0.950%** | 0.782 | **0.7842** |
+
+  The test also asserts the quadrature is **sensitive to the √n scaling** (mis-scaling δ by 1/√12 must
+  move the answer by > 0.3), so the agreement is not two routines sharing one mistake.
+- **Power at δ=0 equals α.** Still worth having as the size check. The figures 0.0504 / 0.0515 / 0.0498
+  at n = 4 / 12 / 50 (±0.0011) come from `analyst/power-t.test.mjs`, which evaluates all three and also
+  checks α = 0.10; `power-small-n.mjs` prints only the n=4 case.
 - **Closed forms of the incomplete beta.** `I_x(1,1) = x`, `I_x(1,2) = 1-(1-x)²`, `I_x(2,1) = x²` — three
   different functional forms, all to 10⁻¹², which exercises the continued fraction rather than restating it.
 
-Plus the structural checks: *t* → *z* as df → ∞, monotonicity in df, the quantile inverting the CDF to
-10⁻⁸, `mdeTExact` attaining both 0.80 and 0.90 within Monte Carlo error, and determinism under a fixed
-seed. Every entry point rejects non-finite, non-positive and non-integer inputs.
+Plus the structural checks: *t* → *z* as df → ∞, monotonicity in df, the quantile inverting both CDFs,
+`mdeTExact` attaining both 0.80 and 0.90 within Monte Carlo error, its MDE matching a quadrature-bisected
+MDE to within 2% at n = 4/12/50, and determinism under a fixed seed. Every entry point rejects
+non-finite, non-positive and non-integer inputs. **19 tests.**
 
 ### What this does not establish
 
@@ -756,10 +811,13 @@ grid endpoint is right, and the old `i + hold < length` was one period short.
    draws. (A duplicate "3b" entry restating this as outstanding has been removed.)
 
 4. ~~A t-based / bootstrap MDE alongside the normal approximation.~~ **DONE — §5f.** The gap is
-   large only at the smallest count: the registered normal MDE at n=4 attains **~48% power**, not 80%,
-   once σ is estimated (t-exact MDE **1.52×** the normal one); 1.10× at 12, 1.04× at 26, 1.02× at 50.
-   A ±10% band on σ is a 22.2% span in the MDE at every n — five times the whole normal-vs-t correction
-   at n=50 — so the input uncertainty dominates the method choice except at n=4. No gate proposed.
+   large only at the smallest count: **read as a test**, the registered normal MDE at n=4 attains
+   **~48% power**, not 80%, once σ is estimated (t-exact MDE **1.52×** the normal one); 1.10× at 12,
+   1.04× at 26, 1.02× at 50. Confirmed by deterministic noncentral quadrature as well as simulation.
+   The protocol registers no σ-estimating test, so the finding is about how to read the resolution
+   table — and because the ratios are scale-invariant in σ it holds whatever σ that table used. σ's own
+   measured band (±6%, §3b) outweighs the method correction at n ≥ 26 and is outweighed by it at n=4.
+   No gate proposed.
 5. **Cost-model sensitivity of the MDE.** Last, as before: cost enters the mean, not the variance, so it
    shifts the edge being measured rather than the noise floor. `PER-FAMILY-COST-CEILING` already has the
    break-even in closed form.

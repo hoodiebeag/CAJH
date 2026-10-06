@@ -204,3 +204,123 @@ test("simulated figures are deterministic for a fixed seed and move with it", ()
   assert.notEqual(a.power, c.power, "a different seed must give a different draw");
   assert.ok(a.se > 0 && a.se < 0.02);
 });
+
+// ---- INDEPENDENT NUMERICAL ANCHORS ------------------------------------------------------------
+//
+// The twelve table values above are the standard printed critical-t table. This session's egress
+// policy blocks itl.nist.gov and en.wikipedia.org, so no published table could be FETCHED to cite:
+// those values are therefore asserted as known, which is weaker than a citation. What follows does
+// not depend on them. It checks the module against (a) two exact closed forms and (b) deterministic
+// quadrature written here from the densities, with a structure that shares no code with the module —
+// no incomplete beta, no Lanczos gamma, no simulation.
+//
+// Every normalising constant is obtained by integrating the same density over its whole support, so
+// the gamma functions cancel and nothing has to be looked up.
+
+/** Simpson's rule on [a,b] with an even number of panels. */
+function simpson(f, a, b, panels = 4000) {
+  const h = (b - a) / panels;
+  let s = f(a) + f(b);
+  for (let i = 1; i < panels; i++) s += f(a + i * h) * (i % 2 ? 4 : 2);
+  return (s * h) / 3;
+}
+
+/** Φ(z), by quadrature of the normal density under x = tan(u), normalised by its own total mass. */
+function normalCdfQuad(z) {
+  const g = (u) => Math.exp(-(Math.tan(u) ** 2) / 2) / Math.cos(u) ** 2;
+  const half = Math.PI / 2 - 1e-9;
+  const total = simpson(g, -half, half, 2000);
+  return simpson(g, -half, Math.atan(z), 2000) / total;
+}
+
+/** The t CDF, by the same substitution. Shares nothing with the module's incomplete-beta route. */
+function tCdfQuad(t, nu) {
+  const g = (u) => (1 + Math.tan(u) ** 2 / nu) ** (-(nu + 1) / 2) / Math.cos(u) ** 2;
+  const half = Math.PI / 2 - 1e-9;
+  const total = simpson(g, -half, half, 6000);
+  return simpson(g, -half, Math.atan(t), 6000) / total;
+}
+
+/**
+ * Exact two-sided one-sample t-test power, by quadrature over the chi-square density.
+ *
+ * Reject when |Zbar| > tc*U, with Zbar ~ N(lambda,1), U = S/sigma independent, lambda = delta*sqrt(n)/sigma.
+ * So power = E_U[ Phi(lambda - tc*U) + Phi(-lambda - tc*U) ], and U = sqrt(V/k), V ~ chi2_k, k = n-1.
+ * Integrating V's unnormalised density and dividing by its own total mass removes the gamma constant.
+ */
+function tPowerQuad({ n, delta, sigma, alpha = 0.05 }) {
+  const k = n - 1;
+  const lambda = (delta * Math.sqrt(n)) / sigma;
+  const tc = studentTQuantile(1 - alpha / 2, k);
+  const w = (v) => v ** (k / 2 - 1) * Math.exp(-v / 2);
+  const hi = k + 40 * Math.sqrt(2 * k) + 60;          // far beyond any mass for these k
+  const num = (v) => {
+    const u = Math.sqrt(v / k);
+    return (normalCdfQuad(lambda - tc * u) + normalCdfQuad(-lambda - tc * u)) * w(v);
+  };
+  return simpson(num, 1e-12, hi, 2000) / simpson(w, 1e-12, hi, 2000);
+}
+
+test("ANCHOR: the critical t matches exact closed forms at df 1 and df 2", () => {
+  // df=1 is standard Cauchy: F(t) = 1/2 + arctan(t)/pi, so the 0.975 point is tan(0.475*pi).
+  close(studentTQuantile(0.975, 1), Math.tan(0.475 * Math.PI), 1e-7);
+  // df=2 has F(t) = (1 + t/sqrt(2+t^2))/2, which inverts to t = c*sqrt(2/(1-c^2)) with c = 2p-1.
+  const c = 2 * 0.975 - 1;
+  close(studentTQuantile(0.975, 2), c * Math.sqrt(2 / (1 - c * c)), 1e-7);
+  // These are derived here, not looked up, so they stand even with no source reachable.
+  close(studentTQuantile(0.975, 1), 12.7062, 5e-4);   // and they agree with the printed table
+  close(studentTQuantile(0.975, 2), 4.3027, 5e-4);
+});
+
+test("ANCHOR: the t CDF agrees with independent quadrature of its own density", () => {
+  for (const nu of [1, 2, 4, 11, 25, 49]) {
+    for (const t of [-2.5, -0.7, 0.3, 1.4, 3.1]) {
+      close(studentTCdf(t, nu), tCdfQuad(t, nu), 1e-6);
+    }
+  }
+  // And the quantile inverts that independent CDF, which is what licenses using it below.
+  for (const nu of [3, 11, 49]) close(tCdfQuad(studentTQuantile(0.975, nu), nu), 0.975, 1e-6);
+});
+
+test("ANCHOR at a NON-ZERO effect: simulated power matches exact noncentral quadrature", () => {
+  // Power at delta=0 only checks the SIZE of the test. A mis-scaled alternative -- sigma for
+  // sigma/sqrt(n), or one-sided for two-sided -- would pass every delta=0 check ever written. This is
+  // the anchor that catches it, and it is deterministic.
+  const sigma = 0.0235;
+  for (const [n, delta] of [[4, 0.03], [4, 0.05], [12, 0.02], [26, 0.013], [50, 0.009]]) {
+    const q = tPowerQuad({ n, delta, sigma });
+    const s = tTestPowerSimulated({ n, delta, sigma, draws: 40000, seed: 17 });
+    assert.ok(Math.abs(s.power - q) < 4 * s.se + 0.002,
+      `n=${n} delta=${delta}: simulated ${s.power.toFixed(4)} vs quadrature ${q.toFixed(4)}`);
+  }
+  // A deliberately mis-scaled alternative must NOT match, or the comparison proves nothing.
+  const bad = tPowerQuad({ n: 12, delta: 0.02 / Math.sqrt(12), sigma });
+  const good = tPowerQuad({ n: 12, delta: 0.02, sigma });
+  assert.ok(Math.abs(bad - good) > 0.3, "the quadrature must be sensitive to the sqrt(n) scaling");
+});
+
+test("ANCHOR: mdeTExact's reported MDE is the exact-power MDE, by quadrature", () => {
+  // The headline numbers in docs/POWER-VALIDATION.md section 5f are these. Bisect the quadrature
+  // independently and compare the EFFECT, not the power, so a flat power curve cannot hide a gap.
+  const sigma = 0.0235;
+  for (const n of [4, 12, 50]) {
+    let lo = 1e-6, hi = 1;
+    for (let i = 0; i < 60; i++) {
+      const mid = (lo + hi) / 2;
+      if (tPowerQuad({ n, delta: mid, sigma }) < 0.8) lo = mid; else hi = mid;
+    }
+    const exactQuad = (lo + hi) / 2;
+    const got = mdeTExact({ sigma, n, draws: 20000, seed: 7 }).mde;
+    assert.ok(Math.abs(got / exactQuad - 1) < 0.02,
+      `n=${n}: mdeTExact ${(got * 100).toFixed(3)}% vs quadrature ${(exactQuad * 100).toFixed(3)}%`);
+  }
+});
+
+test("ANCHOR: the normal MDE's attained power at n=4 is ~0.48 by quadrature too", () => {
+  // The single most quoted figure in section 5f, re-derived without simulation.
+  const sigma = 0.0235;
+  const q = tPowerQuad({ n: 4, delta: mdeNormal(sigma, 4), sigma });
+  assert.ok(q > 0.46 && q < 0.50, `expected ~0.48, quadrature gives ${q.toFixed(4)}`);
+  const q50 = tPowerQuad({ n: 50, delta: mdeNormal(sigma, 50), sigma });
+  assert.ok(q50 > 0.77 && q50 < 0.79, `expected ~0.78 at n=50, quadrature gives ${q50.toFixed(4)}`);
+});

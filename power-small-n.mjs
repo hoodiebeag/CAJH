@@ -2,9 +2,15 @@
 /**
  * power-small-n.mjs — how optimistic is the normal MDE at the period counts this project faces?
  *
- * `docs/PAPER-PROTOCOL.md` registers a power table built on the normal approximation with KNOWN σ. At
- * 50 periods that is a rounding detail. At 4 — one month of a 5-day hold — it is not, and this
- * quantifies the gap. It amends nothing and proposes no gate change.
+ * `docs/PAPER-PROTOCOL.md` registers a table of the "smallest edge it can resolve", built on the normal
+ * approximation with KNOWN σ. At 50 periods that is a rounding detail. At 4 — one month of a 5-day hold
+ * — it is not, and this quantifies the gap. It amends nothing and proposes no gate change.
+ *
+ * CONDITIONAL, AND THE CONDITION MATTERS: the protocol registers NO σ-estimating test on the paired
+ * difference. Its ten pass criteria are operational and its Tier 2 says the month cannot establish edge.
+ * So this asks what that resolution figure would mean IF read as the effect a one-sample test on the
+ * forward periods could detect — not what some currently registered test attains. The attained-power and
+ * ratio columns are scale-invariant in σ, so they hold whatever σ the registered table used.
  *
  * THREE DISTINCT QUESTIONS, kept apart because conflating them is the hazard:
  *
@@ -82,8 +88,8 @@ async function main() {
                 `${(0.8 - r.power >= 0 ? "-" : "+")}${Math.abs(0.8 - r.power).toFixed(3)}`);
   }
   console.log("");
-  console.log("  READ THE n=4 ROW PLAINLY. The registered 20-trading-day figure is a ~48% power test, not");
-  console.log("  an 80% one, once sigma is estimated rather than known. The direction is not a surprise --");
+  console.log("  READ THE n=4 ROW PLAINLY. Read AS A TEST, the registered 20-trading-day figure attains");
+  console.log("  ~48% power, not 80%, once sigma is estimated rather than known. The direction is no surprise --");
   console.log("  estimating sigma from four observations costs power -- but the SIZE is: a factor of about");
   console.log("  1.5 on the detectable effect, which is larger than most of the effects this project has");
   console.log("  argued about. By 50 periods the gap is ~2% and the normal figure is fine.\n");
@@ -91,8 +97,10 @@ async function main() {
   // ---- 3. uncertainty in sigma is a SEPARATE axis ----------------------------------------------
   console.log("=== 3. UNCERTAINTY IN SIGMA vs SAMPLING POWER (two different things) ===");
   console.log("  Sections 1-2 hold sigma FIXED at the measured value and vary the inferential method.");
-  console.log("  But sigma is itself estimated. §5e measured a per-state sampling CI of ~22% of sigma, so");
-  console.log("  the planning figure moves with sigma independently of any power correction:");
+  console.log("  But sigma is itself estimated: §3b measured a period-bootstrap 95% CI 0.319% wide on a");
+  console.log("  2.437% sigma, i.e. about +-6%. The +-10% band below is ILLUSTRATIVE and wider than that");
+  console.log("  (§5e's 22% figure is a PER-STATE resolution and does not apply to the pooled estimate).");
+  console.log("  The span column is algebra -- 1.1/0.9 under linearity -- not a measurement:");
   console.log("   n   MDE at 0.9x sigma   at sigma   at 1.1x sigma   span");
   for (const { n } of rows) {
     const lo = mdeTExact({ sigma: SIGMA * 0.9, n, draws: DRAWS, seed: 7 }).mde;
