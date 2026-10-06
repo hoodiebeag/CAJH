@@ -1,5 +1,5 @@
 {
-  "collectedAt": "2026-09-19T21:58:52.924Z",
+  "collectedAt": "2026-10-06T21:15:24.242Z",
   "host": "127.0.0.1",
   "port": 4002,
   "news": {
@@ -19,19 +19,727 @@
       }
     ],
     "reason": null,
-    "sample": {
-      "symbol": "AAPL",
-      "ok": true,
-      "count": 10,
-      "reason": null
+    "coverage": {
+      "symbols": 989,
+      "withHeadlines": 860,
+      "headlines": 6071,
+      "failed": 0,
+      "future": 0,
+      "perSymbolCap": 8,
+      "atCap": 629
     }
   },
   "sectors": {
-    "classified": 118,
-    "total": 128,
-    "groups": 8,
+    "classified": 872,
+    "total": 1047,
+    "groups": 9,
     "ambiguous": 0,
-    "unclassified": 10
+    "unclassified": 175,
+    "universeSource": "universe\\candidates.txt (candidates, UNVERIFIED)",
+    "verifiedUniverse": false,
+    "resolvedToConId": 989,
+    "unresolved": [
+      {
+        "symbol": "ACWI",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "AGG",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "AKRO",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "ALE",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "AMED",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "APGE",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "APLS",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "ARKG",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "ARKK",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "ATAI",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "AVB",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "AXNX",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "AZEK",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "BERY",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "BIL",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "BITF",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "BKLN",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "BLD",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "BND",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "BOTZ",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "BPMC",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "BRK.B",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "CFLT",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "CHX",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "CIBR",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "CIVI",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "CMA",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "COPX",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "CORN",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "CRNX",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "CTRA",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "CYBR",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "DAWN",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "DBA",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "DBC",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "DFS",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "DIA",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "DO",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "EA",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "EEM",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "EFA",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "EMB",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "EPI",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "EQR",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "ETNB",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "EWA",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "EWC",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "EWG",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "EWJ",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "EWT",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "EWU",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "EWW",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "EWY",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "EWZ",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "EXAS",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "FL",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "FOLD",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "FXI",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "GDX",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "GDXJ",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "GLD",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "GOVT",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "GPS",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "HACK",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "HOLX",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "HYG",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "IAC",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "IAI",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "IAU",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "IBB",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "ICLN",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "IEF",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "IEFA",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "IEI",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "IEMG",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "IGV",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "IHI",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "INDA",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "ITB",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "ITCI",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "IVV",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "IWB",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "IWM",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "IWV",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "JETS",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "JNK",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "JWN",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "K",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "KBE",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "KIE",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "KRE",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "KWEB",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "LIT",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "LQD",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "LSI",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "MCHI",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "MDY",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "MRUS",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "MTUM",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "MUB",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "NOVA",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "NSA",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "NUVL",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "NVTA",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "OIH",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "PALL",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "PAVE",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "PCH",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "PPLT",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "QQQ",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "QRVO",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "QUAL",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "RAPT",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "REMX",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "RSP",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "SAGE",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "SEE",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "SGH",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "SHV",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "SHY",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "SIL",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "SILK",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "SKX",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "SKYY",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "SLV",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "SMH",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "SNV",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "SOXX",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "SPHB",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "SPLV",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "SPY",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "SWN",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "SWTX",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "TAN",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "TERN",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "THS",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "TIP",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "TLT",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "TMHC",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "UGA",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "UNG",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "URA",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "USMV",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "USO",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "VB",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "VEA",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "VERV",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "VGK",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "VLUE",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "VO",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "VOO",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "VPL",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "VTI",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "VTV",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "VUG",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "VWO",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "VXUS",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "WEAT",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "X",
+        "reason": "timeout"
+      },
+      {
+        "symbol": "XBI",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XHB",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XLB",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XLC",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XLE",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XLF",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XLI",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XLK",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XLP",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XLRE",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XLU",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XLV",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XLY",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XME",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XOP",
+        "reason": "no industry field"
+      },
+      {
+        "symbol": "XRT",
+        "reason": "no industry field"
+      }
+    ]
   },
   "intraday": [
     {
@@ -66,7 +774,7 @@
       "duration": "6 M",
       "barSize": "1 hour",
       "ok": true,
-      "bars": 875,
+      "bars": 868,
       "reason": ""
     },
     {
