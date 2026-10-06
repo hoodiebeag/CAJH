@@ -51,7 +51,7 @@ available inside grounded calendar coverage — so it depends on the calendar.
 | **Stays untouched** | **Dueness ≠ coverage.** Whether the *symbol* has bars is a separate question; a due decision whose symbol lacks coverage stays `due` and stays failing (§8.7). Criterion 7 keeps `stops: true`. |
 | **Acceptance tests** | `acceptance-contracts.test.mjs`, six contracts: the panel-wide-gap adversary (5 expected sessions elapse, one missing for every symbol → observed counting says 4 and "not due"; expected counting says **due**); a weekend is legitimately **not due** (3 sessions, not 5 calendar days); a published closure does **not** advance dueness while an **early close does** (Nov 20 → Nov 27 gives 4 sessions, Nov 30 gives 5); a due decision whose symbol lacks coverage **stays due**; outside coverage `due === null` with a reason and no invented count; and input rejection. Plus the §8.7 fixture still reading `due: 1, unsettled: 1, FAIL, stops: true`. |
 | **Depends on** | **The grounded calendar** (`panel-freshness.mjs` `expectedSessions`, 2026–2028, §10.1) — *not* "nothing". Shares A2's dependency and its invariant. |
-| **Owner semantics vs source-settled** | **Source-settled:** that calendar days and trading sessions differ, and that `decisionTimeMs` exists for exactly this reason (`journal.mjs:506`). **Owner:** whether a pre-registered stopping criterion may be changed at all (P2), and whether a *gate* may depend on a transcribed calendar given that an ungrounded year must then refuse (P4). |
+| **Owner semantics vs source-settled** | **Source-settled:** that calendar days and trading sessions differ, and that `decisionTimeMs` exists for exactly this reason (`journal.mjs:506`). **Owner:** whether this exact criterion-7 arithmetic change is approved, and whether a *gate* may depend on a transcribed calendar given that an ungrounded year must then refuse (P4). |
 
 ### A2 — A market holiday makes paper mode refuse a session · `GATE`
 
@@ -82,13 +82,17 @@ defect than the one originally filed.
 | **Evidence** | `acceptance-contracts.test.mjs` "in paper mode a FRESH symbol is already rejected stale_quote" — `missedSessions = 0` (the guard proceeds) and the gate returns `allowed: []`, `stale_quote`. And "the minimum possible paper-mode figure is a day", which holds by construction at every run time. |
 | **Why the suite never caught it** | `analyst/loop.test.mjs`'s `panel()` helper sets `lastTime = floor(now/1000) - endingDaysAgo*DAY`, so with `endingDaysAgo = 0` the newest bar carries an **arbitrary wall-clock instant** and the age is ~0. The real bundle stamps every bar at **00:00:00Z** (0 of 921 misaligned). The two conventions differ in exactly the way that hides this, which is why `"a clean batch flows context -> decide -> gate -> journal"` passes in paper mode with `allowed.length === 2`. Pinned by a test. |
 | **What information actually exists** | Three distinct quantities, now reported separately by `freshnessInformation()`: **`sessionsSinceLastBar`** — daily-session freshness, derived and meaningful, 0 for a live name and 19 for one that stopped 19 sessions ago; **`barTimestampAgeMs`** — the wall-clock age of a midnight-stamped session record, which is what the code computes today and is *not* a quote age; **`quoteAgeMs`** — **unavailable**, reported as `null` with a reason, because a daily panel carries no intraday observation. |
-| **Options, with their semantics — no choice made here** | **(i)** Express the staleness rule in **sessions** for daily panels (`sessionsSinceLastBar <= N`) and keep `maxQuoteAgeMs` for a future intraday feed. Separates the two cleanly; needs a value for N, which is an owner choice. **(ii)** Keep the millisecond rule but set the reference to the decision bar in paper mode too, as the dry run already does. Makes the check pass, and makes it measure **nothing** — every symbol reads 0, including a dead one. **(iii)** Raise `maxQuoteAgeMs` to a daily-appropriate value. Simplest, and it silently redefines what the limit means for any future intraday path. **(iv)** Reject the *panel* rather than each symbol when the newest bar is older than one session, leaving per-symbol staleness to `sessionsSinceLastBar`. |
+| **PREFERRED PROPOSAL — fail-closed, and it leaves the 15-minute threshold untouched** | **Keep `maxQuoteAgeMs` at 15 minutes, unchanged, for an actual quote observation.** A daily panel never supplies one, so the millisecond rule is **not applicable** there rather than vacuously passing. In its place, two complementary daily-session requirements: **(a) per-symbol** — the symbol must have a bar **at the decision session** (`forwardFilledAtDecision === false`); a symbol with no bar at that session, or no usable bar at all, is **rejected**, never treated as age 0. **(b) panel-level** — the panel's own session coverage must be **explicit**: its newest session must be the latest expected session, checked against a sourced calendar, with UNKNOWN outside grounded coverage (and UNKNOWN must refuse, not pass). |
+| **Why (i) and (iv) are not alternatives — they overlap and both are needed** | A per-symbol session rule alone **cannot see a stale panel**, because `sessionsSinceLastBar` is measured against the panel's *own* newest session: on a panel a week out of date every symbol still has a bar at that session and all read **0** (asserted). A panel-level rule alone **cannot see a dead symbol inside a fresh panel** (§9.4 R2). (i) is (a) and (iv) is (b); the preferred proposal is their conjunction, not a choice between them. |
+| **Options rejected, with source rationale** | **(ii) the zero-age shortcut** — set `referenceMs = asOfTime * 1000` in paper mode, as the dry run does. **Rejected:** it makes the check measure nothing. Asserted: a symbol 19 sessions stale reads `quoteAgeMs === 0`, identical to a live one, and is **allowed**. It also erases the mode distinction `loop.mjs:226-230` deliberately draws. **(iii) raise the threshold** — **rejected because the unit is wrong, not the value.** Calendar time per session varies: the longest *legitimate* gap between consecutive expected sessions in 2026–2028 is **96h** (2026-01-16 → 2026-01-20, a weekend plus a published closure), while a symbol genuinely **one session stale** after an ordinary weekend is only **72h** old. The stale case sits *inside* the fresh window, so **no single millisecond threshold separates them** — computed from the grounded calendar, not asserted. Neither of these is a safe alternative to the preferred proposal and they are not offered as equivalent choices. |
+| **What daily evidence can and cannot establish** | A daily bar is a **session record**: it says a session occurred and closed at a price. It does **not** say a quote was observable, that a price is currently tradable, or anything about the spread, depth or the state of the book at any instant. So daily data can support "this name traded in the most recent session" and cannot support "this price is executable now". The 15-minute rule is about the second claim, which is why it should keep its meaning and simply not apply to a daily panel. |
+| **The hazard any implementation must avoid, from source** | `risk.mjs:221` guards with `isFiniteNum(inst.quoteAgeMs)`, so a quote age that is **absent, null or NaN skips the staleness check entirely and the proposal is ALLOWED** — asserted for all three. Simply nulling the field for daily bars would therefore **disable** the gate rather than fix it. The replacement check must reject on absence. |
 | **Changes** | `GATE` under every option. (ii) and (iii) also change what an existing pre-registered limit means. |
 | **Fail-closed** | A symbol with **no** usable bar must be rejected, not treated as age 0 — the hazard in option (ii). No threshold may be changed silently: if a number moves, it moves explicitly and is recorded. A daily close must not be asserted to be a current tradable quote in any readout. |
 | **Stays untouched** | Point-in-time: the measure reads bars at or before the decision only, asserted by a next-bar perturbation test (`deepEqual` with a `1e6` close appended at `asOf + 1`). The dry-run reference path, which works today and is the reason the plumbing check is meaningful. `maxQuoteAgeMs`'s value, unless an option that changes it is chosen. |
 | **Acceptance tests** | Fresh symbol **allowed** in paper mode at a legitimate run time; a symbol 19 sessions stale **rejected**; a symbol with no usable bar **rejected**; the dry-run path unchanged (`quoteAgeMs === 0`, allowed); the next-bar perturbation still `deepEqual`; and the real panel's 127 symbols — all 0 sessions stale — unaffected. |
-| **Depends on** | `panel-freshness.mjs` (**built**) for `sessionsSinceLastBar`; **P2** for permission to touch a gate; and an owner choice among the four options, which is a *new* question only in the sense that the old proposal was unworkable. |
-| **Owner semantics vs source-settled** | **Source-settled:** that the current paper path rejects everything (measured), that the reference differs by mode (`loop.mjs:231`), and that a midnight-stamped daily bar is not a quote observation. **Owner:** which option, and any value of N. |
+| **Depends on** | `panel-freshness.mjs` (**built**) for `sessionsSinceLastBar` and `forwardFilledAtDecision`; the grounded calendar for the panel-level half, which brings **P4** in; and its own approval. **No N is chosen here**: the per-symbol rule as stated needs no threshold at all (a bar at the decision session, or reject), which is why it is preferred over a tunable `sessionsSinceLastBar <= N`. |
+| **Owner semantics vs source-settled** | **Source-settled:** that the current paper path rejects everything (measured at three run times); that the reference differs by mode (`loop.mjs:231`); that a missing `quoteAgeMs` currently fails open (`risk.mjs:221`); that no millisecond threshold can separate fresh from one-session-stale (96h vs 72h, computed); and that (i) and (iv) are complementary rather than alternative. **Genuinely unresolved and for the owner:** (1) whether this exact behaviour change to a risk rejection is approved; (2) whether the panel-level half may depend on a transcribed calendar, given UNKNOWN must then refuse (**P4**); and (3) the one real tradeoff — a strict "bar at the decision session" rule will **reject a symbol that genuinely did not trade that session** (a halt, or a thin name with no prints), which is fail-closed and correct but *will* shrink the eligible universe on a ragged panel by an amount no offline fixture can predict. |
 
 ### A4 — The headline edge and its interval are computed on different rows · `STAT`
 
@@ -174,30 +178,23 @@ before shorting or trims are enabled.
 
 ---
 
-## C. Planning refinements — labels and reporting, no gate
+## C. Reporting items — **not all label-only**
 
-- **C1. Criterion 1 counts batches, not distinct sessions**, so five sessions run twice score ratio 2.0
-  against ten sessions run once at 1.0 (§8.2). It does not stop the run. **Proposed:** count distinct
-  decision sessions; keep the batch count beside it.
-- **C2. Criterion 1 penalises a market holiday** — five batches on all five trading days of a span
-  containing a closure read `expected: 6, ratio: 0.833, FAIL` (§8.2). Same dependency and the same
-  invariant as A2: within grounded coverage subtract published closures; outside it, leave the expected
-  set **UNKNOWN** and say so rather than substituting a weekday count.
-- **C3. A correct refusal reads as a session that never ran** (§8.3). A skip is not in criterion 1's
-  numerator while its `at` extends the denominator. **Proposed:** report attempts, successes and refusals
-  separately — `calendarAccounting()` already separates the five quantities (§9.6).
-- **C4. `pending` conflates three states** — inside the hold, no panel coverage, bad bars — and
-  `analyst-run.mjs` prints all three as "still inside the holding period" (§2 D5). Distinct labels;
-  **an unsettleable name must stay counted against criterion 7**, never excluded from `due`.
-- **C5. Criterion 2's actual coverage is not stated.** It verifies the `asOf` label and news timestamps,
-  and **nothing about prices or per-symbol freshness** (§9.2). A reader can take "point-in-time integrity
-  holds live" to cover prices. **Proposed:** state the scope in the readout text. Documentation-level, and
-  the only item here with no behavioural component.
-- **C6. Unequal position sizes are weighted equally** in every mean — a 10% name at +5% and a 1% name at
-  −5% give 0 where portfolio weighting gives +4.09% (§4). Pairs *are* size-matched, so the paired
-  difference is sound; only the label "analyst mean net" is ambiguous.
+**An earlier draft titled this section "labels and reporting, no gate". That was wrong.** Criterion 1 is
+a PASS/FAIL criterion, so changing its numerator or denominator changes a published verdict, and the
+`pending` labels feed a **stopping** criterion. Each item is typed individually below.
 
----
+| # | Item | Type | Why it is that type |
+|---|---|---|---|
+| **C1** | Criterion 1 counts batches, not distinct sessions | **`STAT`** | Changes criterion 1's numerator and therefore its PASS/FAIL verdict. Five sessions run twice score ratio 2.0 against ten run once at 1.0 (§8.2). Not a stopping criterion, but a published verdict. |
+| **C2** | Criterion 1 penalises a published closure | **`STAT`** | Changes the denominator: five batches on all five trading days of a span containing a closure read `expected: 6, ratio: 0.833, FAIL` (§8.2). Also introduces a calendar dependency into a criterion, so **P4** applies. |
+| **C3** | A correct refusal reads as a session that never ran | **`LABEL`** if additive | Reporting attempts, successes and refusals as *additional* fields changes nothing computed. **It becomes `STAT` the moment criterion 1's denominator is altered** — so C3 must be approved as additive-only, or merged into C1/C2. |
+| **C4** | `pending` conflates inside-the-hold, no-coverage and bad-bars | **`LABEL` or `GATE`** | Splitting the printed label is `LABEL`. **If it changes what criterion 7 counts as `unsettled`, it is a `GATE` change to a STOPPING criterion.** The invariant is that an unsettleable name stays counted against criterion 7 and never leaves `due` (§8.7). Approve the label variant and the gate variant separately. |
+| **C5** | Criterion 2's actual coverage is unstated | **`LABEL`** | Readout text only. It verifies the `asOf` label and news timestamps, and nothing about prices or per-symbol freshness (§9.2). The only item here with no computed component at all. |
+| **C6** | Unequal position sizes are weighted equally | **`LABEL`** if renaming, **`STAT`** if reweighting | A 10% name at +5% and a 1% name at −5% give 0; portfolio weighting gives +4.09% (§4). Pairs *are* size-matched so the paired difference is sound. Renaming "analyst mean net" is `LABEL`; changing the weighting is `STAT` and changes every published mean. |
+
+**So of the six, two are `STAT` outright (C1, C2), two are conditional (C3, C4), and two are `LABEL`
+only unless scope creeps (C5, C6).**
 
 ## D. Decisions that are genuinely the owner's
 
@@ -207,9 +204,10 @@ Each was checked against source and the protocol **before** being called a decis
   and B2 are two independent ways the current count diverges from measurable trades. Source does not
   settle it: `PAPER-PROTOCOL.md` says "50 trades" and `scoreJournal`'s `sized` and the settlement path
   disagree about what a trade is.
-- **P2. Whether A1–A3 may touch a pre-registered criterion or gate at all.** A1 changes a stopping
-  criterion's arithmetic, A2 changes a refusal, A3 changes a risk rejection. Each is a *correctness* fix
-  in intent, and all three are nonetheless changes to gates the protocol pre-registered.
+- ~~**P2. Whether A1–A3 may touch a pre-registered criterion or gate at all.**~~ **REMOVED.** A single
+  blanket permission question was the wrong shape: it invited one yes to cover three different
+  behaviour changes. Each item now states the **exact requested behaviour** in its own row and needs its
+  own yes or no. There is no general grant to ask for.
 - **P3. Whether scoring should reset independent periods per registered version.** `FORWARD-EVAL-SPEC.md`
   §4 specifies it, **and that file is a proposal that is explicitly not approved**; the protocol wins
   where they disagree. Neither `scoreJournal` nor `protocol.mjs` reads `analyst/ledger.mjs`, and nothing
@@ -241,7 +239,7 @@ Each was checked against source and the protocol **before** being called a decis
 
 **Suggested sequence:** C5 (documentation only, no risk) → A4 (statistic, no gate) → **A3** (it blocks
 the book existing at all, so nothing downstream is observable until it is settled) → A1 → A2 → C2 → C4 →
-B3 → the rest. A1–A3 each need **P2** first, and A3 additionally needs a choice among its four options.
+B3 → the rest. A1–A3 each need their own approval, and A3 additionally needs a choice among its options.
 
 **A3 is now the first blocker in consequence order**, ahead of A1. A1 halts a run that is otherwise
 fine; A3 means the run produces no positions at all, so every other statistic stays empty and none of
@@ -269,26 +267,92 @@ on real IBKR data is unknown until the live panel exists. Nothing in this plan h
 
 ## G. Review sheet for the coordinating thread
 
-Plain language, one line of consequence each. **Nothing here is approved, and this is not a pull-request
-description.** Each item needs a separate yes/no, and the four `P` questions need answering before the
-three gate items can be touched at all.
+Plain language, one line of consequence each. **Nothing here is approved, and this is not a
+pull-request description.** Each item needs its own yes or no.
 
-| # | In plain terms | Fires when | Touches | Needs |
-|---|---|---|---|---|
-| **A3** | **The paper run would buy nothing.** Every proposal is rejected as a stale quote, because a daily bar is a day old and the limit is 15 minutes. | First paper run | A risk gate | **P2** + a choice among 4 options |
-| **A1** | A stopping criterion halts the run over a weekend, while settlement is behaving correctly. | First weekend | A stopping criterion | **P2**, **P4** |
-| **A2** | A market holiday makes the run refuse a session, one per holiday. | First holiday | A refusal | **P2**, **P4** |
-| **A4** | The headline edge is printed next to an interval computed from different rows, and can land outside it. | First settled control gap | A published number | Nothing |
-| **B1** | Running the same session twice doubles the trade count that the evidence floor gates on. | An operator retries | A published number | **P1** |
-| **B2** | Position closes count toward the evidence floor but can never be measured. | Once positions are wired | A published number | **P1** |
-| **B3** | A vendor series in the wrong order is ranked on a fabricated flat history instead of being refused. | A vendor panel | Eligibility | **P2** |
-| **B4** | A duplicated settlement row is counted twice and hidden from the criterion meant to catch it. | A double append | A published number | Nothing |
-| **B5–B7** | Malformed grids accepted silently; `settle` and scoring disagree about a record with no mode; direction is never read so every row is scored long. | Various, mostly latent | Numbers and labels | Nothing / **P2** for B3-style refusal |
-| **C1–C6** | Labels and reporting: criterion 1 counts batches not sessions and penalises holidays; a correct refusal looks like a missed session; `pending` conflates three states; criterion 2's actual scope is unstated; equal weighting is unlabelled. | Reporting only | Labels | Nothing |
-| **P1** | Does "50 trades" mean measurable decisions or orders placed? | — | Defines the floor | **Owner** |
-| **P2** | May a correctness fix change a pre-registered criterion or gate at all? | — | Permission | **Owner** |
-| **P3** | Should scoring reset independent periods per registered version? The spec proposing it is **not approved**. | — | A published number | **Owner** |
-| **P4** | May a gate depend on a transcribed calendar, given an ungrounded year must then refuse? | — | Permission | **Owner** |
+**Read the two columns carefully, because an earlier draft conflated them:**
 
-**Read A3 first.** Until it is settled, the paper run produces an empty book, so none of the other
-numbers can be observed at all.
+- **Unresolved dependency** — is there a *semantic* question that must be answered before the item can
+  even be specified? "None" here means the item is fully specified. **It does not mean the item needs no
+  approval.**
+- **Approval** — **every item that changes a runtime statistic or gate needs item-specific approval,
+  without exception.** Only the pure-label items can proceed on a single yes about wording.
+
+| # | In plain terms | Fires when | Type | Unresolved dependency | Approval |
+|---|---|---|---|---|---|
+| **A3** | **The paper run would buy nothing.** Every proposal is rejected as a stale quote: a daily bar is ~38h old and the limit is 15 minutes. | First paper run | `GATE` | **Yes** — P4, plus the eligible-universe tradeoff in A3's own row | **Required** |
+| **A1** | A stopping criterion halts the run over a weekend while settlement is behaving correctly. | First weekend | `GATE` (STOP) | **Yes** — P4 | **Required** |
+| **A2** | A market holiday makes the run refuse a session, one per holiday. | First holiday | `GATE` | **Yes** — P4 | **Required** |
+| **A4** | The headline edge is printed beside an interval computed from different rows, and can land outside it. | First settled control gap | `STAT` | None | **Required** |
+| **B1** | Running the same session twice doubles the trade count the evidence floor gates on. **Reachable today.** | An operator retries | `STAT` | **Yes** — P1 | **Required** |
+| **B2** | Position closes count toward the evidence floor but can never be measured. | Once positions are wired | `STAT` | **Yes** — P1 | **Required** |
+| **B3** | A vendor series in the wrong order is ranked on a fabricated flat history instead of refused. | A vendor panel | `GATE` (eligibility) | None | **Required** |
+| **B4** | A duplicated settlement row is counted twice and hidden from the criterion meant to catch it. | A double append | `STAT` | None | **Required** |
+| **B5** | Unsorted, duplicated or misaligned grids are accepted silently. | A vendor panel | `LABEL`, or `GATE` if it refuses | None for the report; yes for a refusal | **Required for a refusal** |
+| **B6** | `settle` and scoring disagree about a record with no mode. | Hand-edited records | `STAT` | None | **Required** |
+| **B7** | Direction is never read, so every row is scored long. | Shorting or a trim | `STAT` | None | **Required** |
+| **C1** | Criterion 1 counts batches, so half the sessions run twice scores *higher*. | Any rerun | **`STAT`** | **Yes** — overlaps B1 | **Required** |
+| **C2** | Criterion 1 fails a perfect run whose span contains a holiday. | First holiday in span | **`STAT`** | **Yes** — P4 | **Required** |
+| **C3** | A correct refusal looks like a session that never ran. | First refusal | `LABEL` if additive, `STAT` if the denominator moves | None if additive only | **Required if not additive** |
+| **C4** | `pending` conflates inside-the-hold, no-coverage and bad-bars — and feeds a **stopping** criterion. | First incomplete hold | `LABEL` **or `GATE`** | None for the label; yes for the gate | **Required separately for each variant** |
+| **C5** | Criterion 2's actual scope is unstated, so "point-in-time integrity holds live" reads as covering prices. | Reporting only | `LABEL` | None | Wording only |
+| **C6** | "Analyst mean net" does not say it is equal-weighted across unequal sizes. | Reporting only | `LABEL` renaming, **`STAT`** if reweighted | None for renaming | Wording only; **required if reweighted** |
+| **P1** | Does "50 trades" mean measurable decisions or orders placed? | — | Defines the floor | — | **Owner decision** |
+| **P3** | Should scoring reset independent periods per registered version? The spec proposing it is **not approved**. | — | `STAT` | — | **Owner decision** |
+| **P4** | May a gate depend on a transcribed calendar, given an ungrounded year must then refuse? | — | Permission | — | **Owner decision** |
+
+**Read A3 first.** Until it is settled the paper run produces an empty book, so none of the other
+numbers can be observed at all — demonstrated in §H.
+
+---
+
+## H. First-forward-run rehearsal: the actionable checklist
+
+`rehearsal.mjs` walks input preflight → context → risk → record → settle → score → protocol on a
+synthetic panel of midnight-stamped daily bars, with a **stub decider** (a plain object, no SDK) and a
+**temporary journal**. It prints today's behaviour beside each acceptance contract.
+
+**What it did not do, and must not be read as evidence of:** it does not launch `analyst-run.mjs`, so no
+CLI argument handling, mode dispatch or journal lock was exercised; it constructs no model client and
+reads no key; it touches no broker path; and it **fixes nothing** — every failure below is current
+behaviour. These are synthetic decisions in paper *mode*, which are not forward evidence and cannot
+become a track record. Two tests assert the import graph never reaches the CLI, the SDK, the key, the
+lock or any `ibkr-*` module, and that the real journal is byte-identical afterwards.
+
+| # | Boundary | Today | Contract |
+|---|---|---|---|
+| 1 | Grid shape | clean — but **nothing in the runtime validates it** | report at run start (B5) |
+| 1 | Session coverage | 188 expected / 188 observed, 0 missing, 0 on a closure. Adversaries: one session missing for every symbol stays listed; a bar on a published closure is named | sourced where grounded, UNKNOWN counted outside |
+| 1 | Per-symbol freshness | **FAIL** — 2 symbols have no bar at the decision session (19 and 297 sessions stale) and nothing consults this | the gate consults it (A3) |
+| 2 | Point-in-time | 0 issues — verifies the `asOf` label and news dates only | unchanged, scope stated (C5) |
+| 2 | Slate membership | **FAIL** — all 4 symbols shown, including the two stale ones | a symbol with no bar at the decision session is excluded or flagged |
+| 2 | Paper staleness guard | `missedSessions = 0`, proceeds | a published closure is not a missed session (A2) |
+| 3 | Quote age | **FAIL** — 37.8h for **every** symbol against a 15-minute limit | the limit applies to an actual quote, which a daily panel does not carry |
+| 3 | Gate outcome | **FAIL** — **allowed 0 of 2**, both `stale_quote` | a symbol with a bar at the decision session is allowed; one without is rejected |
+| 4 | Batch recorded | **FAIL** — journalled with `allowed = 0`, `control = 0` | a non-empty book with one control per sized decision |
+| 4 | Same-session retry | **FAIL** — 2 records, 1 session, **1 batchId**, 1 repeated | refused or marked superseding; two distinct batches stay one period (B1) |
+| 4 | No-decision batch | recorded, distinguishable from a run that never fired | unchanged |
+| 4 | Short control pool | **FAIL** — 1 slot for 2 sized decisions; the **tail** goes unpaired, positionally | unpaired rows reported, paired count printed (A4) |
+| 5 | Settlement | `wrote 0` — correct, since the book is empty | `pending` split three ways (C4) |
+| 6 | Headline edge | `—` throughout, because nothing settled | paired estimate beside its own interval (A4) |
+| 7 | Criterion 1 | **FAIL against contract** — reads PASS at `ratio: 2` from a **single** session | distinct sessions, closures subtracted (C1, C2) |
+| 7 | Criterion 7 (STOPS) | PASS, `due: 0` — and expected-session dueness agrees (`due: false`, 2 of 5 elapsed) | dueness from expected sessions (A1) |
+| 8 | Session after a closure | **FAIL** — `missedSessions = 1`, paper mode refuses | a published closure is not a missed session (A2) |
+
+**The cascade is the point.** The gate rejects every proposal, so the journal records an empty book, so
+nothing settles, so every score is `—` and every downstream criterion is trivially satisfied. **A1, A4,
+B1 and the rest cannot be observed in a real run until A3 is settled**, which is why A3 leads the
+sequence in §E.
+
+**Checklist before a first forward run**, in order, each needing its own approval:
+
+1. **A3** — otherwise the run buys nothing. Verify: a fresh symbol is allowed, a stale one rejected, one
+   with no bar rejected, and the dry-run path unchanged.
+2. **A1** — otherwise a stopping criterion halts the run on day 5–7.
+3. **A2** — otherwise the first holiday costs a session and writes a `PANEL_STALE` skip.
+4. **A4** — otherwise the first settled batch with a control gap misreports the headline.
+5. **B1** — otherwise an operator retry silently doubles the count the evidence floor uses.
+6. **C5** — wording only, and it removes a reading of criterion 2 that the code does not support.
+
+Everything else can follow the first run, since each is either reporting-only or needs wiring that does
+not yet exist.

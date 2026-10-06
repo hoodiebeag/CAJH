@@ -18,7 +18,9 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { duenessByCalendar, freshnessInformation, expectedSessions, NYSE_2026_2028 } from "./panel-freshness.mjs";
+import {
+  duenessByCalendar, freshnessInformation, expectedSessions, reconcileSessions, NYSE_2026_2028,
+} from "./panel-freshness.mjs";
 import { buildContext } from "./analyst/context.mjs";
 import { instrumentsFromContext, missedSessions, sessionWeekdays } from "./analyst/loop.mjs";
 import { applyRiskGate, DEFAULT_LIMITS } from "./analyst/risk.mjs";
@@ -234,4 +236,138 @@ test("A3: the immediate next bar is excluded from every freshness figure", () =>
   const a = freshnessInformation({ series: base, dates, asOf: dates.length - 1, now });
   const b = freshnessInformation({ series: withNext, dates, asOf: dates.length - 1, now });
   assert.deepEqual(b, a, "a bar after the decision must not move any figure");
+});
+
+// =================================================================================================
+// A3 — the preferred fail-closed daily-session proposal, as a contract
+// =================================================================================================
+
+test("A3 REJECTS option (ii): the decision-bar reference makes the check measure nothing", () => {
+  // Setting referenceMs = asOfTime*1000 in paper mode too (what the dry run does) gives every symbol
+  // an age of exactly 0 -- a live name and one that stopped trading 19 sessions ago are identical.
+  const dates = sessionGrid("2026-10-01", 300);
+  const series = {
+    FRESH: dates.map((t, i) => ({ time: t, close: 100 * 1.002 ** i, volume: 1e6 })),
+    STALE: dates.slice(0, 281).map((t, i) => ({ time: t, close: 20 * 1.001 ** i, volume: 1e6 })),
+  };
+  const ctx = buildContext({ series, dates, asOf: dates.length - 1,
+    sectors: { FRESH: "Tech", STALE: "Energy" } });
+  const inst = instrumentsFromContext(ctx, series, dates.at(-1), dates.at(-1) * 1000);
+  assert.equal(inst.FRESH.quoteAgeMs, 0);
+  assert.equal(inst.STALE.quoteAgeMs, 0, "the dead name reads EXACTLY as fresh as the live one");
+  assert.deepEqual(gateOn(inst, "STALE").allowed.map((a) => a.symbol), ["STALE"],
+    "so a 19-session-stale symbol is allowed — the check has stopped measuring anything");
+});
+
+test("A3 REJECTS option (iii): no millisecond threshold can separate the cases", () => {
+  // The unit is wrong, not the value. Calendar time per session varies, so the longest LEGITIMATE gap
+  // between consecutive expected sessions exceeds the age of a symbol that is genuinely one session
+  // stale after an ordinary weekend. Computed from the grounded calendar, not asserted.
+  let worst = 0, worstPair = null;
+  for (const y of [2026, 2027, 2028]) {
+    const s = expectedSessions({ from: e(`${y}-01-01`), to: e(`${y}-12-31`) }).sessions;
+    for (let i = 1; i < s.length; i++) {
+      const h = (s[i] - s[i - 1]) / 3600;
+      if (h > worst) { worst = h; worstPair = [iso(s[i - 1]), iso(s[i])]; }
+    }
+  }
+  assert.equal(worst, 96, `longest legitimate gap is 96h, at ${worstPair?.join(" -> ")}`);
+  const oneSessionStaleAfterAWeekend = 72;      // Friday bar, Monday session
+  assert.ok(oneSessionStaleAfterAWeekend < worst,
+    "a genuinely stale symbol can be YOUNGER than a legitimately fresh one, so no single threshold works");
+});
+
+test("A3 PREFERRED: a missing bar must reject, and a missing quoteAgeMs currently FAILS OPEN", () => {
+  // The hazard any proposal must avoid. risk.mjs:221 guards with isFiniteNum(inst.quoteAgeMs), so a
+  // quote age that is absent, null or NaN SKIPS the staleness check entirely and the proposal is
+  // allowed. Simply nulling the field for daily bars would therefore DISABLE the gate, not fix it.
+  const base = { class: "usEquity", sector: "Tech", price: 100, medianDollarVolume: 1e9 };
+  for (const absent of [undefined, null, NaN]) {
+    const r = gateOn({ AAA: { ...base, quoteAgeMs: absent } }, "AAA");
+    assert.deepEqual(r.allowed.map((a) => a.symbol), ["AAA"],
+      `quoteAgeMs ${String(absent)} currently skips the staleness check`);
+  }
+  // And the threshold itself still works when a real figure is present, so it is not the broken part.
+  assert.deepEqual(gateOn({ AAA: { ...base, quoteAgeMs: 14 * 60000 } }, "AAA").allowed.length, 1);
+  assert.equal(gateOn({ AAA: { ...base, quoteAgeMs: 16 * 60000 } }, "AAA").rejected[0].code, "stale_quote");
+});
+
+test("A3 PREFERRED: the two halves are complementary, not alternatives", () => {
+  // Option (i) alone -- a per-symbol session rule -- cannot see a stale PANEL, because
+  // sessionsSinceLastBar is measured against the panel's own newest session. Option (iv) alone -- a
+  // panel-level rule -- cannot see a dead symbol inside a fresh panel. The preferred proposal needs both.
+  const dates = sessionGrid("2026-10-01", 300);
+  const uniformlyStale = Object.fromEntries(["AAA", "BBB"].map((s) =>
+    [s, dates.map((t, i) => ({ time: t, close: 100 * 1.001 ** i, volume: 1e6 }))]));
+  // Read a week later: every symbol still has a bar at the panel's newest session, so all read 0.
+  const f = freshnessInformation({ series: uniformlyStale, dates, asOf: dates.length - 1,
+    now: Date.parse("2026-10-09T14:00:00Z") });
+  for (const s of f.symbols) {
+    assert.equal(s.sessionsSinceLastBar, 0, "a uniformly stale panel looks perfectly fresh per symbol");
+    assert.ok(s.barTimestampAgeMs > 7 * 24 * 3600 * 1000, "while the panel itself is over a week old");
+  }
+  // The panel-level half is what catches it, and it is a session-coverage question.
+  const rec = reconcileSessions({ observed: dates.filter((t) => t >= e("2026-01-01")) });
+  assert.equal(rec.supported, true);
+  assert.equal(rec.missingExpected.length, 0, "the panel is internally complete up to its last bar");
+  // The expected session AFTER the panel's end is what is missing, which is a different query.
+  const through = reconcileSessions({ observed: dates.filter((t) => t >= e("2026-01-01")),
+    from: e("2026-01-02"), to: e("2026-10-08") });
+  assert.ok(through.missingExpected.length >= 4,
+    "extending the window to the run date exposes the uncovered sessions");
+});
+
+// =================================================================================================
+// Rehearsal safety
+// =================================================================================================
+
+test("REHEARSAL SAFETY: no SDK, no key, no broker, no CLI in the import graph", async () => {
+  const fs2 = await import("node:fs");
+  const path2 = await import("node:path");
+  const root = path2.dirname(new URL(import.meta.url).pathname);
+  const seen = new Set();
+  const walk = (file) => {
+    if (seen.has(file) || !fs2.existsSync(file)) return;
+    seen.add(file);
+    const src = fs2.readFileSync(file, "utf8");
+    for (const m of src.matchAll(/^\s*import\s[^"']*["'](\.[^"']+)["']/gm)) {
+      walk(path2.resolve(path2.dirname(file), m[1]));
+    }
+    for (const m of src.matchAll(/\bimport\(\s*["'](\.[^"']+)["']/g)) {
+      walk(path2.resolve(path2.dirname(file), m[1]));
+    }
+  };
+  walk(path2.join(root, "rehearsal.mjs"));
+  const names = [...seen].map((f) => path2.basename(f));
+  assert.ok(names.includes("rehearsal.mjs"));
+  for (const forbidden of ["analyst-run.mjs", "trader.mjs", "ibkr-bars.mjs", "ibkr-collect.mjs", "ibkr-panel.mjs"]) {
+    assert.ok(!names.includes(forbidden), `must not reach ${forbidden}; graph: ${names.join(", ")}`);
+  }
+  const SDK = /(?:from\s*|import\s*\(\s*|require\s*\(\s*)["'`]@anthropic-ai\//;
+  for (const f of seen) {
+    const src = fs2.readFileSync(f, "utf8");
+    assert.ok(!SDK.test(src), `${path2.basename(f)} must not import the model SDK`);
+    assert.ok(!/new\s+Anthropic\s*\(/.test(src), `${path2.basename(f)} must not construct a client`);
+    assert.ok(!/ANTHROPIC_API_KEY/.test(src), `${path2.basename(f)} must not read the key`);
+  }
+  // And the lock is a CLI concern, so it must not be in the rehearsal's graph either.
+  assert.ok(!names.includes("lock.mjs"), "the journal lock belongs to the CLI, not to this rehearsal");
+});
+
+test("REHEARSAL SAFETY: it writes only to a temp path and leaves the real journal alone", async () => {
+  const fs2 = await import("node:fs");
+  const crypto2 = await import("node:crypto");
+  const { DEFAULT_JOURNAL } = await import("./analyst/journal.mjs");
+  const fp = () => (fs2.existsSync(DEFAULT_JOURNAL)
+    ? crypto2.createHash("sha256").update(fs2.readFileSync(DEFAULT_JOURNAL)).digest("hex") : "ABSENT");
+  const before = fp();
+  const { execFileSync } = await import("node:child_process");
+  const out = execFileSync(process.execPath, ["rehearsal.mjs"], { cwd: process.cwd(), encoding: "utf8" });
+  assert.equal(fp(), before, "the real journal must be byte-identical after the rehearsal");
+  assert.match(out, /unchanged: true/, "and the rehearsal must say so itself");
+  assert.match(out, /no CLI launched, no model client constructed/);
+  assert.match(out, /NOTHING WAS FIXED/);
+  // The cascade the rehearsal exists to show: the gate rejects, so the book is empty downstream.
+  assert.match(out, /allowed 0\/2; rejected: stale_quote/);
+  assert.ok(!/analyst-journal\.jsonl.*fingerprint after: (?!ABSENT)/.test(out) || before !== "ABSENT");
 });
