@@ -259,16 +259,73 @@ test("a dry run judges quote age against the simulated decision, not the wall cl
   assert.equal(r.gate.allowed.length, 1, "a dry run must be able to exercise the whole path");
 });
 
-test("paper mode still catches a genuinely stale feed", async () => {
-  const now = Date.now();
-  const { series, dates } = panel(SYMS, 400, now, 0);
-  // The panel is current, but the feed's last bar is a day old against wall-clock `now`.
-  const r = await runOnce({
-    series, dates, client: clientProposing([buy("AAA")]), mode: MODE.PAPER,
-    now: now + 24 * 3600 * 1000, nav: 1e5, journalFile: tmp(),
+test("a genuinely stale feed is still caught — by the PANEL guard, not the quote-age check", async () => {
+  // THIS TEST CHANGED WITH A3, AND THE REASON MATTERS. It used to build a panel ending at `now`,
+  // run with `now + 24h`, and assert `stale_quote` -- which passed because quoteAgeMs was
+  // `referenceMs - asOfTime*1000`, i.e. the PANEL's age judged against a 15-minute quote limit.
+  // That is the conflation A3 removed: on a real midnight-stamped panel the same arithmetic made
+  // every fresh symbol stale too, so a paper run could only journal an empty book.
+  //
+  // Panel staleness is `missedSessions`' job, in the paper guard, which is where it belongs. The
+  // fixture here is a weekday grid, as a real panel is -- the shared `panel()` helper uses every
+  // calendar day, which lets missedSessions read 0 while the wall clock says a day has passed, and
+  // that is the only reason the old assertion had anything to catch.
+  const DAYS = 86400_000;
+  const weekdayGrid = (endMs, n) => {
+    const out = [];
+    for (let t = Math.floor(endMs / DAYS) * DAYS; out.length < n; t -= DAYS) {
+      const w = new Date(t).getUTCDay();
+      if (w !== 0 && w !== 6) out.unshift(Math.floor(t / 1000));
+    }
+    return out;
+  };
+  // Last bar Thursday; the run is the following Monday, so Friday's session was missed.
+  const dates = weekdayGrid(Date.parse("2026-10-01T00:00:00Z"), 400);
+  const series = {};
+  for (const [k, sym] of SYMS.entries()) {
+    series[sym] = dates.map((t, i) => {
+      const px = 100 * (1 + (k + 1) * 0.0004) ** i;
+      return { time: t, open: px, high: px * 1.01, low: px * 0.99, close: px, volume: 2e6 };
+    });
+  }
+  const j = tmp();
+  await assert.rejects(
+    () => runOnce({ series, dates, client: clientProposing([buy("AAA")]), mode: MODE.PAPER,
+      now: Date.parse("2026-10-05T14:00:00Z"), nav: 1e5, journalFile: j }),
+    /completed session\(s\) behind/,
+    "the paper guard refuses before a decision exists",
+  );
+  const { records } = readJournal(j);
+  assert.equal(records.length, 1, "and the refusal is journalled");
+  assert.equal(records[0].kind, KIND.SKIP);
+  assert.equal(records[0].reason, SKIP_REASON.PANEL_STALE);
+});
+
+test("A3: a fresh symbol is ALLOWED, and one with no bar in the decision session is rejected", async () => {
+  // The defect A3 fixed, as a regression guard. Same weekday-grid fixture, run on the next trading
+  // morning so the paper guard passes, with one symbol whose history stops 19 sessions early.
+  const DAYS = 86400_000;
+  const dates = [];
+  for (let t = Date.parse("2026-10-01T00:00:00Z"); dates.length < 400; t -= DAYS) {
+    const w = new Date(t).getUTCDay();
+    if (w !== 0 && w !== 6) dates.unshift(Math.floor(t / 1000));
+  }
+  const bars = (ts, start) => ts.map((t, i) => {
+    const px = start * 1.0005 ** i;
+    return { time: t, open: px, high: px * 1.01, low: px * 0.99, close: px, volume: 2e6 };
   });
-  assert.equal(r.gate.allowed.length, 0);
+  const series = { AAA: bars(dates, 100), BBB: bars(dates.slice(0, -19), 60) };
+  const r = await runOnce({
+    series, dates, client: clientProposing([buy("AAA"), buy("BBB")]), mode: MODE.PAPER,
+    now: Date.parse("2026-10-02T13:45:00Z"), nav: 1e5, journalFile: tmp(),
+  });
+  assert.equal(r.skipped, null, "the paper guard passes: nothing is behind");
+  assert.deepEqual(r.gate.allowed.map((a) => a.symbol), ["AAA"],
+    "the fresh symbol is allowed — this is what used to be rejected");
+  assert.equal(r.gate.rejected.length, 1);
+  assert.equal(r.gate.rejected[0].proposal.symbol, "BBB");
   assert.equal(r.gate.rejected[0].code, "stale_quote");
+  assert.match(r.gate.rejected[0].detail, /no bar in the decision session/);
 });
 
 test("the gate is priced from the decision bar, never the panel's last bar", async () => {

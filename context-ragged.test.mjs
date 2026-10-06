@@ -152,30 +152,44 @@ test("DEFECT: a symbol whose own bars are out of order gets a FABRICATED flat hi
   assert.ok(ok.candidates.find((c) => c.symbol === "AAA").indicators.momentum > 0.1);
 });
 
-test("DEFECT: a symbol dead for 200 sessions is a ranked candidate and PASSES the risk gate", () => {
-  // Point-in-time holds here — every bar used predates the decision. FRESHNESS does not, and they
-  // are different properties. `instrumentsFromContext` derives quoteAgeMs from the DECISION BAR, so
-  // the 15-minute staleness limit cannot see per-symbol staleness at all.
+test("FIXED BY A3: a symbol dead for 200 sessions is still a candidate, but the gate REJECTS it", () => {
+  // Point-in-time holds here — every bar used predates the decision. FRESHNESS is a different
+  // property, and before A3 nothing computed it: `instrumentsFromContext` derived quoteAgeMs from
+  // the DECISION BAR, identically for every symbol, so the 15-minute limit could not see per-symbol
+  // staleness and this name was ALLOWED at a price 200 sessions old.
   const series = { ALIVE: ramp(DATES), DEAD: ramp(DATES.slice(0, 100), 20, 0.001) };
   const ctx = buildContext({ series, dates: DATES, asOf: ASOF, sectors: { ALIVE: "Tech", DEAD: "Tech" } });
-  const dead = ctx.candidates.find((c) => c.symbol === "DEAD");
-  assert.ok(dead, "the dead name is shown to the analyst");
-  assert.ok(Number.isFinite(dead.indicators.momentum), "with a non-null momentum");
-  assert.equal(dead.ret5d, 0, "and a flat recent path, because it is forward-filled");
 
+  // THE CONTEXT HALF IS UNCHANGED, DELIBERATELY. A3 was a gate fix; whether a stale name should
+  // reach the slate at all is a separate, unapproved eligibility question.
+  const dead = ctx.candidates.find((c) => c.symbol === "DEAD");
+  assert.ok(dead, "the dead name is still shown to the analyst");
+  assert.ok(Number.isFinite(dead.indicators.momentum), "still with a non-null momentum");
+  assert.equal(dead.ret5d, 0, "and a flat recent path, because it is forward-filled");
+  assert.deepEqual(contextIsPointInTime(ctx, ASOF_TIME), [], "criterion 2 still reports nothing");
+
+  // The instrument record now separates the two quantities instead of conflating them.
   const inst = instrumentsFromContext(ctx, series, ASOF_TIME, ASOF_TIME * 1000);
-  assert.equal(inst.DEAD.quoteAgeMs, inst.ALIVE.quoteAgeMs,
-    "identical quote age for a live name and one 200 sessions stale");
-  assert.equal(inst.DEAD.quoteAgeMs, 0);
+  assert.equal(inst.DEAD.quoteAgeMs, null, "a daily panel carries no intraday observation");
+  assert.equal(inst.ALIVE.quoteAgeMs, null);
+  assert.equal(inst.ALIVE.sessionBar, inst.ALIVE.decisionSession, "the live name traded that session");
+  assert.notEqual(inst.DEAD.sessionBar, inst.DEAD.decisionSession, "the dead one did not");
+  assert.equal(inst.DEAD.sessionBar, DATES[99], "its newest bar is 200 sessions back");
   const lastRealClose = series.DEAD.at(-1).close;
   assert.ok(Math.abs(inst.DEAD.price - lastRealClose) < 1e-9,
-    "the gate would size from the close 200 sessions ago");
+    "the price is still its last real close — the gate's job is to refuse it, not to repair it");
 
-  const r = applyRiskGate([{ symbol: "DEAD", action: "buy", targetPct: 0.05, thesis: THESIS }],
+  const gate = (symbol) => applyRiskGate([{ symbol, action: "buy", targetPct: 0.05, thesis: THESIS }],
     { nav: 100000, peakNav: 100000, dayStartNav: 100000, positions: {}, shortingPermitted: false }, inst);
-  assert.deepEqual(r.allowed.map((a) => a.symbol), ["DEAD"], "and it is ALLOWED");
-  assert.deepEqual(r.rejected, []);
-  assert.deepEqual(contextIsPointInTime(ctx, ASOF_TIME), [], "criterion 2 reports nothing");
+
+  const dr = gate("DEAD");
+  assert.deepEqual(dr.allowed, [], "it is now REJECTED");
+  assert.equal(dr.rejected[0].code, "stale_quote");
+  assert.match(dr.rejected[0].detail, /no bar in the decision session/);
+
+  // And the fix is not a blanket refusal: the live name passes, which is the half that was broken.
+  assert.deepEqual(gate("ALIVE").allowed.map((a) => a.symbol), ["ALIVE"]);
+  assert.deepEqual(gate("ALIVE").rejected, []);
 });
 
 // ---- correctly handled: these are refusals, not defects -------------------------------------------

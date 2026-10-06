@@ -69,6 +69,7 @@ const stubDecider = (decisions) => ({
     }),
   },
 });
+const sessionISO = (secs) => (Number.isFinite(secs) ? new Date(secs * 1000).toISOString().slice(0, 10) : String(secs));
 const buy = (symbol) => ({ symbol, action: "buy", targetPct: 0.05, confidence: 0.7, thesis: THESIS });
 
 /**
@@ -162,11 +163,12 @@ async function main() {
   const proposals = shown.slice(0, 2).map(buy);
   const gated = applyRiskGate(proposals,
     { nav: 1e5, peakNav: 1e5, dayStartNav: 1e5, positions: {}, shortingPermitted: false }, inst);
-  const anyQa = inst[shown[0]]?.quoteAgeMs;
+  const first = inst[shown[0]];
   line("quote age on a daily panel",
-    `${(anyQa / 3600000).toFixed(1)}h for EVERY symbol, against a ${DEFAULT_LIMITS.maxQuoteAgeMs / 60000}min limit`,
+    `quoteAgeMs=${first?.quoteAgeMs} for every symbol (the ${DEFAULT_LIMITS.maxQuoteAgeMs / 60000}min limit is `
+    + `not consulted); sessionBar=${sessionISO(first?.sessionBar)} vs decision ${sessionISO(first?.decisionSession)}`,
     "the 15-minute limit applies to an actual quote observation, which a daily panel does not carry",
-    anyQa <= DEFAULT_LIMITS.maxQuoteAgeMs);
+    first?.quoteAgeMs === null);
   line("gate outcome for FRESH symbols",
     `allowed ${gated.allowed.length}/${proposals.length}; rejected: `
     + (gated.rejected.map((r) => r.code).join(",") || "none"),

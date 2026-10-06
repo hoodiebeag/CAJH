@@ -66,13 +66,44 @@ available inside grounded calendar coverage — so it depends on the calendar.
 | **Acceptance** | The holiday fixture no longer refuses; a genuine mid-week outage still refuses (`loop.test.mjs:383` must still pass); a 2029 date returns UNSUPPORTED and the guard's behaviour is unchanged there. |
 | **Depends on** | The grounded calendar (**done**, §10.1: 2026–2028, cited, weekday-verified). |
 
-### A3 — The paper-mode quote-age check rejects every symbol, fresh ones included · `GATE`
+### A3 — The paper-mode quote-age check rejects every symbol, fresh ones included · `GATE` · **IMPLEMENTED (per-symbol half), panel half DEFERRED**
 
 **This item's first draft was wrong and is corrected here.** It proposed feeding the symbol's own
 daily bar timestamp into the 15-minute `maxQuoteAgeMs` limit. **A daily bar is a session record
 stamped at 00:00:00Z, not an observation of an executable quote**, so that figure is always at least a
 day old and the substitution would reject every fresh symbol. Investigating that turned up a larger
 defect than the one originally filed.
+
+**IMPLEMENTATION RECORD — approved and landed.** Approval covered this item and **P4**. What shipped is
+**half (a)**, the per-symbol daily-session requirement, plus the fail-closed guard:
+
+- `analyst/loop.mjs` — `instrumentsFromContext` no longer derives a quote age from the decision bar. It
+  reports four separated quantities: `quoteAgeMs: null` (a daily panel carries no intraday observation),
+  `sessionBar` (the symbol's newest bar at or before the decision), `decisionSession`, and `panelAgeMs`
+  (the old figure, informational only, consulted by nothing).
+- `analyst/risk.mjs` — the staleness check became three branches. A **finite** `quoteAgeMs` is still
+  judged against `maxQuoteAgeMs`, **unchanged at 15 minutes**. An **absent** one requires a usable
+  session pair, and rejects `stale_quote` with `"no quote age and no session bar: freshness is
+  unverifiable"` when it has none — this is the fail-open hazard closed. With a usable pair,
+  `sessionBar !== decisionSession` rejects `stale_quote` with the newest bar's date and the calendar-day
+  distance.
+- `REJECT.STALE_QUOTE` was **reused rather than extended**, so `KNOWN_REJECT_CODES` and criterion 5's
+  accounting are unchanged.
+
+**Half (b), the panel-level session-coverage requirement, was NOT implemented, deliberately.** It is the
+same code change as **A2**, which is not approved, so implementing it here would have landed an
+unapproved item under A3's approval. The existing `missedSessions` weekday guard already refuses a stale
+panel conservatively — it **over**-refuses on a published closure, which is A2's defect and the safe
+direction — so deferring (b) leaves the panel covered, not uncovered. A3 is therefore closed for the
+per-symbol defect and **still open for (b)**, which should land with A2 or not at all.
+
+**Tests.** `analyst/loop.test.mjs` (43/43) gained "a genuinely stale feed is still caught — by the PANEL
+guard, not the quote-age check" and "a fresh symbol is ALLOWED, and one with no bar in the decision
+session is rejected". The six contract tests in `acceptance-contracts.test.mjs` that recorded the defect
+were converted to assert the fix while keeping their fixtures and arithmetic, and
+`context-ragged.test.mjs`'s "a symbol dead for 200 sessions ... PASSES the risk gate" became
+"FIXED BY A3 ... the gate REJECTS it", with its **context-side** assertions preserved unchanged, because
+whether a stale name reaches the slate at all is **B3** and unapproved. Suite: **773/773**.
 
 | | |
 |---|---|
@@ -319,7 +350,9 @@ called by nothing in the runtime.
 
 **Still unmeasured.** 2029+ and every non-NYSE venue remain UNKNOWN. Exceptional closures are outside
 the source, so a weekday absent from both panel and schedule stays UNKNOWN. A3's dead-symbol frequency
-on real IBKR data is unknown until the live panel exists. Nothing in this plan has been implemented.
+on real IBKR data is unknown until the live panel exists. **A3's per-symbol half is the only item in
+this plan that has been implemented** (approved; see its implementation record). Its panel-level half is
+deferred to A2, and everything else here remains unapproved and unimplemented.
 
 ---
 
