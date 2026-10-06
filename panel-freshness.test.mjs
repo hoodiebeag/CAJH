@@ -10,8 +10,10 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {
-  NYSE_2026, expectedSessions, reconcileSessions, validateTimestamps, symbolFreshness,
+  NYSE_2026, NYSE_2026_2028, calendarYears, expectedSessions, reconcileSessions,
+  validateTimestamps, symbolFreshness,
 } from "./panel-freshness.mjs";
 
 const DAY = 86400;
@@ -49,14 +51,16 @@ test("the calendar reference carries its provenance and its limits", () => {
   }
 });
 
-test("expectedSessions REFUSES outside the grounded year instead of guessing", () => {
+test("expectedSessions REFUSES outside the grounded years instead of guessing", () => {
   const out = expectedSessions({ from: e("2025-01-01"), to: e("2025-12-31") });
   assert.equal(out.supported, false);
   assert.equal(out.sessions, null);
-  assert.match(out.reason, /coverage is 2026 only/);
-  // A window straddling the boundary is also refused, rather than partially answered.
+  assert.match(out.reason, /coverage is 2026-2028/);
+  // A window straddling the lower boundary is refused rather than partially answered.
   assert.equal(expectedSessions({ from: e("2025-12-30"), to: e("2026-01-05") }).supported, false);
-  assert.equal(expectedSessions({ from: e("2026-12-28"), to: e("2027-01-04") }).supported, false);
+  // And the upper one. 2029 is not grounded, so a window reaching into it refuses whole.
+  assert.equal(expectedSessions({ from: e("2028-12-28"), to: e("2029-01-04") }).supported, false);
+  assert.equal(expectedSessions({ from: e("2029-01-02"), to: e("2029-01-05") }).supported, false);
   assert.throws(() => expectedSessions({ from: e("2026-02-01"), to: e("2026-01-01") }), /from <= to/);
 });
 
@@ -109,13 +113,13 @@ test("a bar on a published closure is reported as the panel disagreeing with the
   assert.equal(r.publishedClosuresInWindow, 1);
 });
 
-test("outside the grounded year the comparison refuses and counts no-bar weekdays as UNKNOWN", () => {
+test("outside the grounded years the comparison refuses and counts no-bar weekdays as UNKNOWN", () => {
   // 2025: no calendar. A weekday with no bar cannot be called a holiday OR an outage.
   const ts = weekdays("2025-03-03", 10);
   const observed = ts.filter((_, i) => i !== 4);
   const r = reconcileSessions({ observed });
   assert.equal(r.supported, false);
-  assert.match(r.reason, /coverage is 2026 only/);
+  assert.match(r.reason, /coverage is 2026-2028/);
   assert.equal(r.observed, 9);
   assert.deepEqual(r.unknownNoBar, [iso(ts[4])], "counted and listed, not resolved either way");
   assert.equal(r.expected, undefined, "and no expected count is invented");
@@ -288,4 +292,138 @@ test("symbolFreshness refuses a decision index it cannot interpret", () => {
   assert.throws(() => symbolFreshness({ series: {}, dates: [], asOf: 0 }), /dates required/);
   assert.throws(() => symbolFreshness({ series: {}, dates: grid, asOf: 99 }), /outside the grid/);
   assert.throws(() => symbolFreshness({ series: {}, dates: grid, asOf: -1 }), /outside the grid/);
+});
+
+// ---- the 2026-2028 grounding, and the year boundaries ------------------------------------------
+
+test("every supplied closure and early close is a WEEKDAY, verified computationally", () => {
+  // A weekend entry would not be a session closure at all, so this is the first check the transcribed
+  // facts have to pass. Computed from the dates, never recalled.
+  for (const [year, y] of Object.entries(NYSE_2026_2028.years)) {
+    for (const d of y.closed) {
+      assert.ok(d.startsWith(`${year}-`), `${d} is filed under ${year}`);
+      const w = new Date(e(d) * 1000).getUTCDay();
+      assert.ok(w !== 0 && w !== 6, `${d} must be a weekday to be a closure of a session`);
+    }
+    for (const { date, closes } of y.earlyClose) {
+      assert.ok(date.startsWith(`${year}-`));
+      const w = new Date(e(date) * 1000).getUTCDay();
+      assert.ok(w !== 0 && w !== 6, `${date} must be a weekday`);
+      assert.match(closes, /^13:00 America\/New_York$/);
+      assert.ok(!y.closed.includes(date), `${date} is a short session, not a closed day`);
+    }
+  }
+  assert.deepEqual(calendarYears(), [2026, 2027, 2028]);
+  assert.equal(NYSE_2026_2028.coverage, "2026-2028");
+  assert.equal(NYSE_2026_2028.retrieved, "2026-10-06");
+  assert.match(NYSE_2026_2028.basis, /exceptional exchange notices are NOT included/);
+});
+
+test("2028's missing New Year's holiday matches the page's own footnote, computed", () => {
+  // The footnote says no New Year's Day holiday is observed because 2028-01-01 falls on a Saturday.
+  // That is a checkable claim, and it explains the closure count differing from the other years.
+  assert.equal(new Date(e("2028-01-01") * 1000).getUTCDay(), 6, "2028-01-01 is a Saturday");
+  assert.ok(!NYSE_2026_2028.years[2028].closed.some((d) => d.endsWith("-01-01")));
+  assert.match(NYSE_2026_2028.years[2028].note, /Saturday/);
+  assert.equal(NYSE_2026_2028.years[2028].closed.length, 9);
+  assert.equal(NYSE_2026_2028.years[2026].closed.length, 10);
+  assert.equal(NYSE_2026_2028.years[2027].closed.length, 10);
+  // 2026 and 2027 DO carry a New Year's closure, and both fall on a weekday.
+  for (const y of [2026, 2027]) {
+    const d = `${y}-01-01`;
+    assert.ok(NYSE_2026_2028.years[y].closed.includes(d));
+    const w = new Date(e(d) * 1000).getUTCDay();
+    assert.ok(w !== 0 && w !== 6);
+  }
+});
+
+test("each grounded year resolves to a session count its own weekdays explain", () => {
+  // Not a recalled figure: the weekday total is counted here and the closures subtracted.
+  for (const y of calendarYears()) {
+    const from = e(`${y}-01-01`), to = e(`${y}-12-31`);
+    let weekdays = 0;
+    for (let t = from; t <= to; t += DAY) {
+      const w = new Date(t * 1000).getUTCDay();
+      if (w !== 0 && w !== 6) weekdays++;
+    }
+    const r = expectedSessions({ from, to });
+    assert.equal(r.supported, true);
+    assert.equal(r.closedInWindow.length, NYSE_2026_2028.years[y].closed.length);
+    assert.equal(r.sessions.length, weekdays - NYSE_2026_2028.years[y].closed.length,
+      `${y}: ${weekdays} weekdays minus ${NYSE_2026_2028.years[y].closed.length} closures`);
+    // The early closes are inside the session set, not outside it.
+    for (const { date } of NYSE_2026_2028.years[y].earlyClose) {
+      assert.ok(r.sessions.map(iso).includes(date), `${date} is a shorter session and must be expected`);
+    }
+  }
+});
+
+test("a window CROSSING a year boundary inside coverage is answered, not refused", () => {
+  // The case §10.6 named: a forward run spanning New Year must not go UNSUPPORTED.
+  const r = expectedSessions({ from: e("2026-12-28"), to: e("2027-01-08") });
+  assert.equal(r.supported, true);
+  const got = r.sessions.map(iso);
+  // Hand-checkable: 2026-12-25 (Fri) and 2027-01-01 (Fri) are closures; 2026-12-24 is an early close
+  // and therefore still a session.
+  assert.ok(!got.includes("2027-01-01"), "the 2027 closure is removed inside a window that began in 2026");
+  assert.ok(got.includes("2026-12-31"), "and the sessions either side are kept");
+  assert.ok(got.includes("2027-01-04"));
+  assert.ok(!got.includes("2027-01-02"), "a Saturday is not a session");
+  assert.ok(!got.includes("2027-01-03"), "nor a Sunday");
+
+  // The 2027/2028 boundary too, where 2028 has no New Year's closure at all.
+  const r2 = expectedSessions({ from: e("2027-12-27"), to: e("2028-01-07") });
+  assert.equal(r2.supported, true);
+  const got2 = r2.sessions.map(iso);
+  assert.ok(!got2.includes("2027-12-24"), "outside the window");
+  assert.ok(got2.includes("2028-01-03"), "2028-01-03 is a Monday session");
+  assert.ok(!got2.includes("2028-01-01"), "a Saturday, so no closure is needed to exclude it");
+  assert.ok(got2.includes("2027-12-31"), "2027-12-31 is a Friday session");
+});
+
+test("reconciliation works across a year boundary and still reports a missing session", () => {
+  const all = expectedSessions({ from: e("2026-12-14"), to: e("2027-01-15") }).sessions;
+  const dropped = all.find((t) => iso(t).startsWith("2027-"));
+  const observed = all.filter((t) => t !== dropped);
+  const r = reconcileSessions({ observed, from: e("2026-12-14"), to: e("2027-01-15") });
+  assert.equal(r.supported, true, "both years are grounded, so the comparison is available");
+  assert.equal(r.expected, all.length, "the expected count spans the boundary without shrinking");
+  assert.deepEqual(r.missingExpected, [iso(dropped)]);
+  assert.equal(r.calendar.coverage, "2026-2028");
+});
+
+test("a DST transition does not move a session's date under the panel's UTC-midnight convention", () => {
+  // US DST in 2027 begins Sunday 2027-03-14 and ends Sunday 2027-11-07 -- both Sundays, hence never
+  // sessions. Computed here rather than asserted: find the Sundays and show the sessions either side
+  // are consecutive, with no date shifted or duplicated.
+  const march = expectedSessions({ from: e("2027-03-08"), to: e("2027-03-19") }).sessions.map(iso);
+  assert.deepEqual(march, ["2027-03-08", "2027-03-09", "2027-03-10", "2027-03-11", "2027-03-12",
+    "2027-03-15", "2027-03-16", "2027-03-17", "2027-03-18", "2027-03-19"],
+    "ten consecutive weekday sessions across the spring transition, no gap and no repeat");
+  const nov = expectedSessions({ from: e("2027-11-01"), to: e("2027-11-12") }).sessions.map(iso);
+  assert.deepEqual(nov, ["2027-11-01", "2027-11-02", "2027-11-03", "2027-11-04", "2027-11-05",
+    "2027-11-08", "2027-11-09", "2027-11-10", "2027-11-11", "2027-11-12"],
+    "and ten across the autumn transition");
+  // Every session timestamp is still at UTC midnight, so no date became ambiguous.
+  for (const t of expectedSessions({ from: e("2027-03-08"), to: e("2027-11-12") }).sessions) {
+    assert.equal(t % DAY, 0);
+  }
+  // THE PITFALL REMAINS A TIMESTAMP ONE, NOT A CALENDAR ONE: an intraday stamp inside the DST window
+  // can still land on the previous Eastern day, which validateTimestamps flags (see the test above).
+  const duringEdt = e("2027-07-01") + 2 * 3600;                       // 2027-07-01T02:00:00Z
+  assert.equal(new Date(duringEdt * 1000).toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
+    "2027-06-30", "02:00Z in summer is the previous day in Eastern time");
+  assert.equal(validateTimestamps([duringEdt]).notUtcMidnight.length, 1);
+});
+
+test("the early-close times are recorded and unused — no intraday feature is added", () => {
+  // Scope guard: the times exist so a later intraday diagnostic does not read a short session as a
+  // missing one. Nothing in this module consumes them, and that is asserted rather than assumed.
+  const src = fs.readFileSync(new URL("./panel-freshness.mjs", import.meta.url), "utf8");
+  const body = src.slice(src.indexOf("export function expectedSessions"));
+  assert.ok(!body.includes("earlyClose"), "no function in this module branches on an early close");
+  assert.ok(!/13:00/.test(body), "and no close time is used in any computation");
+  // They are still reachable as published facts.
+  assert.equal(NYSE_2026_2028.years[2027].earlyClose[0].date, "2027-11-26");
+  assert.equal(NYSE_2026_2028.years[2028].earlyClose.length, 2);
 });

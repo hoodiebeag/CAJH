@@ -25,44 +25,104 @@
  */
 
 /**
- * NYSE scheduled closures and early closes for 2026.
+ * NYSE published scheduled closures and early closes, 2026-2028.
  *
  * SOURCE: the primary NYSE "Holidays & Trading Hours" page, https://www.nyse.com/markets/hours-calendars
  * RETRIEVED: 2026-10-06, by independent research outside this session (this session's own egress policy
- * blocks nyse.com; see §9.6). COVERAGE: 2026 ONLY. The page's text also covers 2027 and 2028, but those
- * years were not transcribed here and are therefore UNKNOWN to this module rather than extrapolated.
+ * blocks nyse.com; see docs §9.6). COVERAGE: 2026, 2027 and 2028 — the three years the page's text
+ * covers. 2029 and later are UNKNOWN to this module rather than extrapolated, and so is every other
+ * venue.
  *
  * WHAT THIS IS AND IS NOT. These are the exchange's PUBLISHED SCHEDULED sessions. They are not a record
  * of what actually happened: an exceptional closure — weather, a national day of mourning, a systems
- * outage — arrives as a separate exchange notice and is NOT represented here. So a weekday absent from a
- * panel and absent from this list is still UNKNOWN: it may be an unpublished exceptional closure or a
+ * outage — arrives as a separate exchange notice and is NOT represented here. So a weekday absent from
+ * a panel and absent from this list is still UNKNOWN: it may be an unpublished exceptional closure or a
  * gap in the data. This module reports that case; it does not resolve it.
  *
- * An early close is a SHORTER SESSION, not a closure: a bar exists for it. Recorded so that a future
- * intraday diagnostic does not read a short session as a missing one.
+ * AN EARLY CLOSE IS A SHORTER SESSION, NOT A CLOSURE: a bar exists for it, and `expectedSessions`
+ * includes it. The times are recorded so that a future intraday diagnostic does not read a short
+ * session as a missing one. Nothing in this module uses them, and no intraday feature is added here.
+ *
+ * EVERY DATE BELOW IS VERIFIED COMPUTATIONALLY in panel-freshness.test.mjs: each is a weekday (a
+ * weekend entry would not be a session closure at all), and 2028's missing New Year's holiday is
+ * checked against the page's own footnote — 2028-01-01 falls on a Saturday, which is why that year
+ * carries nine closures where 2027 carries ten.
  */
-export const NYSE_2026 = Object.freeze({
+export const NYSE_2026_2028 = Object.freeze({
   source: "https://www.nyse.com/markets/hours-calendars",
   retrieved: "2026-10-06",
-  coverage: "2026 only",
+  coverage: "2026-2028",
   basis: "published scheduled sessions; exceptional exchange notices are NOT included",
   regularSession: "09:30-16:00 America/New_York",
-  closed: Object.freeze([
-    "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25",
-    "2026-06-19", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25",
-  ]),
-  earlyClose: Object.freeze([
-    { date: "2026-11-27", closes: "13:00 America/New_York" },
-    { date: "2026-12-24", closes: "13:00 America/New_York" },
-  ]),
+  years: Object.freeze({
+    2026: Object.freeze({
+      closed: Object.freeze([
+        "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25",
+        "2026-06-19", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25",
+      ]),
+      earlyClose: Object.freeze([
+        { date: "2026-11-27", closes: "13:00 America/New_York" },
+        { date: "2026-12-24", closes: "13:00 America/New_York" },
+      ]),
+      note: null,
+    }),
+    2027: Object.freeze({
+      closed: Object.freeze([
+        "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26", "2027-05-31",
+        "2027-06-18", "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24",
+      ]),
+      earlyClose: Object.freeze([
+        { date: "2027-11-26", closes: "13:00 America/New_York" },
+      ]),
+      note: null,
+    }),
+    2028: Object.freeze({
+      closed: Object.freeze([
+        "2028-01-17", "2028-02-21", "2028-04-14", "2028-05-29", "2028-06-19",
+        "2028-07-04", "2028-09-04", "2028-11-23", "2028-12-25",
+      ]),
+      earlyClose: Object.freeze([
+        { date: "2028-07-03", closes: "13:00 America/New_York" },
+        { date: "2028-11-24", closes: "13:00 America/New_York" },
+      ]),
+      // The page's own footnote, kept verbatim in substance because it explains the count.
+      note: "no New Year's Day holiday observed: 2028-01-01 falls on a Saturday",
+    }),
+  }),
+});
+
+/** Every closure across the grounded years, flattened. */
+const allClosed = (cal) => Object.values(cal.years).flatMap((y) => y.closed);
+/** Every early close across the grounded years, flattened. */
+const allEarlyClose = (cal) => Object.values(cal.years).flatMap((y) => y.earlyClose);
+/** The grounded years, as numbers, ascending. */
+export const calendarYears = (cal = NYSE_2026_2028) => Object.keys(cal.years).map(Number).sort();
+
+/**
+ * The 2026 slice, kept as a named export because the first version of this module shipped only 2026.
+ * Derived rather than duplicated, so the two can never disagree.
+ */
+export const NYSE_2026 = Object.freeze({
+  source: NYSE_2026_2028.source,
+  retrieved: NYSE_2026_2028.retrieved,
+  coverage: "2026 only",
+  basis: NYSE_2026_2028.basis,
+  regularSession: NYSE_2026_2028.regularSession,
+  closed: NYSE_2026_2028.years[2026].closed,
+  earlyClose: NYSE_2026_2028.years[2026].earlyClose,
 });
 
 const DAY = 86400;
 const dayStart = (secs) => Math.floor(secs / DAY) * DAY;
 const iso = (secs) => new Date(secs * 1000).toISOString().slice(0, 10);
 const epoch = (isoDate) => Date.parse(`${isoDate}T00:00:00Z`) / 1000;
-const COVERED_FROM = epoch("2026-01-01");
-const COVERED_TO = epoch("2026-12-31");
+/** The grounded window, derived from the calendar's own years rather than written twice. */
+const coveredWindow = (cal = NYSE_2026_2028) => {
+  const ys = calendarYears(cal);
+  return { from: epoch(`${ys[0]}-01-01`), to: epoch(`${ys.at(-1)}-12-31`) };
+};
+const COVERED_FROM = coveredWindow().from;
+const COVERED_TO = coveredWindow().to;
 
 /**
  * The sessions the exchange published for a window, or an explicit refusal outside coverage.
@@ -70,19 +130,21 @@ const COVERED_TO = epoch("2026-12-31");
  * REFUSES RATHER THAN GUESSING. Outside 2026 this returns `{ supported: false }` with the reason, so a
  * caller cannot accidentally treat a weekday count as an expected-session count.
  */
-export function expectedSessions({ from, to, calendar = NYSE_2026 } = {}) {
+export function expectedSessions({ from, to, calendar = NYSE_2026_2028 } = {}) {
   if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) {
     throw new Error("panel-freshness: expectedSessions needs a finite from <= to (epoch seconds)");
   }
-  if (from < COVERED_FROM || to > COVERED_TO) {
+  const win = calendar.years ? coveredWindow(calendar)
+    : { from: epoch(`${calendar.closed[0].slice(0, 4)}-01-01`), to: epoch(`${calendar.closed[0].slice(0, 4)}-12-31`) };
+  if (from < win.from || to > win.to) {
     return {
       supported: false,
-      reason: `calendar coverage is ${calendar.coverage} (${iso(COVERED_FROM)}..${iso(COVERED_TO)}); `
+      reason: `calendar coverage is ${calendar.coverage} (${iso(win.from)}..${iso(win.to)}); `
             + `the window ${iso(from)}..${iso(to)} falls outside it, and no other year is grounded`,
       sessions: null,
     };
   }
-  const closed = new Set(calendar.closed.map(epoch));
+  const closed = new Set((calendar.years ? allClosed(calendar) : calendar.closed).map(epoch));
   const sessions = [];
   for (let t = dayStart(from); t <= dayStart(to); t += DAY) {
     const dow = new Date(t * 1000).getUTCDay();
@@ -100,7 +162,7 @@ export function expectedSessions({ from, to, calendar = NYSE_2026 } = {}) {
  * never reinterpreted as "not a session". Outside calendar coverage the comparison refuses and the
  * no-bar weekdays are returned as `unknownNoBar` instead — counted, unresolved.
  */
-export function reconcileSessions({ observed = [], from = null, to = null, calendar = NYSE_2026 } = {}) {
+export function reconcileSessions({ observed = [], from = null, to = null, calendar = NYSE_2026_2028 } = {}) {
   const obs = new Set(observed.map(dayStart));
   const lo = from ?? (obs.size ? Math.min(...obs) : null);
   const hi = to ?? (obs.size ? Math.max(...obs) : null);
@@ -256,7 +318,7 @@ async function main() {
       console.log(`    basis: ${r2.calendar.basis}`);
     }
   }
-  console.log("\n  Outside the grounded year the expected set is UNKNOWN and is not substituted by a");
+  console.log("\n  Outside the grounded years the expected set is UNKNOWN and is not substituted by a");
   console.log("  weekday count. A missing expected session stays listed; it never leaves the denominator.\n");
 
   console.log("=== 3. PER-SYMBOL FRESHNESS AT THE DECISION BAR ===");

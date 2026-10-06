@@ -367,10 +367,14 @@ No implementation. The fix list in §5 stands with fix 3 reworded as above.
 
 Checked against source before reporting, per the standing instruction not to manufacture owner choices:
 
-- **Not an ambiguity.** `FORWARD-EVAL-SPEC.md` §4 already specifies an independent-period reset per
-  registered version, and `analyst/ledger.mjs` already implements `evidenceWindow`,
-  `recordsAfterBoundary` and `familySize`. Nothing is undecided — the machinery exists and the scoring
-  path simply does not call it. That is a wiring gap, not a decision.
+- ~~**Not an ambiguity.**~~ **WITHDRAWN — this reading was wrong.** The claim was that
+  `FORWARD-EVAL-SPEC.md` §4 settles the per-version period reset, so wiring it in would be "a wiring
+  gap, not a decision". That file's own header reads *"Status: proposal. Nothing in this file is built,
+  scheduled, enabled or approved"*, and states that where it and the protocol could be read as
+  disagreeing, **the protocol wins**. A proposal specifying semantics does not make them approved, and
+  the ledger having been built offline is not a standing grant to wire it into scoring. The machinery
+  (`evidenceWindow`, `recordsAfterBoundary`, `familySize`) does exist and nothing calls it — but
+  adopting the spec's semantics **is** an owner decision. See `docs/REMEDIATION-PLAN.md` item P3.
 - **A real ambiguity, already open from §3.** Whether the standing minimum's "50 trades" means
   measurable decisions or orders placed. §8.1 adds a second way the count diverges from measurable
   trades (reruns, on top of closes). Still the owner's call; not reinterpreted here.
@@ -675,8 +679,9 @@ the live name's, and `DEAD` sorts first so the worst case is the first thing a r
 
 1. **Run this diagnostic against the live `ibkr-bundle` once it lands.** It is the first tool that would
    show whether a real pull contains dead-but-present symbols, and it needs no key — only the panel.
-2. **Ground 2027 from the same primary page**, so a forward run crossing the year boundary is not
-   immediately UNSUPPORTED. The 2026 window already ends Dec 31.
+2. ~~**Ground 2027 from the same primary page**, so a forward run crossing the year boundary is not
+   immediately UNSUPPORTED.~~ **DONE — §10.1 now covers 2026-2028**, with year-boundary and DST tests.
+   2029 and later remain UNKNOWN.
 3. **A `presentButClosed` check against the live panel**, which would catch a vendor stamping a bar on a
    closed day — a class of error the research bundle shows zero of.
 
