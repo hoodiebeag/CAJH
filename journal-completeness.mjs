@@ -19,6 +19,7 @@
  */
 
 import { readJournal, scoreJournal, KIND, MODE, decisionTimeMs, DEFAULT_JOURNAL } from "./analyst/journal.mjs";
+import { sessionWeekdays, missedSessions } from "./analyst/loop.mjs";
 import { tier1 } from "./analyst/protocol.mjs";
 
 const flag = (name, dflt) => {
@@ -102,6 +103,67 @@ export function adjacentClusterOverlap(decisions, holdDays) {
   return { clusters: Math.ceil(times.length / holdDays), sharedSessions: shared, holdDays, entries: times.length };
 }
 
+/**
+ * Decision records grouped by the session they decided on, and by batch identity.
+ *
+ * A SAME-SESSION RERUN IS NOT A DUPLICATE OUTCOME, AND THE TWO FAIL DIFFERENTLY. `runOnce` reads
+ * nothing from the journal, so it has no rerun guard, and `defaultBatchId` is `mode-YYYY-MM-DD`
+ * (loop.mjs:293) — so a second paper run on the same session, with no explicit batchId, appends a
+ * SECOND decision record carrying the SAME batchId. Every decision-side count then doubles
+ * (`batches`, `sized`, `rejectCounts`, `halts`, `brakes`, criterion 1's numerator) while the
+ * outcome side does not, because settlement keys on `(batchId, symbol)`.
+ *
+ * A DESIGNED same-session experiment is the other case: two DISTINCT batchIds at one `asOfTime`.
+ * That doubles the outcome rows legitimately and must still count as ONE holding period, which
+ * `holdPeriodKeys` gets right because it ranks distinct entry times.
+ */
+export function sessionCoverage(decisions) {
+  const byTime = new Map();
+  const byBatch = new Map();
+  for (const d of decisions) {
+    const t = Number.isFinite(d.asOfTime) ? d.asOfTime : null;
+    if (t !== null) byTime.set(t, (byTime.get(t) ?? 0) + 1);
+    byBatch.set(d.batchId, (byBatch.get(d.batchId) ?? 0) + 1);
+  }
+  return {
+    batchRecords: decisions.length,
+    distinctSessions: byTime.size,
+    distinctBatchIds: byBatch.size,
+    repeatedBatchIds: [...byBatch.entries()].filter(([, n]) => n > 1).map(([id, n]) => ({ batchId: id, count: n })),
+    sessionsWithSeveralBatches: [...byTime.entries()].filter(([, n]) => n > 1)
+      .map(([t, n]) => ({ session: new Date(t * 1000).toISOString().slice(0, 10), batches: n })),
+    noSession: decisions.filter((d) => !Number.isFinite(d.asOfTime)).length,
+  };
+}
+
+/**
+ * Which slots lose their control, and why that is not random.
+ *
+ * `matchedRandomControl` does `sized.slice(0, bag.length)`: when the pool is smaller than the book
+ * the FIRST slots get controls and the TAIL gets none. The names drawn are random; WHICH SLOTS GO
+ * UNPAIRED IS POSITIONAL. If `allowed` is ordered by anything — conviction, the model's own listing
+ * order, sector — the unpaired rows correlate with it, and a split on that variable can lose an
+ * entire arm. Reported so the pattern is visible rather than read as random missingness.
+ */
+export function unpairedBySlot(decisions, outcomes) {
+  const nullControl = new Set(outcomes.filter((o) => !Number.isFinite(o.controlReturn))
+    .map((o) => `${o.batchId}\u0000${o.symbol}`));
+  const slots = [];
+  for (const d of decisions) {
+    const sized = (d.allowed ?? []).filter((a) => a.action !== "hold" && (a.targetPct ?? 0) > 0);
+    sized.forEach((a, i) => {
+      if (nullControl.has(`${d.batchId}\u0000${a.symbol}`)) slots.push(i);
+    });
+  }
+  return { unpaired: slots.length, slotIndices: [...new Set(slots)].sort((a, b) => a - b) };
+}
+
+/** Version-like fields recorded per decision. Nothing in score or protocol splits on model. */
+export function versionSpread(decisions) {
+  const of = (k) => [...new Set(decisions.map((d) => d[k] ?? null))];
+  return { model: of("model"), checklistId: of("checklistId"), contextHash: of("contextHash").length };
+}
+
 function main() {
   const file = flag("journal", DEFAULT_JOURNAL);
   const mode = flag("mode", MODE.PAPER);
@@ -166,6 +228,45 @@ function main() {
     console.log(`  NOTE: ${sp.closing} closing row(s) count toward the standing minimum and can never be settled.`);
   }
 
+  console.log("\n=== 3b. OPERATIONAL COVERAGE vs STATISTICAL SAMPLE ===");
+  const cov = sessionCoverage(decisions);
+  const skips = records.filter((r) => r.kind === KIND.SKIP && (r.mode ?? MODE.PAPER) === mode);
+  const notes = records.filter((r) => r.kind === KIND.NOTE);
+  console.log(`  decision RECORDS ${cov.batchRecords}   distinct decision SESSIONS ${cov.distinctSessions}   distinct batchIds ${cov.distinctBatchIds}`);
+  if (cov.repeatedBatchIds.length) {
+    console.log(`  REPEATED batchIds ${cov.repeatedBatchIds.length}  <- a same-session rerun: decision-side counts are doubled`);
+    for (const r of cov.repeatedBatchIds.slice(0, 5)) console.log(`      ${r.batchId} x${r.count}`);
+  }
+  const designed = cov.sessionsWithSeveralBatches.filter((x) =>
+    !cov.repeatedBatchIds.some((r) => r.batchId.includes(x.session)));
+  if (designed.length) {
+    console.log(`  sessions carrying SEVERAL DISTINCT batches ${designed.length}  <- designed same-day arms;`);
+    console.log("      legitimate, and each such session is still ONE holding period");
+  }
+  console.log(`  skip records ${skips.length}   note records ${notes.length}   decisions with no asOfTime ${cov.noSession}`);
+  const byReason = {};
+  for (const s2 of skips) byReason[s2.reason] = (byReason[s2.reason] ?? 0) + 1;
+  if (skips.length) console.log(`  skip reasons ${JSON.stringify(byReason)}`);
+  console.log("  A skip is NOT a batch, so criterion 1's numerator excludes it while its `at` still");
+  console.log("  extends the span — a correct refusal and a session that never ran read identically.");
+
+  const vs = versionSpread(decisions);
+  console.log(`\n  model values recorded ${JSON.stringify(vs.model)}`);
+  console.log(`  checklistId values    ${JSON.stringify(vs.checklistId)}`);
+  if (vs.model.filter(Boolean).length > 1) {
+    console.log("  MORE THAN ONE MODEL IN THIS RECORD. No statistic splits on it: scoreJournal splits on");
+    console.log("  checklistId and on per-name news, never on model, and neither it nor protocol.mjs reads");
+    console.log("  analyst/ledger.mjs — so versions blend into one edge and one period count.");
+  }
+
+  const up = unpairedBySlot(decisions, outcomes);
+  if (up.unpaired) {
+    console.log(`\n  unpaired rows by SLOT INDEX within their batch: ${JSON.stringify(up.slotIndices)}`);
+    console.log("  matchedRandomControl assigns the first slots and truncates the tail, so WHICH rows go");
+    console.log("  unpaired is positional, not random. A split on anything correlated with that order can");
+    console.log("  lose a whole arm (its controlMeanNet and edge come back null).");
+  }
+
   console.log("\n=== 4. HOLDING-PERIOD CLUSTERS ===");
   const ov = adjacentClusterOverlap(decisions, s.holdDays);
   console.log(`  distinct entry sessions ${ov.entries ?? 0}, hold ${ov.holdDays}, clusters ${s.periods}`);
@@ -193,6 +294,17 @@ function main() {
       console.log(`  latest decision bar: ${new Date(latest).toISOString().slice(0, 10)}`);
     }
   }
+
+  console.log("\n=== 6. SESSION CALENDAR: A HOLIDAY LOOKS LIKE A MISSED SESSION ===");
+  const latestBar = decisions.map((d) => d.asOfTime).filter(Number.isFinite).sort((a, b) => b - a)[0];
+  if (Number.isFinite(latestBar)) {
+    const wk = sessionWeekdays(decisions.map((d) => d.asOfTime).filter(Number.isFinite));
+    console.log(`  trading weekdays seen in this record: ${[...wk].sort().join(",")} (0=Sun)`);
+    console.log(`  missedSessions(latest decision bar, now) = ${missedSessions(latestBar, Date.now(), wk)}`);
+  }
+  console.log("  `sessionWeekdays` models the trading WEEK and there is no holiday calendar anywhere, so");
+  console.log("  the first trading day after a market holiday reads as one completed session missed.");
+  console.log("  In paper mode that is a REFUSAL plus a PANEL_STALE skip, and it self-heals the next day.");
 
   console.log("\nREAD THIS AS COMPLETENESS, NOT PERFORMANCE. Nothing above is evidence about edge, and a");
   console.log("number from a dry-run or synthetic journal is not prospective evidence of anything.");
