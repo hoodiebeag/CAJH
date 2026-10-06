@@ -288,3 +288,193 @@ test("a batch failure is validated against its enum, unlike a skip reason", () =
 test("SAFETY: this suite left the real journal exactly as it found it", () => {
   assert.equal(fp(), BEFORE);
 });
+
+// =================================================================================================
+// Criterion 4 — "Model output stays parseable" / "< 10% of batches lost to refusal, truncation or
+// malformed JSON".  NOT stopping.
+// =================================================================================================
+
+test("CRITERION 4: an absent failure field and an explicit null are both counted as success", () => {
+  // This is a DOCUMENTED limitation, not an undiscovered bug: the criterion's own detail string says
+  // "Batches written before the failure code was journalled read as successes." What this pins is that
+  // the distinction IS recoverable from the record and is simply not used.
+  const f = tmp();
+  decide(f, { batchId: "modern", day: 2, allowed: [p("AAA")] });        // failure: null, key present
+  // A pre-field record, written raw because recordDecision always sets the key.
+  fs.appendFileSync(f, `${JSON.stringify({ kind: KIND.DECISION, batchId: "old",
+    at: "2026-03-03T21:00:00Z", mode: MODE.PAPER, contextHash: "h", asOfTime: e("2026-03-03"),
+    proposals: [p("AAA")], allowed: [p("AAA")], rejected: [], control: [], poolSize: 1 })}\n`);
+
+  const recs = readJournal(f).records;
+  const modern = recs.find((r) => r.batchId === "modern");
+  const old = recs.find((r) => r.batchId === "old");
+  assert.equal("failure" in modern, true, "a modern record has the key");
+  assert.equal(modern.failure, null, "set explicitly to null on success");
+  assert.equal("failure" in old, false, "an older record has no key at all");
+  assert.equal(old.failure, undefined);
+  // `d.failure` is falsy for both, so the criterion cannot tell them apart.
+  const c4 = crit(f, 4);
+  assert.equal(c4.status, "pass");
+  assert.deepEqual(c4.numbers, { failed: 0, batches: 2, lossRate: 0, byCode: {} });
+  assert.match(c4.detail, /written before the failure code was journalled read as successes/);
+  // THE EVIDENCE THAT CAN HONESTLY BE ASSERTED: "no journalled batch carries a failure code", which
+  // is weaker than "every batch produced parseable output". The field's presence is the discriminator.
+  const withKey = recs.filter((r) => r.kind === KIND.DECISION && "failure" in r).length;
+  assert.equal(withKey, 1, "exactly one record can speak to its own success");
+});
+
+test("CRITERION 4: a malformed TRUTHY failure fails closed; a malformed FALSY one fails open", () => {
+  const f = tmp();
+  const raw = (batchId, failure) => fs.appendFileSync(f, `${JSON.stringify({ kind: KIND.DECISION,
+    batchId, at: "2026-03-02T21:00:00Z", mode: MODE.PAPER, contextHash: "h",
+    asOfTime: e("2026-03-02"), proposals: [], allowed: [], rejected: [], control: [], poolSize: 0,
+    failure })}\n`);
+  raw("emptyObj", {});
+  raw("nullCode", { code: null });
+  raw("falseVal", false);
+  raw("emptyStr", "");
+  raw("zero", 0);
+  const c4 = crit(f, 4);
+  // Truthy-but-malformed: counted as failures with an unknown code, so the criterion FAILS. Correct.
+  assert.equal(c4.status, "fail");
+  assert.equal(c4.numbers.failed, 2, "the two truthy malformed shapes are caught");
+  assert.deepEqual(c4.numbers.byCode, { undefined: 1, null: 1 });
+  assert.match(c4.detail, /carry a code decide\.mjs does not define/);
+  // Falsy-but-malformed: silently counted as success. `false`, `""` and `0` are not valid values of
+  // this field, and `d.failure` cannot distinguish them from a real success.
+  assert.equal(c4.numbers.batches, 5);
+  assert.equal(c4.numbers.failed, 2, "three malformed records are read as successes");
+});
+
+test("CRITERION 4's denominator is journalled DECISIONS, not sessions attempted", () => {
+  // A panel refusal leaves a SKIP, not a decision, so a batch lost before `decide` ran is not in the
+  // denominator at all. Faithful to the registered word "batches"; not a measure of sessions.
+  const f = tmp();
+  recordSkip({ batchId: "s1", at: "2026-03-02T21:00:00Z", mode: MODE.PAPER,
+    reason: SKIP_REASON.PANEL_STALE }, f);
+  decide(f, { batchId: "b1", day: 3, allowed: [], proposals: [],
+    failure: { code: Object.values(BATCH_FAILURE)[0], detail: "d" } });
+  const c4 = crit(f, 4);
+  assert.equal(c4.numbers.batches, 1, "the skip is not a batch");
+  assert.equal(c4.numbers.failed, 1);
+  assert.equal(c4.numbers.lossRate, 1, "100% of journalled batches, 50% of sessions attempted");
+  assert.equal(c4.status, "fail");
+  // Criterion 10 is where the skip is counted, and it is MANUAL.
+  assert.equal(crit(f, 10).numbers.skips, 1);
+});
+
+test("CRITERION 4 reports MANUAL rather than a vacuous pass when no batch exists", () => {
+  const f = tmp();
+  const c4 = crit(f, 4);
+  assert.equal(c4.status, "manual", "no batches yet, so no rate — this one does NOT pass vacuously");
+  assert.equal(c4.numbers.lossRate, null);
+  assert.match(c4.detail, /no batches yet/);
+});
+
+// =================================================================================================
+// Criterion 8 — "News actually reaches decisions" / "≥ 60% of sized decisions carry hadNews: true".
+// NOT stopping.
+// =================================================================================================
+
+const withNewsMeta = (file, { batchId, day, allowed, rejected = [], newsSymbols = null }) =>
+  recordDecision({
+    batchId, at: `2026-03-${String(day).padStart(2, "0")}T21:00:00Z`,
+    context: { asOfTime: e(`2026-03-${String(day).padStart(2, "0")}`) },
+    proposals: allowed, gate: { allowed, rejected }, pool: ["CTRL"], seed: 1, mode: MODE.PAPER,
+    newsSymbols,
+    news: { source: "synthetic", fetchedAt: "2026-03-02T20:00:00Z", ageHours: 1, stale: false,
+      droppedAtBoundary: 0 },
+  }, file);
+
+test("CRITERION 8 measures SELECTED-NAME coverage, which is exactly its registered words", () => {
+  // Three different notions, and the criterion is faithful to the one it names.
+  const f = tmp();
+  withNewsMeta(f, { batchId: "b1", day: 2, allowed: [p("AAA"), p("BBB")],
+    newsSymbols: new Set(["AAA"]) });
+  const c8 = crit(f, 8);
+  assert.equal(c8.numbers.sized, 2, "the denominator is allowed non-hold rows");
+  assert.equal(c8.numbers.withNews, 1);
+  assert.equal(c8.numbers.rate, 0.5);
+  assert.equal(c8.status, "fail", "below the 60% floor");
+  assert.equal(c8.stops, false);
+});
+
+test("CRITERION 8 cannot distinguish a broken feed from a gate that rejected everything", () => {
+  // All proposals rejected, and the rejected name DID have news. sizedAllowed is empty, so the rate
+  // is null and the criterion reads MANUAL — the same verdict a run with no news feed would give.
+  const rejected = tmp();
+  withNewsMeta(rejected, { batchId: "b1", day: 2, allowed: [],
+    rejected: [{ proposal: p("AAA"), code: REJECT.STALE_QUOTE, detail: "stale" }],
+    newsSymbols: new Set(["AAA"]) });
+  const noFeed = tmp();
+  decide(noFeed, { batchId: "b1", day: 2, allowed: [], proposals: [p("AAA")],
+    rejected: [{ proposal: p("AAA"), code: REJECT.STALE_QUOTE, detail: "stale" }] });
+
+  assert.equal(crit(rejected, 8).status, "manual");
+  assert.equal(crit(noFeed, 8).status, "manual");
+  assert.deepEqual(crit(rejected, 8).numbers, crit(noFeed, 8).numbers,
+    "identical numbers for a working feed and no feed at all");
+
+  // FEED AVAILABILITY IS RECORDED AND UNREAD. The decision carries a `news` meta block; no criterion
+  // consults it.
+  const rec = readJournal(rejected).records.find((r) => r.kind === KIND.DECISION);
+  assert.equal(rec.news.source, "synthetic");
+  assert.equal(rec.news.stale, false);
+  const protoSrc = fs.readFileSync(new URL("./analyst/protocol.mjs", import.meta.url), "utf8");
+  const c8Branch = protoSrc.slice(protoSrc.indexOf("// ---- 8."), protoSrc.indexOf("// ---- 9."));
+  assert.ok(!/\.news\b/.test(c8Branch), "criterion 8's branch never reads the news meta block");
+});
+
+test("CRITERION 8: INPUT coverage is not recorded anywhere, so it cannot be computed", () => {
+  // The journal stores per-ALLOWED `hadNews` and a batch-level meta block. It does not store, per
+  // candidate shown, whether that candidate had news — so "how much of the slate carried news" is
+  // unrecoverable from the record, for any criterion or diagnostic.
+  const f = tmp();
+  withNewsMeta(f, { batchId: "b1", day: 2, allowed: [p("AAA")], newsSymbols: new Set(["AAA", "ZZZ"]) });
+  const rec = readJournal(f).records.find((r) => r.kind === KIND.DECISION);
+  assert.deepEqual(rec.allowed.map((a) => [a.symbol, a.hadNews]), [["AAA", true]]);
+  // ZZZ had news and was never proposed; nothing in the record says so.
+  assert.ok(!JSON.stringify(rec).includes("ZZZ"), "a news-carrying name that was not selected leaves no trace");
+  assert.equal(rec.proposals.length, 1, "and the candidate list itself is not stored");
+});
+
+test("CRITERION 8 includes a close in its denominator, which can never be settled", () => {
+  const f = tmp();
+  withNewsMeta(f, { batchId: "b1", day: 2,
+    allowed: [p("AAA"), p("BBB", { action: "sell", targetPct: 0 }), p("CCC", { action: "hold", targetPct: 0 })],
+    newsSymbols: new Set(["AAA"]) });
+  const c8 = crit(f, 8);
+  assert.equal(c8.numbers.sized, 2, "the close counts; the hold does not");
+  assert.equal(c8.numbers.rate, 0.5, "so a close with no news drags the rate below the floor");
+  // The same set criterion 6 reviews.
+  assert.equal(crit(f, 6).numbers.toReview, 2);
+});
+
+test("CRITERION 8 is ROBUST to a duplicated retry, unlike criterion 1", () => {
+  // Numerator and denominator double together, so the rate is unchanged. Worth pinning, because B1's
+  // duplication does move criterion 1 and `sized`.
+  const once = tmp();
+  withNewsMeta(once, { batchId: "paper-2026-03-02", day: 2, allowed: [p("AAA"), p("BBB")],
+    newsSymbols: new Set(["AAA"]) });
+  const twice = tmp();
+  for (let i = 0; i < 2; i++) {
+    withNewsMeta(twice, { batchId: "paper-2026-03-02", day: 2, allowed: [p("AAA"), p("BBB")],
+      newsSymbols: new Set(["AAA"]) });
+  }
+  assert.equal(crit(once, 8).numbers.rate, 0.5);
+  assert.equal(crit(twice, 8).numbers.rate, 0.5, "the rate survives duplication");
+  assert.equal(crit(twice, 8).numbers.sized, 4, "while the counts double");
+  assert.equal(crit(twice, 8).status, crit(once, 8).status);
+});
+
+test("CRITERION 8: an unrecorded hadNews counts in the denominator and against the rate", () => {
+  // Fail-closed, and the detail says so. A batch written without newsSymbols has hadNews null.
+  const f = tmp();
+  decide(f, { batchId: "b1", day: 2, allowed: [p("AAA")] });
+  const c8 = crit(f, 8);
+  assert.equal(c8.numbers.sized, 1);
+  assert.equal(c8.numbers.unrecorded, 1);
+  assert.equal(c8.numbers.withNews, 0);
+  assert.equal(c8.numbers.rate, 0, "counted against, not excluded");
+  assert.match(c8.detail, /predate the per-name flag and count against the rate/);
+});

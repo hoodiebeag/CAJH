@@ -477,6 +477,119 @@ changes a write path. **None is implemented, and none is approved.**
 - **The CLI remains untested here** — launching it would construct an SDK client and take the real lock.
 - Nothing above tells you whether the gate's *thresholds* are right; that was never in scope.
 
+## F4. Criteria 4 and 8: provenance and the news denominator
+
+`criteria-semantics.test.mjs` is now 24 tests. Registered meanings untouched.
+
+### Criterion 4 — "< 10% of batches lost to refusal, truncation or malformed JSON"
+
+**A known limitation, confirmed and bounded.** The criterion's own detail already says *"Batches
+written before the failure code was journalled read as successes"*, so this is documented, not
+undiscovered. What is new is where the line falls:
+
+| record shape | `d.failure` | counted as | recoverable from the record? |
+|---|---|---|---|
+| `failure: null` (modern success) | falsy | success | **yes** — the key is present |
+| no `failure` key (pre-field record) | falsy | success | **yes** — `"failure" in d` is false |
+| `{code: <known>}` | truthy | failure, code known | yes |
+| `{code: <unknown>}` | truthy | failure, **FAIL** | yes |
+| `{}` or `{code: null}` | truthy | failure, code `"undefined"`/`"null"`, **FAIL** | yes — **fails closed** |
+| `false`, `""`, `0` | falsy | **success** | only as "key present but not a failure object" — **fails open** |
+
+**What can honestly be asserted** from the current fields is *"no journalled batch carries a failure
+code"*, which is weaker than *"every batch produced parseable output"*. The discriminator is the
+**presence of the key**, and nothing uses it.
+
+**The denominator is journalled decisions, not sessions attempted.** A panel refusal leaves a *skip*, so
+a batch lost before `decide` ran is not in the denominator: one skip plus one failed decision reports
+`batches: 1, lossRate: 1` — 100% of journalled batches, 50% of sessions. Faithful to the registered word
+"batches"; not a measure of sessions. And with no batches at all it reads **MANUAL**, not a vacuous pass.
+
+### Criterion 8 — "≥ 60% of sized decisions carry `hadNews: true`"
+
+**Faithful to its words.** It measures **selected-name coverage** over allowed non-hold rows, which is
+what the registered criterion says. Three notions must be kept apart:
+
+| notion | recorded? | read by criterion 8? |
+|---|---|---|
+| **feed availability** — `record.news` meta (`source`, `fetchedAt`, `ageHours`, `stale`, `droppedAtBoundary`) | **yes**, per batch | **no** — asserted, its branch never touches `.news` |
+| **input coverage** — how much of the slate shown carried news | **no** — the candidate list is not stored, and a news-carrying name that was never proposed leaves no trace | not computable at all |
+| **selected-name coverage** — `hadNews` on allowed non-hold rows | yes | **yes** |
+
+**It cannot distinguish a broken feed from a gate that rejected everything.** With all proposals
+rejected, `sized: 0`, `rate: null`, **MANUAL** — numbers identical to a run with no feed at all, even
+though the rejected name *did* carry news and the meta block records a healthy feed.
+
+Two behaviours confirmed correct rather than defective: an **unrecorded** `hadNews` counts in the
+denominator and **against** the rate (fail-closed, and the detail says so); and the criterion is
+**robust to a duplicated retry** — numerator and denominator double together so the rate is unchanged,
+unlike criterion 1 and `sized`.
+
+One carried-forward interaction: a `targetPct: 0` **close** is in the denominator, so a close with no
+news drags the rate down even though it can never be settled.
+
+### Proposed fixes — typed, none approved, none rewrites history
+
+| # | Fix | Type | Acceptance test |
+|---|---|---|---|
+| **S7** | Criterion 4 reports how many batches *can* speak to their own success (`"failure" in d`) beside the loss rate, so an unknown-provenance record is visible rather than silently successful. **No record is rewritten and no success is inferred from a missing field** — a record without the key counts as *unknown provenance*, not as a pass. | `STAT` | The modern/old fixture reports `batches: 2, withProvenance: 1`; `lossRate` and the verdict are unchanged. |
+| **S8** | Criterion 4 treats a **falsy non-null** `failure` as malformed rather than as success. | `STAT` | The `false`/`""`/`0` fixture moves those three from success to unknown-code failures; valid `null` is unaffected. |
+| **S9** | Criterion 8 reports the recorded feed meta beside the rate, so an empty book and a dead feed are distinguishable. **Registered words and the 60% floor unchanged.** | `LABEL` | The all-rejected fixture still reads MANUAL with `rate: null`, and the detail now names the feed's `source`/`stale`/`ageHours`. |
+
+**S7's migration note:** the only honest migration is additive. A record with no `failure` key cannot be
+retro-labelled a success or a failure, because the information was never written; it can only be counted
+as unknown. Nothing in S7 or S8 edits a stored record.
+
+---
+
+## F5. Finite coverage inventory — all ten registered criteria and the first-run boundaries
+
+**This is a map of what has been tested, not a readiness claim.** Green tests prove the fixtures behave
+as described; they do not prove the system is ready to run. Three exclusions apply to every row:
+
+- **No CLI path is tested anywhere.** Launching `analyst-run.mjs` would construct an SDK client and take
+  the real journal lock, so argument handling, mode dispatch, lock acquisition and release, and signal
+  handling are **untested**.
+- **No SDK, model, key or broker path is tested.** Every decider is a plain stub object.
+- **Synthetic timestamp assumption.** Fixtures stamp bars at `00:00:00Z` of the session date, matching
+  the real bundle (0 of 921 misaligned). `analyst/loop.test.mjs`'s own `panel()` helper stamps its last
+  bar at `now` instead, which is why the pre-existing suite does not see the A3 quote-age defect
+  (§H). **Conclusions drawn from fixtures using the `now` convention do not transfer to a real panel.**
+
+| # | Criterion | Current behaviour tested | Named fixture | Unresolved |
+|---|---|---|---|---|
+| 1 | Runs every session | counts batches not sessions; a closure depresses the ratio; a refusal reads as a no-run | `journal-rerun-coverage.test.mjs` "criterion 1 counts BATCHES", "FAILS on a span containing a market holiday", "a correct refusal reads the same" | whether distinct sessions or batches is intended (C1) |
+| 2 | Point-in-time (STOPS) | verifies the `asOf` label and news dates only; prices and per-symbol freshness are outside it | `context-ragged.test.mjs` "contextIsPointInTime verifies the asOf LABEL" | — (scope now documented, C5) |
+| 3 | Panel freshness (STOPS) | **hardcoded PASS**; cannot distinguish absent run, safe refusal or decided-anyway | `criteria-semantics.test.mjs` "is hardcoded PASS", "cannot distinguish" | S1 approval |
+| 4 | Output parseable | absent vs null provenance; truthy-malformed fails closed, falsy-malformed fails open; denominator is journalled decisions | `criteria-semantics.test.mjs` "an absent failure field and an explicit null", "malformed TRUTHY… FALSY", "denominator is journalled DECISIONS" | S7, S8 approval |
+| 5 | Gate load-bearing | PASSES on an all-rejected book, on one `halted`, and on a no-NAV batch; FAILS on a clean book | `criteria-semantics.test.mjs` four C5 tests | S3 approval; the title-vs-words gap is a protocol question |
+| 6 | No gate escape (STOPS) | MANUAL always; pre-outcome count; `toReview: 0` on an empty book; includes a close | `criteria-semantics.test.mjs` two C6 tests | S4 approval |
+| 7 | Settlement (STOPS) | calendar-day dueness fails over a weekend; an uncovered name fails forever | `journal-rerun-coverage.test.mjs` "STOPS the run over a weekend"; `acceptance-contracts.test.mjs` six A1 contracts | A1 approval, P4 |
+| 8 | News reaches decisions | selected-name coverage only; feed meta recorded and unread; input coverage unrecordable; robust to a retry | `criteria-semantics.test.mjs` six C8 tests | S9 approval |
+| 9 | Theses reviewable | **not tested.** MANUAL, and it counts `proposals[].thesis` — a string count, which is what it says it is | — | nothing demonstrated; no fixture would add information |
+| 10 | Nothing halts unexpectedly | counts halts, brakes, skips, notes; an unknown skip reason is counted here and nowhere else | `criteria-semantics.test.mjs` "an unknown reason is invisible to both STOPPING criteria" | S5, S6 approval |
+
+**First-run boundaries** (`rehearsal.mjs`, §H): preflight, context, risk, record, settle, score and
+protocol are each exercised with a stub decider and a temp journal. The gate boundary is the blocker
+(A3). Not exercised: the CLI, the lock, and any live interface.
+
+**Runtime remediation still awaiting approval:** A1–A4, B1 (R0a/R0b/R1/R2), B2–B7, C1–C6, S1–S9. **None
+is implemented.** `docs/FORWARD-EVAL-SPEC.md` remains a proposal and item **P3** is open.
+
+**Offline work that is now closed**, and should not be re-audited: the calendar grounding and
+session reconciliation (§10), ragged-panel point-in-time and criterion 2's scope (§9), the
+paired/unpaired statistic cluster (§2, §8.5), the retry contract (§B1, F2 part 1), the version boundary
+(F2 part 2), and criteria 3/5/6/4/8 (F3, F4).
+
+### The one critical path still untested, as a bounded unit
+
+**`recordOutcome`'s own field validation.** Every settlement figure flows through it, and
+`journal-completeness.test.mjs` covers duplicates and orphans but not the field shapes: a `netReturn` of
+`"0.05"`, `Infinity` or `null` is written as given, and `scoreJournal` filters with
+`typeof v === "number"`, so a string silently disappears from a mean while still counting in `outcomes`.
+That is one focused unit — not a re-audit — and it is the last place a wrong number could enter the
+record unexamined.
+
 ## G. Review sheet for the coordinating thread
 
 Plain language, one line of consequence each. **Nothing here is approved, and this is not a
