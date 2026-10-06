@@ -188,10 +188,30 @@ export function carriedPools(grids, starts, { slate = 300, bookSize = 10, seed =
   // Index i in a symbol's candle array corresponds to barDates[i] only if every series shares the grid.
   // loadGrids already asserts one shared first bar; this asserts the length, since a short series would
   // make avgPrice read the wrong bar.
+  // VERIFY THE DATE MAPPING, NOT JUST THE LENGTH.
+  //
+  // avgPrice reads kept[sym][i].close and treats it as the bar at barDates[i]. An equal LENGTH does not
+  // establish that: a symbol with an interior missing bar and a compensating extra bar elsewhere has the
+  // right count and the wrong dates at every index past the gap, and would be priced at the wrong day
+  // silently. One shared first bar does not establish it either, for the same reason. So the times are
+  // compared directly.
+  //
+  // Checked at every index rather than sampled: the panel is small, and an interior gap is exactly the
+  // case a sample would miss.
   for (const [sym, bars] of Object.entries(kept)) {
     if (bars.length !== barDates.length) {
       throw new Error(`carriedPools: ${sym} has ${bars.length} bars against a ${barDates.length}-bar grid; ` +
                       `the avgPrice lookup below would read the wrong date`);
+    }
+    for (let i = 0; i < bars.length; i++) {
+      if (Number(bars[i].time) !== barDates[i]) {
+        throw new Error(
+          `carriedPools: ${sym} index ${i} is ` +
+          `${new Date(Number(bars[i].time) * 1000).toISOString().slice(0, 10)} but barDates[${i}] is ` +
+          `${new Date(barDates[i] * 1000).toISOString().slice(0, 10)} — the per-symbol date mapping is ` +
+          `not positional, so avgPrice would read the wrong day. An interior missing bar does this while ` +
+          `leaving the length and first bar intact.`);
+      }
     }
   }
   const rng = seededRng(seed);
@@ -327,7 +347,11 @@ async function main() {
     console.log(`  warm-up required     ${FIRST_START} return dates before the first decision can be ranked`);
     console.log(`  hold                 ${HOLD}`);
     console.log(`  non-overlapping periods available   ${starts.length}   (need at least 2)`);
-    console.log(`  shortfall            ${Math.max(0, FIRST_START + HOLD - panel.dates.length)} more return dates`);
+    // TWO periods need starts at FIRST_START and FIRST_START+HOLD, so the last window ends at
+    // FIRST_START + 2*HOLD. An earlier version printed FIRST_START + HOLD, which is the requirement
+    // for ONE period -- it understated the shortfall by a whole hold while the line above asked for two.
+    console.log(`  shortfall            ${Math.max(0, FIRST_START + 2 * HOLD - panel.dates.length)} more return dates ` +
+                `(two periods need ${FIRST_START + 2 * HOLD})`);
     console.log("");
     console.log("  NO SIGMA IS REPORTED. A dispersion computed from zero periods is not a small number,");
     console.log("  it is absent data, and an sd of 0 would read as perfect precision.");

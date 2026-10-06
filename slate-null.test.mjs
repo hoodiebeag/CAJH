@@ -539,3 +539,53 @@ test("carriedPools refuses a ragged-length panel rather than mis-pricing avgPric
   assert.throws(() => carriedPools({ kept, barDates }, [260, 265], { slate: 10 }),
     /would read the wrong date/);
 });
+
+test("an INTERIOR missing bar is rejected even when length and first bar look right", () => {
+  // ONE SHARED FIRST BAR AND AN EQUAL LENGTH DO NOT ESTABLISH THE MAPPING. A symbol with a missing bar
+  // in the middle and a compensating extra bar at the end has the right count and the right start, and
+  // the wrong date at every index past the gap — so avgPrice would be read from the wrong day with no
+  // symptom. The earlier guard checked only the length and would have passed this.
+  const DAYS = 86400;
+  const t = (i) => 1_600_000_000 + i * DAYS;
+  const bar = (i) => ({ time: t(i), close: 100 * 1.001 ** i });
+
+  // The union must be exactly as long as every series, or the LENGTH check fires first and the date
+  // check never runs — which is what a first attempt at this fixture did. A DUPLICATED bar achieves it:
+  // C omits index 10 and repeats index 9, so it adds no new date to the union, keeps the count, keeps
+  // the first bar, and is off by one day at every index from 10 onward.
+  const full = Array.from({ length: 31 }, (_, i) => bar(i));
+  const dup = [...Array.from({ length: 10 }, (_, i) => bar(i)), bar(9),
+               ...Array.from({ length: 20 }, (_, i) => bar(i + 11))];
+  assert.equal(dup.length, full.length, "the fixture must match on length, or it proves nothing");
+  assert.equal(Number(dup[0].time), Number(full[0].time), "and on the first bar");
+
+  const kept = { A: full, B: [...full], C: dup };
+  const barDates = [...new Set(Object.values(kept).flatMap((b) => b.map((x) => Number(x.time))))].sort((a, b) => a - b);
+  assert.equal(barDates.length, full.length, "the union must match the series length to isolate the date check");
+  assert.notEqual(Number(dup[10].time), barDates[10], "the fixture must actually be misaligned");
+
+  assert.throws(() => carriedPools({ kept, barDates }, [12, 17], { slate: 5 }), (e) => {
+    assert.match(e.message, /not positional/);
+    assert.match(e.message, /interior missing bar/);
+    assert.match(e.message, /^carriedPools: C index 10/, "the error must name the offending symbol and index");
+    return true;
+  });
+
+  // The clean symbols alone are accepted, so the guard is not rejecting everything.
+  const cleanDates = [...new Set([...full].map((x) => Number(x.time)))].sort((a, b) => a - b);
+  assert.doesNotThrow(() => carriedPools({ kept: { A: full, B: [...full] }, barDates: cleanDates },
+    [12, 17], { slate: 5, bookSize: 1 }));
+});
+
+test("the insufficient-history shortfall agrees with needing TWO periods", () => {
+  // The report asks for at least two periods, so the shortfall must be measured against
+  // FIRST_START + 2*HOLD. An earlier version printed FIRST_START + HOLD, the requirement for ONE,
+  // understating the shortfall by a whole hold while the line above it asked for two.
+  assert.deepEqual(nonOverlappingStarts(FIRST_START, HOLD, FIRST_START + HOLD), [FIRST_START],
+    "FIRST_START + HOLD yields exactly ONE period");
+  assert.equal(nonOverlappingStarts(FIRST_START, HOLD, FIRST_START + 2 * HOLD).length, 2,
+    "two periods need FIRST_START + 2*HOLD return dates");
+  const src = fs.readFileSync(path.join(REPO, "slate-null.mjs"), "utf8");
+  assert.match(src, /FIRST_START \+ 2 \* HOLD - panel\.dates\.length/,
+    "the shortfall is not computed against the two-period requirement");
+});

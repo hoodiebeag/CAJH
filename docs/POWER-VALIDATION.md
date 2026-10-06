@@ -465,8 +465,76 @@ judgement call. The local commit remains reachable; a failed rebase discards not
 fixture via reflog). Verify the result on the **remote**, not from stdout:
 
 ```
-git ls-tree -r --name-only origin/<branch> -- ibkr-bundle | wc -l
+git fetch origin <branch>
+git ls-tree -r --name-only FETCH_HEAD -- ibkr-bundle | wc -l
 ```
+
+**The fetch is not optional.** `origin/<branch>` is a remote-TRACKING ref: it reports whatever was last
+fetched, so reading it without fetching can confirm an upload that never happened. Use `FETCH_HEAD` from
+a fetch in the same breath, and treat stdout from the push as a claim rather than as verification.
+
+## 5e. Regime-conditioned noise: no detectable dependence, and the sample cannot see a modest one
+
+`node regime-null.mjs 20000` (seed 20261006, `sp500-bundle`, hold 5, 133 periods, book 10, slate 300).
+
+**EXPLORATORY PLANNING ANALYSIS.** Not registered, not a candidate, not a strategy. Random-versus-random
+proxy — two random books from one pool, differenced — so **not edge evidence**. Historical, on today's
+survivors.
+
+**NOT GROUNDS TO LOOSEN A DRAWDOWN BRAKE.** A larger σ in a regime means an edge is *harder to see*
+there; it says nothing about whether losses in that regime are tolerable. A risk limit is a statement
+about acceptable loss, not measurement precision. No risk, sizing, STOP or passing criterion is touched.
+
+### The state definition
+
+Trailing realised volatility of the equal-weight basket over 21 sessions **ending at the decision bar** —
+returns at indices `i-20..i` have all closed by then. Split into equal terciles.
+
+- **Primary, `expanding`:** cut-points at period p come from periods `0..p-1` only, so no label depends on
+  data after its own period. The first 20 periods are left **unlabelled** rather than guessed.
+- **Sensitivity, `full-sample`:** whole-panel cut-points. **Not pre-decision** — it reads future periods
+  to place the boundaries — and shown only to expose how much the choice matters.
+
+Windows (10/21/63), the equal-tercile split and the minimum history were fixed before any output was
+read. A test appends a 40%-per-day future run and confirms earlier labels are unchanged; another
+truncates later periods and confirms expanding labels don't move while full-sample ones do.
+
+### Result: flat
+
+| state | periods | σ/period | sim se | MDE@50p | annualised | sampling 95% CI |
+|---|---|---|---|---|---|---|
+| **ALL (ref)** | 133 | 2.350% | 0.012% | 0.931% | 46.9% | 2.197 – 2.501% |
+| low | 38 | 2.402% | 0.012% | 0.952% | 48.0% | 2.187 – 2.644% |
+| mid | 35 | 2.381% | 0.012% | 0.943% | 47.5% | 2.113 – 2.735% |
+| high | 40 | 2.383% | 0.012% | 0.944% | 47.6% | 2.172 – 2.621% |
+
+Ratios to the reference: 1.022 / 1.013 / 1.014. **Spread across states 1.009×.** Across all six
+window × mode combinations the spread runs 1.021–1.111×, with no ordering that survives the window
+choice — at window 10, `high` has the *lowest* σ, which is the signature of noise rather than structure.
+
+### The limit that decides what "flat" means
+
+| | magnitude |
+|---|---|
+| typical per-state sampling CI width | **0.509%** |
+| as a share of pooled σ | **21.7%** |
+| between-state differences observed | ~0.02–0.05% |
+
+The uncertainty is roughly **twenty times** the effect. So this is **"no detectable dependence at this
+sample size"**, not "no dependence". Each state holds about a third of 133 periods, and closing that gap
+needs **more history, not more draws** — simulation error is already 0.012% and shrinks with draws, while
+the sampling CI does not.
+
+**Planning consequence:** on this panel there is no measured basis for a regime-dependent MDE, so a
+pooled σ is the honest default. That is a statement about what is measurable here, not a finding that
+volatility regimes are irrelevant.
+
+### A defect caught before reporting
+
+The per-state Monte Carlo seed was derived as `state.length * 13`, and `"low"` and `"mid"` are both three
+characters — so **two states shared a stream** and their σ were correlated by construction, in a tool
+whose entire purpose is detecting correlation between states. Replaced with explicit distinct offsets;
+asserted in a test. Deriving a seed from an incidental property of a label is how that happens quietly.
 
 ## 5a. Corrections to this document's own earlier draft
 
@@ -501,14 +569,14 @@ grid endpoint is right, and the old `i + hold < length` was one period short.
    decision to make.** §5b: the runtime already fixes it. `loop.mjs` passes the point-in-time slate as
    the pool and `matchedRandomControl` permits overlap, so the diagnostic was the thing out of step.
    Listing this as an owner decision was a manufactured blocker.
-2b. **Measure σ with a held book carried across periods.** The one labelled approximation left in §5b:
-   `positions = {}`, so held names — which are *always* on the slate — are absent, and the reconstructed
-   pool is narrower than a live one. A simple deterministic holding rule (hold the previous period's
-   random book) would close it without a model call, and would also exercise the overlap between a
-   carried book and the slate. **Now the highest-information offline item**, because it is the last
-   known gap between the measured pool and the live one.
+2b. ~~Measure σ with a held book carried across periods.~~ **DONE — `866d661`, §5d.** A deterministic
+   synthetic carry rule; the `slate=300` / full-pool equivalence survives it, and the effect at smaller
+   slates is modest and not monotone. This entry was left marked outstanding after the work landed.
 
-3. **Regime-conditioned σ.** Sub-windows are stable at 1.18x, but quarters are a crude split. Measuring
+3. ~~Regime-conditioned σ.~~ **DONE — §5e.** Flat: spread 1.009× across states, and the per-state
+   sampling CI is ~22% of σ, so a modest dependence would be invisible. More history, not more draws.
+
+3b. **Regime-conditioned σ.** Sub-windows are stable at 1.18x, but quarters are a crude split. Measuring
    σ conditioned on realised market volatility would show whether the MDE should be regime-dependent —
    relevant because a drawdown window is pre-registered. Offline.
 4. **A t-based / bootstrap MDE alongside the normal approximation.** §3a says these are planning
