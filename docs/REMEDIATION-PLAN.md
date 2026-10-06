@@ -116,18 +116,69 @@ need only an operator action, while B2, B6 and B7 are blocked by current wiring.
 
 ### B1 — No same-session rerun guard · `STAT` (and a gate *input*) · **reachable today**
 
-`runOnce` reads nothing from the journal; `defaultBatchId` is `mode-YYYY-MM-DD` (`loop.mjs:293`) and the
-CLI passes no `batchId`. A second paper run on one session appends a second decision under the **same**
-id, doubling `batches`, `sized`, `rejectCounts`, `halts`, `brakes` and criterion 1's numerator while
-`outcomes` and `periods` stay put (§8.1). `meetsStandingMinimum` gates on `sized >= 50`, so fifty
-*measurable* trades can be claimed after twenty-five doubled sessions. The lock guards concurrent runs,
-not sequential ones. **REACHABLE TODAY — not latent.** It needs no wiring change, only a second `node analyst-run.mjs paper`
-on the same session, which an operator retrying after a transient failure would do naturally. It is in
-this section because it is not *automatic*, not because it is blocked.
-**Proposed:** refuse — or record as superseding — a decision at an `asOfTime` already journalled in that
-mode. **Invariant: two *distinct* batchIds at one session is a legitimate designed experiment and must
-still count as one period** (asserted in §8.1). **Acceptance:** the rerun fixture produces one counted
-batch or an explicit skip; the two-arm fixture is unaffected.
+`runOnce` reads nothing from the journal; `defaultBatchId` is `${mode}-YYYY-MM-DD` (`loop.mjs:293`) and
+the CLI passes no `batchId`, so a second paper run on one session appends a second decision under the
+**same** id. The lock guards concurrent runs, not sequential ones. **Reachable today** — it needs only a
+second `node analyst-run.mjs paper`, which an operator retrying after a transient failure would do.
+
+**"Refused OR marked superseding" was not approvable.** Those are two materially different designs, and
+the measurement below narrows which are even necessary.
+
+#### What a retry actually moves — measured, `retry-and-version.mjs` part 1
+
+| situation | recs | ids | repeated | **nominal** (`sized`) | rows | paired | periods |
+|---|---|---|---|---|---|---|---|
+| one run | 1 | 1 | 0 | **2** | 2 | 1 | 1 |
+| same session run twice (today) | 2 | 1 | **1** | **4** | 2 | 1 | 1 |
+| two **distinct** ids, one session | 2 | **2** | 0 | 4 | **4** | **2** | 1 |
+| interrupted write, then retry | 2 | 1 | **1** | **4** | 2 | 1 | 1 |
+| retry after settlement | 2 | 1 | **1** | **4** | 2 | 1 | 1 |
+
+**The defect is confined to the decision-side counts.** `nominalTrades` (`sized`, which gates the
+standing minimum), `rejectCounts`, `halts`, `brakes` and criterion 1's numerator all double.
+`outcomeRows`, `pairedOutcomes` and `independentPeriods` do **not** — the settlement key
+`(batchId, symbol)` and `holdPeriodKeys`' ranking of distinct entry times already de-duplicate, and a
+second `settle` reports `wrote: 0` with the rows `already` present.
+
+**Two situations must not be conflated.** A repeated **identity** is a duplicate; several **distinct**
+identities on one session are a legitimate controlled comparison that genuinely adds measurable rows
+and must still count as **one** independent period. The discriminator is *repeated identity*, never
+*several batches per session* — asserted.
+
+**An interrupted partial write is indistinguishable from a plain rerun** in every count (asserted as
+`deepEqual`). The journal carries no marker that an attempt did not complete, and the lock releases on
+exit, so it does not leave one either. **No policy can separate these two from the record alone** — that
+is a limit, not a design choice.
+
+#### Proposed policy options — all append-only, none chosen
+
+The journal is append-only and a test pins that every earlier byte survives a second pass, so **no
+option may rewrite or delete a record.** In increasing order of intervention:
+
+- **R0 — report only.** Count repeated `(batchId)` decision records in `scoreJournal` and in the
+  readout, and exclude duplicates from `sized` *as a reported figure alongside the raw one*. Changes a
+  published statistic; adds no refusal, no new record kind, no identity scheme. **Simplest option that
+  closes the gate-input defect**, and the one the grounding supports: since only decision-side counts
+  move, correcting the count is sufficient and nothing needs to be prevented.
+- **R1 — refuse.** `runOnce` reads the journal and refuses a decision at an `asOfTime` already
+  journalled in that mode, writing a skip. Prevents the duplicate at source; costs a journal read in
+  the decision path, and **would block a legitimate retry after a genuine partial failure** — which, per
+  the finding above, it cannot distinguish.
+- **R2 — supersede.** Append a marker record naming the superseded `batchId`, and have scoring count
+  only the latest. Keeps the retry possible and preserves history; requires a **new record kind** and a
+  scoring rule that reads it, so it is the largest change and introduces an ordering question (what if
+  two markers disagree).
+- **R3 — distinct identities always.** Make `defaultBatchId` include an attempt counter so a rerun is
+  never a duplicate. Removes the ambiguity but makes every retry look like a new experiment, which is
+  exactly the conflation the measurement above says to avoid. **Not recommended.**
+
+**Preferred for approval: R0.** The evidence is that nothing needs preventing — the outcome side is
+already safe — so the minimum intervention that fixes the gate input is to count correctly and say so.
+R1 and R2 remain available if the owner wants the duplicate prevented rather than reported.
+
+**Unresolved and genuinely the owner's:** (1) which option; (2) **P1**, since what `sized` should count
+determines what "correctly" means here; and (3) whether a legitimate retry after a partial failure
+should be *possible at all* — R1 forbids it, R0 and R2 permit it, and no diagnostic can decide that.
 
 ### B2 — Closing rows count toward the standing minimum · `STAT` · **latent (needs `positions` wired)**
 
@@ -265,6 +316,53 @@ on real IBKR data is unknown until the live panel exists. Nothing in this plan h
 
 ---
 
+## F2. Version-boundary diagnostic: what it shows, and four limits
+
+`retry-and-version.mjs` part 2 uses `analyst/ledger.mjs` **read-only** on a synthetic journal and ledger
+in a temp directory, with every candidate id prefixed `SYNTHETIC-` so it cannot be mistaken for a
+registered one. Ten sessions, a prompt change after five, both versions registered.
+
+**`FORWARD-EVAL-SPEC.md` remains a proposal.** Its header says *"Status: proposal. Nothing in this file
+is built, scheduled, enabled or approved"*, and the protocol wins on disagreement. Printing a scoped
+figure here is a diagnostic comparison, **not an adoption**, and item **P3** is still open.
+
+| | pooled, as scoring reports it today | candidate-scoped, as a diagnostic |
+|---|---|---|
+| decisions | 10 | 5 |
+| outcome rows | 20 | 10 |
+| paired rows | 10 | 5 |
+| independent periods | **2** | **1** |
+
+**Limit 1 — the journal carries no version identifier.** No decision record has a `candidateId` or a
+`version` field (asserted). The ledger knows the boundary; the journal does not reference it. `model`
+and `checklistId` happen to differ across the two halves of this fixture and could proxy for a version,
+but `contextHash` changes **every session**, so it identifies a batch and not a version. Any scoping
+must therefore **join on time**, which leads directly to limit 2.
+
+**Limit 2 — an outcome's `at` is its *settlement* timestamp, so a naive time join misattributes
+everything.** `recordsAfterBoundary` keys on `r.at`. Settlement runs days later and, in a batched
+`settle`, all at once — so filtering outcome rows by their own `at` put **20 of 20** rows after the
+boundary, including the ten the *superseded* version produced. The correct join goes through the parent
+decision's `batchId`, which gives 10. **A scoped figure built the naive way would inflate the current
+version's evidence twofold.**
+
+**Limit 3 — a decision straddles the boundary.** All five pre-boundary decisions were settled after it,
+because `settle` ran once at the end. They belong to the old version by decision time and to the new one
+by settlement time, and **nothing in the record resolves which** (asserted). The decision side has a
+smaller version of the same problem: `recordsAfterBoundary` keys on `at`, a write timestamp, while
+`decisionTimeMs` exists precisely because that differs from the decision bar — so a boundary read off
+`at` and one off `asOfTime` need not agree.
+
+**Limit 4 — a matching hash is bookkeeping, not approval.** `driftFromRegistered` correctly reports no
+drift against the current version's hashes and `["prompt"]` against the superseded ones, and
+`verifyLedger` confirms the chain. None of that is evidence that the candidate's semantics are
+owner-approved: registering a version is an act of record-keeping, and a new source, document or hash
+value existing does not make scoped scoring an approved rule.
+
+**What the diagnostic does not do.** It changes no scoring, settlement, protocol, ledger, journal or
+runtime behaviour; it registers no real candidate; it rewrites and deletes nothing; and it chooses no
+rule for attributing a straddling decision.
+
 ## G. Review sheet for the coordinating thread
 
 Plain language, one line of consequence each. **Nothing here is approved, and this is not a
@@ -280,11 +378,11 @@ pull-request description.** Each item needs its own yes or no.
 
 | # | In plain terms | Fires when | Type | Unresolved dependency | Approval |
 |---|---|---|---|---|---|
-| **A3** | **The paper run would buy nothing.** Every proposal is rejected as a stale quote: a daily bar is ~38h old and the limit is 15 minutes. | First paper run | `GATE` | **Yes** — P4, plus the eligible-universe tradeoff in A3's own row | **Required** |
+| **A3** | **The paper run logs no allowed decisions — an empty simulated book.** Every proposal is rejected as a stale quote: a daily bar is ~38h old and the limit is 15 minutes. This is a log-only run, so **no broker order is involved either way**. | First paper run | `GATE` | **Yes** — P4, plus the eligible-universe tradeoff in A3's own row | **Required** |
 | **A1** | A stopping criterion halts the run over a weekend while settlement is behaving correctly. | First weekend | `GATE` (STOP) | **Yes** — P4 | **Required** |
 | **A2** | A market holiday makes the run refuse a session, one per holiday. | First holiday | `GATE` | **Yes** — P4 | **Required** |
 | **A4** | The headline edge is printed beside an interval computed from different rows, and can land outside it. | First settled control gap | `STAT` | None | **Required** |
-| **B1** | Running the same session twice doubles the trade count the evidence floor gates on. **Reachable today.** | An operator retries | `STAT` | **Yes** — P1 | **Required** |
+| **B1** | Running the same session twice doubles the trade count the evidence floor gates on. **Reachable today.** Outcome rows, paired counts and periods are already safe, so only the decision-side count needs fixing. | An operator retries | `STAT` | **Yes** — P1, plus which of R0–R3 (R0 preferred) and whether a retry after a partial failure should be possible at all | **Required** |
 | **B2** | Position closes count toward the evidence floor but can never be measured. | Once positions are wired | `STAT` | **Yes** — P1 | **Required** |
 | **B3** | A vendor series in the wrong order is ranked on a fabricated flat history instead of refused. | A vendor panel | `GATE` (eligibility) | None | **Required** |
 | **B4** | A duplicated settlement row is counted twice and hidden from the criterion meant to catch it. | A double append | `STAT` | None | **Required** |
@@ -301,8 +399,13 @@ pull-request description.** Each item needs its own yes or no.
 | **P3** | Should scoring reset independent periods per registered version? The spec proposing it is **not approved**. | — | `STAT` | — | **Owner decision** |
 | **P4** | May a gate depend on a transcribed calendar, given an ungrounded year must then refuse? | — | Permission | — | **Owner decision** |
 
-**Read A3 first.** Until it is settled the paper run produces an empty book, so none of the other
-numbers can be observed at all — demonstrated in §H.
+**Read A3 first** — but the reason is narrower than an earlier draft claimed. A3 blocks every
+**realised-selection** figure, because those need a settled outcome: `edge`, `edgeCI`, `hitRate`,
+`beatControlRate`, the paired counts and the news/checklist splits. It does **not** block the
+**decision-side and operational** figures, which are observable with an empty book and were observed in
+§H: `batches`, `sized`, `rejectCounts`, criterion 1's ratio, the repeated-batchId count, skip accounting
+and session coverage. So **B1, C1, C2, C3 and B5 can be exercised in a real run before A3 is settled**;
+A4, B4, B7 and the rest of the outcome-side items cannot.
 
 ---
 
@@ -339,15 +442,23 @@ lock or any `ibkr-*` module, and that the real journal is byte-identical afterwa
 | 7 | Criterion 7 (STOPS) | PASS, `due: 0` — and expected-session dueness agrees (`due: false`, 2 of 5 elapsed) | dueness from expected sessions (A1) |
 | 8 | Session after a closure | **FAIL** — `missedSessions = 1`, paper mode refuses | a published closure is not a missed session (A2) |
 
-**The cascade is the point.** The gate rejects every proposal, so the journal records an empty book, so
-nothing settles, so every score is `—` and every downstream criterion is trivially satisfied. **A1, A4,
-B1 and the rest cannot be observed in a real run until A3 is settled**, which is why A3 leads the
-sequence in §E.
+**The cascade, stated precisely.** The gate rejects every proposal, so the journal records an empty
+simulated book (no broker order is placed in this mode at all), so nothing settles, so every
+outcome-derived score is `—`.
+
+**What that does and does not block.** It blocks the **realised-selection** figures — `edge`, `edgeCI`,
+`hitRate`, `beatControlRate`, paired counts, the splits — and therefore A4, B4 and B7 cannot be
+exercised against a real run. It does **not** block the **decision-side and operational** figures: §H
+observed criterion 1 at `ratio: 2` and B1's repeated batchId *with* an empty book, and `sized`,
+`rejectCounts`, skip accounting, session coverage and grid validation are all equally observable. **A3
+leads the sequence because it is the largest single defect and gates the outcome half, not because
+nothing else is measurable.**
 
 **Checklist before a first forward run**, in order, each needing its own approval:
 
-1. **A3** — otherwise the run buys nothing. Verify: a fresh symbol is allowed, a stale one rejected, one
-   with no bar rejected, and the dry-run path unchanged.
+1. **A3** — otherwise the run logs no allowed decisions and the simulated book stays empty, so no
+   realised selection outcome can ever exist. Verify: a fresh symbol is allowed, a stale one rejected,
+   one with no bar rejected, and the dry-run path unchanged.
 2. **A1** — otherwise a stopping criterion halts the run on day 5–7.
 3. **A2** — otherwise the first holiday costs a session and writes a `PANEL_STALE` skip.
 4. **A4** — otherwise the first settled batch with a control gap misreports the headline.
