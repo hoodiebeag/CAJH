@@ -277,24 +277,38 @@ the close of `barDates[i]` → `asOf = i`. `loadGrids` throws if a future panel 
 **`sp500-bundle`** the registered σ was measured against the right pool **by coincidence of sizing, not
 by design**. Ratio 1.0029 against the full universe confirms it.
 
-> ⚠️ **CORRECTION, 2026-10-05, from a live panel pull rather than inference.** An earlier draft of this
-> section said slate-conditioning "changes nothing TODAY", which read as a statement about the deployed
-> configuration. It is only true of the 127-name research bundle. `scripts/ibkr-panel.mjs` reported
-> **`universe from universe/candidates.txt (1047 tickers)`** on the owner's machine. Against 1,047 names
-> a slate of 300 shows roughly **29%** of the universe, so the narrow-slate regime below is the LIVE
-> regime, not a hypothetical one — and it is the regime in which the registered MDE is **optimistic by
-> ~20%**. `context.mjs` records that 300 was chosen "against a ~1,000-name universe"; that pull confirms
-> the figure. The measurement must be repeated against `ibkr-bundle` once the panel is complete:
-> `node slate-null.mjs 20000 --root ibkr-bundle`. Until then the σ figures here describe 127 survivors
-> and should not be read as the live noise level.
+> ⚠️ **CORRECTION, 2026-10-05.** An earlier draft said slate-conditioning "changes nothing TODAY",
+> which read as a statement about the deployed configuration. It is only true of the 127-name research
+> bundle, so every σ in this section describes **127 survivors** and is not the live noise level.
+>
+> **A second correction, to the correction itself.** That draft then said a slate of 300 against 1,047
+> tickers makes the registered MDE "optimistic by ~20%". **That was an unsupported transport and is
+> withdrawn.** Two reasons:
+>
+> 1. **The 1.203× ratio was measured on a different thing.** It came from slates of 20/40/80 drawn from
+>    a 127-name cross-section. A slate of 300 drawn from a ~1,000-name cross-section has a different
+>    slate-to-universe ratio, a different cross-section and different constituents. A ratio measured at
+>    one configuration is not a bias estimate at another.
+> 2. **1,047 is a CANDIDATE count, not an eligible count.** `scripts/ibkr-panel.mjs` printed
+>    `universe from universe/candidates.txt (1047 tickers)` — that is the input list. What matters is the
+>    count after IBKR resolution (the probe resolved 25 of 25, which says nothing about 1,047) and then
+>    after `screenUniverse`, which rejected 1 of 128 on the research bundle. Candidate ≠ resolved ≠
+>    screened ≠ eligible, and only the last one is the pool.
+>
+> **So the live effect is UNKNOWN until measured.** What is established: `slate=300` is not
+> automatically the whole universe once the universe is large, so the equivalence that holds on
+> `sp500-bundle` cannot be assumed. The direction and size are open. `--root ibkr-bundle` exists to
+> measure it, and §5c records why that measurement cannot run on a 1-year pull.
 
-**The direction matters and it is the uncomfortable one.** A narrow slate is a *ranked* slate holding the
-momentum extremes, not a random subset. Two effects compete — a smaller pool means more overlap between
-the books, shrinking the difference's variance, while ranked extremes are more volatile names, inflating
-it. **Measured, the second wins:** σ peaks at `slate=40` at 1.203× the full-universe figure. So a
-deployed slate narrower than the universe would make the registered MDE **optimistic by ~20%**, the
-opposite direction from the control-overlap mismatch (which was conservative by ~5%). It does not bite
-today, and it would bite at the ~1,000-name universe `slate=300` was chosen for.
+**The direction, on this panel.** A narrow slate is a *ranked* slate holding the momentum extremes, not
+a random subset. Two effects compete — a smaller pool means more overlap between the books, shrinking
+the difference's variance, while ranked extremes are more volatile names, inflating it. **On the 127-name
+bundle the second wins:** σ peaks at `slate=40` at 1.203× the full-universe figure, so on *this* panel a
+narrower slate raises the noise floor and would make an MDE computed from the full pool optimistic.
+
+**That is a statement about 127 names at slates of 20–80, and nothing more.** It is not a bias estimate
+for `slate=300` against a larger universe — see the correction above. Whether the live panel shows the
+same direction, a smaller effect, or none is unmeasured.
 
 ### A degeneracy in the runtime's control, worth knowing before any forward configuration
 
@@ -341,6 +355,119 @@ and a different covariance with the pool. If it is more volatile than a random d
 **optimistic**; if more diversified, conservative. The realised dispersion can only be measured from a
 forward journal, of which there is none.
 
+## 5c. Live-panel readiness: three gaps found by auditing source, not by waiting
+
+Audited against the real scripts and synthetic fixtures while a data refresh was in flight. **No
+operation was performed on the owner's machine**, and `scripts/refresh.sh` is **unchanged** — the two
+operational findings are reported for separate decision, not patched here.
+
+### (1) A 1-year pull cannot be measured at all — the tool now refuses
+
+`scripts/ibkr-panel.mjs` defaults to `--duration "1 Y"` and produced **251 bars per symbol**. 251 bars
+give **250 return dates**, and `slate-null.mjs` needs `FIRST_START = 252` before `buildContext` can rank
+anything (`momentum = ret(c, i, 252, 21)`). So `nonOverlappingStarts(252, 5, 250)` is **empty** — zero
+periods, not few.
+
+Left alone this fabricates: `sd([])` is `0`, and a σ of 0 reads as perfect precision rather than absent
+data. Two fixes, both tested:
+
+- The report now exits **2** with `UNAVAILABLE: INSUFFICIENT HISTORY`, printing bars, return dates,
+  warm-up, periods available and the exact shortfall, and **prints no σ at all**.
+- `measureWithPool` had **no empty-grid guard** (`measure()` in `power-sensitivity.mjs` did) and returned
+  `sd: 0, n: 0` with no flag. It now returns `empty: true`. Found by the test for this case.
+
+**The warm-up is not weakened.** 252 is what the ranking indicator requires; lowering it would measure a
+different ranking from the one the runtime uses and report it under the same name. The fix is a longer
+pull: `node scripts/ibkr-panel.mjs --symbols universe/candidates.txt --duration "2 Y"`.
+
+### (2) Ragged panel shapes: exact supported shape, and a safe refusal
+
+The tool maps return-grid index `k` to bar-grid index `k+1`, which holds **only when every screened
+symbol shares one first bar**. A real IBKR panel need not: an IPO mid-window, late history, or a partly
+resolved symbol all produce ragged starts, and the decision bar for a window would then be off by the
+shortfall — silently.
+
+| shape | behaviour | why |
+|---|---|---|
+| one shared first bar, equal lengths | measured | the mapping is verified |
+| **ragged starts** (IPO, late history) | **refuses**, naming the distinct first bars | the mapping fails; a shifted decision date is invisible |
+| ragged **ends** (starts together, stops early) | measured, and *visible* | the union grid is unaffected; `bookReturn` skips missing returns, so it surfaces as `mean sessions held` below the hold in §4 |
+| ragged lengths, for the carried book | `carriedPools` **refuses** | `avgPrice` reads `kept[sym][i].close`, which is the bar at `barDates[i]` only if the series spans the grid |
+
+**It refuses rather than dropping the inconvenient symbols.** Dropping them would change the eligible
+universe — runtime eligibility, not this tool's to alter — and would quietly measure a different
+cross-section from the one the analyst is shown.
+
+### (3) OPERATIONAL, REPORTED NOT FIXED: the probe's resolved file narrows collection
+
+`universe.mjs`'s `resolveUniverseSource` prefers `ibkr-bundle/universe-resolved.txt` **(IBKR-verified)**
+over `universe/candidates.txt` whenever no explicit `--symbols` is given. A `--limit 25` probe **writes
+that file with 25 tickers** (`ibkr-panel.mjs:219-225`).
+
+And `refresh.sh` is asymmetric:
+
+| stage | line | symbols |
+|---|---|---|
+| collect | `refresh.sh:52` — `node scripts/ibkr-collect.mjs` | **no `--symbols`** → resolves to the 25-name file |
+| panel | `refresh.sh:59` — `node scripts/ibkr-panel.mjs --symbols "$UNIVERSE" --skip-fresh` | explicit → all candidates |
+
+Collect runs **before** panel. So after a 25-symbol probe, a `refresh.sh` run collects **news and sectors
+for 25 names**, then the panel pull rewrites the resolved file with the full verified list. The panel is
+unaffected; the **collection is silently narrowed**.
+
+**Safe handoff, no code change:** after a full panel pull completes, re-run the collect stage so it picks
+up the now-complete resolved file —
+
+```
+bash scripts/refresh.sh collect
+```
+
+— or pass the universe explicitly: `node scripts/ibkr-collect.mjs --symbols universe/candidates.txt`.
+Verify coverage by the symbol count in `data/ibkr-collection-report.json` and `data/sector-map.json`.
+**Proposed operational fix, for separate decision:** have `refresh.sh:52` pass `--symbols "$UNIVERSE"`
+to match the panel stage, or have `ibkr-panel.mjs` refuse to write `universe-resolved.txt` when
+`--limit` is set. Neither is applied here; `refresh.sh` runtime code is untouched in this unit.
+
+### (4) OPERATIONAL, REPORTED NOT FIXED: `refresh.sh commit` does not push after a rebase
+
+Proven in an isolated fixture (`refresh-recovery.test.mjs`, 5 tests, throwaway repo with a local bare
+origin — nothing touches this repository or the owner's machine).
+
+A push rejected as non-fast-forward is handled honestly: four retries, then `PUSH FAILED after 4
+attempts … committed locally and is not lost`, exit non-zero. **But the obvious recovery silently
+fails.** The commit stage does:
+
+```bash
+if git diff --cached --quiet; then
+  echo "nothing changed — already up to date, nothing to push."
+  exit 0
+fi
+```
+
+After a rebase the data commit is already in `HEAD`, so re-staging the same paths yields **no staged
+diff**. The stage prints success and **exits 0 without pushing** — the "work done, never pushed" failure
+`refresh.sh` was written to prevent, reached by following the recovery instruction.
+
+**This corrects advice I gave during the refresh:** I suggested `git pull --rebase` then
+`bash scripts/refresh.sh commit`. That second step does nothing. The correct recovery — **no force, no
+reset, no deletion**:
+
+```
+git status --porcelain          # expect empty: the data is already committed
+git rev-parse --abbrev-ref HEAD # confirm the branch
+git log --oneline -3            # confirm the data-refresh commit is present
+git pull --rebase origin <branch>
+git push origin <branch>        # an explicit, ordinary push
+```
+
+If the rebase reports a conflict, **stop** — both sides changed the same file and the resolution is a
+judgement call. The local commit remains reachable; a failed rebase discards nothing (asserted in the
+fixture via reflog). Verify the result on the **remote**, not from stdout:
+
+```
+git ls-tree -r --name-only origin/<branch> -- ibkr-bundle | wc -l
+```
+
 ## 5a. Corrections to this document's own earlier draft
 
 Four overclaims, found on review and fixed rather than left standing:
@@ -364,11 +491,12 @@ grid endpoint is right, and the old `i + hold < length` was one period short.
 
 ## 6. Next work, ranked by expected information gain
 
-1. **Re-measure §5b against the live `ibkr-bundle` once it lands.** Done for `sp500-bundle` (127 names),
-   where `slate=300` coincides with the full universe. But the live universe is **1,047 tickers**, so
-   `slate=300` is ~29% of it and the narrow-slate regime — where the registered MDE is optimistic by
-   ~20% — is the live one. `--root ibkr-bundle` now exists for exactly this. **Highest-information item
-   the moment the panel is pushed**, and it supersedes the ordering below.
+1. **Measure §5b against the live `ibkr-bundle`, once it has enough history.** Done for `sp500-bundle`
+   (127 names), where `slate=300` coincides with the full universe. The live candidate list is 1,047
+   tickers, so that coincidence cannot be assumed — but the live effect is **unknown**, not estimated
+   (see the correction in §5b). `--root ibkr-bundle` exists for this. **Blocked on history, not on the
+   upload:** a 1-year pull is ~251 bars → ~250 return dates, below the 252-date warm-up, so the grid is
+   empty and the tool refuses (§5c). It needs a longer pull, e.g. `--duration "2 Y"`.
 2. ~~Decide the control-sampling convention for the forward record.~~ **WITHDRAWN — there was no
    decision to make.** §5b: the runtime already fixes it. `loop.mjs` passes the point-in-time slate as
    the pool and `matchedRandomControl` permits overlap, so the diagnostic was the thing out of step.

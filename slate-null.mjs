@@ -97,11 +97,35 @@ export function loadGrids(root = ROOT) {
 
   const firstBars = new Set(Object.values(kept).map((b) => Number(b[0].time)));
   const aligned = panel.dates.every((t, k) => t === barDates[k + 1]);
+  // THE EXACT SUPPORTED SHAPE, AND WHY IT IS NARROW.
+  //
+  // This tool maps a return-grid index to a bar-grid index by `returnDates[k] === barDates[k+1]`, which
+  // holds only when EVERY symbol shares one first bar. A real IBKR panel need not: an IPO mid-window, a
+  // symbol whose history starts late, or a name that failed to resolve all produce ragged starts, and
+  // then the two grids no longer correspond index-for-index. The decision bar for a window would be off
+  // by however much the symbol's history is short, silently.
+  //
+  // So the supported shape is: one shared first bar across all screened symbols. Anything else REFUSES
+  // rather than measuring. It does NOT drop the inconvenient symbols to force alignment -- dropping
+  // names would change the eligible universe, which is runtime eligibility and not this tool's to
+  // alter, and would quietly measure a different cross-section from the one the analyst sees.
+  //
+  // Ragged ENDS (a symbol that stops early but starts with the rest) pass this check by design: the
+  // union grid is unaffected, and `bookReturn` skips missing returns so the effect shows up as
+  // `mean sessions held` below the nominal hold in section 4 rather than as a wrong date.
   if (!aligned || firstBars.size !== 1) {
+    const firstList = [...firstBars].sort().map((t) => new Date(t * 1000).toISOString().slice(0, 10));
     throw new Error(
-      `slate-null: bar and return grids do not correspond (${firstBars.size} distinct first bars, ` +
-      `aligned=${aligned}). The asOf mapping below would be wrong; fix the mapping before trusting any ` +
-      `number from this tool.`);
+      `slate-null: unsupported panel shape -- ${firstBars.size} distinct first bars ` +
+      `(${firstList.slice(0, 5).join(", ")}${firstList.length > 5 ? ", ..." : ""}), index alignment ` +
+      `${aligned ? "holds" : "FAILS"}.\n` +
+      `  This tool requires ONE shared first bar across all ${Object.keys(kept).length} screened symbols, ` +
+      `because it maps returnDates[k] to barDates[k+1] to find each window's decision bar.\n` +
+      `  Ragged starts (IPOs, late history, partially resolved symbols) break that mapping and would ` +
+      `shift decision dates silently.\n` +
+      `  REFUSING rather than dropping the short symbols: dropping them would change the eligible ` +
+      `universe and measure a different cross-section from the one the analyst is shown.\n` +
+      `  Fix the panel (pull a common window) or extend the tool to a per-symbol date map.`);
   }
   return { kept, barDates, panel, screened, aligned };
 }
@@ -201,6 +225,18 @@ export function carriedPools(grids, starts, { slate = 300, bookSize = 10, seed =
  * runtime: `matchedRandomControl` permits overlap.
  */
 export function measureWithPool(panel, starts, poolFor, { bookSize, hold, draws, seed, disjoint = false }) {
+  // AN EMPTY GRID RETURNS `empty`, NOT A SIGMA OF ZERO.
+  //
+  // Without this, `starts[Math.floor(rng() * 0)]` is undefined, every draw's bookReturn compounds
+  // nothing and yields null, `diffs` stays empty, and sd([]) is 0 -- so the function returned
+  // `sd: 0, n: 0` with no indication that it had measured nothing. A caller printing that figure shows
+  // perfect precision where there is absent data. power-sensitivity.mjs's `measure` already guarded
+  // this; this one did not, and a test of the 1-year-panel case is what exposed it.
+  if (!starts.length) {
+    return { sd: 0, mean: 0, n: 0, periods: 0, starts: 0, mcSe: NaN, meanSeen: 0,
+             truncatedShare: 0, meanPoolSize: 0, poolTooSmallShare: 0, identicalShare: 0,
+             degenerate: false, empty: true, byPeriod: new Map() };
+  }
   const rng = seededRng(seed);
   const diffs = [];
   const byPeriod = new Map();
@@ -240,6 +276,7 @@ export function measureWithPool(panel, starts, poolFor, { bookSize, hold, draws,
     identicalShare,
     // A sigma of zero from identical books is not a precise measurement; it is no measurement.
     degenerate: identicalShare > 0.999,
+    empty: false,
     byPeriod,
   };
 }
@@ -270,6 +307,40 @@ async function main() {
 
   // ---- 1. the point-in-time mapping ------------------------------------------------------------
   const starts = nonOverlappingStarts(FIRST_START, HOLD, panel.dates.length);
+
+  // INSUFFICIENT HISTORY IS A REFUSAL, NOT A SMALL NUMBER.
+  //
+  // A 1-year IBKR pull is ~251 bars, which gives ~250 return dates -- BELOW the 252-bar momentum
+  // warm-up that buildContext needs before it can rank anything. nonOverlappingStarts then returns an
+  // empty grid and every downstream figure would be computed from nothing: Math.max of an empty list
+  // is -Infinity, an sd of an empty sample is 0, and a sigma of 0 reads as perfect precision rather
+  // than as absent data. So this exits instead.
+  //
+  // The warm-up is NOT weakened to make a short panel measurable. 252 bars is what the ranking
+  // indicator requires (`momentum = ret(c, i, 252, 21)`); shortening it here would measure a different
+  // ranking from the one the runtime uses and report it as the same thing.
+  if (starts.length < 2) {
+    console.log("=== UNAVAILABLE: INSUFFICIENT HISTORY ===");
+    console.log(`  panel root           ${ROOT}`);
+    console.log(`  bar dates            ${barDates.length}`);
+    console.log(`  return dates         ${panel.dates.length}   (one fewer than bars, per symbol's first bar)`);
+    console.log(`  warm-up required     ${FIRST_START} return dates before the first decision can be ranked`);
+    console.log(`  hold                 ${HOLD}`);
+    console.log(`  non-overlapping periods available   ${starts.length}   (need at least 2)`);
+    console.log(`  shortfall            ${Math.max(0, FIRST_START + HOLD - panel.dates.length)} more return dates`);
+    console.log("");
+    console.log("  NO SIGMA IS REPORTED. A dispersion computed from zero periods is not a small number,");
+    console.log("  it is absent data, and an sd of 0 would read as perfect precision.");
+    console.log("");
+    console.log(`  A 1-year IBKR pull is ~251 bars -> ~250 return dates, which is BELOW the ${FIRST_START}-date`);
+    console.log("  warm-up. To measure this panel the pull needs more history, e.g.");
+    console.log('    node scripts/ibkr-panel.mjs --symbols universe/candidates.txt --duration "2 Y"');
+    console.log("  The warm-up is not adjustable here: 252 is what the momentum ranking requires, and");
+    console.log("  lowering it would measure a different ranking from the one the runtime uses.");
+    process.exitCode = 2;
+    return;
+  }
+
   console.log("=== 1. POINT-IN-TIME MAPPING AND ITS LIMITS ===");
   console.log(`  bar grid ${barDates.length} dates, return grid ${panel.dates.length} dates, aligned: ${grids.aligned}`);
   console.log(`  window at return index i is entered at the close of barDates[i] -> buildContext asOf = i`);
@@ -441,8 +512,11 @@ async function main() {
   console.log(`    period 1 (bar ${new Date(barDates[secondKey] * 1000).toISOString().slice(0, 10)}) pool ${auditCarry.pools.get(secondKey).length}`);
   console.log(`    mean held across periods ${auditCarry.meanHeld.toFixed(2)} (expect ~10 after period 0)`);
   console.log(`    mean pool at slate=${auditSlate}: ${auditCarry.meanPool.toFixed(2)} vs ${auditSlate} flat`);
-  console.log("    held names are shown ON TOP of the ranked slate, so a carried pool is WIDER; the");
-  console.log("    excess over the flat slate is the held names the ranking would not have shown.");
+  console.log("    held names are shown ON TOP of the ranked slate, so a carried pool is WIDER -- but the");
+  console.log("    excess over the flat slate is NOT simply the held names. context.mjs ranks");
+  console.log("    `rest = rows.filter(r => !r.held)`, so held names are EXCLUDED before the halves are");
+  console.log("    taken and the slices slide down the cross-section: the excess is held names PLUS");
+  console.log("    PROMOTED names the flat ranking had excluded. Two channels, not one.");
   console.log("");
   // PAIRED AND ORDER-NORMALISED, because two things were confounding this comparison.
   //

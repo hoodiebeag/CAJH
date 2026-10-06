@@ -13,10 +13,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
+import fs from "node:fs";
+import os from "node:os";
 import { execFileSync } from "node:child_process";
 import { buildContext } from "./analyst/context.mjs";
 import { nonOverlappingStarts } from "./analyst/power.mjs";
-import { buildReturnMap, blockBootstrapSd, periodBootstrapSd, sd } from "./analyst/panel-null.mjs";
+import { buildReturnMap, bookReturn, blockBootstrapSd, periodBootstrapSd, sd } from "./analyst/panel-null.mjs";
 import { seededRng } from "./inference.mjs";
 import { loadGrids, slateFor, measureWithPool, carriedPools, SEED, HOLD, FIRST_START } from "./slate-null.mjs";
 
@@ -405,4 +407,135 @@ test("a nonexistent root fails loudly rather than measuring an empty panel", () 
   } catch (e) { failed = true; out = String(e.stdout ?? "") + String(e.stderr ?? ""); }
   assert.ok(failed, "a missing root should not exit 0");
   assert.doesNotMatch(out, /sigma\/period\s+0\.000%/, "a missing panel must not report a sigma at all");
+});
+
+// ---- audit: insufficient history must refuse, not fabricate -------------------------------------
+
+test("a 1-year panel is BELOW the warm-up, so the grid is empty rather than small", () => {
+  // THE CONCRETE LIVE RISK. scripts/ibkr-panel.mjs with its default "1 Y" duration produced 251 bars
+  // per symbol on the owner's machine. 251 bars give 250 return dates, and FIRST_START is 252, so the
+  // period grid is EMPTY -- not short. Asserted as arithmetic so the shortfall is unambiguous.
+  assert.equal(FIRST_START, 252, "the warm-up is the momentum lookback and must not drift");
+  const oneYearBars = 251;
+  const returnDates = oneYearBars - 1;              // one return fewer than bars
+  assert.equal(returnDates, 250);
+  assert.deepEqual(nonOverlappingStarts(FIRST_START, HOLD, returnDates), [],
+    "a 1-year pull must yield NO periods, which is why the tool has to refuse");
+  // Two years clears it comfortably.
+  assert.ok(nonOverlappingStarts(FIRST_START, HOLD, 502).length > 40);
+  // And the boundary is exact: the first realisable window needs FIRST_START + HOLD return dates.
+  assert.deepEqual(nonOverlappingStarts(FIRST_START, HOLD, FIRST_START + HOLD - 1), []);
+  assert.deepEqual(nonOverlappingStarts(FIRST_START, HOLD, FIRST_START + HOLD), [FIRST_START]);
+});
+
+test("a sigma is never computed from an empty period grid", () => {
+  // The failure mode the refusal prevents: sd([]) is 0, and a sigma of 0 reads as perfect precision.
+  // measureWithPool must report `empty` rather than a number when there is nothing to draw from.
+  const g = loadGrids();
+  const m = measureWithPool(g.panel, [], () => g.panel.names,
+    { bookSize: 10, hold: HOLD, draws: 100, seed: SEED });
+  assert.equal(m.empty, true);
+  assert.equal(m.starts, 0);
+  assert.equal(m.sd, 0, "sd of nothing is 0, which is exactly why `empty` has to be checked first");
+});
+
+test("the report REFUSES on a short panel and reports the shortfall, printing no sigma", () => {
+  // Built on a synthetic bundle too short to clear the warm-up, so the refusal path is exercised
+  // end-to-end rather than argued. Written under the OS temp dir; no real bundle is touched.
+  const box = fs.mkdtempSync(path.join(os.tmpdir(), "shortpanel-"));
+  const root = path.join(box, "short-bundle");
+  const dir = path.join(root, "1440");
+  fs.mkdirSync(dir, { recursive: true });
+  const DAYS = 86400;
+  for (let k = 0; k < 6; k++) {
+    const rows = ["time,open,high,low,close,volume"];
+    for (let i = 0; i < 251; i++) {                 // the 1-year shape, exactly
+      const px = 100 * (1 + 0.0003 * (k + 1)) ** i;
+      rows.push(`${1_600_000_000 + i * DAYS},${px},${px * 1.01},${px * 0.99},${px},1000000`);
+    }
+    fs.writeFileSync(path.join(dir, `S${k}.csv`), rows.join("\n") + "\n");
+  }
+
+  let out = "", status = 0;
+  try {
+    out = execFileSync("node", [path.join(REPO, "slate-null.mjs"), "100", "--root", root],
+      { cwd: REPO, stdio: "pipe", encoding: "utf8", timeout: 600000 });
+  } catch (e) { status = e.status; out = String(e.stdout ?? "") + String(e.stderr ?? ""); }
+
+  assert.equal(status, 2, `a short panel must exit 2, got ${status}\n${out.slice(0, 800)}`);
+  assert.match(out, /UNAVAILABLE: INSUFFICIENT HISTORY/);
+  assert.match(out, /NO SIGMA IS REPORTED/);
+  assert.match(out, /warm-up required\s+252/);
+  assert.match(out, /shortfall/);
+  // It must not weaken the warm-up or print a dispersion figure.
+  assert.doesNotMatch(out, /sigma\/period/);
+  assert.match(out, /not adjustable here/);
+});
+
+// ---- audit: ragged panel shapes --------------------------------------------------------------
+
+test("ragged STARTS are refused with the supported shape named, and no symbol is dropped", () => {
+  // A real IBKR panel can have IPOs and late history. The index mapping returnDates[k] = barDates[k+1]
+  // only holds with one shared first bar, so a ragged-start panel must refuse rather than measure a
+  // shifted decision date -- and must not silently drop the short symbols to force alignment, which
+  // would change the eligible universe.
+  const box = fs.mkdtempSync(path.join(os.tmpdir(), "ragged-"));
+  const root = path.join(box, "ragged-bundle");
+  const dir = path.join(root, "1440");
+  fs.mkdirSync(dir, { recursive: true });
+  const DAYS = 86400;
+  const write = (name, startIdx, n) => {
+    const rows = ["time,open,high,low,close,volume"];
+    for (let i = startIdx; i < startIdx + n; i++) {
+      const px = 100 * 1.0005 ** i;
+      rows.push(`${1_600_000_000 + i * DAYS},${px},${px * 1.01},${px * 0.99},${px},1000000`);
+    }
+    fs.writeFileSync(path.join(dir, `${name}.csv`), rows.join("\n") + "\n");
+  };
+  for (let k = 0; k < 5; k++) write(`EARLY${k}`, 0, 400);
+  write("IPO", 120, 280);                            // starts late: the ragged case
+
+  assert.throws(() => loadGrids(root), (e) => {
+    assert.match(e.message, /unsupported panel shape/);
+    assert.match(e.message, /distinct first bars/);
+    assert.match(e.message, /ONE shared first bar/);
+    assert.match(e.message, /REFUSING rather than dropping/);
+    return true;
+  });
+});
+
+test("ragged ENDS pass by design, and show up as a short hold rather than a wrong date", () => {
+  // A symbol that starts with the rest but stops early does NOT break the index mapping: the union
+  // grid is unchanged. bookReturn skips its missing returns, so the effect is a shorter effective hold,
+  // which section 4 reports as `mean sessions held` below the nominal. Asserted so the distinction
+  // between "refused" and "visible" is deliberate rather than accidental.
+  const kept = {};
+  const DAYS = 86400;
+  const mk = (n) => Array.from({ length: n }, (_, i) => ({ time: 1_600_000_000 + i * DAYS, close: 100 * 1.001 ** i }));
+  kept.FULL1 = mk(60); kept.FULL2 = mk(60); kept.SHORT = mk(40);   // same first bar, early end
+  const panel = buildReturnMap(kept);
+  const firsts = new Set(Object.values(kept).map((b) => Number(b[0].time)));
+  assert.equal(firsts.size, 1, "the fixture must share a first bar");
+  assert.equal(panel.dates.length, 59, "the union grid follows the longest series");
+
+  // A window past SHORT's end: it contributes fewer sessions, and `seen` reports that.
+  const full = bookReturn(panel, ["FULL1"], 50, 5, 0);
+  const short = bookReturn(panel, ["SHORT"], 50, 5, 0);
+  assert.equal(full.seen, 5);
+  assert.equal(short.net, null, "a symbol with no returns in the window yields null, not a fake 0");
+  // Mixed book: the short name simply does not contribute.
+  const mixed = bookReturn(panel, ["FULL1", "SHORT"], 50, 5, 0);
+  assert.equal(mixed.seen, 5, "seen averages over contributing names only");
+});
+
+test("carriedPools refuses a ragged-length panel rather than mis-pricing avgPrice", () => {
+  // avgPrice reads kept[sym][i].close, which is the bar at barDates[i] only if every series spans the
+  // whole grid. A short series would silently price a carried position at the wrong date.
+  const kept = {};
+  const DAYS = 86400;
+  const mk = (n) => Array.from({ length: n }, (_, i) => ({ time: 1_600_000_000 + i * DAYS, close: 100 * 1.001 ** i }));
+  kept.A = mk(300); kept.B = mk(300); kept.C = mk(250);
+  const barDates = [...new Set(Object.values(kept).flatMap((b) => b.map((x) => Number(x.time))))].sort((a, b) => a - b);
+  assert.throws(() => carriedPools({ kept, barDates }, [260, 265], { slate: 10 }),
+    /would read the wrong date/);
 });
