@@ -218,8 +218,35 @@ export function applyRiskGate(proposals, state, instruments, limits = {}) {
     }
 
     if (!isFiniteNum(inst.price) || inst.price <= 0) { reject(p, REJECT.NO_PRICE, "no positive price"); continue; }
-    if (isFiniteNum(inst.quoteAgeMs) && inst.quoteAgeMs > L.maxQuoteAgeMs) {
-      reject(p, REJECT.STALE_QUOTE, `quote ${(inst.quoteAgeMs / 60000).toFixed(1)}min old`);
+    // STALENESS, IN WHICHEVER UNIT THE DATA ACTUALLY SUPPORTS.
+    //
+    // `maxQuoteAgeMs` is unchanged and still governs an ACTUAL intraday observation. A daily panel
+    // does not carry one -- its bars are session records stamped at midnight -- so judging a daily
+    // bar's age against 15 minutes rejected every proposal including fresh ones, and a paper run
+    // could only journal an empty book. See `instrumentsFromContext`.
+    //
+    // THE MILLISECOND RULE CANNOT BE RE-TUNED INTO A SESSION RULE, WHICH IS WHY THIS IS A SEPARATE
+    // BRANCH RATHER THAN A LARGER NUMBER. Calendar time per session varies: the longest legitimate
+    // gap between consecutive published NYSE sessions in 2026-2028 is 96h (a weekend plus a
+    // closure), while a symbol genuinely ONE session stale after an ordinary weekend is only 72h
+    // old. The stale case sits inside the fresh window, so no single threshold separates them.
+    //
+    // FAIL CLOSED ON ABSENCE. This branch used to be `isFiniteNum(inst.quoteAgeMs) && ...`, so an
+    // absent, null or NaN quote age SKIPPED the staleness check entirely and the proposal was
+    // allowed. Supplying neither a quote age nor a session now rejects.
+    if (isFiniteNum(inst.quoteAgeMs)) {
+      if (inst.quoteAgeMs > L.maxQuoteAgeMs) {
+        reject(p, REJECT.STALE_QUOTE, `quote ${(inst.quoteAgeMs / 60000).toFixed(1)}min old`);
+        continue;
+      }
+    } else if (!isFiniteNum(inst.sessionBar) || !isFiniteNum(inst.decisionSession)) {
+      reject(p, REJECT.STALE_QUOTE, "no quote age and no session bar: freshness is unverifiable");
+      continue;
+    } else if (inst.sessionBar !== inst.decisionSession) {
+      const sessions = Math.round((inst.decisionSession - inst.sessionBar) / 86400);
+      reject(p, REJECT.STALE_QUOTE,
+        `no bar in the decision session; newest is ${new Date(inst.sessionBar * 1000).toISOString().slice(0, 10)}`
+        + ` (${sessions} calendar day(s) back)`);
       continue;
     }
 

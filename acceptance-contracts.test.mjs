@@ -12,8 +12,10 @@
  *      daily bar is a session record stamped at 00:00:00Z, not an executable quote, so that figure is
  *      always at least a day old and the substitution would reject every fresh symbol.
  *
- * Nothing runtime is changed. `analyst/protocol.mjs`, `analyst/risk.mjs` and `analyst/loop.mjs` are
- * read, not modified, and no threshold is altered anywhere.
+ * A3 HAS SINCE BEEN IMPLEMENTED (approved separately). The tests below that recorded its defect now
+ * assert the fixed behaviour, each keeping the fixture and the arithmetic that showed what was wrong,
+ * so the evidence survives the fix. `maxQuoteAgeMs` itself is unchanged -- the unit was wrong, not the
+ * value. A1 is still unapproved: `analyst/protocol.mjs` is read, not modified.
  */
 
 import test from "node:test";
@@ -130,10 +132,11 @@ const sessionGrid = (endISO, n) => {
   return out;
 };
 
-test("A3: in paper mode a FRESH symbol is already rejected stale_quote on a daily panel", () => {
-  // The reference the runtime uses in paper mode is the WALL CLOCK (analyst/loop.mjs:231,
+test("A3 FIXED: in paper mode a FRESH symbol is ALLOWED on a daily panel", () => {
+  // The reference the runtime uses in paper mode is the WALL CLOCK (analyst/loop.mjs,
   // `mode === MODE.PAPER ? now : asOfTime * 1000`). The panel's newest bar must be the last
-  // COMPLETED session for the paper guard to pass, so it is stamped at least one midnight back.
+  // COMPLETED session for the paper guard to pass, so it is stamped at least one midnight back --
+  // which is why feeding that stamp into a 15-minute limit rejected every fresh symbol.
   const dates = sessionGrid("2026-10-01", 300);              // last bar Thursday, 00:00:00Z
   const asOfTime = dates.at(-1);
   const series = { AAA: dates.map((t, i) => ({ time: t, close: 100 * 1.002 ** i, volume: 1e6 })) };
@@ -143,39 +146,59 @@ test("A3: in paper mode a FRESH symbol is already rejected stale_quote on a dail
   // The paper staleness guard is satisfied: nothing is behind.
   assert.equal(missedSessions(asOfTime, now, sessionWeekdays(dates)), 0, "paper mode would PROCEED");
 
+  // THE ARITHMETIC THAT WAS THE DEFECT, kept verbatim: the bar-stamp age still exceeds the limit by
+  // a wide margin. What changed is that this figure is no longer reported as a quote age.
+  const barStampAgeMs = now - asOfTime * 1000;
+  assert.ok(barStampAgeMs > DEFAULT_LIMITS.maxQuoteAgeMs,
+    `${barStampAgeMs}ms exceeds the ${DEFAULT_LIMITS.maxQuoteAgeMs}ms limit`);
+  assert.ok(barStampAgeMs > 24 * 3600 * 1000, "at least a day, structurally");
+
   const inst = instrumentsFromContext(ctx, series, asOfTime, now);
-  assert.ok(inst.AAA.quoteAgeMs > DEFAULT_LIMITS.maxQuoteAgeMs,
-    `${inst.AAA.quoteAgeMs}ms must exceed the ${DEFAULT_LIMITS.maxQuoteAgeMs}ms limit`);
-  assert.ok(inst.AAA.quoteAgeMs > 24 * 3600 * 1000, "at least a day, structurally");
+  assert.equal(inst.AAA.quoteAgeMs, null, "no intraday observation is claimed");
+  assert.equal(inst.AAA.sessionBar, asOfTime);
+  assert.equal(inst.AAA.decisionSession, asOfTime);
+  assert.equal(inst.AAA.panelAgeMs, barStampAgeMs, "the old figure is still reported, informationally");
   const r = gateOn(inst, "AAA");
-  assert.deepEqual(r.allowed, [], "a perfectly fresh symbol is rejected");
-  assert.equal(r.rejected[0].code, "stale_quote");
+  assert.deepEqual(r.allowed.map((a) => a.symbol), ["AAA"], "a perfectly fresh symbol now passes");
+  assert.deepEqual(r.rejected, []);
 });
 
-test("A3: the minimum possible paper-mode figure is a day, so no fresh symbol can ever pass", () => {
+test("A3: the bar-stamp age is a day at MINIMUM, which is why it could never be a quote age", () => {
   // Not a property of one fixture: the bar is stamped at 00:00:00Z of a session that has already
   // completed, and the run happens on a later day, so the difference is at least 24h by construction.
+  // The gate is now indifferent to it at every reference instant.
   const dates = sessionGrid("2026-10-01", 300);   // clears the 252-bar momentum warm-up
   const asOfTime = dates.at(-1);
   const series = { AAA: dates.map((t, i) => ({ time: t, close: 100 * 1.001 ** i, volume: 1e6 })) };
   const ctx = buildContext({ series, dates, asOf: dates.length - 1, sectors: { AAA: "Tech" } });
   for (const at of ["2026-10-02T00:00:00Z", "2026-10-02T13:30:00Z", "2026-10-02T19:55:00Z"]) {
-    const inst = instrumentsFromContext(ctx, series, asOfTime, Date.parse(at));
-    assert.ok(inst.AAA.quoteAgeMs >= 24 * 3600 * 1000, `${at}: ${inst.AAA.quoteAgeMs}`);
-    assert.ok(inst.AAA.quoteAgeMs / 60000 > 15);
+    const ref = Date.parse(at);
+    assert.ok(ref - asOfTime * 1000 >= 24 * 3600 * 1000, `${at}: under a day`);
+    assert.ok((ref - asOfTime * 1000) / 60000 > 15, `${at}: inside the 15min limit`);
+    const inst = instrumentsFromContext(ctx, series, asOfTime, ref);
+    assert.equal(inst.AAA.quoteAgeMs, null, at);
+    assert.deepEqual(gateOn(inst, "AAA").allowed.map((a) => a.symbol), ["AAA"], at);
   }
 });
 
-test("A3: the dry-run reference passes, which is why the suite has never caught this", () => {
-  // In a dry run the reference is `asOfTime * 1000`, so the age is exactly 0 and the gate passes.
-  // The defect is specific to the paper path.
+test("A3: the dry-run and paper paths now agree, where before only the dry run passed", () => {
+  // The defect was specific to the paper path: in a dry run the reference is `asOfTime * 1000`, the
+  // age came out exactly 0 and the gate passed, so no test exercised the failing figure. Both paths
+  // now report the same thing, which is what removes the discrepancy.
   const dates = sessionGrid("2026-10-01", 300);   // clears the 252-bar momentum warm-up
   const asOfTime = dates.at(-1);
   const series = { AAA: dates.map((t, i) => ({ time: t, close: 100 * 1.001 ** i, volume: 1e6 })) };
   const ctx = buildContext({ series, dates, asOf: dates.length - 1, sectors: { AAA: "Tech" } });
-  const inst = instrumentsFromContext(ctx, series, asOfTime, asOfTime * 1000);
-  assert.equal(inst.AAA.quoteAgeMs, 0);
-  assert.deepEqual(gateOn(inst, "AAA").allowed.map((a) => a.symbol), ["AAA"]);
+  const dry = instrumentsFromContext(ctx, series, asOfTime, asOfTime * 1000);
+  const paper = instrumentsFromContext(ctx, series, asOfTime, Date.parse("2026-10-02T14:00:00Z"));
+  assert.equal(dry.AAA.quoteAgeMs, null);
+  assert.equal(paper.AAA.quoteAgeMs, null);
+  assert.equal(dry.AAA.sessionBar, paper.AAA.sessionBar, "the gate's inputs no longer depend on mode");
+  assert.equal(dry.AAA.decisionSession, paper.AAA.decisionSession);
+  assert.equal(dry.AAA.panelAgeMs, 0, "only the informational figure differs");
+  assert.ok(paper.AAA.panelAgeMs > 0);
+  assert.deepEqual(gateOn(dry, "AAA").allowed.map((a) => a.symbol), ["AAA"]);
+  assert.deepEqual(gateOn(paper, "AAA").allowed.map((a) => a.symbol), ["AAA"]);
 });
 
 test("A3: the existing paper-mode test passes because its panel is stamped at `now`, not midnight", () => {
@@ -242,9 +265,10 @@ test("A3: the immediate next bar is excluded from every freshness figure", () =>
 // A3 — the preferred fail-closed daily-session proposal, as a contract
 // =================================================================================================
 
-test("A3 REJECTS option (ii): the decision-bar reference makes the check measure nothing", () => {
+test("A3 REJECTED option (ii): a decision-bar reference would have measured nothing", () => {
   // Setting referenceMs = asOfTime*1000 in paper mode too (what the dry run does) gives every symbol
   // an age of exactly 0 -- a live name and one that stopped trading 19 sessions ago are identical.
+  // That arithmetic is still true, which is why the implemented fix compares SESSIONS instead.
   const dates = sessionGrid("2026-10-01", 300);
   const series = {
     FRESH: dates.map((t, i) => ({ time: t, close: 100 * 1.002 ** i, volume: 1e6 })),
@@ -253,10 +277,18 @@ test("A3 REJECTS option (ii): the decision-bar reference makes the check measure
   const ctx = buildContext({ series, dates, asOf: dates.length - 1,
     sectors: { FRESH: "Tech", STALE: "Energy" } });
   const inst = instrumentsFromContext(ctx, series, dates.at(-1), dates.at(-1) * 1000);
-  assert.equal(inst.FRESH.quoteAgeMs, 0);
-  assert.equal(inst.STALE.quoteAgeMs, 0, "the dead name reads EXACTLY as fresh as the live one");
-  assert.deepEqual(gateOn(inst, "STALE").allowed.map((a) => a.symbol), ["STALE"],
-    "so a 19-session-stale symbol is allowed — the check has stopped measuring anything");
+  const rejectedOption = (i) => dates.at(-1) * 1000 - i.decisionSession * 1000;   // the proposed figure
+  assert.equal(rejectedOption(inst.FRESH), 0);
+  assert.equal(rejectedOption(inst.STALE), 0, "the dead name would read EXACTLY as fresh as the live one");
+
+  // What the gate uses now separates them, on that same reference.
+  assert.equal(inst.FRESH.sessionBar, inst.FRESH.decisionSession);
+  assert.equal(inst.STALE.sessionBar, dates[280], "19 sessions back");
+  assert.deepEqual(gateOn(inst, "FRESH").allowed.map((a) => a.symbol), ["FRESH"]);
+  const r = gateOn(inst, "STALE");
+  assert.deepEqual(r.allowed, [], "and the 19-session-stale symbol is rejected");
+  assert.equal(r.rejected[0].code, "stale_quote");
+  assert.match(r.rejected[0].detail, /no bar in the decision session/);
 });
 
 test("A3 REJECTS option (iii): no millisecond threshold can separate the cases", () => {
@@ -277,18 +309,26 @@ test("A3 REJECTS option (iii): no millisecond threshold can separate the cases",
     "a genuinely stale symbol can be YOUNGER than a legitimately fresh one, so no single threshold works");
 });
 
-test("A3 PREFERRED: a missing bar must reject, and a missing quoteAgeMs currently FAILS OPEN", () => {
-  // The hazard any proposal must avoid. risk.mjs:221 guards with isFiniteNum(inst.quoteAgeMs), so a
-  // quote age that is absent, null or NaN SKIPS the staleness check entirely and the proposal is
-  // allowed. Simply nulling the field for daily bars would therefore DISABLE the gate, not fix it.
+test("A3: a missing bar rejects, and an absent quoteAgeMs now FAILS CLOSED", () => {
+  // The hazard the fix had to avoid. risk.mjs previously guarded with isFiniteNum(inst.quoteAgeMs),
+  // so a quote age that was absent, null or NaN SKIPPED the staleness check entirely and the proposal
+  // was allowed. Nulling the field for daily bars would therefore have DISABLED the gate; the
+  // implemented branch requires a usable session pair before it will pass anything.
   const base = { class: "usEquity", sector: "Tech", price: 100, medianDollarVolume: 1e9 };
   for (const absent of [undefined, null, NaN]) {
     const r = gateOn({ AAA: { ...base, quoteAgeMs: absent } }, "AAA");
-    assert.deepEqual(r.allowed.map((a) => a.symbol), ["AAA"],
-      `quoteAgeMs ${String(absent)} currently skips the staleness check`);
+    assert.deepEqual(r.allowed, [], `quoteAgeMs ${String(absent)} must not skip the check`);
+    assert.equal(r.rejected[0].code, "stale_quote");
+    assert.match(r.rejected[0].detail, /freshness is unverifiable/);
   }
-  // And the threshold itself still works when a real figure is present, so it is not the broken part.
-  assert.deepEqual(gateOn({ AAA: { ...base, quoteAgeMs: 14 * 60000 } }, "AAA").allowed.length, 1);
+  // A session pair that disagrees rejects; one that agrees passes.
+  const session = e("2026-10-01");
+  assert.deepEqual(gateOn({ AAA: { ...base, quoteAgeMs: null, sessionBar: session - 3 * DAY,
+    decisionSession: session } }, "AAA").rejected[0].code, "stale_quote");
+  assert.equal(gateOn({ AAA: { ...base, quoteAgeMs: null, sessionBar: session,
+    decisionSession: session } }, "AAA").allowed.length, 1);
+  // And the threshold itself still works when a real figure is present, so it was not the broken part.
+  assert.equal(gateOn({ AAA: { ...base, quoteAgeMs: 14 * 60000 } }, "AAA").allowed.length, 1);
   assert.equal(gateOn({ AAA: { ...base, quoteAgeMs: 16 * 60000 } }, "AAA").rejected[0].code, "stale_quote");
 });
 
@@ -367,7 +407,8 @@ test("REHEARSAL SAFETY: it writes only to a temp path and leaves the real journa
   assert.match(out, /unchanged: true/, "and the rehearsal must say so itself");
   assert.match(out, /no CLI launched, no model client constructed/);
   assert.match(out, /NOTHING WAS FIXED/);
-  // The cascade the rehearsal exists to show: the gate rejects, so the book is empty downstream.
-  assert.match(out, /allowed 0\/2; rejected: stale_quote/);
+  // What the gate now does: fresh symbols pass, and the quote-age figure is no longer claimed.
+  assert.match(out, /allowed 2\/2; rejected: none/);
+  assert.match(out, /quoteAgeMs=null for every symbol/);
   assert.ok(!/analyst-journal\.jsonl.*fingerprint after: (?!ABSENT)/.test(out) || before !== "ABSENT");
 });

@@ -297,9 +297,29 @@ function defaultBatchId(asOfTime, mode) {
 /**
  * Derive the instrument facts the risk gate needs from the context and the panel.
  *
- * QUOTE AGE IS COMPUTED FROM THE BAR AGAINST `referenceMs`, NOT ASSUMED FRESH. The caller chooses
- * the reference: wall-clock for a live decision, the simulated decision moment for a dry run. See
- * the note at the call site in `runOnce` for why that distinction is not a convenience.
+ * A DAILY BAR IS NOT A QUOTE, AND THIS USED TO CONFLATE THEM. `quoteAgeMs` was
+ * `referenceMs - asOfTime * 1000`: in paper mode the reference is the wall clock and the newest bar
+ * must already be the last COMPLETED session, so the figure was never less than a day. Measured at
+ * three legitimate run times it was 37.5h, 38.0h and 43.9h against a 15-minute limit, so the gate
+ * rejected EVERY proposal `stale_quote` -- fresh names included -- and a paper run could only ever
+ * journal an empty book. The pre-existing suite did not catch it because `panel()` in
+ * analyst/loop.test.mjs stamps its newest bar at `now`, while the real bundle stamps 00:00:00Z of the
+ * session date (verified: 0 of 921 bar dates misaligned).
+ *
+ * SO THE TWO QUANTITIES ARE NOW SEPARATE, AND NAMED FOR WHAT THEY ARE:
+ *
+ *   quoteAgeMs      the age of an ACTUAL intraday observation. A daily panel carries none, so this
+ *                   is `null` here. `maxQuoteAgeMs` is unchanged and still governs it when a caller
+ *                   -- a future intraday feed, or a test -- supplies a real one.
+ *   sessionBar      the session of this symbol's own newest bar at or before the decision.
+ *   decisionSession the session being decided. `sessionBar === decisionSession` is the daily-data
+ *                   freshness test: the name traded in the session being decided on.
+ *   panelAgeMs      wall-clock age of the decision session against `referenceMs`. INFORMATIONAL --
+ *                   it is the panel's age, not a quote's, and the gate does not reject on it.
+ *
+ * The gate's half of this is in `applyRiskGate`: with no quote age it requires `sessionBar` to equal
+ * `decisionSession` and REFUSES when either is missing, because `isFiniteNum(inst.quoteAgeMs)`
+ * previously meant an absent quote age skipped the staleness check altogether.
  */
 export function instrumentsFromContext(context, series, asOfTime, referenceMs) {
   const out = {};
@@ -318,7 +338,13 @@ export function instrumentsFromContext(context, series, asOfTime, referenceMs) {
       class: "usEquity",
       sector: c.sector ?? null,
       price: atDecision ? Number(atDecision.close) : null,
-      quoteAgeMs: Math.max(0, referenceMs - asOfTime * 1000),
+      // No intraday observation exists in a daily panel, so there is no quote age to report. Null
+      // rather than a session age, because a session age judged against a 15-minute limit is the
+      // defect this replaces.
+      quoteAgeMs: null,
+      sessionBar: atDecision ? Number(atDecision.time) : null,
+      decisionSession: asOfTime,
+      panelAgeMs: Math.max(0, referenceMs - asOfTime * 1000),
       medianDollarVolume: c.medianDollarVolume ?? null,
     };
   }
