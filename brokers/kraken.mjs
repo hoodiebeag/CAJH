@@ -16,4 +16,5 @@ export const KrakenBroker = {
   placeBuy: trader.placeBuy,
   placeSell: trader.placeSell,
   symbolToNativeId: trader.symbolToPair,
+  getHoldings: trader.getHoldings,
 };

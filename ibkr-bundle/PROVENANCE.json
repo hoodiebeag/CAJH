@@ -1,0 +1,11 @@
+{
+  "source": "IBKR reqHistoricalData, SMART/USD STK, whatToShow TRADES",
+  "adjustment": "IBKR TRADES bars: split-adjusted, NOT dividend-adjusted. Single vendor, single basis.",
+  "doNotJoin": "Do not merge with sp500-bundle or any other root. Different vendor, unverified basis.",
+  "duration": "2 Y",
+  "symbolsFrom": "ibkr-bundle/universe-resolved.txt (989 tickers)",
+  "collectedAt": "2026-10-06T22:58:40.995Z",
+  "symbols": 989,
+  "failed": [],
+  "newestBar": "2026-10-06"
+}
