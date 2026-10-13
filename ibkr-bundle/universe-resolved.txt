@@ -1,5 +1,5 @@
-# Resolved against IBKR 2026-10-06 from universe/candidates.txt
-# 989 of 1047 resolved; 58 did not and are left out.
+# Resolved against IBKR 2026-10-06 from ibkr-bundle/universe-resolved.txt
+# 989 of 989 resolved; 0 did not and are left out.
 A
 AA
 AAL
