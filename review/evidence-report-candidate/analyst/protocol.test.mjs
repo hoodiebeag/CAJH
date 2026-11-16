@@ -1,0 +1,366 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { recordDecision, recordOutcome, recordSkip, MODE, SKIP_REASON } from "./journal.mjs";
+import { REJECT } from "./risk.mjs";
+import { BATCH_FAILURE } from "./decide.mjs";
+import { tier1 } from "./protocol.mjs";
+
+const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "protocol-")), "j.jsonl");
+const DAY = 86400;
+const T0 = 1_760_000_000;
+const by = (r, n) => r.criteria.find((c) => c.n === n);
+
+// EVERY FIXTURE IS ATTRIBUTED, because tier1 now requires a candidate: the ten criteria are a
+// promotion claim and a claim over pooled records describes no candidate. The pair is fixture setup
+// here -- no test below changes what it asserts about any criterion. tier1 filters records and does
+// not resolve against the ledger, so no registration is needed.
+const CID = "analyst-daily", CVER = "v1";
+const ATTRIB = { candidateId: CID, candidateVersion: CVER };
+
+/** One healthy batch: two sized names, both with news, one rejection, settled. */
+function healthyBatch(j, s, { at = null, rejected = [REJECT.POSITION_CAP], hadNews = true, settle = true } = {}) {
+  const asOfTime = T0 + s * DAY;
+  const batchId = `paper-${s}`;
+  const allowed = [
+    { symbol: "AAA", action: "buy", targetPct: 0.05 },
+    { symbol: "BBB", action: "buy", targetPct: 0.05 },
+  ];
+  recordDecision({ ...ATTRIB,
+    batchId, at: at ?? new Date(asOfTime * 1000).toISOString(), mode: MODE.PAPER,
+    context: { asOfTime },
+    proposals: allowed.map((a) => ({ ...a, thesis: `${a.symbol} broke out on volume` })),
+    gate: { allowed, rejected: rejected.map((code) => ({ proposal: { symbol: "CCC" }, code, detail: "d" })) },
+    pool: [], newsSymbols: hadNews ? new Set(["AAA", "BBB"]) : new Set(),
+  }, j);
+  if (settle) {
+    for (const a of allowed) {
+      recordOutcome({ ...ATTRIB, batchId, symbol: a.symbol, holdDays: 5, grossReturn: 0.01, netReturn: 0.01, controlReturn: 0.005 }, j);
+    }
+  }
+  return batchId;
+}
+
+/** `now` far enough past the last batch that every hold has elapsed. */
+const wellAfter = (sessions) => (T0 + sessions * DAY) * 1000 + 30 * 86400000;
+
+test("a clean run passes every computable criterion and claims nothing about the manual ones", () => {
+  const j = tmp();
+  for (let s = 0; s < 20; s++) healthyBatch(j, s);
+
+  const r = tier1(j, { candidateId: CID, now: wellAfter(20) });
+
+  assert.equal(r.verdict, "PASS");
+  for (const n of [1, 2, 3, 4, 5, 7, 8]) assert.equal(by(r, n).status, "pass", `criterion ${n}`);
+  // The three that no file can answer say so rather than quietly passing.
+  for (const n of [6, 9, 10]) assert.equal(by(r, n).status, "manual", `criterion ${n}`);
+});
+
+test("the four stopping criteria are marked, and only they produce a STOP", () => {
+  const j = tmp();
+  for (let s = 0; s < 20; s++) healthyBatch(j, s);
+  const r = tier1(j, { candidateId: CID, now: wellAfter(20) });
+
+  assert.deepEqual(r.criteria.filter((c) => c.stops).map((c) => c.n), [2, 3, 6, 7]);
+
+  // A non-stopping failure is reported and judged; it does not stop the run.
+  const j2 = tmp();
+  for (let s = 0; s < 20; s++) healthyBatch(j2, s, { hadNews: false });
+  const r2 = tier1(j2, { candidateId: CID, now: wellAfter(20) });
+  assert.equal(by(r2, 8).status, "fail");
+  assert.equal(r2.verdict, "FAIL", "criterion 8 is not a stopping criterion");
+});
+
+test("an unsettled decision past its hold STOPS the run", () => {
+  const j = tmp();
+  for (let s = 0; s < 20; s++) healthyBatch(j, s, { settle: s < 18 });
+
+  const r = tier1(j, { candidateId: CID, now: wellAfter(20) });
+
+  assert.equal(by(r, 7).status, "fail");
+  assert.equal(by(r, 7).numbers.unsettled, 4, "two batches of two names each");
+  assert.equal(r.verdict, "STOP");
+  assert.deepEqual(r.stops.map((c) => c.n), [7]);
+});
+
+test("a decision still inside its holding period is not counted as unsettled", () => {
+  // The defect this guards against was found once already: an unfinished hold recorded as a
+  // completed 0% trade. Here the mirror of it -- an unfinished hold reported as a failure.
+  const j = tmp();
+  healthyBatch(j, 0, { at: new Date(Date.now() - 86400000).toISOString(), settle: false });
+
+  const r = tier1(j, { candidateId: CID, now: Date.now() });
+
+  assert.equal(by(r, 7).numbers.due, 0, "one day into a five-day hold is not due");
+  assert.equal(by(r, 7).status, "pass");
+});
+
+test("a point-in-time skip STOPS the run", () => {
+  const j = tmp();
+  for (let s = 0; s < 20; s++) healthyBatch(j, s);
+  recordSkip({ ...ATTRIB, batchId: "paper-20", mode: MODE.PAPER, reason: SKIP_REASON.CONTEXT_NOT_POINT_IN_TIME }, j);
+
+  const r = tier1(j, { candidateId: CID, now: wellAfter(21) });
+
+  assert.equal(by(r, 2).status, "fail");
+  assert.equal(r.verdict, "STOP");
+});
+
+test("refusals on a stale panel are counted without being called a failure", () => {
+  // The guard refusing IS the system working. What it must not do is vanish: criterion 3 reports
+  // the refusals so a panel that stopped being refreshed is visible rather than silent.
+  const j = tmp();
+  for (let s = 0; s < 20; s++) healthyBatch(j, s);
+  for (let s = 0; s < 3; s++) recordSkip({ ...ATTRIB, mode: MODE.PAPER, reason: SKIP_REASON.PANEL_STALE }, j);
+  recordSkip({ ...ATTRIB, mode: MODE.PAPER, reason: SKIP_REASON.PANEL_FUTURE_DATED }, j);
+
+  const r = tier1(j, { candidateId: CID, now: wellAfter(20) });
+
+  assert.equal(by(r, 3).status, "pass", "no batch was decided on a bad panel");
+  assert.equal(by(r, 3).numbers.stale, 3);
+  assert.equal(by(r, 3).numbers.futureDated, 1);
+  assert.match(by(r, 3).detail, /not being refreshed/);
+});
+
+test("lost batches are counted against criterion 4 by their recorded failure code", () => {
+  const j = tmp();
+  for (let s = 0; s < 19; s++) healthyBatch(j, s);
+  recordDecision({ ...ATTRIB,
+    batchId: "paper-lost-0", mode: MODE.PAPER, context: { asOfTime: T0 + 19 * DAY },
+    proposals: [], gate: { allowed: [], rejected: [] }, pool: [],
+    failure: { code: BATCH_FAILURE.REFUSED, detail: "x" },
+  }, j);
+
+  const r = tier1(j, { candidateId: CID, now: wellAfter(21) });
+
+  assert.equal(by(r, 4).numbers.failed, 1);
+  assert.equal(by(r, 4).numbers.batches, 20);
+  assert.equal(by(r, 4).numbers.byCode[BATCH_FAILURE.REFUSED], 1);
+  assert.equal(by(r, 4).status, "pass", "1 of 20 is 5%");
+});
+
+test("criterion 4 is '< 10%', so exactly 10% fails", () => {
+  // Pinned because the boundary is the whole content of a threshold, and a pre-registered one does
+  // not get relaxed to "about 10%" on the day it is first missed.
+  const j = tmp();
+  for (let s = 0; s < 18; s++) healthyBatch(j, s);
+  for (const [i, code] of [BATCH_FAILURE.REFUSED, BATCH_FAILURE.TRUNCATED].entries()) {
+    recordDecision({ ...ATTRIB,
+      batchId: `paper-lost-${i}`, mode: MODE.PAPER, context: { asOfTime: T0 + (18 + i) * DAY },
+      proposals: [], gate: { allowed: [], rejected: [] }, pool: [], failure: { code, detail: "x" },
+    }, j);
+  }
+
+  const r = tier1(j, { candidateId: CID, now: wellAfter(21) });
+
+  assert.equal(by(r, 4).numbers.lossRate, 0.1);
+  assert.equal(by(r, 4).status, "fail");
+});
+
+test("criterion 4 fails at or above the 10% loss threshold", () => {
+  const j = tmp();
+  for (let s = 0; s < 17; s++) healthyBatch(j, s);
+  for (let i = 0; i < 3; i++) {
+    recordDecision({ ...ATTRIB,
+      batchId: `paper-lost-${i}`, mode: MODE.PAPER, context: { asOfTime: T0 + (17 + i) * DAY },
+      proposals: [], gate: { allowed: [], rejected: [] }, pool: [],
+      failure: { code: BATCH_FAILURE.UNPARSEABLE, detail: "x" },
+    }, j);
+  }
+
+  const r = tier1(j, { candidateId: CID, now: wellAfter(20) });
+
+  assert.equal(by(r, 4).status, "fail", "3 of 20 is 15%");
+  assert.equal(by(r, 4).numbers.byCode[BATCH_FAILURE.UNPARSEABLE], 3);
+});
+
+test("a gate that never rejects anything fails criterion 5", () => {
+  const j = tmp();
+  for (let s = 0; s < 20; s++) healthyBatch(j, s, { rejected: [] });
+
+  const r = tier1(j, { candidateId: CID, now: wellAfter(20) });
+
+  assert.equal(by(r, 5).status, "fail");
+  assert.match(by(r, 5).detail, /not being reached/);
+});
+
+test("a rejection code risk.mjs does not define fails criterion 5", () => {
+  // "every code is one we can explain" is the criterion. An unknown code is unexplained by
+  // definition, and a readout that accepted it would be checking that rejections happened at all.
+  const j = tmp();
+  for (let s = 0; s < 20; s++) healthyBatch(j, s, { rejected: [s === 0 ? "vibes" : REJECT.POSITION_CAP] });
+
+  const r = tier1(j, { candidateId: CID, now: wellAfter(20) });
+
+  assert.equal(by(r, 5).status, "fail");
+  assert.deepEqual(by(r, 5).numbers.unexplained, ["vibes"]);
+});
+
+test("an empty journal reports manual rather than a pass it has not earned", () => {
+  const r = tier1(tmp(), { candidateId: CID, now: Date.now() });
+  assert.equal(by(r, 1).status, "manual");
+  assert.equal(by(r, 4).status, "manual");
+  assert.equal(by(r, 8).status, "manual");
+  assert.equal(r.batches, 0);
+});
+
+test("dry-run records are not scored as a paper run", () => {
+  const j = tmp();
+  for (let s = 0; s < 20; s++) {
+    recordDecision({ ...ATTRIB,
+      batchId: `dry-${s}`, mode: MODE.DRY_RUN, context: { asOfTime: T0 + s * DAY },
+      proposals: [], gate: { allowed: [], rejected: [] }, pool: [],
+    }, j);
+  }
+  const r = tier1(j, { candidateId: CID, mode: MODE.PAPER, now: wellAfter(20) });
+  assert.equal(r.batches, 0, "a dry run cannot satisfy a criterion about the paper run");
+});
+
+// ---- criterion 1 is measured on decision bars, and only in a forward run ------------------------
+
+test("criterion 1 counts the weekdays the decisions cover, not the minute they were written", () => {
+  // Read off write timestamps this reported "5 batch(es) over 1 weekday(s)" and PASSED at a ratio
+  // of 5.0 -- a pass manufactured by the records having been written together.
+  const j = tmp();
+  const write = new Date().toISOString();
+  for (let s = 0; s < 5; s++) healthyBatch(j, s * 5, { at: write });   // 5 batches, 5 sessions apart
+
+  const r = tier1(j, { candidateId: CID, now: wellAfter(40) });
+
+  const c = by(r, 1);
+  assert.ok(c.numbers.expected >= 15, `expected weekdays should span the bars; got ${c.numbers.expected}`);
+  assert.ok(c.numbers.ratio < 0.5, `5 batches over ~4 weeks is sparse; got ratio ${c.numbers.ratio}`);
+  assert.equal(c.status, "fail", "a forward run that skipped most sessions has not passed");
+});
+
+test("a contiguous forward run passes criterion 1 on the decision bars", () => {
+  const j = tmp();
+  const write = new Date().toISOString();
+  for (let s = 0; s < 20; s++) healthyBatch(j, s, { at: write });      // one per consecutive session
+
+  const r = tier1(j, { candidateId: CID, now: wellAfter(40) });
+
+  const c = by(r, 1);
+  assert.equal(c.status, "pass");
+  assert.ok(c.numbers.ratio >= 0.9, `got ${c.numbers.ratio}`);
+});
+
+test("criterion 1 reports MANUAL outside a forward run instead of a meaningless pass or fail", () => {
+  // A dry run's batches are hand-picked --asOf dates, so the ratio describes the operator's choice.
+  // A red line here would be noise in a table where four criteria stop the run.
+  const j = tmp();
+  const write = new Date().toISOString();
+  for (let s = 0; s < 5; s++) {
+    recordDecision({ ...ATTRIB,
+      batchId: `dry-${s}`, at: write, mode: MODE.DRY_RUN,
+      context: { asOfTime: T0 + s * 5 * DAY },
+      proposals: [], gate: { allowed: [], rejected: [] }, pool: [],
+    }, j);
+  }
+
+  const r = tier1(j, { candidateId: CID, mode: MODE.DRY_RUN, now: wellAfter(40) });
+
+  assert.equal(by(r, 1).status, "manual");
+  assert.equal(by(r, 1).numbers.forward, false);
+  assert.match(by(r, 1).detail, /hand-picked dates/);
+});
+
+// ---- per-version scoping: a promotion claim is about ONE candidate ----------------------------
+//
+// Weighted toward misuse. The point of requiring a candidate is not that one can be supplied; it is
+// that a verdict which describes no candidate cannot be produced at all.
+
+/** A batch attributed to a named candidate/version, so arms can be mixed in one journal. */
+function armBatch(j, s, who, { settle = true } = {}) {
+  const asOfTime = T0 + s * DAY;
+  const batchId = `paper-${who.candidateId}-${who.candidateVersion}-${s}`;
+  const allowed = [{ symbol: "AAA", action: "buy", targetPct: 0.05 },
+                   { symbol: "BBB", action: "buy", targetPct: 0.05 }];
+  recordDecision({
+    batchId, ...who, at: new Date(asOfTime * 1000).toISOString(), mode: MODE.PAPER,
+    context: { asOfTime },
+    proposals: allowed.map((a) => ({ ...a, thesis: `${a.symbol} broke out on volume` })),
+    gate: { allowed, rejected: [{ proposal: { symbol: "CCC" }, code: REJECT.POSITION_CAP, detail: "d" }] },
+    pool: [], newsSymbols: new Set(["AAA", "BBB"]),
+  }, j);
+  if (settle) {
+    for (const a of allowed) {
+      recordOutcome({ batchId, symbol: a.symbol, ...who, holdDays: 5,
+                      grossReturn: 0.01, netReturn: 0.01, controlReturn: 0.005 }, j);
+    }
+  }
+  return batchId;
+}
+
+test("tier1 REFUSES without a candidate", () => {
+  const j = tmp();
+  for (let s = 0; s < 20; s++) healthyBatch(j, s);
+  assert.throws(() => tier1(j, { now: wellAfter(20) }), /requires a candidateId/);
+  // And the message says why, rather than only that a field is missing.
+  assert.throws(() => tier1(j, { now: wellAfter(20) }), /describes no candidate/);
+  assert.throws(() => tier1(j, { now: wellAfter(20) }), /never back-filled/);
+});
+
+test("two versions get different verdicts, and a pooled one would have described neither", () => {
+  const j = tmp();
+  const V1 = { candidateId: "c", candidateVersion: "v1" };
+  const V2 = { candidateId: "c", candidateVersion: "v2" };
+  // v1 is clean. v2 leaves a decision unsettled past its hold, which is a STOPPING criterion.
+  for (let s = 0; s < 20; s++) armBatch(j, s, V1);
+  for (let s = 20; s < 40; s++) armBatch(j, s, V2, { settle: s > 20 });
+
+  const r1 = tier1(j, { ...V1, now: wellAfter(40) });
+  const r2 = tier1(j, { ...V2, now: wellAfter(40) });
+  assert.equal(r1.verdict, "PASS", "v1 is clean on its own records");
+  assert.equal(r2.verdict, "STOP", "v2 is not");
+  assert.equal(by(r2, 7).status, "fail");
+  assert.equal(r1.batches, 20);
+  assert.equal(r2.batches, 20);
+
+  // THE WHOLE POINT. Evaluating the candidate across both versions inherits v2's failure, so the
+  // single verdict a pooled read would have produced describes v1 wrongly and v2 by accident.
+  const both = tier1(j, { candidateId: "c", now: wellAfter(40) });
+  assert.equal(both.batches, 40, "omitting the version evaluates every version together");
+  assert.equal(both.verdict, "STOP");
+  assert.notEqual(both.verdict, r1.verdict, "v1's own verdict is not the pooled one");
+});
+
+test("unattributed records are EXCLUDED from a scoped verdict and counted, never absorbed", () => {
+  const j = tmp();
+  const V1 = { candidateId: "c", candidateVersion: "v1" };
+  for (let s = 0; s < 20; s++) armBatch(j, s, V1);
+  // Twenty legacy batches with NO attribution, each leaving an unsettled decision past its hold --
+  // a stopping failure if they were ever read as this candidate's. `armBatch` with nulls is how a
+  // record written before the field existed looks.
+  const LEGACY = { candidateId: null, candidateVersion: null };
+  for (let s = 20; s < 40; s++) armBatch(j, s, LEGACY, { settle: false });
+
+  const r = tier1(j, { ...V1, now: wellAfter(40) });
+  assert.equal(r.batches, 20, "only its own records");
+  assert.equal(r.verdict, "PASS", "the legacy failures are not charged to this candidate");
+  assert.equal(r.unattributedBatches, 20, "and they are reported, not silently dropped");
+  assert.equal(by(r, 7).status, "pass");
+});
+
+test("an unknown candidate is EMPTY, not a fallback to whatever is in the file", () => {
+  const j = tmp();
+  for (let s = 0; s < 20; s++) armBatch(j, s, { candidateId: "c", candidateVersion: "v1" });
+  const r = tier1(j, { candidateId: "ghost", now: wellAfter(20) });
+  assert.equal(r.batches, 0, "it must not fall back to the candidate that is present");
+  assert.equal(r.excludedByCandidate, 20);
+  // An empty verdict is otherwise indistinguishable from a misspelled id, so the inventory says what
+  // is actually there.
+  assert.deepEqual(r.candidatesPresent.map((c) => `${c.candidateId}/${c.candidateVersion}`), ["c/v1"]);
+  // Criterion 1 reports MANUAL on an empty set rather than a pass it has not earned.
+  assert.equal(by(r, 1).status, "manual");
+});
+
+test("a version that does not exist for a candidate that does is empty, not its sibling", () => {
+  const j = tmp();
+  for (let s = 0; s < 20; s++) armBatch(j, s, { candidateId: "c", candidateVersion: "v1" });
+  const r = tier1(j, { candidateId: "c", candidateVersion: "v99", now: wellAfter(20) });
+  assert.equal(r.batches, 0);
+  assert.equal(r.excludedByCandidate, 20);
+});
